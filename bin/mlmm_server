@@ -1,11 +1,48 @@
 #!/usr/bin/env python
 
-from mlmm import Socket
+######################################################################
+# ML/MM: https://github.com/emedio/embedding
+#
+# Copyright: 2022-2023
+#
+# Authors: Kirill Zinovjev <kzinovjev@gmail.com>
+#          Lester Hedges   <lester.hedges@gmail.com>
+#
+# ML/MM is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+#
+# ML/MM is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ML/MM. If not, see <http://www.gnu.org/licenses/>.
+######################################################################
+
+import os
+
+from mlmm import MLMM, Socket
 
 print("Starting ML-MM server...")
 
+# Create the ML/MM calculator.
+mlmm_calculator = MLMM()
+
+# See if the MLMM HOST and PORT environment variable are set.
+MLMM_HOST = os.getenv("MLMM_HOST")
+MLMM_PORT = os.getenv("MLMM_PORT")
+# Fallback to default values.
+if not MLMM_HOST:
+    MLMM_HOST = "localhost"
+if not MLMM_PORT:
+    MLMM_PORT = 10000
+
+# Create the ML/MM socket.
 sock = Socket()
-sock.bind("localhost", 10000)
+sock.bind(MLMM_HOST, MLMM_PORT)
 sock.listen()
 
 while True:
@@ -15,8 +52,13 @@ while True:
         print("Client connected:", client_address)
         while True:
             data = connection.receive()
-            if data:
-                print(f"Received: '{data}'")
+            if data == "mlmmrun":
+                # Try to run the ML/MM calculation.
+                print("Running ML/MM calculation...")
+                mlmm_calculator.run()
+
+                # Tell the client that we have finished.
+                print("Finished!")
                 connection.send("mlmmfin")
             else:
                 break

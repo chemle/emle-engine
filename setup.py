@@ -10,6 +10,7 @@ setup(
     author="Lester Hedges",
     author_email="lester.hedges@gmail.com",
     packages=find_packages(),
+    include_package_data=True,
     scripts=["bin/mlmm_server", "bin/orca"],
     url="https://github.com/lohedges/sander-mlmm",
     license="GPLv2",

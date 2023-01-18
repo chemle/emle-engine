@@ -1,15 +1,57 @@
 #!/usr/bin/env python
 
+######################################################################
+# ML/MM: https://github.com/emedio/embedding
+#
+# Copyright: 2022-2023
+#
+# Authors: Kirill Zinovjev <kzinovjev@gmail.com>
+#          Lester Hedges   <lester.hedges@gmail.com>
+#
+# ML/MM is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+#
+# ML/MM is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ML/MM. If not, see <http://www.gnu.org/licenses/>.
+######################################################################
+
+import os
+import sys
+
 from mlmm import Socket
 
 print("Starting ML-MM client...")
 
+# Check the number of command-line arguments.
+if len(sys.argv) != 2:
+    raise ValueError("usage: orca input_file")
+
+# Get the ORCA input file name and validate.
+orca_input = sys.argv[1]
+if not os.path.exists(orca_input):
+    raise ValueError(f"Couldn't locate ORCA input file: {orca_input}")
+
+# Create a socket and connect.
 sock = Socket()
 
-sock.connect("localhost", 10000)
+# See if the MLMM HOST and PORT environment variable are set.
+MLMM_HOST = os.getenv("MLMM_HOST")
+MLMM_PORT = os.getenv("MLMM_PORT")
+# Fallback to default values.
+if not MLMM_HOST:
+    MLMM_HOST = "localhost"
+if not MLMM_PORT:
+    MLMM_PORT = 10000
+sock.connect(MLMM_HOST, MLMM_PORT)
 
 try:
-
     message = "mlmmrun"
     print(f"Sending message: {message}")
     sock.send(message)
