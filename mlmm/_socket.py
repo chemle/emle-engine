@@ -94,6 +94,7 @@ class Socket:
             raise TypeError("'port' must be of type 'int'")
 
         print(f"Binding socket to {host} port {port}")
+        self._sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
         self._sock.bind((host, port))
 
     def listen(self):
