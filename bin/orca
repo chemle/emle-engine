@@ -70,11 +70,11 @@ sock.connect(MLMM_HOST, MLMM_PORT)
 
 try:
     message = "mlmmrun"
-    print(f"Sending message: {message}")
+    print(f"Sending message: '{message}'")
     sock.send(message)
 
     data = sock.receive()
-    print("Received '%s'" % data)
+    print(f"Received message: '{message}'")
 
 finally:
     sock.close()
