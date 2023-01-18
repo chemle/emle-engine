@@ -9,7 +9,7 @@ potentials in [sander](https://ambermd.org/AmberTools.php). Based on
 First create a conda environment with all of the required dependencies.
 
 ```sh
-CONDA_OVERRIDE_CUDA="11.2" conda create -n mlmm -c conda-forge ase compilers cudatoolkit=11.2 cudatoolkit-dev=11.2 eigen jax jaxlib=\*=cuda\* pytorch-gpu torchani
+CONDA_OVERRIDE_CUDA="11.2" conda create -n mlmm -c conda-forge ambertools ase compilers cudatoolkit=11.2 cudatoolkit-dev=11.2 eigen jax jaxlib=\*=cuda\* pytorch-gpu torchani
 conda activate mlmm
 ```
 
