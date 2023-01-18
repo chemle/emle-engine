@@ -28,9 +28,6 @@ from mlmm import MLMMCalculator, Socket
 
 print("Starting ML-MM server...")
 
-# Create the ML/MM calculator.
-mlmm_calculator = MLMMCalculator()
-
 # See if the MLMM HOST and PORT environment variable are set.
 MLMM_HOST = os.getenv("MLMM_HOST")
 MLMM_PORT = os.getenv("MLMM_PORT")
@@ -42,8 +39,18 @@ if not MLMM_PORT:
 
 # Create the ML/MM socket.
 sock = Socket()
-sock.bind(MLMM_HOST, MLMM_PORT)
-sock.listen()
+
+try:
+    sock.bind(MLMM_HOST, MLMM_PORT)
+    sock.listen()
+except:
+    raise OSError(
+        f"Server address already in use: ({MLMM_HOST}, {MLMM_PORT})"
+    ) from None
+
+# Create the ML/MM calculator.
+print("Initialising ML/MM calculator...")
+mlmm_calculator = MLMMCalculator()
 
 while True:
     print("Waiting for a connection...")

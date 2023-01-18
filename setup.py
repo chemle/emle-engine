@@ -9,7 +9,7 @@ setup(
     author="Lester Hedges",
     author_email="lester.hedges@gmail.com",
     packages=find_packages(include=["mlmm", "mlmm.*", "bin/*"]),
-    scripts=["bin/mlmm_server", "bin/orca"],
+    scripts=["bin/mlmm-server", "bin/mlmm-stop", "bin/orca"],
     include_package_data=True,
     url="https://github.com/lohedges/sander-mlmm",
     license="GPLv2",

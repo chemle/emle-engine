@@ -71,7 +71,7 @@ class Socket:
         if type(port) is not int:
             raise TypeError("'port' must be of type 'int'")
 
-        print(f"Connecting socket to {host} port {port}")
+        print(f"Connecting socket at address: ({host}, {port})")
         self._sock.connect((host, port))
 
     def bind(self, host, port):
@@ -93,7 +93,7 @@ class Socket:
         if type(port) is not int:
             raise TypeError("'port' must be of type 'int'")
 
-        print(f"Binding socket to {host} port {port}")
+        print(f"Binding socket to address: ({host}, {port})")
         self._sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
         self._sock.bind((host, port))
 

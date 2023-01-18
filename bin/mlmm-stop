@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+# Try to kill all of the mlmm-server processes.
+echo "Stopping all mlmm-server processes..."
+killall mlmm-server > /dev/null 2>&1 
+echo "Done!"
