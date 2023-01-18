@@ -6,7 +6,6 @@ setup(
     name="sander-mlmm",
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
-    version="0.1.0",
     author="Lester Hedges",
     author_email="lester.hedges@gmail.com",
     packages=find_packages(),
