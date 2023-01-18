@@ -314,11 +314,11 @@ class MLMMCalculator:
 
         with open(engrad, "w") as f:
             # Write the energy.
-            f.write("#The current total energy in Eh\n")
+            f.write("# The current total energy in Eh\n")
             f.write(f"{E_tot:22.12f}\n")
 
             # Write the QM gradients.
-            f.write("#The current gradient in in Eh/bohr\n")
+            f.write("# The current gradient in in Eh/bohr\n")
             for x, y, z in grad_qm:
                 f.write(f"{x:16.10f}\n{y:16.10f}\n{z:16.10f}\n")
 
