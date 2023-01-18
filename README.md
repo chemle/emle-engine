@@ -14,7 +14,6 @@ conda activate mlmm
 ```
 
 If this fails, try using [mamba](https://github.com/mamba-org/mamba) as a replacement for conda.
-the `set_environment_ash.sh` script are updated to reflect your local [ORCA](https://www.orcasoftware.de/tutorials_orca/) installation.)
 
 (For GPU functionality, you will need to install appropriate CUDA drivers on
 your host system along with NVCC, the CUDA compiler driver. (This doesn't come
