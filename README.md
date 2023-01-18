@@ -64,3 +64,15 @@ To stop the server:
 ```
 mlmm-stop
 ```
+
+# Demo
+
+A demo showing how to run ML/MM on a solvated alanine dipeptide system can be
+found in the [demo](demo) directory. To run:
+
+```
+cd demo
+./demo.sh
+```
+
+Output will be written to the `demo/output` directory.

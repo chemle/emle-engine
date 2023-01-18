@@ -1,0 +1,36 @@
+Production
+ &cntrl
+  imin=0,
+  ntx=1,
+  irest=0,
+  nstlim=10000,
+  dt=0.001,
+  ntf=1,
+  ntc=1,
+  tempi=300.0,
+  temp0=300.0,
+  ntpr=10,
+  ntwx=100,
+  cut=10.0,
+  ntb=1,
+  ntp=0,
+  ntt=3,
+  gamma_ln=2.0,
+  nmropt=0,
+  ifqnt=1,
+  ig=12345,
+  iwrap=1
+ /
+ &qmmm
+  qmmask=':3',
+  qmcharge=0,
+  qm_theory='EXTERN',
+  qmcut=12,
+  qm_ewald=0
+ /
+ &orc
+  method='BLYP',
+  basis='6-31G*',
+  num_threads=24
+ /
+&wt type='END' /
