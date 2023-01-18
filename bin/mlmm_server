@@ -1,0 +1,24 @@
+#!/usr/bin/env python
+
+from mlmm import Socket
+
+print("Starting ML-MM server...")
+
+sock = Socket()
+sock.bind("localhost", 10000)
+sock.listen()
+
+while True:
+    print("Waiting for a connection...")
+    connection, client_address = sock.accept()
+    try:
+        print("Client connected:", client_address)
+        while True:
+            data = connection.receive()
+            if data:
+                print(f"Received: '{data}'")
+                connection.send("mlmmfin")
+            else:
+                break
+    finally:
+        connection.close()

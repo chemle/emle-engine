@@ -1,0 +1,21 @@
+#!/usr/bin/env python
+
+from mlmm import Socket
+
+print("Starting ML-MM client...")
+
+sock = Socket()
+
+sock.connect("localhost", 10000)
+
+try:
+
+    message = "mlmmrun"
+    print(f"Sending message: {message}")
+    sock.send(message)
+
+    data = sock.receive()
+    print("Received '%s'" % data)
+
+finally:
+    sock.close()

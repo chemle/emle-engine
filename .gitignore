@@ -1,0 +1,25 @@
+# Byte-compiled / optimized / DLL files.
+__pycache__/
+*.py[cod]
+
+# C extensions.
+*.so
+
+# Pytest directories.
+.pytest_cache/
+
+# macOS folder attributes.
+.DS_Store
+
+# Jupyter notebook checkpoints.
+.ipynb_checkpoints/
+
+# Build artifacts.
+setup.out
+setup.err
+dist/
+build/
+mlmm.egg-info
+
+# VSCode config
+.vscode/
