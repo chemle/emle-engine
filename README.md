@@ -51,3 +51,8 @@ orca orca_input
 Where `orca_input` is the path to a fully specified ORCA input file. This will
 be called by `sander` when performing QM/MM, i.e. we are using a _fake_ ORCA as
 the QM backend.
+
+The server and client should both connect the same hostname and port. This
+can be specified in a script using the environment variables `MLMM_HOST` and
+`MLMM_PORT`. If not specified, then the _same_ default values will be used for
+both the client and server.
