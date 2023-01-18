@@ -23,7 +23,9 @@
 ######################################################################
 
 import os
+import subprocess
 import sys
+import time
 
 from mlmm import Socket
 
@@ -37,6 +39,21 @@ if len(sys.argv) != 2:
 orca_input = sys.argv[1]
 if not os.path.exists(orca_input):
     raise ValueError(f"Couldn't locate ORCA input file: {orca_input}")
+
+# Try to start and ML/MM server in the background. This will
+try:
+    print("Trying to start ML/MM server...")
+    process = subprocess.Popen(
+        ["mlmm-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+
+    # Wait 5 seconds for the server to start.
+    time.sleep(5)
+
+# The server is already running.
+except:
+    print("ML/MM server already running!")
+    pass
 
 # Create a socket and connect.
 sock = Socket()
