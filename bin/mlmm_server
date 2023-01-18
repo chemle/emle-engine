@@ -24,12 +24,12 @@
 
 import os
 
-from mlmm import MLMM, Socket
+from mlmm import MLMMCalculator, Socket
 
 print("Starting ML-MM server...")
 
 # Create the ML/MM calculator.
-mlmm_calculator = MLMM()
+mlmm_calculator = MLMMCalculator()
 
 # See if the MLMM HOST and PORT environment variable are set.
 MLMM_HOST = os.getenv("MLMM_HOST")

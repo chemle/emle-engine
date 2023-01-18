@@ -159,7 +159,7 @@ class SOAPCalculatorSpinv:
 # energies forces, to which those from the ML/MM model are added. For now we
 # support use of ORCA (QM) or TorchANI (ML) as the backend, but this could
 # be generalised to any compatible engine.
-class MLMM:
+class MLMMCalculator:
     # Class attributes.
 
     # Get the directory of this module file.

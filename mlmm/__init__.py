@@ -20,7 +20,7 @@
 # along with ML/MM. If not, see <http://www.gnu.org/licenses/>.
 ######################################################################
 
-from ._mlmm import MLMM
+from ._mlmm import MLMMCalculator
 from ._socket import Socket
 
 from ._version import get_versions
