@@ -19,7 +19,7 @@ setup.out
 setup.err
 dist/
 build/
-mlmm.egg-info
+sander-mlmm.egg-info
 
 # VSCode config
 .vscode/
