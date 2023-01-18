@@ -302,11 +302,32 @@ class MLMMCalculator:
             + dE_dchi @ dchi_dxyz_qm_bohr.swapaxes(0, 1)
         )
 
-        return (
-            E + E_vac,
-            np.array(dE_dxyz_qm_bohr) + grad_vac,
-            np.array(dE_dxyz_mm_bohr),
-        )
+        # Compute the total energy and gradients.
+        E_tot = E + E_vac
+        grad_qm = np.array(dE_dxyz_qm_bohr) + grad_vac
+        grad_mm = np.array(dE_dxyz_mm_bohr)
+
+        # Create the file names for the ORCA format output.
+        filename = os.path.splitext(orca_input)[0]
+        engrad = filename + ".engrad"
+        pcgrad = filename + ".pcgrad"
+
+        with open(engrad, "w") as f:
+            # Write the energy.
+            f.write("#The current total energy in Eh\n")
+            f.write(f"{E_tot:22.12f}\n")
+
+            # Write the QM gradients.
+            f.write("#The current gradient in in Eh/bohr\n")
+            for x, y, z in grad_qm:
+                f.write(f"{x:16.10f}\n{y:16.10f}\n{z:16.10f}\n")
+
+        with open(pcgrad, "w") as f:
+            # Write the number of MM atoms.
+            f.write(f"{len(grad_mm)}\n")
+            # Write the MM gradients.
+            for x, y, z in grad_mm:
+                f.write(f"{x:17.12f}{y:17.12f}{z:17.12f}\n")
 
     def _get_E(self, xyz_qm_bohr, zid, s, chi, xyz_mm_bohr, charges_mm):
         return jnp.sum(
@@ -477,6 +498,10 @@ class MLMMCalculator:
         # Store the directory name for the file. Files within the input file
         # should be relative to this.
         dirname = os.path.dirname(orca_input) + "/"
+        if dirname:
+            dirname += "/"
+        else:
+            dirname = "./"
 
         # Null the required information from the input file.
         charge = None
