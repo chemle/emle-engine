@@ -65,7 +65,7 @@ To stop the server:
 mlmm-stop
 ```
 
-# Demo
+## Demo
 
 A demo showing how to run ML/MM on a solvated alanine dipeptide system can be
 found in the [demo](demo) directory. To run:
