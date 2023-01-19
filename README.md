@@ -32,8 +32,14 @@ pip install .
 
 Finally, install the `sander-mlmm` interface:
 
-```
+```sh
 python setup.py install
+```
+
+If you are developing and want and editable install, use:
+
+```sh
+python setup.py develop
 ```
 
 ## Usage
