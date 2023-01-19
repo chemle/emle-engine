@@ -15,5 +15,5 @@ name=mlmm
 # Launch sander.
 sander -O -i ../$name.in -o $name.out -p ../$PARM -c ../$CRD -r $name.ncrst -x $name.nc
 
-# Kill any running mlmm-server processes.
+# Stop any running mlmm-server processes.
 mlmm-stop
