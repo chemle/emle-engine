@@ -1,7 +1,7 @@
 ######################################################################
 # ML/MM: https://github.com/emedio/embedding
 #
-# Copyright: 2022-2023
+# Copyright: 2023
 #
 # Authors: Lester Hedges   <lester.hedges@gmail.com>
 #          Kirill Zinovjev <kzinovjev@gmail.com>
