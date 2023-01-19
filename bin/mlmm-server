@@ -30,7 +30,7 @@ from mlmm import MLMMCalculator, Socket
 # See if the MLMM HOST and PORT environment variable are set.
 MLMM_HOST = os.getenv("MLMM_HOST")
 MLMM_PORT = os.getenv("MLMM_PORT")
-MLMM_MODEL = os.getenv("MLMM_PORT")
+MLMM_MODEL = os.getenv("MLMM_MODEL")
 MLMM_NUM_CLIENTS = os.getenv("MLMM_NUM_CLIENTS")
 # Fallback to default values.
 if not MLMM_HOST:
