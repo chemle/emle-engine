@@ -30,6 +30,7 @@ from mlmm import MLMMCalculator, Socket
 # See if the MLMM HOST and PORT environment variable are set.
 MLMM_HOST = os.getenv("MLMM_HOST")
 MLMM_PORT = os.getenv("MLMM_PORT")
+MLMM_MODEL = os.getenv("MLMM_PORT")
 MLMM_NUM_CLIENTS = os.getenv("MLMM_NUM_CLIENTS")
 # Fallback to default values.
 if not MLMM_HOST:
@@ -56,12 +57,15 @@ def validate_clients(num_clients):
 parser = argparse.ArgumentParser(description="ML/MM server")
 
 # parse command-line options
-parser.add_argument("--host", type=str, help="The hostname.", required=False)
-parser.add_argument("--port", type=str, help="The port number.", required=False)
+parser.add_argument("--host", type=str, help="the hostname.", required=False)
+parser.add_argument("--port", type=str, help="the port number", required=False)
+parser.add_argument(
+    "--model", type=str, help="path to an ML/MM model file", required=False
+)
 parser.add_argument(
     "--num-clients",
     type=validate_clients,
-    help="The maximum number of client connections to allow.",
+    help="the maximum number of client connections to allow",
     required=False,
     default=1,
 )
@@ -72,6 +76,8 @@ if args.host:
     MLMM_HOST = args.host
 if args.port:
     MLMM_PORT = args.port
+if args.model:
+    MLMM_MODEL = args.model
 if args.num_clients:
     MLMM_NUM_CLIENTS = args.num_clients
 
@@ -90,7 +96,7 @@ except:
 
 # Create the ML/MM calculator.
 print("Initialising ML/MM calculator...")
-mlmm_calculator = MLMMCalculator()
+mlmm_calculator = MLMMCalculator(model=MLMM_MODEL)
 
 while True:
     print("Waiting for a connection...")
