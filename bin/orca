@@ -78,7 +78,14 @@ try:
     sock.send(message)
 
     data = sock.receive()
-    print(f"Received message: '{data}'")
+
+    if data == "mlmmfin":
+        print(
+            "Received notice that ML/MM calculation has finished. "
+            "Closing client connection."
+        )
+    else:
+        raise RuntimeError(f"Invalid message received from ML/MM server: '{data}'")
 
 finally:
     sock.close()
