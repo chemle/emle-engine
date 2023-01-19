@@ -97,9 +97,22 @@ class Socket:
         self._sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
         self._sock.bind((host, port))
 
-    def listen(self):
-        """Enable server to accept a single connection."""
-        self._sock.listen(1)
+    def listen(self, num_connections=1):
+        """
+        Listen for the specified number of connections. If num_connections = 0,
+        then the system default will be used.
+
+        Parameters
+        ----------
+
+        num_connections : int
+        """
+        if type(num_connections) is not int:
+            raise ValueError("'num_connections' must be of type 'int'")
+        if num_connections < 0:
+            raise ValueError("'num_connections' must be >= 0")
+
+        self._sock.listen(num_connections)
 
     def accept(self):
         """
