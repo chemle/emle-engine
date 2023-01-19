@@ -10,7 +10,7 @@ mkdir output
 cd output
 
 # Job name.
-name=qmmm
+name=mlmm
 
 # Launch sander.
 sander -O -i ../$name.in -o $name.out -p ../$PARM -c ../$CRD -r $name.ncrst -x $name.nc
