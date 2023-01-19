@@ -87,7 +87,7 @@ and gradients. [TorchANI](https://github.com/aiqm/torchani) is used for the in v
 predictions and custom [Jax](https://github.com/google/jax) code is used to predict
 corrections to the in vacuo values in the presence of point charges.
 Both frameworks make heavy use of
-[just-int-time compilation](https://en.wikipedia.org/wiki/Just-in-time_compilation).
+[just-in-time compilation](https://en.wikipedia.org/wiki/Just-in-time_compilation).
 This compilation is performed during to the _first_ ML/MM call, hence
 subsequent calculatons are _much_ faster. By using a long-lived server
 process to handle ML/MM calls from `sander` we can get the performance
