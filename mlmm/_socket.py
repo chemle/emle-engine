@@ -112,6 +112,7 @@ class Socket:
         if num_connections < 0:
             raise ValueError("'num_connections' must be >= 0")
 
+        print(f"Listening for connections from {num_connections} clients")
         self._sock.listen(num_connections)
 
     def accept(self):
