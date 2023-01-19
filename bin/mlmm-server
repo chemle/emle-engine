@@ -30,11 +30,14 @@ from mlmm import MLMMCalculator, Socket
 # See if the MLMM HOST and PORT environment variable are set.
 MLMM_HOST = os.getenv("MLMM_HOST")
 MLMM_PORT = os.getenv("MLMM_PORT")
+MLMM_NUM_CLIENTS = os.getenv("MLMM_NUM_CLIENTS")
 # Fallback to default values.
 if not MLMM_HOST:
     MLMM_HOST = "localhost"
 if not MLMM_PORT:
     MLMM_PORT = 10000
+if not MLMM_NUM_CLIENTS:
+    MLMM_NUM_CLIENTS = 1
 
 
 def validate_clients(num_clients):
@@ -69,6 +72,8 @@ if args.host:
     MLMM_HOST = args.host
 if args.port:
     MLMM_PORT = args.port
+if args.num_clients:
+    MLMM_NUM_CLIENTS = args.num_clients
 
 print("Starting ML-MM server...")
 
@@ -77,7 +82,7 @@ sock = Socket()
 
 try:
     sock.bind(MLMM_HOST, MLMM_PORT)
-    sock.listen(args.num_clients)
+    sock.listen(MLMM_NUM_CLIENTS)
 except:
     raise OSError(
         f"Server address already in use: ({MLMM_HOST}, {MLMM_PORT})"
