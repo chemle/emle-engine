@@ -22,11 +22,10 @@
 # along with ML/MM. If not, see <http://www.gnu.org/licenses/>.
 ######################################################################
 
+import argparse
 import os
 
 from mlmm import MLMMCalculator, Socket
-
-print("Starting ML-MM server...")
 
 # See if the MLMM HOST and PORT environment variable are set.
 MLMM_HOST = os.getenv("MLMM_HOST")
@@ -37,12 +36,48 @@ if not MLMM_HOST:
 if not MLMM_PORT:
     MLMM_PORT = 10000
 
+
+def validate_clients(num_clients):
+    try:
+        num_clients = int(num_clients)
+    except:
+        raise argparse.ArgumentTypeError(
+            f"--num-clients: invalid int value: '{num_clients}'"
+        )
+
+    if num_clients < 0:
+        raise argparse.ArgumentTypeError("--num-clients: Value must be >= 0")
+
+
+# create argument parser.
+parser = argparse.ArgumentParser(description="ML/MM server")
+
+# parse command-line options
+parser.add_argument("--host", type=str, help="The hostname.", required=False)
+parser.add_argument("--port", type=str, help="The port number.", required=False)
+parser.add_argument(
+    "--num-clients",
+    type=validate_clients,
+    help="The maximum number of client connections to allow.",
+    required=False,
+    default=1,
+)
+args = parser.parse_args()
+
+# Overload using command-line arguments.
+if args.host:
+    MLMM_HOST = args.host
+if args.port:
+    MLMM_PORT = args.port
+
+print("Starting ML-MM server...")
+
 # Create the ML/MM socket.
 sock = Socket()
 
 try:
     sock.bind(MLMM_HOST, MLMM_PORT)
-    sock.listen()
+    sock.listen(args.num_clients)
 except:
     raise OSError(
         f"Server address already in use: ({MLMM_HOST}, {MLMM_PORT})"
