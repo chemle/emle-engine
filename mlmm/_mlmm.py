@@ -182,12 +182,15 @@ class MLMMCalculator:
         **SPHERICAL_EXPANSION_HYPERS_COMMON,
     }
 
-    def __init__(self, model=None):
+    def __init__(self, model=None, log=True):
         """Constructor.
 
         model : str
             Path to the ML model parameter file. If None, then a default
             model will be used.
+
+        log : bool
+            Whether to log the in vacuo and ML/MM energies to file.
         """
 
         # Validate input.
@@ -206,6 +209,11 @@ class MLMMCalculator:
             self._params = scipy.io.loadmat(self._model, squeeze_me=True)
         except:
             raise ValueError(f"Unable to load model parameters from: '{self._model}'")
+
+        if not isinstance(log, bool):
+            raise TypeError("'log' must be of type 'bool")
+        else:
+            self._log = log
 
         # Initialise ML-model attributes.
 
@@ -250,6 +258,7 @@ class MLMMCalculator:
 
         # Parse the ORCA input file.
         (
+            dirname,
             charge,
             multi,
             atomic_numbers,
@@ -330,6 +339,11 @@ class MLMMCalculator:
             # Write the MM gradients.
             for x, y, z in grad_mm:
                 f.write(f"{x:17.12f}{y:17.12f}{z:17.12f}\n")
+
+        # Log the in vacuo and ML/MM energies.
+        if self._log:
+            with open(dirname + "mlmm_log.txt", "a+") as f:
+                f.write(f"{E_vac:22.12f}{E_tot:22.12f}\n")
 
     def _get_E(self, xyz_qm_bohr, zid, s, chi, xyz_mm_bohr, charges_mm):
         return jnp.sum(
@@ -499,7 +513,7 @@ class MLMMCalculator:
 
         # Store the directory name for the file. Files within the input file
         # should be relative to this.
-        dirname = os.path.dirname(orca_input) + "/"
+        dirname = os.path.dirname(orca_input)
         if dirname:
             dirname += "/"
         else:
@@ -579,6 +593,7 @@ class MLMMCalculator:
         xyz_mm = np.array(xyz_mm)
 
         return (
+            dirname,
             charge,
             mult,
             xyz_qm.get_atomic_numbers(),
