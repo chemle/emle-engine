@@ -31,8 +31,8 @@ class Socket:
     the sending and receiving of messages.
     """
 
-    # The length of messages passed via this socket.
-    msg_len = 7
+    # The length of messages passed via this socket. (In characters and bytes.)
+    _msg_len = 7
 
     def __init__(self, sock=None):
         """
@@ -154,7 +154,7 @@ class Socket:
         msg_bytes = msg.encode("utf-8")
 
         totalsent = 0
-        while totalsent < self.msg_len:
+        while totalsent < self._msg_len:
             sent = self._sock.send(msg_bytes[totalsent:])
             if sent == 0:
                 raise RuntimeError("The socket connection was broken")
@@ -163,8 +163,8 @@ class Socket:
     def receive(self):
         chunks = []
         bytes_recd = 0
-        while bytes_recd < self.msg_len:
-            chunk = self._sock.recv(min(self.msg_len - bytes_recd, 2048))
+        while bytes_recd < self._msg_len:
+            chunk = self._sock.recv(min(self._msg_len - bytes_recd, self._msg_len))
             if chunk == b"":
                 print("The socket connection was broken")
                 return None
