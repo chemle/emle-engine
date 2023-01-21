@@ -154,12 +154,14 @@ class SOAPCalculatorSpinv:
         return soap, dsoap_dxyz
 
 
-# ML/MM theory. Predicts ML/MM energies (and gradients) allowing QM/MM with
-# ML/MM embedding. Requires the use of a QM (or ML) engine to compute in vacuo
-# energies forces, to which those from the ML/MM model are added. For now we
-# support use of ORCA (QM) or TorchANI (ML) as the backend, but this could
-# be generalised to any compatible engine.
 class MLMMCalculator:
+    """
+    Predicts ML/MM energies and gradients allowing QM/MM with ML/MM embedding.
+    Requires the use of a QM (or ML) engine to compute in vacuo energies forces,
+    to which those from the ML/MM model are added. Here we use TorchANI (ML)
+    as the backend, but this can easily be generalised to any compatible engine.
+    """
+
     # Class attributes.
 
     # Get the directory of this module file.
