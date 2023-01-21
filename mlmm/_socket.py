@@ -1,5 +1,5 @@
 ######################################################################
-# ML/MM: https://github.com/emedio/embedding
+# ML/MM: https://github.com/lohedges/sander-mlmm
 #
 # Copyright: 2023
 #
