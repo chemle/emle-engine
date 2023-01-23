@@ -168,6 +168,6 @@ class Socket:
             if chunk == b"":
                 print("The socket connection was broken")
                 return None
-            chunks.append(chunk.decode("utf-8"))
+            chunks.append(chunk)
             bytes_recd = bytes_recd + len(chunk)
-        return "".join(chunks)
+        return b"".join(chunks).decode("utf-8")
