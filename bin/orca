@@ -64,13 +64,24 @@ if not MLMM_HOST:
 if not MLMM_PORT:
     MLMM_PORT = 10000
 
-# Try to connect to the server.
-try:
-    sock.connect(MLMM_HOST, MLMM_PORT)
-# Wait in case it is still connecting.
-except:
-    time.sleep(2)
-    sock.connect(MLMM_HOST, MLMM_PORT)
+# Try to connect to the server. We try 10 times, waiting for 2 seconds
+# following each failure. This should (hopefully) give the server enough
+# time to start.
+is_connected = False
+for x in range(0, 10):
+    try:
+        sock.connect(MLMM_HOST, MLMM_PORT)
+    except:
+        time.sleep(2)
+    else:
+        is_connected = True
+        break
+
+if not is_connected:
+    raise OSError(
+        "Unable to establish connection with the ML/MM server. "
+        "Please check that it is running."
+    )
 
 try:
     message = "mlmmrun"
