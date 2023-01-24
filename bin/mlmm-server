@@ -25,7 +25,8 @@
 import argparse
 import os
 
-from mlmm import MLMMCalculator, Socket
+from mlmm.mlmm import MLMMCalculator
+from mlmm.socket import Socket
 
 # See if the MLMM HOST and PORT environment variable are set.
 MLMM_HOST = os.getenv("MLMM_HOST")

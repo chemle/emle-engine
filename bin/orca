@@ -27,7 +27,7 @@ import subprocess
 import sys
 import time
 
-from mlmm import Socket
+from mlmm.socket import Socket
 
 print("Starting ML-MM client...")
 
