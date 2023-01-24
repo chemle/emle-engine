@@ -247,6 +247,9 @@ class MLMMCalculator:
             self._torchani_device
         )
 
+        # Initialise the maximum number of MM atom that have been seen.
+        self._max_mm_atoms = 0
+
     # Match run function of other interface objects.
     def run(self, orca_input="orc_job.inp"):
         """Calculate the energy and gradients.
@@ -268,6 +271,19 @@ class MLMMCalculator:
             xyz_mm,
             charges_mm,
         ) = self.parse_orca_input(orca_input)
+
+        # Update the maximum number of MM atoms if this is the largest seen.
+        num_mm_atoms = len(charges_mm)
+        if num_mm_atoms > self._max_mm_atoms:
+            self._max_mm_atoms = num_mm_atoms
+
+        # Pad the MM coordinates and charges arrays to avoid re-jitting with Jax.
+        if self._max_mm_atoms > num_mm_atoms:
+            num_pad = self._max_mm_atoms - num_mm_atoms
+            xyz_mm_pad = num_pad * [[0.0, 0.0, 0.0]]
+            charges_mm_pad = num_pad * [0.0]
+            xyz_mm = np.append(xyz_mm, xyz_mm_pad, axis=0)
+            charges_mm = np.append(charges_mm, charges_mm_pad)
 
         # Convert the QM atomic numbers to species IDs.
         species_id = []
@@ -337,9 +353,9 @@ class MLMMCalculator:
 
         with open(pcgrad, "w") as f:
             # Write the number of MM atoms.
-            f.write(f"{len(grad_mm)}\n")
+            f.write(f"{num_mm_atoms}\n")
             # Write the MM gradients.
-            for x, y, z in grad_mm:
+            for x, y, z in grad_mm[:num_mm_atoms]:
                 f.write(f"{x:17.12f}{y:17.12f}{z:17.12f}\n")
 
         # Log the in vacuo and ML/MM energies.
