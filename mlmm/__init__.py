@@ -20,6 +20,11 @@
 # along with ML/MM. If not, see <http://www.gnu.org/licenses/>.
 ######################################################################
 
+# Note that this file is empty since MLMMCalculator and Socket should
+# be directly imported from their respective sub-modules. This is to
+# avoid severe module import overheads when running the client code,
+# which requires no ML/MM functionality.
+
 from ._version import get_versions
 
 __version__ = get_versions()["version"]
