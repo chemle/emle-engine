@@ -81,7 +81,7 @@ try:
 
     if data == "mlmmfin":
         print(
-            "Received notice that ML/MM calculation has finished. "
+            "Received notice that the ML/MM calculation has finished. "
             "Closing client connection."
         )
     else:
