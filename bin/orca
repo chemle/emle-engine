@@ -70,10 +70,13 @@ if not MLMM_PORT:
 is_connected = False
 for x in range(0, 10):
     try:
+        print("Trying to establish a connection with the ML/MM server...")
         sock.connect(MLMM_HOST, MLMM_PORT)
     except:
+        print("Failed. Retrying in 2 seconds...")
         time.sleep(2)
     else:
+        print("Connection established!")
         is_connected = True
         break
 
@@ -85,18 +88,16 @@ if not is_connected:
 
 try:
     message = "mlmmrun"
-    print(f"Sending message: '{message}'")
+    print("Requesting ML/MM calculation from server...")
     sock.send(message)
 
     data = sock.receive()
 
     if data == "mlmmfin":
-        print(
-            "Received notice that the ML/MM calculation has finished. "
-            "Closing client connection."
-        )
+        print("Received notice that the ML/MM calculation has finished.")
     else:
         raise RuntimeError(f"Invalid message received from ML/MM server: '{data}'")
 
 finally:
+    print("Closing client connection.")
     sock.close()

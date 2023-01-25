@@ -112,7 +112,7 @@ class Socket:
         if num_connections < 0:
             raise ValueError("'num_connections' must be >= 0")
 
-        print(f"Listening for connections from {num_connections} clients")
+        print(f"Listening for connections from {num_connections} clients...")
         self._sock.listen(num_connections)
 
     def accept(self):
@@ -157,7 +157,7 @@ class Socket:
         while totalsent < self._msg_len:
             sent = self._sock.send(msg_bytes[totalsent:])
             if sent == 0:
-                raise RuntimeError("The socket connection was broken")
+                raise RuntimeError("The socket connection was broken!")
             totalsent = totalsent + sent
 
     def receive(self):
@@ -166,7 +166,7 @@ class Socket:
         while bytes_recd < self._msg_len:
             chunk = self._sock.recv(min(self._msg_len - bytes_recd, self._msg_len))
             if chunk == b"":
-                print("The socket connection was broken")
+                print("The socket connection was broken!")
                 return None
             chunks.append(chunk)
             bytes_recd = bytes_recd + len(chunk)
