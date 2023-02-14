@@ -64,11 +64,11 @@ if not MLMM_HOST:
 if not MLMM_PORT:
     MLMM_PORT = 10000
 
-# Try to connect to the server. We try 20 times, waiting for 2 seconds
+# Try to connect to the server. We try 100 times, waiting for 2 seconds
 # following each failure. This should (hopefully) give the server enough
 # time to start.
 is_connected = False
-for x in range(0, 20):
+for x in range(0, 100):
     try:
         print("Trying to establish a connection with the ML/MM server...")
         sock.connect(MLMM_HOST, MLMM_PORT)
