@@ -251,15 +251,24 @@ class MLMMCalculator:
         self._max_mm_atoms = 0
 
     # Match run function of other interface objects.
-    def run(self, orca_input="orc_job.inp"):
+    def run(self, path=None):
         """Calculate the energy and gradients.
 
         Parameters
         ----------
 
-        orca_input : str
-            Path to an ORCA input file.
+        path : str
+            Path to the sander process.
         """
+
+        if path is not None:
+            if not isinstance(path, str):
+                raise TypeError("'path' must be of type 'str'")
+            if not os.path.exists(path):
+                raise ValueError(f"sander process path does not exist: {path}")
+            orca_input = f"{path}/orc_job.inp"
+        else:
+            orca_input = "orc_job.inp"
 
         # Parse the ORCA input file.
         (

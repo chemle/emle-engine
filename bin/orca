@@ -87,16 +87,24 @@ if not is_connected:
     )
 
 try:
-    message = "mlmmrun"
+    # Get the current working directory.
+    cwd = os.getcwd()
+
+    # Prepend the run message.
+    msg = f"mlmmrun:{cwd}"
+
+    # Prepend the message length.
+    msg = f"{len(msg)}:{msg}"
+
     print("Requesting ML/MM calculation from server...")
-    sock.send(message)
+    sock.send(msg, len(msg))
 
-    data = sock.receive()
+    msg, _ = sock.receive()
 
-    if data == "mlmmfin":
+    if msg == "mlmmfin":
         print("Received notice that the ML/MM calculation has finished.")
     else:
-        raise RuntimeError(f"Invalid message received from ML/MM server: '{data}'")
+        raise RuntimeError(f"Invalid message received from ML/MM server: '{msg}'")
 
 finally:
     print("Closing client connection.")

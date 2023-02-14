@@ -31,9 +31,6 @@ class Socket:
     the sending and receiving of messages.
     """
 
-    # The length of messages passed via this socket. (In characters and bytes.)
-    _msg_len = 7
-
     def __init__(self, sock=None):
         """
         Constructor.
@@ -137,37 +134,91 @@ class Socket:
         """Close the socket."""
         self._sock.close()
 
-    def send(self, msg):
+    def send(self, msg, length):
         """
-        Send a message over the socket.
+        Send a message over the socket. The message is ":" token delimited
+        string where the header contains the length of the subsequent message.
+
+        For example, for the client:
+
+          "23:mlmmrun:/path/to/client"
+
+        This communicates an ML/MM calculation request to the server, also
+        passing the path from which the client was run.
+
+        On succesful completion, the server will return a fixed message of:
+
+          "7:mlmmfin"
 
         Parameters
         ----------
 
         msg : str
             The message to send.
+
+        length : int
+            The length of the message.
         """
         if not isinstance(msg, str):
             raise TypeError("'msg' must be of type 'str'")
+
+        if not isinstance(length, int):
+            raise TypeError("'length' must be of type 'int'")
 
         # Encode the message.
         msg_bytes = msg.encode("utf-8")
 
         totalsent = 0
-        while totalsent < self._msg_len:
+        while totalsent < length:
             sent = self._sock.send(msg_bytes[totalsent:])
             if sent == 0:
                 raise RuntimeError("The socket connection was broken!")
             totalsent = totalsent + sent
 
     def receive(self):
+        """
+        Receive a message.
+
+        Returns
+        -------
+
+        msg : str
+            The message received.
+
+        path : str (optional)
+            The path from which the message was sent.
+        """
+
+        # First work out the message length.
+        buf = b""
+        while True:
+            c = self._sock.recv(1)
+            if not c:
+                print("The socket connection was broken!")
+                return None, None
+            if c == b":":
+                break
+            else:
+                buf += c
+
+        # Store the length of the message.
+        msg_len = int(buf)
+
         chunks = []
         bytes_recd = 0
-        while bytes_recd < self._msg_len:
-            chunk = self._sock.recv(min(self._msg_len - bytes_recd, self._msg_len))
+
+        # Now read the rest of the message.
+        while bytes_recd < msg_len:
+            chunk = self._sock.recv(min(msg_len - bytes_recd, msg_len))
             if chunk == b"":
                 print("The socket connection was broken!")
-                return None
+                return None, None
             chunks.append(chunk)
             bytes_recd = bytes_recd + len(chunk)
-        return b"".join(chunks).decode("utf-8")
+
+        data = b"".join(chunks).decode("utf-8").split(":")
+
+        if len(data) < 2:
+            return data[0], None
+        else:
+            return data[:2]

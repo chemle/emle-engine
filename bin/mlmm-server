@@ -114,15 +114,16 @@ while True:
     try:
         print("Client connected:", client_address)
         while True:
-            data = connection.receive()
-            if data == "mlmmrun":
+            msg, path = connection.receive()
+            if msg == "mlmmrun":
                 # Try to run the ML/MM calculation.
                 print("Running ML/MM calculation...")
-                mlmm_calculator.run()
+                mlmm_calculator.run(path=path)
 
                 # Tell the client that we have finished.
                 print("Finished!")
-                connection.send("mlmmfin")
+                msg = "7:mlmmfin"
+                connection.send(msg, len(msg))
             else:
                 break
     finally:
