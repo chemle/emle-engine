@@ -52,7 +52,6 @@ if not MLMM_NUM_CLIENTS:
 if not MLMM_BACKEND:
     MLMM_BACKEND = "torchani"
 
-
 def validate_clients(num_clients):
     try:
         num_clients = int(num_clients)
@@ -86,7 +85,6 @@ parser.add_argument(
     type=str,
     help="the in vacuo backend",
     choices=["torchani", "orca"],
-    default="torchani",
     required=False,
 )
 parser.add_argument(
