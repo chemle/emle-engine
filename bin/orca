@@ -59,7 +59,7 @@ sock = Socket()
 MLMM_HOST = os.getenv("MLMM_HOST")
 try:
     MLMM_PORT = int(os.getenv("MLMM_PORT"))
-except ValueError:
+except:
     MLMM_PORT = None
 
 # Fallback to default values.
