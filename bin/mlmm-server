@@ -106,6 +106,10 @@ sock = Socket()
 try:
     sock.bind(MLMM_HOST, MLMM_PORT)
     sock.listen(MLMM_NUM_CLIENTS)
+
+    # Write the PID to file in the current directory.
+    with open("mlmm_pid.txt", "w") as f:
+        f.write(f"{os.getpid()}\n")
 except:
     raise OSError(
         f"Server address already in use: ({MLMM_HOST}, {MLMM_PORT})"
