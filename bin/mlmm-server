@@ -28,15 +28,19 @@ import os
 from mlmm.mlmm import MLMMCalculator
 from mlmm.socket import Socket
 
-# See if the MLMM HOST and PORT environment variable are set.
+# Check whether any MLMM environment variables are set.
 MLMM_HOST = os.getenv("MLMM_HOST")
 try:
     MLMM_PORT = int(os.getenv("MLMM_PORT"))
 except ValueError:
     MLMM_PORT = None
 MLMM_MODEL = os.getenv("MLMM_MODEL")
-MLMM_NUM_CLIENTS = os.getenv("MLMM_NUM_CLIENTS")
+try:
+    MLMM_NUM_CLIENTS = int(os.getenv("MLMM_NUM_CLIENTS"))
+except ValueError:
+    MLMM_NUM_CLIENTS = None
 MLMM_LOG = os.getenv("MLMM_LOG", "True").lower() in ("true", "1", "t")
+
 # Fallback to default values.
 if not MLMM_HOST:
     MLMM_HOST = "localhost"
