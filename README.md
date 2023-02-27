@@ -97,7 +97,8 @@ mlmm-server --backend torchani
 
 When using the `orca` backend, you will need to ensure that the _fake_ `orca`
 executable takes precedence in the `PATH`. (To check that ML/MM is running,
-look for an `mlmm_log.txt` file in the working directory.)
+look for an `mlmm_backend_log.txt` file in the working directory, where
+`backend` is the name of the specified backend.)
 
 ## Why do we need an ML/MM server?
 
