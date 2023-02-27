@@ -417,7 +417,7 @@ class MLMMCalculator:
 
         # Log the in vacuo and ML/MM energies.
         if self._log:
-            with open(dirname + "mlmm_log.txt", "a+") as f:
+            with open(dirname + f"mlmm_{self._backend}_log.txt", "a+") as f:
                 f.write(f"{E_vac:22.12f}{E_tot:22.12f}\n")
 
     def _get_E(self, xyz_qm_bohr, zid, s, chi, xyz_mm_bohr, charges_mm):
