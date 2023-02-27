@@ -39,6 +39,7 @@ try:
     MLMM_NUM_CLIENTS = int(os.getenv("MLMM_NUM_CLIENTS"))
 except:
     MLMM_NUM_CLIENTS = None
+MLMM_BACKEND = os.getenv("MLMM_BACKEND")
 MLMM_LOG = os.getenv("MLMM_LOG", "True").lower() in ("true", "1", "t")
 
 # Fallback to default values.
@@ -48,6 +49,8 @@ if not MLMM_PORT:
     MLMM_PORT = 10000
 if not MLMM_NUM_CLIENTS:
     MLMM_NUM_CLIENTS = 1
+if not MLMM_BACKEND:
+    MLMM_BACKEND = "torchani"
 
 
 def validate_clients(num_clients):
@@ -79,6 +82,14 @@ parser.add_argument(
     default=1,
 )
 parser.add_argument(
+    "--backend",
+    type=str,
+    help="the in vacuo backend",
+    choices=["torchani", "orca"],
+    default="torchani",
+    required=False,
+)
+parser.add_argument(
     "--log",
     action=argparse.BooleanOptionalAction,
     help="whether to log energies",
@@ -95,10 +106,12 @@ if args.model:
     MLMM_MODEL = args.model
 if args.num_clients:
     MLMM_NUM_CLIENTS = args.num_clients
+if args.backend:
+    MLMM_BACKEND = args.backend
 if args.log is not None:
     MLMM_LOG = args.log
 
-print("Starting ML-MM server...")
+print(f"Starting ML-MM server using {MLMM_BACKEND} backend...")
 
 # Create the ML/MM socket.
 sock = Socket()
@@ -117,7 +130,7 @@ except:
 
 # Create the ML/MM calculator.
 print("Initialising ML/MM calculator...")
-mlmm_calculator = MLMMCalculator(model=MLMM_MODEL, log=MLMM_LOG)
+mlmm_calculator = MLMMCalculator(model=MLMM_MODEL, backend=MLMM_BACKEND, log=MLMM_LOG)
 
 while True:
     print("Waiting for a connection...")

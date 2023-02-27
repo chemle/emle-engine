@@ -22,6 +22,10 @@
 
 import os
 import numpy as np
+import shlex
+import shutil
+import subprocess
+import tempfile
 
 import jax.numpy as jnp
 from jax import value_and_grad
@@ -184,7 +188,10 @@ class MLMMCalculator:
         **SPHERICAL_EXPANSION_HYPERS_COMMON,
     }
 
-    def __init__(self, model=None, log=True):
+    # List of supported backends.
+    _supported_backends = ["torchani", "orca"]
+
+    def __init__(self, model=None, backend="torchani", log=True):
         """Constructor.
 
         model : str
@@ -212,6 +219,16 @@ class MLMMCalculator:
         except:
             raise ValueError(f"Unable to load model parameters from: '{self._model}'")
 
+        if not isinstance(backend, str):
+            raise TypeError("'backend' must be of type 'bool")
+        # Strip whitespace and convert to lower case.
+        backend = backend.lower().replace(" ", "")
+        if not backend in self._supported_backends:
+            raise ValueError(
+                f"Unsupported backend '{backend}'. Options are: {', '.join(self._supported_backends)}"
+            )
+        self._backend = backend
+
         if not isinstance(log, bool):
             raise TypeError("'log' must be of type 'bool")
         else:
@@ -236,16 +253,36 @@ class MLMMCalculator:
         self._get_E_with_grad = value_and_grad(self._get_E, argnums=(0, 2, 3, 4))
 
         # Initialise TorchANI backend attributes.
+        if self._backend == "torchani":
+            # Create the device. Use CUDA as the default, falling back on CPU.
+            self._torchani_device = torch.device(
+                "cuda" if torch.cuda.is_available() else "cpu"
+            )
 
-        # Create the device. Use CUDA as the default, falling back on CPU.
-        self._torchani_device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
-        )
+            # Create the model.
+            self._torchani_model = torchani.models.ANI2x(periodic_table_index=True).to(
+                self._torchani_device
+            )
+        # If the backend is ORCA, then try to find the executable.
+        elif self._backend == "orca":
+            # Get the PATH for the environment.
+            path = os.environ["PATH"]
 
-        # Create the model.
-        self._torchani_model = torchani.models.ANI2x(periodic_table_index=True).to(
-            self._torchani_device
-        )
+            # Search the PATH for a matching executable, ignoring any conda
+            # directories.
+
+            exes = []
+
+            for p in path.split(":"):
+                exe = shutil.which("orca", path=p)
+                if exe and not "conda" in exe:
+                    exes.append(exe)
+
+            # Use the first executable.
+            if len(exes) > 0:
+                self._orca_exe = exes[0]
+            else:
+                raise OSError("Couldn't find ORCA executable for in vacuo backend!")
 
         # Initialise the maximum number of MM atom that have been seen.
         self._max_mm_atoms = 0
@@ -279,6 +316,7 @@ class MLMMCalculator:
             xyz_qm,
             xyz_mm,
             charges_mm,
+            xyz_file_qm,
         ) = self.parse_orca_input(orca_input)
 
         # Update the maximum number of MM atoms if this is the largest seen.
@@ -306,15 +344,25 @@ class MLMMCalculator:
                 )
         species_id = np.array(species_id)
 
-        # First try to use the qm_theory backend to compute in vacuo
+        # First try to use the specified backend to compute in vacuo
         # energies and (optionally) gradients.
 
-        try:
-            E_vac, grad_vac = self._run_torchani(xyz_qm, atomic_numbers)
-        except:
-            raise RuntimeError(
-                "Failed to calculate in vacuo energies using TorchANI backend!"
-            )
+        # TorchANI.
+        if self._backend == "torchani":
+            try:
+                E_vac, grad_vac = self._run_torchani(xyz_qm, atomic_numbers)
+            except:
+                raise RuntimeError(
+                    "Failed to calculate in vacuo energies using TorchANI backend!"
+                )
+        # ORCA.
+        elif self._backend == "orca":
+            try:
+                E_vac, grad_vac = self._run_orca(orca_input, xyz_file_qm)
+            except:
+                raise RuntimeError(
+                    "Failed to calculate in vacuo energies using ORCA backend!"
+                )
 
         # Convert coordinate units.
         xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
@@ -627,6 +675,7 @@ class MLMMCalculator:
             xyz_qm.get_positions(),
             xyz_mm,
             charges_mm,
+            xyz_file_qm,
         )
 
     def _run_torchani(self, xyz, atomic_numbers):
@@ -640,17 +689,17 @@ class MLMMCalculator:
         xyz : numpy.array
             The coordinates of the QM region in Angstrom.
 
-        atomic_numbes : numpy.array
+        atomic_numbers : numpy.array
             The atomic numbers of the QM region.
 
         Returns
         -------
 
         energy : float
-            The in vacuo QM energy.
+            The in vacuo ML energy.
 
         gradients : numpy.array
-            The in vacuo QM gradient in Eh/Bohr.
+            The in vacuo ML gradient in Eh/Bohr.
         """
 
         if not isinstance(xyz, np.ndarray):
@@ -679,3 +728,131 @@ class MLMMCalculator:
         gradient = torch.autograd.grad(energy.sum(), coords)[0] * BOHR_TO_ANGSTROM
 
         return energy.detach().cpu().numpy()[0], gradient.cpu().numpy()[0]
+
+    def _run_orca(self, orca_input, xyz_file_qm):
+        """
+        Internal function to compute in vacuo energies and gradients using
+        ORCA.
+
+        Parameters
+        ----------
+
+        orca_input : str
+            The path to the ORCA input file.
+
+        xyz_file_qm : str
+            The path to the xyz coordinate file for the QM region.
+
+        Returns
+        -------
+
+        energy : float
+            The in vacuo QM energy.
+
+        gradients : numpy.array
+            The in vacuo QM gradient in Eh/Bohr.
+        """
+
+        if not isinstance(orca_input, str):
+            raise TypeError("'orca_input' must be of type 'str'.")
+        if not os.path.exists(orca_input):
+            raise IOError(f"Unable to locate the ORCA input file: {orca_input}")
+
+        if not isinstance(xyz_file_qm, str):
+            raise TypeError("'xyz_file_qm' must be of type 'str'.")
+        if not os.path.exists(xyz_file_qm):
+            raise IOError(f"Unable to locate the ORCA QM xyz file: {xyz_file_qm}")
+
+        # Create a temporary working directory.
+        with tempfile.TemporaryDirectory() as tmp:
+            # Work out the name of the input files.
+            inp_name = f"{tmp}/{os.path.basename(orca_input)}"
+            xyz_name = f"{tmp}/{os.path.basename(xyz_file_qm)}"
+
+            # Copy the files to the working directory.
+            shutil.copyfile(orca_input, inp_name)
+            shutil.copyfile(xyz_file_qm, xyz_name)
+
+            # Edit the input file to remove the point charges.
+            lines = []
+            with open(inp_name, "r") as f:
+                for line in f:
+                    if not line.startswith("%pointcharges"):
+                        lines.append(line)
+            with open(inp_name, "w") as f:
+                for line in lines:
+                    f.write(line)
+
+            # Create the ORCA command.
+            command = f"{self._orca_exe} {inp_name}"
+
+            # Run the command as a sub-process.
+            proc = subprocess.run(
+                shlex.split(command),
+                cwd=tmp,
+                shell=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            if proc.returncode != 0:
+                raise RuntimeError("ORCA job failed!")
+
+            # Parse the output file for the energies and gradients.
+            engrad = f"{tmp}/{os.path.splitext(os.path.basename(orca_input))[0]}.engrad"
+
+            if not os.path.isfile(engrad):
+                raise IOError(f"Unable to locate ORCA engrad file: {engrad}")
+
+            with open(engrad, "r") as f:
+                is_nrg = False
+                is_grad = False
+                gradient = []
+                for line in f:
+                    if line.startswith("# The current total"):
+                        is_nrg = True
+                        count = 0
+                    elif line.startswith("# The current gradient"):
+                        is_grad = True
+                        count = 0
+                    else:
+                        # This is an energy record. These start two lines after
+                        # the header, following a comment. So we need to count
+                        # one line forward.
+                        if is_nrg and count == 1 and not line.startswith("#"):
+                            try:
+                                energy = float(line.strip())
+                            except:
+                                IOError("Unable to parse ORCA energy record!")
+                        # This is a gradient record. These start two lines after
+                        # the header, following a comment. So we need to count
+                        # one line forward.
+                        elif is_grad and count == 1 and not line.startswith("#"):
+                            try:
+                                gradient.append(float(line.strip()))
+                            except:
+                                IOError("Unable to parse ORCA gradient record!")
+                        else:
+                            if is_nrg:
+                                # We've hit the end of the records, abort.
+                                if count == 1:
+                                    is_nrg = False
+                                # Increment the line count since the header.
+                                else:
+                                    count += 1
+                            if is_grad:
+                                # We've hit the end of the records, abort.
+                                if count == 1:
+                                    is_grad = False
+                                # Increment the line count since the header.
+                                else:
+                                    count += 1
+
+        # Convert the gradient to a NumPy array and reshape. (Read as a single
+        # column, convert to x, y, z components for each atom.)
+        try:
+            gradient = np.array(gradient).reshape(int(len(gradient) / 3), 3)
+        except:
+            raise IOError("Number of ORCA gradient records isn't a multiple of 3!")
+
+        return energy, gradient

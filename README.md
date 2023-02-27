@@ -80,10 +80,29 @@ To stop the server:
 mlmm-stop
 ```
 
+## Backends
+
+The embedding method relies on in vacuo energies and gradients, to which
+corrections are added based on the predictions of the model. At present we
+support the use of [TorchANI](https://githb.com/aiqm/torchani) or [ORCA](https://sites.google.com/site/orcainputlibrary/interfaces-and-qmm)
+for the backend, providing reference QM with ML/MM embedding, and pure ML/MM
+implementations. To specify a backend, use the `--backend` argument when launching
+`mlmm-server`, e.g:
+
+```
+mlmm-server --backend torchani
+```
+
+(The default backend is `torchani`.)
+
+When using the `orca` backend, you will need to ensure that the _fake_ `orca`
+executable takes precedence in the `PATH`. (To check that ML/MM is running,
+look for an `mlmm_log.txt` file in the working directory.)
+
 ## Why do we need an ML/MM server?
 
 The ML/MM implementation uses several ML frameworks to predict energies
-and gradients. [TorchANI](https://github.com/aiqm/torchani) is used for the in vacuo
+and gradients. [TorchANI](https://github.com/aiqm/torchani) can be used for the in vacuo
 predictions and custom [Jax](https://github.com/google/jax) code is used to predict
 corrections to the in vacuo values in the presence of point charges.
 Both frameworks make heavy use of
@@ -104,3 +123,16 @@ cd demo
 ```
 
 Output will be written to the `demo/output` directory.
+
+## Issues
+
+By default, when a GPU is available, Jax will preallocate 90% of the total
+memory when the first operation is run. (See [here](https://jax.readthedocs.io/en/latest/gpu_memory_allocation.html)
+for details.) While this is designed to minimise allocation overhead and
+memory fragmentation, it can result in an "out of memory" error if the
+GPU is already partially utilised. In this case, setting the following
+environment variable will disable preallocation.
+
+```
+XLA_PYTHON_CLIENT_PREALLOCATE=false
+```
