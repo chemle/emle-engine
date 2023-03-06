@@ -173,7 +173,7 @@ class MLMMCalculator:
 
     # Create the name of the default model file. (This is trained for the
     # alanine dipeptide (ADP) system.)
-    _default_model = os.path.join(_module_dir, "mlmm_adp.mat")
+    _default_model = os.path.join(_module_dir, "mlmm_spinv.mat")
 
     # ML model parameters. For now we'll hard-code our own model parameters.
     # Could allow the user to specify their own model, but that would require
