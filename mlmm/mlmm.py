@@ -171,8 +171,7 @@ class MLMMCalculator:
     # Get the directory of this module file.
     _module_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # Create the name of the default model file. (This is trained for the
-    # alanine dipeptide (ADP) system.)
+    # Create the name of the default model file.
     _default_model = os.path.join(_module_dir, "mlmm_spinv.mat")
 
     # ML model parameters. For now we'll hard-code our own model parameters.
