@@ -168,7 +168,7 @@ class MLMMCalculator:
     as the backend, but this can easily be generalised to any compatible engine.
 
     WARNING: This class is assumed to be static for the purposes of working with
-    Jax, i.e. all attributes assigned in the constructor and used within the
+    JAX, i.e. all attributes assigned in the constructor and used within the
     _get_E method are immutable.
     """
 
@@ -329,7 +329,7 @@ class MLMMCalculator:
         if num_mm_atoms > self._max_mm_atoms:
             self._max_mm_atoms = num_mm_atoms
 
-        # Pad the MM coordinates and charges arrays to avoid re-jitting with Jax.
+        # Pad the MM coordinates and charges arrays to avoid re-jitting with JAX.
         if self._max_mm_atoms > num_mm_atoms:
             num_pad = self._max_mm_atoms - num_mm_atoms
             xyz_mm_pad = num_pad * [[0.0, 0.0, 0.0]]
@@ -369,7 +369,7 @@ class MLMMCalculator:
                     "Failed to calculate in vacuo energies using ORCA backend!"
                 )
 
-        # Convert units and convert to Jax arrays.
+        # Convert units and convert to JAX arrays.
         xyz_qm_bohr = jnp.array(xyz_qm * ANGSTROM_TO_BOHR)
         xyz_mm_bohr = jnp.array(xyz_mm * ANGSTROM_TO_BOHR)
         charges_mm = jnp.array(charges_mm)
