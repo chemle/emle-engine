@@ -27,8 +27,10 @@ import shutil
 import subprocess
 import tempfile
 
+from functools import partial
+
 import jax.numpy as jnp
-from jax import value_and_grad
+from jax import jit, value_and_grad
 from jax.scipy.special import erf as jerf
 
 import scipy
@@ -164,6 +166,10 @@ class MLMMCalculator:
     Requires the use of a QM (or ML) engine to compute in vacuo energies forces,
     to which those from the ML/MM model are added. Here we use TorchANI (ML)
     as the backend, but this can easily be generalised to any compatible engine.
+
+    WARNING: This class is assumed to be static for the purposes of working with
+    Jax, i.e. all attributes assigned in the constructor and used within the
+    _get_E method are immutable.
     """
 
     # Class attributes.
@@ -249,7 +255,7 @@ class MLMMCalculator:
             self._params["n_ref"],
             1e-3,
         )
-        self._get_E_with_grad = value_and_grad(self._get_E, argnums=(0, 2, 3, 4))
+        self._get_E_with_grad = value_and_grad(self._get_E, argnums=(1, 2, 3, 4))
 
         # Initialise TorchANI backend attributes.
         if self._backend == "torchani":
@@ -338,10 +344,10 @@ class MLMMCalculator:
                 species_id.append(SPECIES_DICT[id])
             except:
                 raise ValueError(
-                    f"Unsupported element '{elem}'. "
+                    f"Unsupported element index '{id}'. "
                     f"We currently support {', '.join(Z_DICT.keys())}."
                 )
-        species_id = np.array(species_id)
+        self._species_id = np.array(species_id)
 
         # First try to use the specified backend to compute in vacuo
         # energies and (optionally) gradients.
@@ -363,22 +369,21 @@ class MLMMCalculator:
                     "Failed to calculate in vacuo energies using ORCA backend!"
                 )
 
-        # Convert coordinate units.
-        xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
-        xyz_mm_bohr = xyz_mm * ANGSTROM_TO_BOHR
+        # Convert units and convert to Jax arrays.
+        xyz_qm_bohr = jnp.array(xyz_qm * ANGSTROM_TO_BOHR)
+        xyz_mm_bohr = jnp.array(xyz_mm * ANGSTROM_TO_BOHR)
+        charges_mm = jnp.array(charges_mm)
 
         mol_soap, dsoap_dxyz = self._get_soap(atomic_numbers, xyz_qm, True)
         dsoap_dxyz_qm_bohr = dsoap_dxyz / ANGSTROM_TO_BOHR
 
-        s, ds_dsoap = self._get_s(mol_soap, species_id, True)
-        chi, dchi_dsoap = self._get_chi(mol_soap, species_id, True)
+        s, ds_dsoap = self._get_s(mol_soap, self._species_id, True)
+        chi, dchi_dsoap = self._get_chi(mol_soap, self._species_id, True)
         ds_dxyz_qm_bohr = self._get_df_dxyz(ds_dsoap, dsoap_dxyz_qm_bohr)
         dchi_dxyz_qm_bohr = self._get_df_dxyz(dchi_dsoap, dsoap_dxyz_qm_bohr)
 
-        E, grads = self._get_E_with_grad(
-            xyz_qm_bohr, species_id, s, chi, xyz_mm_bohr, charges_mm
-        )
-        dE_dxyz_qm_bohr_part, dE_ds, dE_dchi, dE_dxyz_mm_bohr = grads
+        E, grads = self._get_E_with_grad(charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi)
+        dE_dxyz_qm_bohr_part, dE_dxyz_mm_bohr, dE_ds, dE_dchi = grads
         dE_dxyz_qm_bohr = (
             dE_dxyz_qm_bohr_part
             + dE_ds @ ds_dxyz_qm_bohr.swapaxes(0, 1)
@@ -419,14 +424,16 @@ class MLMMCalculator:
             with open(dirname + f"mlmm_{self._backend}_log.txt", "a+") as f:
                 f.write(f"{E_vac:22.12f}{E_tot:22.12f}\n")
 
-    def _get_E(self, xyz_qm_bohr, zid, s, chi, xyz_mm_bohr, charges_mm):
+    @partial(jit, static_argnums=0)
+    def _get_E(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
         return jnp.sum(
-            self._get_E_components(xyz_qm_bohr, zid, s, chi, xyz_mm_bohr, charges_mm)
+            self._get_E_components(charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi)
         )
 
-    def _get_E_components(self, xyz_qm_bohr, zid, s, chi, xyz_mm_bohr, charges_mm):
-        q_core = self._q_core[zid]
-        k_Z = self._k_Z[zid]
+    @partial(jit, static_argnums=0)
+    def _get_E_components(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
+        q_core = self._q_core[self._species_id]
+        k_Z = self._k_Z[self._species_id]
         r_data = self._get_r_data(xyz_qm_bohr)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
         q = self._get_q(r_data, s, chi)
@@ -441,11 +448,13 @@ class MLMMCalculator:
         E_ind = jnp.sum(vpot_ind @ charges_mm) * 0.5
         return jnp.array([E_static, E_ind])
 
+    @partial(jit, static_argnums=0)
     def _get_q(self, r_data, s, chi):
         A = self._get_A_QEq(r_data, s)
         b = jnp.hstack([-chi, 0])
         return jnp.linalg.solve(A, b)[:-1]
 
+    @partial(jit, static_argnums=0)
     def _get_A_QEq(self, r_data, s):
         s_gauss = s * self._a_QEq
         s2 = s_gauss**2
@@ -457,6 +466,7 @@ class MLMMCalculator:
         ones = jnp.ones((len(A), 1))
         return jnp.block([[A, ones], [ones.T, 0.0]])
 
+    @partial(jit, static_argnums=0)
     def _get_mu_ind(self, r_data, mesh_data, q, s, q_val, k_Z):
         A = self._get_A_thole(r_data, s, q_val, k_Z)
 
@@ -470,9 +480,9 @@ class MLMMCalculator:
         E_ind = mu_ind @ fields * 0.5
         return mu_ind.reshape((-1, 3))
 
+    @partial(jit, static_argnums=0)
     def _get_A_thole(self, r_data, s, q_val, k_Z):
-        N = -q_val
-        v = 60 * N * s**3
+        v = -60 * q_val * s**3
         alpha = jnp.array(v * k_Z)
 
         alphap = alpha * self._a_Thole
@@ -486,18 +496,22 @@ class MLMMCalculator:
         return A
 
     @staticmethod
+    @jit
     def _get_df_dxyz(df_dsoap, dsoap_dxyz):
         return jnp.einsum("ij,ijkl->ikl", df_dsoap, dsoap_dxyz)
 
     @staticmethod
+    @jit
     def _get_vpot_q(q, T0):
         return jnp.sum(T0 * q[:, None], axis=0)
 
     @staticmethod
+    @jit
     def _get_vpot_mu(mu, T1):
         return -jnp.tensordot(T1, mu, ((0, 2), (0, 1)))
 
     @classmethod
+    @partial(jit, static_argnums=0)
     def _get_r_data(cls, xyz):
         n_atoms = len(xyz)
 
@@ -523,6 +537,7 @@ class MLMMCalculator:
         return {"r_mat": r_mat, "T01": t01, "T11": t11, "T21": t21, "T22": t22}
 
     @staticmethod
+    @jit
     def _get_outer(a):
         n = len(a)
         idx = jnp.triu_indices(n, 1)
@@ -545,20 +560,24 @@ class MLMMCalculator:
         }
 
     @classmethod
+    @partial(jit, static_argnums=0)
     def _get_f1_slater(cls, r, s):
         return (
             cls._get_T0_slater(r, s) * r - jnp.exp(-r / s) / s * (0.5 + r / (s * 2)) * r
         )
 
     @staticmethod
+    @jit
     def _get_T0_slater(r, s):
         return (1 - (1 + r / (s * 2)) * jnp.exp(-r / s)) / r
 
     @staticmethod
+    @jit
     def _get_T0_gaussian(t01, r, s_mat):
         return t01 * jerf(r / (s_mat * jnp.sqrt(2)))
 
     @staticmethod
+    @jit
     def _get_T1_gaussian(t11, r, s_mat):
         s_invsq2 = 1.0 / (s_mat * jnp.sqrt(2))
         return t11 * (
@@ -567,14 +586,17 @@ class MLMMCalculator:
         ).repeat(3, axis=1)
 
     @classmethod
+    @partial(jit, static_argnums=0)
     def _get_T2_thole(cls, tr21, tr22, au3):
         return cls._lambda3(au3) * tr21 + cls._lambda5(au3) * tr22
 
     @staticmethod
+    @jit
     def _lambda3(au3):
         return 1 - jnp.exp(-au3)
 
     @staticmethod
+    @jit
     def _lambda5(au3):
         return 1 - (1 + au3) * jnp.exp(-au3)
 
