@@ -22,7 +22,7 @@ Production
   iwrap=1
  /
  &qmmm
-  qmmask=':3',
+  qmmask=':1-3',
   qmcharge=0,
   qm_theory='EXTERN',
   qmcut=12,
