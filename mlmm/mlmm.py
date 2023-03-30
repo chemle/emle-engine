@@ -736,13 +736,16 @@ class MLMMCalculator:
         # Convert the coordinates to a Torch tensor, casting to 32-bit floats.
         # Use a NumPy array, since converting a Python list to a Tensor is slow.
         coords = torch.tensor(
-            np.array([np.float32(xyz)]),
+            np.float32(xyz.reshape(1, *xyz.shape)),
             requires_grad=True,
             device=self._torchani_device,
         )
 
         # Convert the atomic numbers to a Torch tensor.
-        atomic_numbers = torch.tensor([atomic_numbers], device=self._torchani_device)
+        atomic_numbers = torch.tensor(
+            atomic_numbers.reshape(1, *atomic_numbers.shape),
+            device=self._torchani_device,
+        )
 
         # Compute the energy and gradient.
         energy = self._torchani_model((atomic_numbers, coords)).energies
