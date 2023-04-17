@@ -857,9 +857,14 @@ class MLMMCalculator:
         for x, dp in enumerate(self._deepmd_potential):
             # Work out the mapping between the elements and the type indices
             # used by the model.
-            mapping = {
-                element: index for index, element in enumerate(dp.get_type_map())
-            }
+            try:
+                mapping = {
+                    element: index for index, element in enumerate(dp.get_type_map())
+                }
+            except:
+                raise ValueError(
+                    f"DeePMD model doesnt' support element '{element}'"
+                )
 
             # Now determine the atom types based on the mapping.
             atom_types = [mapping[element] for element in elements]
