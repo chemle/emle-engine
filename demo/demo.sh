@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Specify names in topology and coordinate files.
 PARM=adp.parm7
 CRD=adp.rst7
