@@ -12,7 +12,7 @@ modifications to sander are needed.
 First create a conda environment with all of the required dependencies:
 
 ```sh
-CONDA_OVERRIDE_CUDA="11.2" conda create -n mlmm -c conda-forge ambertools ase compilers cudatoolkit=11.2 cudatoolkit-dev=11.2 eigen jax jaxlib=\*=cuda\* pytorch-gpu torchani
+CONDA_OVERRIDE_CUDA="11.2" conda create -n mlmm -c conda-forge ambertools ase compilers cudatoolkit=11.2 cudatoolkit-dev=11.2 eigen deepmd-kit jax jaxlib=\*=cuda\* pytorch-gpu torchani
 conda activate mlmm
 ```
 
@@ -84,7 +84,7 @@ mlmm-stop
 
 The embedding method relies on in vacuo energies and gradients, to which
 corrections are added based on the predictions of the model. At present we
-support the use of [TorchANI](https://githb.com/aiqm/torchani) or [ORCA](https://sites.google.com/site/orcainputlibrary/interfaces-and-qmm)
+support the use of [DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html), [TorchANI](https://githb.com/aiqm/torchani) or [ORCA](https://sites.google.com/site/orcainputlibrary/interfaces-and-qmm)
 for the backend, providing reference QM with ML/MM embedding, and pure ML/MM
 implementations. To specify a backend, use the `--backend` argument when launching
 `mlmm-server`, e.g:
@@ -102,10 +102,18 @@ look for an `mlmm_backend_log.txt` file in the working directory, where
 be taken from the `&orc` section of the  `sander` configuration file, so use
 this to specify the method, etc.
 
+When using `deepmd` as the backend you will also need to specify a model
+file to use. This can be passed with the `--deepmd-model` command-line argument,
+or using the `DEEPMD_MODEL` environment variable. This can be a single file, or
+a set of model files specified using wildcards, or as a comma-separated list.
+When multiple files are specified, energies and gradients will be averaged
+over the models.
+
 ## Why do we need an ML/MM server?
 
 The ML/MM implementation uses several ML frameworks to predict energies
-and gradients. [TorchANI](https://github.com/aiqm/torchani) can be used for the in vacuo
+and gradients. [DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html)
+or [TorchANI](https://github.com/aiqm/torchani) can be used for the in vacuo
 predictions and custom [Jax](https://github.com/google/jax) code is used to predict
 corrections to the in vacuo values in the presence of point charges.
 Both frameworks make heavy use of
