@@ -46,11 +46,14 @@ from rascal.utils import (
     spherical_expansion_reshape,
 )
 
+from deepmd.infer import DeepPot
+
 import torch
 import torchani
 
 ANGSTROM_TO_BOHR = 1.88973
 BOHR_TO_ANGSTROM = 0.529177
+ELECTRONVOLT_TO_HARTREE = 0.0367493
 SPECIES = (1, 6, 7, 8, 16)
 SIGMA = 1e-3
 
@@ -63,8 +66,8 @@ SPHERICAL_EXPANSION_HYPERS_COMMON = {
     "global_species": SPECIES,
 }
 
-Z_DICT = {"H": 1, "C": 6, "N": 7, "O": 8, "S": 16}
 SPECIES_DICT = {1: 0, 6: 1, 7: 2, 8: 3, 16: 4}
+ELEMENT_DICT = {1: "H", 6: "C", 7: "N", 8: "O", 16: "S"}
 
 
 class GPRCalculator:
@@ -194,14 +197,21 @@ class MLMMCalculator:
     }
 
     # List of supported backends.
-    _supported_backends = ["torchani", "orca"]
+    _supported_backends = ["torchani", "deepmd", "orca"]
 
-    def __init__(self, model=None, backend="torchani", log=True):
+    def __init__(self, model=None, backend="torchani", deepmd_model=None, log=True):
         """Constructor.
 
         model : str
-            Path to the ML model parameter file. If None, then a default
-            model will be used.
+            Path to the ML/MM embedding model parameter file. If None, then a
+            default model will be used.
+
+        backend : str
+            The backend to use to compute in vacuo energies and gradients.
+
+        deepmd_model : str
+            Path to the DeePMD model file to use for in vacuo calculations. This
+            must be specified if "deepmd" is the selected backend.
 
         log : bool
             Whether to log the in vacuo and ML/MM energies to file.
@@ -213,7 +223,9 @@ class MLMMCalculator:
             if not isinstance(model, str):
                 raise TypeError("'model' must be of type 'str'")
             if not os.path.exists(model):
-                raise ValueError(f"Unable to locate model file: '{model}'")
+                raise ValueError(
+                    f"Unable to locate ML/MM embedding model file: '{model}'"
+                )
             self._model = model
         else:
             self._model = self._default_model
@@ -234,12 +246,46 @@ class MLMMCalculator:
             )
         self._backend = backend
 
+        if deepmd_model is not None:
+            # We support a str, or list/tuple of strings.
+            if not isinstance(deepmd_model, (str, list, tuple)):
+                raise TypeError(
+                    "'deepmd_model' must be of type 'str', or a list of 'str' types"
+                )
+            else:
+                # Make sure all values are strings.
+                if isinstance(deepmd_model, (list, tuple)):
+                    for model in deepmd_model:
+                        if not isinstance(model, str):
+                            raise TypeError(
+                                "'deepmd_model' must be of type 'str', or a list of 'str' types"
+                            )
+                # Convert to a list.
+                else:
+                    deepmd_model = [deepmd_model]
+
+                # Make sure all of the model files exist.
+                for model in deepmd_model:
+                    if not os.path.exists(model):
+                        raise ValueError(
+                            f"Unable to locate DeePMD model file: '{model}'"
+                        )
+
+                # Store the list of model files, removing any duplicates.
+                self._deepmd_model = list(set(deepmd_model))
+
+        else:
+            if self._backend == "deepmd":
+                raise ValueError(
+                    "'deepmd_model' must be specified when DeePMD 'backend' is chosen!"
+                )
+
         if not isinstance(log, bool):
             raise TypeError("'log' must be of type 'bool")
         else:
             self._log = log
 
-        # Initialise ML-model attributes.
+        # Initialise ML-MM embedding model attributes.
 
         self._get_soap = SOAPCalculatorSpinv(self._hypers)
         self._q_core = self._params["q_core"]
@@ -264,10 +310,15 @@ class MLMMCalculator:
                 "cuda" if torch.cuda.is_available() else "cpu"
             )
 
-            # Create the model.
+            # Create the TorchANI model.
             self._torchani_model = torchani.models.ANI2x(periodic_table_index=True).to(
                 self._torchani_device
             )
+
+        # Initialise DeePMD backend attributes.
+        elif self._backend == "deepmd":
+            self._deepmd_potential = [DeepPot(model) for model in self._deepmd_model]
+
         # If the backend is ORCA, then try to find the executable.
         elif self._backend == "orca":
             # Get the PATH for the environment.
@@ -337,15 +388,17 @@ class MLMMCalculator:
             xyz_mm = np.append(xyz_mm, xyz_mm_pad, axis=0)
             charges_mm = np.append(charges_mm, charges_mm_pad)
 
-        # Convert the QM atomic numbers to species IDs.
+        # Convert the QM atomic numbers to elements and species IDs.
         species_id = []
+        elements = []
         for id in atomic_numbers:
             try:
                 species_id.append(SPECIES_DICT[id])
+                elements.append(ELEMENT_DICT[id])
             except:
                 raise ValueError(
                     f"Unsupported element index '{id}'. "
-                    f"We currently support {', '.join(Z_DICT.keys())}."
+                    f"We currently support {', '.join(Z_DICT.values())}."
                 )
         self._species_id = np.array(species_id)
 
@@ -360,6 +413,16 @@ class MLMMCalculator:
                 raise RuntimeError(
                     "Failed to calculate in vacuo energies using TorchANI backend!"
                 )
+
+        # DeePMD.
+        if self._backend == "deepmd":
+            try:
+                E_vac, grad_vac = self._run_deepmd(xyz_qm, elements)
+            except:
+                raise RuntimeError(
+                    "Failed to calculate in vacuo energies using DeePMD backend!"
+                )
+
         # ORCA.
         elif self._backend == "orca":
             try:
@@ -752,6 +815,67 @@ class MLMMCalculator:
         gradient = torch.autograd.grad(energy.sum(), coords)[0] * BOHR_TO_ANGSTROM
 
         return energy.detach().cpu().numpy()[0], gradient.cpu().numpy()[0]
+
+    def _run_deepmd(self, xyz, elements):
+        """
+        Internal function to compute in vacuo energies and gradients using
+        DeepMD.
+
+        Parameters
+        ----------
+
+        xyz : numpy.array
+            The coordinates of the QM region in Angstrom.
+
+        elements : [str]
+            The list of elements.
+
+        Returns
+        -------
+
+        energy : float
+            The in vacuo ML energy.
+
+        gradients : numpy.array
+            The in vacuo ML gradient in Eh/Bohr.
+        """
+
+        if not isinstance(xyz, np.ndarray):
+            raise TypeError("'xyz' must be of type 'numpy.ndarray'")
+        if xyz.dtype != np.float64:
+            raise TypeError("'xyz' must have dtype 'float64'.")
+
+        if not isinstance(elements, (list, tuple)):
+            raise TypeError("'elements' must be of type 'list'")
+        if not all(isinstance(element, str) for element in elements):
+            raise TypeError("'elements' must be a 'list' of 'str' types")
+
+        # Reshape to a frames x (natoms x 3) array.
+        xyz = xyz.reshape([1, -1])
+
+        # Run a calculation for each model and take the average.
+        for x, dp in enumerate(self._deepmd_potential):
+            # Work out the mapping between the elements and the type indices
+            # used by the model.
+            mapping = {
+                element: index for index, element in enumerate(dp.get_type_map())
+            }
+
+            # Now determine the atom types based on the mapping.
+            atom_types = [mapping[element] for element in elements]
+
+            if x == 0:
+                energy, force, _ = dp.eval(xyz, cells=None, atom_types=atom_types)
+            else:
+                e, f, _ = dp.eval(xyz, cells=None, atom_types=atom_types)
+                energy += e
+                force += f
+
+        # Take averages and return. (Gradient equals minus the force.)
+        return (
+            (energy[0][0] * ELECTRONVOLT_TO_HARTREE) / (x + 1),
+            -(force[0] * ELECTRONVOLT_TO_HARTREE * BOHR_TO_ANGSTROM) / (x + 1),
+        )
 
     def _run_orca(self, orca_input, xyz_file_qm):
         """

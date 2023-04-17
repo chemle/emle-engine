@@ -25,6 +25,8 @@
 import argparse
 import os
 
+from glob import glob
+
 from mlmm.mlmm import MLMMCalculator
 from mlmm.socket import Socket
 
@@ -41,6 +43,7 @@ except:
     MLMM_NUM_CLIENTS = None
 MLMM_BACKEND = os.getenv("MLMM_BACKEND")
 MLMM_LOG = os.getenv("MLMM_LOG", "True").lower() in ("true", "1", "t")
+DEEPMD_MODEL = os.getenv("DEEPMD_MODEL")
 
 # Fallback to default values.
 if not MLMM_HOST:
@@ -51,6 +54,7 @@ if not MLMM_NUM_CLIENTS:
     MLMM_NUM_CLIENTS = 1
 if not MLMM_BACKEND:
     MLMM_BACKEND = "torchani"
+
 
 def validate_clients(num_clients):
     try:
@@ -84,7 +88,14 @@ parser.add_argument(
     "--backend",
     type=str,
     help="the in vacuo backend",
-    choices=["torchani", "orca"],
+    choices=["deepmd", "torchani", "orca"],
+    required=False,
+)
+parser.add_argument(
+    "--deepmd-model",
+    type=str,
+    nargs="+",
+    help="path to DeepMD model file(s)",
     required=False,
 )
 parser.add_argument(
@@ -106,8 +117,41 @@ if args.num_clients:
     MLMM_NUM_CLIENTS = args.num_clients
 if args.backend:
     MLMM_BACKEND = args.backend
+if args.deepmd_model:
+    DEEPMD_MODEL = args.deepmd_model
 if args.log is not None:
     MLMM_LOG = args.log
+
+# Work out the DeePMD model. We allow the following formatting:
+#    1) A path to a single file.
+#    2) Multiple files specified using wildcards.
+#    3) A list of files, comma-separated.
+#
+# The first two can be found using glob, if empty then try splitting on ",".
+if DEEPMD_MODEL:
+    if isinstance(DEEPMD_MODEL, list) and len(DEEPMD_MODEL) == 1:
+        DEEPMD_MODEL = DEEPMD_MODEL[0]
+    if isinstance(DEEPMD_MODEL, str):
+        print("HERE")
+        # Remove whitespace.
+        DEEPMD_MODEL = DEEPMD_MODEL.replace(" ", "")
+
+        # Try globbing.
+        models = glob(DEEPMD_MODEL)
+
+        # No matches.
+        if not models:
+            models = DEEPMD_MODEL.split(",")
+
+            # Invalid formatting.
+            if len(models) == 1:
+                raise ValueError(
+                    f"DeePMD model not found, or invalid formatting: '{DEEPMD_MODEL}'"
+                )
+            else:
+                DEEPMD_MODEL = models
+        else:
+            DEEPMD_MODEL = models
 
 print(f"Starting ML-MM server using {MLMM_BACKEND} backend...")
 
@@ -128,7 +172,9 @@ except:
 
 # Create the ML/MM calculator.
 print("Initialising ML/MM calculator...")
-mlmm_calculator = MLMMCalculator(model=MLMM_MODEL, backend=MLMM_BACKEND, log=MLMM_LOG)
+mlmm_calculator = MLMMCalculator(
+    model=MLMM_MODEL, backend=MLMM_BACKEND, deepmd_model=DEEPMD_MODEL, log=MLMM_LOG
+)
 
 while True:
     print("Waiting for a connection...")
