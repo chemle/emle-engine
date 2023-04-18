@@ -398,7 +398,7 @@ class MLMMCalculator:
             except:
                 raise ValueError(
                     f"Unsupported element index '{id}'. "
-                    f"We currently support {', '.join(Z_DICT.values())}."
+                    f"We currently support {', '.join(ELEMENT_DICT.values())}."
                 )
         self._species_id = np.array(species_id)
 
@@ -862,9 +862,7 @@ class MLMMCalculator:
                     element: index for index, element in enumerate(dp.get_type_map())
                 }
             except:
-                raise ValueError(
-                    f"DeePMD model doesnt' support element '{element}'"
-                )
+                raise ValueError(f"DeePMD model doesnt' support element '{element}'")
 
             # Now determine the atom types based on the mapping.
             atom_types = [mapping[element] for element in elements]
