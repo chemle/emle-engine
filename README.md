@@ -107,7 +107,8 @@ file to use. This can be passed with the `--deepmd-model` command-line argument,
 or using the `DEEPMD_MODEL` environment variable. This can be a single file, or
 a set of model files specified using wildcards, or as a comma-separated list.
 When multiple files are specified, energies and gradients will be averaged
-over the models.
+over the models. The model files need to be visible to the `mlmm-server`, so we
+recommend the use of absolute paths.
 
 ## Why do we need an ML/MM server?
 
