@@ -331,7 +331,7 @@ class MLMMCalculator:
 
             for p in path.split(":"):
                 exe = shutil.which("orca", path=p)
-                if exe and not "conda" in exe:
+                if exe and not ("conda" in exe or "mamba" in exe or "miniforge" in exe):
                     exes.append(exe)
 
             # Use the first executable.
