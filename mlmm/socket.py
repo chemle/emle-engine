@@ -185,8 +185,9 @@ class Socket:
         msg : str
             The message received.
 
-        path : str (optional)
-            The path from which the message was sent.
+        path/error : str (optional)
+            The path from which the message was sent on the client, or the
+            error message returned from the server.
         """
 
         # First work out the message length.

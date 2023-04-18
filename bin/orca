@@ -103,10 +103,13 @@ try:
     print("Requesting ML/MM calculation from server...")
     sock.send(msg, len(msg))
 
-    msg, _ = sock.receive()
+    msg, err = sock.receive()
 
     if msg == "mlmmfin":
         print("Received notice that the ML/MM calculation has finished.")
+    elif msg == "mlmmfail":
+        print("Received notice that the ML/MM calculation has failed.")
+        print(f"[ERROR] {err}")
     else:
         raise RuntimeError(f"Invalid message received from ML/MM server: '{msg}'")
 

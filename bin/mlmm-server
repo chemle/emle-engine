@@ -186,11 +186,16 @@ while True:
             if msg == "mlmmrun":
                 # Try to run the ML/MM calculation.
                 print("Running ML/MM calculation...")
-                mlmm_calculator.run(path=path)
+                try:
+                    mlmm_calculator.run(path=path)
+                    msg = "7:mlmmfin"
+                    print("Finished!")
+                except Exception as e:
+                    msg = f"mlmmfail:{str(e)}"
+                    msg = f"{len(msg)}:{msg}"
+                    print("Failed!")
 
                 # Tell the client that we have finished.
-                print("Finished!")
-                msg = "7:mlmmfin"
                 connection.send(msg, len(msg))
             else:
                 break
