@@ -115,9 +115,9 @@ recommend the use of absolute paths.
 The ML/MM implementation uses several ML frameworks to predict energies
 and gradients. [DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html)
 or [TorchANI](https://github.com/aiqm/torchani) can be used for the in vacuo
-predictions and custom [Jax](https://github.com/google/jax) code is used to predict
+predictions and custom [JAX](https://github.com/google/jax) code is used to predict
 corrections to the in vacuo values in the presence of point charges.
-Both frameworks make heavy use of
+The frameworks make heavy use of
 [just-in-time compilation](https://en.wikipedia.org/wiki/Just-in-time_compilation).
 This compilation is performed during to the _first_ ML/MM call, hence
 subsequent calculatons are _much_ faster. By using a long-lived server
@@ -138,7 +138,7 @@ Output will be written to the `demo/output` directory.
 
 ## Issues
 
-By default, when a GPU is available, Jax will preallocate 90% of the total
+By default, when a GPU is available, [JAX](https://github.com/google/jax) will preallocate 90% of the total
 memory when the first operation is run. (See [here](https://jax.readthedocs.io/en/latest/gpu_memory_allocation.html)
 for details.) While this is designed to minimise allocation overhead and
 memory fragmentation, it can result in an "out of memory" error if the
@@ -147,4 +147,24 @@ environment variable will disable preallocation.
 
 ```
 XLA_PYTHON_CLIENT_PREALLOCATE=false
+```
+The [DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html) conda package pulls in a version of MPI which may cause
+problems if using [ORCA](https://orcaforum.kofo.mpg.de/index.php) as the in vacuo backend, particularly when running
+on HPC resources that might enforce a specific MPI setup. (ORCA will
+internally call `mpirun` to parallelise work.) Since we don't need any of
+the MPI functionality from `DeePMD-kit`, the problematic packages can be
+safely removed from the environment with:
+
+```
+conda remove --force mpi mpich
+```
+
+Alternatively, if performance isn't an issue, simply set the number of
+threads to 1 in the `sander` input file, e.g.:
+
+```
+&orc
+  method='XTB2',
+  num_threads=1
+/
 ```
