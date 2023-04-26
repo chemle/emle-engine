@@ -55,24 +55,30 @@ except:
 # Create a socket and connect.
 sock = Socket()
 
-# See if the MLMM HOST and PORT environment variable are set.
+# See if the MLMM HOST, PORT, and RETRIES environment variables are set.
 MLMM_HOST = os.getenv("MLMM_HOST")
 try:
     MLMM_PORT = int(os.getenv("MLMM_PORT"))
 except:
     MLMM_PORT = None
+try:
+    MLMM_RETRIES = int(os.getenv("MLMM_RETRIES"))
+except:
+    MLMM_RETRIES = None
 
 # Fallback to default values.
 if not MLMM_HOST:
     MLMM_HOST = "localhost"
 if not MLMM_PORT:
     MLMM_PORT = 10000
+if not MLMM_RETRIES:
+    MLMM_RETRIES = 100
 
 # Try to connect to the server. We try 100 times, waiting for 2 seconds
 # following each failure. This should (hopefully) give the server enough
 # time to start.
 is_connected = False
-for x in range(0, 100):
+for x in range(0, MLMM_RETRIES):
     try:
         print("Trying to establish a connection with the ML/MM server...")
         sock.connect(MLMM_HOST, MLMM_PORT)

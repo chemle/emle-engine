@@ -168,3 +168,10 @@ threads to 1 in the `sander` input file, e.g.:
   num_threads=1
 /
 ```
+
+When running on an HPC resource it can often take a while for the `mlmm-server`
+to start. As such, the client will try reconnecting on failure a specified
+number of times before raising an exception. (Sleeping 2 seconds between
+retries.) By default, the client tries will try to connect 100 times. If this
+is unsuitable for your setup, then the number of attempts can be configured
+using the `MLMM_RETRIES` environment variable.
