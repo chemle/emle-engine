@@ -286,6 +286,11 @@ class MLMMCalculator:
             self._log = log
 
         # Initialise ML-MM embedding model attributes.
+        hypers_keys = ('gaussian_sigma_constant', 'global_species',
+                       'interaction_cutoff', 'max_radial', 'max_angular')
+        for key in hypers_keys:
+            if key in self._params:
+                self._hypers[key] = self._params[key]
 
         self._get_soap = SOAPCalculatorSpinv(self._hypers)
         self._q_core = self._params["q_core"]
