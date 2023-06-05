@@ -99,6 +99,7 @@ class GPRCalculator:
             n_ref = self.n_ref[i]
             ref_soap_z = self.ref_soap[i, :n_ref]
             mol_soap_z = mol_soap[zid == i, :, None]
+
             K_mol_ref2 = (ref_soap_z @ mol_soap_z) ** 2
             K_mol_ref2 = K_mol_ref2.reshape(K_mol_ref2.shape[:-1])
             result[zid == i] = K_mol_ref2 @ self.c[i, :n_ref] + self.ref_mean[i]
@@ -295,7 +296,10 @@ class MLMMCalculator:
         )
         for key in hypers_keys:
             if key in self._params:
-                self._hypers[key] = self._params[key]
+                try:
+                    self._hypers[key] = tuple(self._params[key].tolist())
+                except:
+                    self._hypers[key] = self._params[key]
 
         self._get_soap = SOAPCalculatorSpinv(self._hypers)
         self._q_core = self._params["q_core"]
