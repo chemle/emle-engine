@@ -286,8 +286,13 @@ class MLMMCalculator:
             self._log = log
 
         # Initialise ML-MM embedding model attributes.
-        hypers_keys = ('gaussian_sigma_constant', 'global_species',
-                       'interaction_cutoff', 'max_radial', 'max_angular')
+        hypers_keys = (
+            "gaussian_sigma_constant",
+            "global_species",
+            "interaction_cutoff",
+            "max_radial",
+            "max_angular",
+        )
         for key in hypers_keys:
             if key in self._params:
                 self._hypers[key] = self._params[key]
@@ -297,7 +302,7 @@ class MLMMCalculator:
         self._a_QEq = self._params["a_QEq"]
         self._a_Thole = self._params["a_Thole"]
         self._k_Z = self._params["k_Z"]
-        self._q_total = self._params.get('total_charge', 0)
+        self._q_total = self._params.get("total_charge", 0)
         self._get_s = GPRCalculator(
             self._params["s_ref"], self._params["ref_soap"], self._params["n_ref"], 1e-3
         )
