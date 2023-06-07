@@ -42,6 +42,7 @@ try:
 except:
     MLMM_NUM_CLIENTS = None
 MLMM_BACKEND = os.getenv("MLMM_BACKEND")
+MLMM_DEVICE = os.getenv("MLMM_DEVICE")
 MLMM_LOG = os.getenv("MLMM_LOG", "True").lower() in ("true", "1", "t")
 DEEPMD_MODEL = os.getenv("DEEPMD_MODEL")
 
@@ -54,6 +55,8 @@ if not MLMM_NUM_CLIENTS:
     MLMM_NUM_CLIENTS = 1
 if not MLMM_BACKEND:
     MLMM_BACKEND = "torchani"
+if not MLMM_DEVICE:
+    MLMM_DEVICE = None
 
 
 def validate_clients(num_clients):
@@ -92,6 +95,13 @@ parser.add_argument(
     required=False,
 )
 parser.add_argument(
+    "--device",
+    type=str,
+    help="the device to be used by PyTorch",
+    choices=["cpu", "cuda"],
+    required=False,
+)
+parser.add_argument(
     "--deepmd-model",
     type=str,
     nargs="+",
@@ -117,6 +127,8 @@ if args.num_clients:
     MLMM_NUM_CLIENTS = args.num_clients
 if args.backend:
     MLMM_BACKEND = args.backend
+if args.device:
+    MLMM_DEVICE = args.device
 if args.deepmd_model:
     DEEPMD_MODEL = args.deepmd_model
 if args.log is not None:
@@ -173,7 +185,11 @@ except:
 # Create the ML/MM calculator.
 print("Initialising ML/MM calculator...")
 mlmm_calculator = MLMMCalculator(
-    model=MLMM_MODEL, backend=MLMM_BACKEND, deepmd_model=DEEPMD_MODEL, log=MLMM_LOG
+    model=MLMM_MODEL,
+    backend=MLMM_BACKEND,
+    deepmd_model=DEEPMD_MODEL,
+    device=MLMM_DEVICE,
+    log=MLMM_LOG,
 )
 
 while True:

@@ -72,7 +72,7 @@ ELEMENT_DICT = {1: "H", 6: "C", 7: "N", 8: "O", 16: "S"}
 class GPRCalculator:
     """Predicts an atomic property for a molecule with GPR."""
 
-    def __init__(self, ref_values, ref_soap, n_ref, sigma):
+    def __init__(self, ref_values, ref_soap, n_ref, sigma, device):
         """
         ref_values: (N_Z, N_REF)
         ref_soap: (N_Z, N_REF, N_SOAP)
@@ -80,20 +80,20 @@ class GPRCalculator:
         sigma: ()
         """
         self.ref_soap = ref_soap
-        Kinv = self.get_Kinv(ref_soap, sigma)
+        Kinv = self.get_Kinv(ref_soap, sigma, device)
         self.n_ref = n_ref
         self.n_z = len(n_ref)
         self.ref_mean = torch.sum(ref_values, axis=1) / n_ref
         ref_shifted = ref_values - self.ref_mean[:, None]
         self.c = (Kinv.float() @ ref_shifted[:, :, None].float()).squeeze()
 
-    def __call__(self, mol_soap, zid, gradient=False):
+    def __call__(self, mol_soap, zid, device, gradient=False):
         """
         mol_soap: (N_ATOMS, N_SOAP)
         zid: (N_ATOMS,)
         """
 
-        result = np.zeros(len(zid))
+        result = torch.zeros(len(zid), device=device)
         for i in range(self.n_z):
             n_ref = self.n_ref[i]
             ref_soap_z = self.ref_soap[i, :n_ref]
@@ -104,11 +104,11 @@ class GPRCalculator:
             result[zid == i] = K_mol_ref2 @ self.c[i, :n_ref] + self.ref_mean[i]
         if not gradient:
             return result
-        return result, self.get_gradient(mol_soap, zid)
+        return result, self.get_gradient(mol_soap, zid, device)
 
-    def get_gradient(self, mol_soap, zid):
+    def get_gradient(self, mol_soap, zid, device):
         n_at, n_soap = mol_soap.shape
-        df_dsoap = torch.zeros((n_at, n_soap))
+        df_dsoap = torch.zeros((n_at, n_soap), device=device)
         for i in range(self.n_z):
             n_ref = self.n_ref[i]
             ref_soap_z = self.ref_soap[i, :n_ref]
@@ -120,14 +120,14 @@ class GPRCalculator:
         return df_dsoap
 
     @classmethod
-    def get_Kinv(cls, ref_soap, sigma):
+    def get_Kinv(cls, ref_soap, sigma, device):
         """
         ref_soap: (N_Z, MAX_N_REF, N_SOAP)
         sigma: ()
         """
         n = ref_soap.shape[1]
         K = (ref_soap @ ref_soap.swapaxes(1, 2)) ** 2
-        return torch.linalg.inv(K + sigma**2 * np.identity(n))
+        return torch.linalg.inv(K + sigma**2 * torch.eye(n, device=device))
 
 
 class SOAPCalculatorSpinv:
@@ -199,7 +199,12 @@ class MLMMCalculator:
     # List of supported backends.
     _supported_backends = ["torchani", "deepmd", "orca"]
 
-    def __init__(self, model=None, backend="torchani", deepmd_model=None, log=True):
+    # List of supported devices.
+    _supported_devices = ["cpu", "cuda"]
+
+    def __init__(
+        self, model=None, backend="torchani", deepmd_model=None, device=None, log=True
+    ):
         """Constructor.
 
         model : str
@@ -212,6 +217,10 @@ class MLMMCalculator:
         deepmd_model : str
             Path to the DeePMD model file to use for in vacuo calculations. This
             must be specified if "deepmd" is the selected backend.
+
+        device : str
+            The name of the device to be used by PyTorch. Options are "cpu"
+            or "cuda".
 
         log : bool
             Whether to log the in vacuo and ML/MM energies to file.
@@ -280,6 +289,31 @@ class MLMMCalculator:
                     "'deepmd_model' must be specified when DeePMD 'backend' is chosen!"
                 )
 
+        # Validate the PyTorch device.
+        if device is not None:
+            if not isinstance(device, str):
+                raise TypError("'device' must be of type 'str'")
+            # Strip whitespace and convert to lower case.
+            device = device.lower().replace(" ", "")
+            # See if the user has specified a GPU index.
+            if device.startswith("cuda"):
+                try:
+                    device, index = device.split(":")
+                except:
+                    index = 0
+            if not device in self._supported_devices:
+                raise ValueError(
+                    f"Unsupported device '{device}'. Options are: {', '.join(self._supported_devices)}"
+                )
+            # Create the full CUDA device string.
+            if device == "cuda":
+                device = f"cuda:{index}"
+            # Set the device.
+            self._device = torch.device(device)
+        else:
+            # Default to CUDA, if available.
+            self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         if not isinstance(log, bool):
             raise TypeError("'log' must be of type 'bool")
         else:
@@ -301,37 +335,48 @@ class MLMMCalculator:
                     self._hypers[key] = self._params[key]
 
         self._get_soap = SOAPCalculatorSpinv(self._hypers)
-        self._q_core = torch.tensor(self._params["q_core"], dtype=torch.float32)
+        self._q_core = torch.tensor(
+            self._params["q_core"], dtype=torch.float32, device=self._device
+        )
         self._a_QEq = self._params["a_QEq"]
         self._a_Thole = self._params["a_Thole"]
-        self._k_Z = torch.tensor(self._params["k_Z"], dtype=torch.float32)
+        self._k_Z = torch.tensor(
+            self._params["k_Z"], dtype=torch.float32, device=self._device
+        )
         self._q_total = torch.tensor(
-            self._params.get("total_charge", 0), dtype=torch.float32
+            self._params.get("total_charge", 0),
+            dtype=torch.float32,
+            device=self._device,
         )
         self._get_s = GPRCalculator(
-            torch.tensor(self._params["s_ref"], dtype=torch.float32),
-            torch.tensor(self._params["ref_soap"], dtype=torch.float32),
-            self._params["n_ref"],
+            torch.tensor(
+                self._params["s_ref"], dtype=torch.float32, device=self._device
+            ),
+            torch.tensor(
+                self._params["ref_soap"], dtype=torch.float32, device=self._device
+            ),
+            torch.tensor(self._params["n_ref"], dtype=torch.long, device=self._device),
             1e-3,
+            device=self._device,
         )
         self._get_chi = GPRCalculator(
-            torch.tensor(self._params["chi_ref"], dtype=torch.float32),
-            torch.tensor(self._params["ref_soap"], dtype=torch.float32),
-            self._params["n_ref"],
+            torch.tensor(
+                self._params["chi_ref"], dtype=torch.float32, device=self._device
+            ),
+            torch.tensor(
+                self._params["ref_soap"], dtype=torch.float32, device=self._device
+            ),
+            torch.tensor(self._params["n_ref"], dtype=torch.long, device=self._device),
             1e-3,
+            device=self._device,
         )
         self._get_E_with_grad = grad_and_value(self._get_E, argnums=(1, 2, 3, 4))
 
         # Initialise TorchANI backend attributes.
         if self._backend == "torchani":
-            # Create the device. Use CUDA as the default, falling back on CPU.
-            self._torchani_device = torch.device(
-                "cuda" if torch.cuda.is_available() else "cpu"
-            )
-
             # Create the TorchANI model.
             self._torchani_model = torchani.models.ANI2x(periodic_table_index=True).to(
-                self._torchani_device
+                self._device
             )
 
         # Initialise DeePMD backend attributes.
@@ -452,24 +497,28 @@ class MLMMCalculator:
                 )
 
         # Convert units and convert to PyTorch tensors.
-        xyz_qm_bohr = torch.tensor(xyz_qm * ANGSTROM_TO_BOHR, dtype=torch.float32)
-        xyz_mm_bohr = torch.tensor(xyz_mm * ANGSTROM_TO_BOHR, dtype=torch.float32)
-        charges_mm = torch.tensor(charges_mm, dtype=torch.float32)
-
-        mol_soap, dsoap_dxyz = self._get_soap(atomic_numbers, xyz_qm, True)
-        mol_soap = torch.tensor(mol_soap, dtype=torch.float32)
-        dsoap_dxyz_qm_bohr = torch.tensor(
-            dsoap_dxyz / ANGSTROM_TO_BOHR, dtype=torch.float32
+        xyz_qm_bohr = torch.tensor(
+            xyz_qm * ANGSTROM_TO_BOHR, dtype=torch.float32, device=self._device
         )
-        # self._species_id = sor(self._species_id, dtype=torch.long)
+        xyz_mm_bohr = torch.tensor(
+            xyz_mm * ANGSTROM_TO_BOHR, dtype=torch.float32, device=self._device
+        )
+        charges_mm = torch.tensor(charges_mm, dtype=torch.float32, device=self._device)
 
-        s, ds_dsoap = self._get_s(mol_soap, self._species_id, True)
-        chi, dchi_dsoap = self._get_chi(mol_soap, self._species_id, True)
+        mol_soap, dsoap_dxyz = self._get_soap(atomic_numbers, xyz_qm, gradient=True)
+        mol_soap = torch.tensor(mol_soap, dtype=torch.float32, device=self._device)
+        dsoap_dxyz_qm_bohr = torch.tensor(
+            dsoap_dxyz / ANGSTROM_TO_BOHR, dtype=torch.float32, device=self._device
+        )
+
+        s, ds_dsoap = self._get_s(
+            mol_soap, self._species_id, self._device, gradient=True
+        )
+        chi, dchi_dsoap = self._get_chi(
+            mol_soap, self._species_id, self._device, gradient=True
+        )
         ds_dxyz_qm_bohr = self._get_df_dxyz(ds_dsoap, dsoap_dxyz_qm_bohr)
         dchi_dxyz_qm_bohr = self._get_df_dxyz(dchi_dsoap, dsoap_dxyz_qm_bohr)
-
-        s = torch.tensor(s, dtype=torch.float32)
-        chi = torch.tensor(chi, dtype=torch.float32)
 
         grads, E = self._get_E_with_grad(charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi)
         dE_dxyz_qm_bohr_part, dE_dxyz_mm_bohr, dE_ds, dE_dchi = grads
@@ -481,8 +530,8 @@ class MLMMCalculator:
 
         # Compute the total energy and gradients.
         E_tot = E + E_vac
-        grad_qm = np.array(dE_dxyz_qm_bohr) + grad_vac
-        grad_mm = np.array(dE_dxyz_mm_bohr)
+        grad_qm = np.array(dE_dxyz_qm_bohr.cpu()) + grad_vac
+        grad_mm = np.array(dE_dxyz_mm_bohr.cpu())
 
         # Create the file names for the ORCA format output.
         filename = os.path.splitext(orca_input)[0]
@@ -521,7 +570,7 @@ class MLMMCalculator:
     def _get_E_components(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
         q_core = self._q_core[self._species_id]
         k_Z = self._k_Z[self._species_id]
-        r_data = self._get_r_data(xyz_qm_bohr)
+        r_data = self._get_r_data(xyz_qm_bohr, self._device)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
         q = self._get_q(r_data, s, chi)
         q_val = q - q_core
@@ -562,7 +611,7 @@ class MLMMCalculator:
         x, y = A.shape
 
         # Create an tensor of ones with one more row and column than A.
-        B = torch.ones(x + 1, y + 1)
+        B = torch.ones(x + 1, y + 1, device=self._device)
 
         # Copy A into B.
         B[:x, :y] = A
@@ -618,7 +667,7 @@ class MLMMCalculator:
         return -torch.tensordot(T1, mu, ((0, 2), (0, 1)))
 
     @classmethod
-    def _get_r_data(cls, xyz):
+    def _get_r_data(cls, xyz, device):
         n_atoms = len(xyz)
 
         rr_mat = xyz[:, None, :] - xyz[None, :, :]
@@ -637,8 +686,10 @@ class MLMMCalculator:
 
         r_inv1 = r_inv.repeat_interleave(3, dim=1)
         r_inv2 = r_inv1.repeat_interleave(3, dim=0)
-        outer = cls._get_outer(rr_mat)
-        id2 = torch.tile(torch.tile(torch.eye(3).T, (1, n_atoms)).T, (1, n_atoms))
+        outer = cls._get_outer(rr_mat, device)
+        id2 = torch.tile(
+            torch.tile(torch.eye(3, device=device).T, (1, n_atoms)).T, (1, n_atoms)
+        )
 
         t01 = r_inv
         t11 = -rr_mat.reshape(n_atoms, n_atoms * 3) * r_inv1**3
@@ -648,11 +699,11 @@ class MLMMCalculator:
         return {"r_mat": r_mat_copy, "T01": t01, "T11": t11, "T21": t21, "T22": t22}
 
     @staticmethod
-    def _get_outer(a):
+    def _get_outer(a, device):
         n = len(a)
         idx = np.triu_indices(n, 1)
 
-        result = torch.zeros((n, n, 3, 3))
+        result = torch.zeros((n, n, 3, 3), device=device)
         result[idx] = a[idx][:, :, None] @ a[idx][:, None, :]
         tmp = result
         result = result.swapaxes(0, 1)
@@ -844,13 +895,13 @@ class MLMMCalculator:
         coords = torch.tensor(
             np.float32(xyz.reshape(1, *xyz.shape)),
             requires_grad=True,
-            device=self._torchani_device,
+            device=self._device,
         )
 
         # Convert the atomic numbers to a Torch tensor.
         atomic_numbers = torch.tensor(
             atomic_numbers.reshape(1, *atomic_numbers.shape),
-            device=self._torchani_device,
+            device=self._device,
         )
 
         # Compute the energy and gradient.
