@@ -12,7 +12,7 @@ modifications to sander are needed.
 First create a conda environment with all of the required dependencies:
 
 ```sh
-conda create -n mlmm -c conda-forge ambertools ase compilers eigen deepmd-kit pytorch-gpu torchani
+conda env create -f environment.yml
 conda activate mlmm
 ```
 
@@ -21,27 +21,6 @@ If this fails, try using [mamba](https://github.com/mamba-org/mamba) as a replac
 For GPU functionality, you will need to install appropriate CUDA drivers on
 your host system along with NVCC, the CUDA compiler driver. (This doesn't come
 with `cudatoolkit` from `conda-forge`.)
-
-Now install the additional, non-conda, [librascal](https://github.com/lab-cosmo/librascal) package:
-
-```sh
-git clone https://github.com/lab-cosmo/librascal.git
-cd librascal
-pip install .
-```
-
-If your environment requires a [PyTorch](https://pytorch.org/)
-version less than 2.0, then you will also need the additional
-[functorch](https://github.com/pytorch/functorch) package to access the
-[grad_and_value](https://pytorch.org/functorch/stable/generated/functorch.grad_and_value.html) function. This can be installed from `conda-forge` as follows:
-
-```sh
-conda install -c conda-forge functorch
-```
-
-(It may be necessary to specify `functorch` as an additional dependency at the
-environment creation stage, e.g. if it is not possible to resolve with the
-above approach.)
 
 Finally, install the `sander-mlmm` interface:
 
