@@ -301,6 +301,13 @@ class MLMMCalculator:
                     device, index = device.split(":")
                 except:
                     index = 0
+
+            # Make sure the GPU device index is valid.
+            try:
+                index = int(index)
+            except:
+                raise ValueError(f"Invalid GPU index: {index}") from None
+
             if not device in self._supported_devices:
                 raise ValueError(
                     f"Unsupported device '{device}'. Options are: {', '.join(self._supported_devices)}"
