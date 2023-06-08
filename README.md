@@ -110,6 +110,28 @@ When multiple files are specified, energies and gradients will be averaged
 over the models. The model files need to be visible to the `mlmm-server`, so we
 recommend the use of absolute paths.
 
+## Device
+
+We currently support `CPU` and `CUDA` as the device for [PyTorch](https://pytorch.org/).
+This can be configured using the `MLMM_DEVICE` environment variable, or by
+using the `--device` argument when launching `mlmm-server`, e.g.:
+
+```
+mlmm-server --backend cuda
+```
+
+When no device is specified, we will preferentially try to use `CUDA` if it is
+available. By default, the _first_ `CUDA` device index will be used. If you want
+to specify the index, e.g. when running on a multi-GPU setup, then you can use
+the following syntax:
+
+```
+mlmm-server --backend cuda:1
+```
+
+This would tell `PyTorch` that we want to use device index `1`. The same formatting
+works for the environment varialbe, e.g. `MLMM_DEVICE=cuda:1`.
+
 ## Why do we need an ML/MM server?
 
 The ML/MM implementation uses several ML frameworks to predict energies
