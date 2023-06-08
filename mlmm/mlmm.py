@@ -302,11 +302,11 @@ class MLMMCalculator:
                 except:
                     index = 0
 
-            # Make sure the GPU device index is valid.
-            try:
-                index = int(index)
-            except:
-                raise ValueError(f"Invalid GPU index: {index}") from None
+                # Make sure the GPU device index is valid.
+                try:
+                    index = int(index)
+                except:
+                    raise ValueError(f"Invalid GPU index: {index}") from None
 
             if not device in self._supported_devices:
                 raise ValueError(
