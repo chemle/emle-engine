@@ -1,0 +1,16 @@
+name: mlmm
+
+channels:
+  - conda-forge
+
+dependencies:
+  - ambertools
+  - ase
+  - eigen
+  - compilers
+  - deepmd-kit
+  - functorch
+  - pytorch-gpu >= 1.13
+  - torchani
+  - pip:
+    - git+https://github.com/lab-cosmo/librascal.git#egg=rascal[complete]
