@@ -30,6 +30,19 @@ cd librascal
 pip install .
 ```
 
+If your environment requires a [PyTorch](https://pytorch.org/)
+version less than 2.0, then you will also need the additional
+[functorch](https://github.com/pytorch/functorch) package to access the
+[grad_and_value](https://pytorch.org/functorch/stable/generated/functorch.grad_and_value.html) function. This can be installed from `conda-forge` as follows:
+
+```sh
+conda install -c conda-forge functorch
+```
+
+(It may be necessary to specify `functorch` as an additional dependency at the
+environment creation stage, e.g. if it is not possible to resolve with the
+above approach.)
+
 Finally, install the `sander-mlmm` interface:
 
 ```sh
