@@ -72,7 +72,7 @@ ELEMENT_DICT = {1: "H", 6: "C", 7: "N", 8: "O", 16: "S"}
 class GPRCalculator:
     """Predicts an atomic property for a molecule with GPR."""
 
-    def __init__(self, ref_values, ref_soap, n_ref, sigma, device):
+    def __init__(self, ref_values, ref_soap, n_ref, sigma):
         """
         ref_values: (N_Z, N_REF)
         ref_soap: (N_Z, N_REF, N_SOAP)
@@ -80,20 +80,20 @@ class GPRCalculator:
         sigma: ()
         """
         self.ref_soap = ref_soap
-        Kinv = self.get_Kinv(ref_soap, sigma, device)
+        Kinv = self.get_Kinv(ref_soap, sigma)
         self.n_ref = n_ref
         self.n_z = len(n_ref)
-        self.ref_mean = torch.sum(ref_values, axis=1) / n_ref
+        self.ref_mean = np.sum(ref_values, axis=1) / n_ref
         ref_shifted = ref_values - self.ref_mean[:, None]
-        self.c = (Kinv.float() @ ref_shifted[:, :, None].float()).squeeze()
+        self.c = (Kinv @ ref_shifted[:, :, None]).squeeze()
 
-    def __call__(self, mol_soap, zid, device, gradient=False):
+    def __call__(self, mol_soap, zid, gradient=False):
         """
         mol_soap: (N_ATOMS, N_SOAP)
         zid: (N_ATOMS,)
         """
 
-        result = torch.zeros(len(zid), device=device)
+        result = np.zeros(len(zid), dtype=np.float32)
         for i in range(self.n_z):
             n_ref = self.n_ref[i]
             ref_soap_z = self.ref_soap[i, :n_ref]
@@ -104,11 +104,11 @@ class GPRCalculator:
             result[zid == i] = K_mol_ref2 @ self.c[i, :n_ref] + self.ref_mean[i]
         if not gradient:
             return result
-        return result, self.get_gradient(mol_soap, zid, device)
+        return result, self.get_gradient(mol_soap, zid)
 
-    def get_gradient(self, mol_soap, zid, device):
+    def get_gradient(self, mol_soap, zid):
         n_at, n_soap = mol_soap.shape
-        df_dsoap = torch.zeros((n_at, n_soap), device=device)
+        df_dsoap = np.zeros((n_at, n_soap), dtype=np.float32)
         for i in range(self.n_z):
             n_ref = self.n_ref[i]
             ref_soap_z = self.ref_soap[i, :n_ref]
@@ -120,14 +120,14 @@ class GPRCalculator:
         return df_dsoap
 
     @classmethod
-    def get_Kinv(cls, ref_soap, sigma, device):
+    def get_Kinv(cls, ref_soap, sigma):
         """
         ref_soap: (N_Z, MAX_N_REF, N_SOAP)
         sigma: ()
         """
         n = ref_soap.shape[1]
         K = (ref_soap @ ref_soap.swapaxes(1, 2)) ** 2
-        return torch.linalg.inv(K + sigma**2 * torch.eye(n, device=device))
+        return np.linalg.inv(K + sigma**2 * np.eye(n, dtype=np.float32))
 
 
 class SOAPCalculatorSpinv:
@@ -356,26 +356,16 @@ class MLMMCalculator:
             device=self._device,
         )
         self._get_s = GPRCalculator(
-            torch.tensor(
-                self._params["s_ref"], dtype=torch.float32, device=self._device
-            ),
-            torch.tensor(
-                self._params["ref_soap"], dtype=torch.float32, device=self._device
-            ),
-            torch.tensor(self._params["n_ref"], dtype=torch.long, device=self._device),
+            self._params["s_ref"],
+            self._params["ref_soap"],
+            self._params["n_ref"],
             1e-3,
-            device=self._device,
         )
         self._get_chi = GPRCalculator(
-            torch.tensor(
-                self._params["chi_ref"], dtype=torch.float32, device=self._device
-            ),
-            torch.tensor(
-                self._params["ref_soap"], dtype=torch.float32, device=self._device
-            ),
-            torch.tensor(self._params["n_ref"], dtype=torch.long, device=self._device),
+            self._params["chi_ref"],
+            self._params["ref_soap"],
+            self._params["n_ref"],
             1e-3,
-            device=self._device,
         )
         self._get_E_with_grad = grad_and_value(self._get_E, argnums=(1, 2, 3, 4))
 
@@ -503,43 +493,42 @@ class MLMMCalculator:
                     "Failed to calculate in vacuo energies using ORCA backend!"
                 )
 
-        # Convert units and convert to PyTorch tensors.
-        xyz_qm_bohr = torch.tensor(
-            xyz_qm * ANGSTROM_TO_BOHR, dtype=torch.float32, device=self._device
-        )
-        xyz_mm_bohr = torch.tensor(
-            xyz_mm * ANGSTROM_TO_BOHR, dtype=torch.float32, device=self._device
-        )
-        charges_mm = torch.tensor(charges_mm, dtype=torch.float32, device=self._device)
+        # Convert units.
+        xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
+        xyz_mm_bohr = xyz_mm * ANGSTROM_TO_BOHR
 
         mol_soap, dsoap_dxyz = self._get_soap(atomic_numbers, xyz_qm, gradient=True)
-        mol_soap = torch.tensor(mol_soap, dtype=torch.float32, device=self._device)
-        dsoap_dxyz_qm_bohr = torch.tensor(
-            dsoap_dxyz / ANGSTROM_TO_BOHR, dtype=torch.float32, device=self._device
-        )
+        dsoap_dxyz_qm_bohr = dsoap_dxyz / ANGSTROM_TO_BOHR
 
-        s, ds_dsoap = self._get_s(
-            mol_soap, self._species_id, self._device, gradient=True
-        )
-        chi, dchi_dsoap = self._get_chi(
-            mol_soap, self._species_id, self._device, gradient=True
-        )
+        s, ds_dsoap = self._get_s(mol_soap, self._species_id, gradient=True)
+        chi, dchi_dsoap = self._get_chi(mol_soap, self._species_id, gradient=True)
         ds_dxyz_qm_bohr = self._get_df_dxyz(ds_dsoap, dsoap_dxyz_qm_bohr)
         dchi_dxyz_qm_bohr = self._get_df_dxyz(dchi_dsoap, dsoap_dxyz_qm_bohr)
+
+        # Convert inputs to PyTorch tensors.
+        xyz_qm_bohr = torch.tensor(
+            xyz_qm_bohr, dtype=torch.float32, device=self._device
+        )
+        xyz_mm_bohr = torch.tensor(
+            xyz_mm_bohr, dtype=torch.float32, device=self._device
+        )
+        charges_mm = torch.tensor(charges_mm, dtype=torch.float32, device=self._device)
+        s = torch.tensor(s, dtype=torch.float32, device=self._device)
+        chi = torch.tensor(chi, dtype=torch.float32, device=self._device)
 
         # Compute gradients and energy.
         grads, E = self._get_E_with_grad(charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi)
         dE_dxyz_qm_bohr_part, dE_dxyz_mm_bohr, dE_ds, dE_dchi = grads
         dE_dxyz_qm_bohr = (
-            dE_dxyz_qm_bohr_part
-            + dE_ds @ ds_dxyz_qm_bohr.swapaxes(0, 1)
-            + dE_dchi @ dchi_dxyz_qm_bohr.swapaxes(0, 1)
+            dE_dxyz_qm_bohr_part.cpu().numpy()
+            + dE_ds.cpu().numpy() @ ds_dxyz_qm_bohr.swapaxes(0, 1)
+            + dE_dchi.cpu().numpy() @ dchi_dxyz_qm_bohr.swapaxes(0, 1)
         )
 
         # Compute the total energy and gradients.
         E_tot = E + E_vac
-        grad_qm = dE_dxyz_qm_bohr.cpu().numpy() + grad_vac
-        grad_mm = dE_dxyz_mm_bohr.cpu().numpy()
+        grad_qm = dE_dxyz_qm_bohr + grad_vac
+        grad_mm = dE_dxyz_mm_bohr
 
         # Create the file names for the ORCA format output.
         filename = os.path.splitext(orca_input)[0]
@@ -619,7 +608,7 @@ class MLMMCalculator:
         x, y = A.shape
 
         # Create an tensor of ones with one more row and column than A.
-        B = torch.ones(x + 1, y + 1, device=self._device)
+        B = torch.ones(x + 1, y + 1, dtype=torch.float32, device=self._device)
 
         # Copy A into B.
         B[:x, :y] = A
@@ -639,7 +628,7 @@ class MLMMCalculator:
         ).flatten()
 
         mu_ind = torch.linalg.solve(A, fields)
-        E_ind = mu_ind @ fields.float() * 0.5
+        E_ind = mu_ind @ fields * 0.5
         return mu_ind.reshape((-1, 3))
 
     def _get_A_thole(self, r_data, s, q_val, k_Z):
@@ -664,7 +653,7 @@ class MLMMCalculator:
 
     @staticmethod
     def _get_df_dxyz(df_dsoap, dsoap_dxyz):
-        return torch.einsum("ij,ijkl->ikl", df_dsoap, dsoap_dxyz)
+        return np.einsum("ij,ijkl->ikl", df_dsoap, dsoap_dxyz)
 
     @staticmethod
     def _get_vpot_q(q, T0):
@@ -696,7 +685,10 @@ class MLMMCalculator:
         r_inv2 = r_inv1.repeat_interleave(3, dim=0)
         outer = cls._get_outer(rr_mat, device)
         id2 = torch.tile(
-            torch.tile(torch.eye(3, device=device).T, (1, n_atoms)).T, (1, n_atoms)
+            torch.tile(
+                torch.eye(3, dtype=torch.float32, device=device).T, (1, n_atoms)
+            ).T,
+            (1, n_atoms),
         )
 
         t01 = r_inv
@@ -711,7 +703,7 @@ class MLMMCalculator:
         n = len(a)
         idx = np.triu_indices(n, 1)
 
-        result = torch.zeros((n, n, 3, 3), device=device)
+        result = torch.zeros((n, n, 3, 3), dtype=torch.float32, device=device)
         result[idx] = a[idx][:, :, None] @ a[idx][:, None, :]
         tmp = result
         result = result.swapaxes(0, 1)
