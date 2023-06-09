@@ -538,8 +538,8 @@ class MLMMCalculator:
 
         # Compute the total energy and gradients.
         E_tot = E + E_vac
-        grad_qm = np.array(dE_dxyz_qm_bohr.cpu()) + grad_vac
-        grad_mm = np.array(dE_dxyz_mm_bohr.cpu())
+        grad_qm = dE_dxyz_qm_bohr.cpu().numpy() + grad_vac
+        grad_mm = dE_dxyz_mm_bohr.cpu().numpy()
 
         # Create the file names for the ORCA format output.
         filename = os.path.splitext(orca_input)[0]
