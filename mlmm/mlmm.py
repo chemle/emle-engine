@@ -594,15 +594,13 @@ class MLMMCalculator:
 
         A = self._get_T0_gaussian(r_data["T01"], r_data["r_mat"], s_mat)
 
-        try:
-            A.fill_diagonal(
-                torch.ones_like(A.diagonal()) * (1.0 / (s_gauss * np.sqrt(np.pi)))
-            )
-        except:
-            new_diag = torch.ones_like(A.diagonal()) * (
-                1.0 / (s_gauss * np.sqrt(np.pi))
-            )
-            A.diagonal().copy_(new_diag)
+        new_diag = torch.ones_like(
+            A.diagonal(), dtype=torch.float32, device=self._device
+        ) * (1.0 / (s_gauss * np.sqrt(np.pi)))
+        mask = torch.diag(
+            torch.ones_like(new_diag, dtype=torch.float32, device=self._device)
+        )
+        A = mask * torch.diag(new_diag) + (1.0 - mask) * A
 
         # Store the dimensions of A.
         x, y = A.shape
@@ -644,11 +642,12 @@ class MLMMCalculator:
 
         A = -self._get_T2_thole(r_data["T21"], r_data["T22"], au32)
 
-        try:
-            A.fill_diagonal(1.0 / alpha.repeat_interleave(3))
-        except:
-            new_diag = 1.0 / alpha.repeat_interleave(3)
-            A.diagonal().copy_(new_diag)
+        new_diag = 1.0 / alpha.repeat_interleave(3)
+        mask = torch.diag(
+            torch.ones_like(new_diag, dtype=torch.float32, device=self._device)
+        )
+        A = mask * torch.diag(new_diag) + (1.0 - mask) * A
+
         return A
 
     @staticmethod
@@ -671,15 +670,15 @@ class MLMMCalculator:
 
         r2_mat = torch.sum(rr_mat**2, axis=2)
         r_mat = torch.sqrt(torch.where(r2_mat > 0.0, r2_mat, 1.0))
-        try:
-            r_mat.fill_diagonal(torch.zeros_like(r_mat.diagonal()))
-        except:
-            new_diag = torch.zeros_like(r_mat.diagonal())
-            r_mat_copy = r_mat.clone().detach()
-            r_mat_copy.diagonal().copy_(new_diag)
 
-        tmp = torch.where(r_mat_copy == 0.0, 1.0, r_mat_copy)
-        r_inv = torch.where(r_mat_copy == 0.0, 0.0, 1.0 / tmp)
+        new_diag = torch.zeros_like(
+            r_mat.diagonal(), dtype=torch.float32, device=device
+        )
+        mask = torch.diag(torch.ones_like(new_diag, dtype=torch.float32, device=device))
+        r_mat = mask * torch.diag(new_diag) + (1.0 - mask) * r_mat
+
+        tmp = torch.where(r_mat == 0.0, 1.0, r_mat)
+        r_inv = torch.where(r_mat == 0.0, 0.0, 1.0 / tmp)
 
         r_inv1 = r_inv.repeat_interleave(3, dim=1)
         r_inv2 = r_inv1.repeat_interleave(3, dim=0)
@@ -696,7 +695,7 @@ class MLMMCalculator:
         t21 = -id2 * r_inv2**3
         t22 = 3 * outer * r_inv2**5
 
-        return {"r_mat": r_mat_copy, "T01": t01, "T11": t11, "T21": t21, "T22": t22}
+        return {"r_mat": r_mat, "T01": t01, "T11": t11, "T21": t21, "T22": t22}
 
     @staticmethod
     def _get_outer(a, device):
