@@ -10,6 +10,7 @@ dependencies:
   - compilers
   - deepmd-kit
   - functorch
+  - pip
   - pytorch-gpu >= 1.13
   - torchani
   - pip:
