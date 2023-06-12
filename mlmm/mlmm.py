@@ -27,12 +27,6 @@ import shutil
 import subprocess
 import tempfile
 
-from functools import partial
-
-import jax.numpy as jnp
-from jax import jit, value_and_grad
-from jax.scipy.special import erf as jerf
-
 import scipy
 import scipy.io
 
@@ -50,6 +44,11 @@ from deepmd.infer import DeepPot
 
 import torch
 import torchani
+
+try:
+    from torch.func import grad_and_value
+except:
+    from functorch import grad_and_value
 
 ANGSTROM_TO_BOHR = 1.88973
 BOHR_TO_ANGSTROM = 0.529177
@@ -94,7 +93,7 @@ class GPRCalculator:
         zid: (N_ATOMS,)
         """
 
-        result = np.zeros(len(zid))
+        result = np.zeros(len(zid), dtype=np.float32)
         for i in range(self.n_z):
             n_ref = self.n_ref[i]
             ref_soap_z = self.ref_soap[i, :n_ref]
@@ -109,7 +108,7 @@ class GPRCalculator:
 
     def get_gradient(self, mol_soap, zid):
         n_at, n_soap = mol_soap.shape
-        df_dsoap = np.zeros((n_at, n_soap))
+        df_dsoap = np.zeros((n_at, n_soap), dtype=np.float32)
         for i in range(self.n_z):
             n_ref = self.n_ref[i]
             ref_soap_z = self.ref_soap[i, :n_ref]
@@ -128,7 +127,7 @@ class GPRCalculator:
         """
         n = ref_soap.shape[1]
         K = (ref_soap @ ref_soap.swapaxes(1, 2)) ** 2
-        return np.linalg.inv(K + sigma**2 * np.identity(n))
+        return np.linalg.inv(K + sigma**2 * np.eye(n, dtype=np.float32))
 
 
 class SOAPCalculatorSpinv:
@@ -172,7 +171,7 @@ class MLMMCalculator:
     as the backend, but this can easily be generalised to any compatible engine.
 
     WARNING: This class is assumed to be static for the purposes of working with
-    JAX, i.e. all attributes assigned in the constructor and used within the
+    PyTorch, i.e. all attributes assigned in the constructor and used within the
     _get_E method are immutable.
     """
 
@@ -200,7 +199,12 @@ class MLMMCalculator:
     # List of supported backends.
     _supported_backends = ["torchani", "deepmd", "orca"]
 
-    def __init__(self, model=None, backend="torchani", deepmd_model=None, log=True):
+    # List of supported devices.
+    _supported_devices = ["cpu", "cuda"]
+
+    def __init__(
+        self, model=None, backend="torchani", deepmd_model=None, device=None, log=True
+    ):
         """Constructor.
 
         model : str
@@ -213,6 +217,10 @@ class MLMMCalculator:
         deepmd_model : str
             Path to the DeePMD model file to use for in vacuo calculations. This
             must be specified if "deepmd" is the selected backend.
+
+        device : str
+            The name of the device to be used by PyTorch. Options are "cpu"
+            or "cuda".
 
         log : bool
             Whether to log the in vacuo and ML/MM energies to file.
@@ -281,6 +289,38 @@ class MLMMCalculator:
                     "'deepmd_model' must be specified when DeePMD 'backend' is chosen!"
                 )
 
+        # Validate the PyTorch device.
+        if device is not None:
+            if not isinstance(device, str):
+                raise TypError("'device' must be of type 'str'")
+            # Strip whitespace and convert to lower case.
+            device = device.lower().replace(" ", "")
+            # See if the user has specified a GPU index.
+            if device.startswith("cuda"):
+                try:
+                    device, index = device.split(":")
+                except:
+                    index = 0
+
+                # Make sure the GPU device index is valid.
+                try:
+                    index = int(index)
+                except:
+                    raise ValueError(f"Invalid GPU index: {index}") from None
+
+            if not device in self._supported_devices:
+                raise ValueError(
+                    f"Unsupported device '{device}'. Options are: {', '.join(self._supported_devices)}"
+                )
+            # Create the full CUDA device string.
+            if device == "cuda":
+                device = f"cuda:{index}"
+            # Set the device.
+            self._device = torch.device(device)
+        else:
+            # Default to CUDA, if available.
+            self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         if not isinstance(log, bool):
             raise TypeError("'log' must be of type 'bool")
         else:
@@ -302,13 +342,24 @@ class MLMMCalculator:
                     self._hypers[key] = self._params[key]
 
         self._get_soap = SOAPCalculatorSpinv(self._hypers)
-        self._q_core = self._params["q_core"]
+        self._q_core = torch.tensor(
+            self._params["q_core"], dtype=torch.float32, device=self._device
+        )
         self._a_QEq = self._params["a_QEq"]
         self._a_Thole = self._params["a_Thole"]
-        self._k_Z = self._params["k_Z"]
-        self._q_total = self._params.get("total_charge", 0)
+        self._k_Z = torch.tensor(
+            self._params["k_Z"], dtype=torch.float32, device=self._device
+        )
+        self._q_total = torch.tensor(
+            self._params.get("total_charge", 0),
+            dtype=torch.float32,
+            device=self._device,
+        )
         self._get_s = GPRCalculator(
-            self._params["s_ref"], self._params["ref_soap"], self._params["n_ref"], 1e-3
+            self._params["s_ref"],
+            self._params["ref_soap"],
+            self._params["n_ref"],
+            1e-3,
         )
         self._get_chi = GPRCalculator(
             self._params["chi_ref"],
@@ -316,18 +367,13 @@ class MLMMCalculator:
             self._params["n_ref"],
             1e-3,
         )
-        self._get_E_with_grad = value_and_grad(self._get_E, argnums=(1, 2, 3, 4))
+        self._get_E_with_grad = grad_and_value(self._get_E, argnums=(1, 2, 3, 4))
 
         # Initialise TorchANI backend attributes.
         if self._backend == "torchani":
-            # Create the device. Use CUDA as the default, falling back on CPU.
-            self._torchani_device = torch.device(
-                "cuda" if torch.cuda.is_available() else "cpu"
-            )
-
             # Create the TorchANI model.
             self._torchani_model = torchani.models.ANI2x(periodic_table_index=True).to(
-                self._torchani_device
+                self._device
             )
 
         # Initialise DeePMD backend attributes.
@@ -395,7 +441,7 @@ class MLMMCalculator:
         if num_mm_atoms > self._max_mm_atoms:
             self._max_mm_atoms = num_mm_atoms
 
-        # Pad the MM coordinates and charges arrays to avoid re-jitting with JAX.
+        # Pad the MM coordinates and charges arrays to avoid re-jitting.
         if self._max_mm_atoms > num_mm_atoms:
             num_pad = self._max_mm_atoms - num_mm_atoms
             xyz_mm_pad = num_pad * [[0.0, 0.0, 0.0]]
@@ -447,31 +493,42 @@ class MLMMCalculator:
                     "Failed to calculate in vacuo energies using ORCA backend!"
                 )
 
-        # Convert units and convert to JAX arrays.
-        xyz_qm_bohr = jnp.array(xyz_qm * ANGSTROM_TO_BOHR)
-        xyz_mm_bohr = jnp.array(xyz_mm * ANGSTROM_TO_BOHR)
-        charges_mm = jnp.array(charges_mm)
+        # Convert units.
+        xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
+        xyz_mm_bohr = xyz_mm * ANGSTROM_TO_BOHR
 
-        mol_soap, dsoap_dxyz = self._get_soap(atomic_numbers, xyz_qm, True)
+        mol_soap, dsoap_dxyz = self._get_soap(atomic_numbers, xyz_qm, gradient=True)
         dsoap_dxyz_qm_bohr = dsoap_dxyz / ANGSTROM_TO_BOHR
 
-        s, ds_dsoap = self._get_s(mol_soap, self._species_id, True)
-        chi, dchi_dsoap = self._get_chi(mol_soap, self._species_id, True)
+        s, ds_dsoap = self._get_s(mol_soap, self._species_id, gradient=True)
+        chi, dchi_dsoap = self._get_chi(mol_soap, self._species_id, gradient=True)
         ds_dxyz_qm_bohr = self._get_df_dxyz(ds_dsoap, dsoap_dxyz_qm_bohr)
         dchi_dxyz_qm_bohr = self._get_df_dxyz(dchi_dsoap, dsoap_dxyz_qm_bohr)
 
-        E, grads = self._get_E_with_grad(charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi)
+        # Convert inputs to PyTorch tensors.
+        xyz_qm_bohr = torch.tensor(
+            xyz_qm_bohr, dtype=torch.float32, device=self._device
+        )
+        xyz_mm_bohr = torch.tensor(
+            xyz_mm_bohr, dtype=torch.float32, device=self._device
+        )
+        charges_mm = torch.tensor(charges_mm, dtype=torch.float32, device=self._device)
+        s = torch.tensor(s, dtype=torch.float32, device=self._device)
+        chi = torch.tensor(chi, dtype=torch.float32, device=self._device)
+
+        # Compute gradients and energy.
+        grads, E = self._get_E_with_grad(charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi)
         dE_dxyz_qm_bohr_part, dE_dxyz_mm_bohr, dE_ds, dE_dchi = grads
         dE_dxyz_qm_bohr = (
-            dE_dxyz_qm_bohr_part
-            + dE_ds @ ds_dxyz_qm_bohr.swapaxes(0, 1)
-            + dE_dchi @ dchi_dxyz_qm_bohr.swapaxes(0, 1)
+            dE_dxyz_qm_bohr_part.cpu().numpy()
+            + dE_ds.cpu().numpy() @ ds_dxyz_qm_bohr.swapaxes(0, 1)
+            + dE_dchi.cpu().numpy() @ dchi_dxyz_qm_bohr.swapaxes(0, 1)
         )
 
         # Compute the total energy and gradients.
         E_tot = E + E_vac
-        grad_qm = np.array(dE_dxyz_qm_bohr) + grad_vac
-        grad_mm = np.array(dE_dxyz_mm_bohr)
+        grad_qm = dE_dxyz_qm_bohr + grad_vac
+        grad_mm = dE_dxyz_mm_bohr
 
         # Create the file names for the ORCA format output.
         filename = os.path.splitext(orca_input)[0]
@@ -502,17 +559,15 @@ class MLMMCalculator:
             with open(dirname + f"mlmm_{self._backend}_log.txt", "a+") as f:
                 f.write(f"{E_vac:22.12f}{E_tot:22.12f}\n")
 
-    @partial(jit, static_argnums=0)
     def _get_E(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
-        return jnp.sum(
+        return torch.sum(
             self._get_E_components(charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi)
         )
 
-    @partial(jit, static_argnums=0)
     def _get_E_components(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
         q_core = self._q_core[self._species_id]
         k_Z = self._k_Z[self._species_id]
-        r_data = self._get_r_data(xyz_qm_bohr)
+        r_data = self._get_r_data(xyz_qm_bohr, self._device)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
         q = self._get_q(r_data, s, chi)
         q_val = q - q_core
@@ -520,92 +575,120 @@ class MLMMCalculator:
         vpot_q_core = self._get_vpot_q(q_core, mesh_data["T0_mesh"])
         vpot_q_val = self._get_vpot_q(q_val, mesh_data["T0_mesh_slater"])
         vpot_static = vpot_q_core + vpot_q_val
-        E_static = jnp.sum(vpot_static @ charges_mm)
+        E_static = torch.sum(vpot_static @ charges_mm)
 
         vpot_ind = self._get_vpot_mu(mu_ind, mesh_data["T1_mesh"])
-        E_ind = jnp.sum(vpot_ind @ charges_mm) * 0.5
-        return jnp.array([E_static, E_ind])
+        E_ind = torch.sum(vpot_ind @ charges_mm) * 0.5
 
-    @partial(jit, static_argnums=0)
+        return torch.stack([E_static, E_ind])
+
     def _get_q(self, r_data, s, chi):
         A = self._get_A_QEq(r_data, s)
-        b = jnp.hstack([-chi, self._q_total])
-        return jnp.linalg.solve(A, b)[:-1]
+        b = torch.hstack([-chi, self._q_total])
+        return torch.linalg.solve(A, b)[:-1]
 
-    @partial(jit, static_argnums=0)
     def _get_A_QEq(self, r_data, s):
         s_gauss = s * self._a_QEq
         s2 = s_gauss**2
-        s_mat = jnp.sqrt(s2[:, None] + s2[None, :])
+        s_mat = torch.sqrt(s2[:, None] + s2[None, :])
 
         A = self._get_T0_gaussian(r_data["T01"], r_data["r_mat"], s_mat)
-        A = A.at[jnp.diag_indices_from(A)].set(1.0 / (s_gauss * jnp.sqrt(jnp.pi)))
 
-        ones = jnp.ones((len(A), 1))
-        return jnp.block([[A, ones], [ones.T, 0.0]])
+        new_diag = torch.ones_like(
+            A.diagonal(), dtype=torch.float32, device=self._device
+        ) * (1.0 / (s_gauss * np.sqrt(np.pi)))
+        mask = torch.diag(
+            torch.ones_like(new_diag, dtype=torch.float32, device=self._device)
+        )
+        A = mask * torch.diag(new_diag) + (1.0 - mask) * A
 
-    @partial(jit, static_argnums=0)
+        # Store the dimensions of A.
+        x, y = A.shape
+
+        # Create an tensor of ones with one more row and column than A.
+        B = torch.ones(x + 1, y + 1, dtype=torch.float32, device=self._device)
+
+        # Copy A into B.
+        B[:x, :y] = A
+
+        # Set the final entry on the diagonal to zero.
+        B[-1, -1] = 0.0
+
+        return B
+
     def _get_mu_ind(self, r_data, mesh_data, q, s, q_val, k_Z):
         A = self._get_A_thole(r_data, s, q_val, k_Z)
 
         r = 1.0 / mesh_data["T0_mesh"]
         f1 = self._get_f1_slater(r, s[:, None] * 2.0)
-        fields = jnp.sum(
+        fields = torch.sum(
             mesh_data["T1_mesh"] * f1[:, :, None] * q[:, None], axis=1
         ).flatten()
 
-        mu_ind = jnp.linalg.solve(A, fields)
+        mu_ind = torch.linalg.solve(A, fields)
         E_ind = mu_ind @ fields * 0.5
         return mu_ind.reshape((-1, 3))
 
-    @partial(jit, static_argnums=0)
     def _get_A_thole(self, r_data, s, q_val, k_Z):
         v = -60 * q_val * s**3
-        alpha = jnp.array(v * k_Z)
+        alpha = v * k_Z
 
         alphap = alpha * self._a_Thole
         alphap_mat = alphap[:, None] * alphap[None, :]
 
-        au3 = r_data["r_mat"] ** 3 / jnp.sqrt(alphap_mat)
-        au31 = au3.repeat(3, axis=1)
-        au32 = au31.repeat(3, axis=0)
+        au3 = r_data["r_mat"] ** 3 / torch.sqrt(alphap_mat)
+        au31 = au3.repeat_interleave(3, dim=1)
+        au32 = au31.repeat_interleave(3, dim=0)
+
         A = -self._get_T2_thole(r_data["T21"], r_data["T22"], au32)
-        A = A.at[jnp.diag_indices_from(A)].set(1.0 / alpha.repeat(3))
+
+        new_diag = 1.0 / alpha.repeat_interleave(3)
+        mask = torch.diag(
+            torch.ones_like(new_diag, dtype=torch.float32, device=self._device)
+        )
+        A = mask * torch.diag(new_diag) + (1.0 - mask) * A
+
         return A
 
     @staticmethod
-    @jit
     def _get_df_dxyz(df_dsoap, dsoap_dxyz):
-        return jnp.einsum("ij,ijkl->ikl", df_dsoap, dsoap_dxyz)
+        return np.einsum("ij,ijkl->ikl", df_dsoap, dsoap_dxyz)
 
     @staticmethod
-    @jit
     def _get_vpot_q(q, T0):
-        return jnp.sum(T0 * q[:, None], axis=0)
+        return torch.sum(T0 * q[:, None], axis=0)
 
     @staticmethod
-    @jit
     def _get_vpot_mu(mu, T1):
-        return -jnp.tensordot(T1, mu, ((0, 2), (0, 1)))
+        return -torch.tensordot(T1, mu, ((0, 2), (0, 1)))
 
     @classmethod
-    @partial(jit, static_argnums=0)
-    def _get_r_data(cls, xyz):
+    def _get_r_data(cls, xyz, device):
         n_atoms = len(xyz)
 
         rr_mat = xyz[:, None, :] - xyz[None, :, :]
 
-        r2_mat = jnp.sum(rr_mat**2, axis=2)
-        r_mat = jnp.sqrt(jnp.where(r2_mat > 0.0, r2_mat, 1.0))
-        r_mat = r_mat.at[jnp.diag_indices_from(r_mat)].set(0.0)
+        r2_mat = torch.sum(rr_mat**2, axis=2)
+        r_mat = torch.sqrt(torch.where(r2_mat > 0.0, r2_mat, 1.0))
 
-        tmp = jnp.where(r_mat == 0.0, 1.0, r_mat)
-        r_inv = jnp.where(r_mat == 0.0, 0.0, 1.0 / tmp)
+        new_diag = torch.zeros_like(
+            r_mat.diagonal(), dtype=torch.float32, device=device
+        )
+        mask = torch.diag(torch.ones_like(new_diag, dtype=torch.float32, device=device))
+        r_mat = mask * torch.diag(new_diag) + (1.0 - mask) * r_mat
 
-        r_inv1 = r_inv.repeat(3, axis=1)
-        r_inv2 = r_inv1.repeat(3, axis=0)
-        outer = cls._get_outer(rr_mat)
-        id2 = jnp.tile(jnp.tile(jnp.eye(3).T, n_atoms).T, n_atoms)
+        tmp = torch.where(r_mat == 0.0, 1.0, r_mat)
+        r_inv = torch.where(r_mat == 0.0, 0.0, 1.0 / tmp)
+
+        r_inv1 = r_inv.repeat_interleave(3, dim=1)
+        r_inv2 = r_inv1.repeat_interleave(3, dim=0)
+        outer = cls._get_outer(rr_mat, device)
+        id2 = torch.tile(
+            torch.tile(
+                torch.eye(3, dtype=torch.float32, device=device).T, (1, n_atoms)
+            ).T,
+            (1, n_atoms),
+        )
 
         t01 = r_inv
         t11 = -rr_mat.reshape(n_atoms, n_atoms * 3) * r_inv1**3
@@ -615,21 +698,22 @@ class MLMMCalculator:
         return {"r_mat": r_mat, "T01": t01, "T11": t11, "T21": t21, "T22": t22}
 
     @staticmethod
-    @jit
-    def _get_outer(a):
+    def _get_outer(a, device):
         n = len(a)
-        idx = jnp.triu_indices(n, 1)
+        idx = np.triu_indices(n, 1)
 
-        result = jnp.zeros((n, n, 3, 3))
-        result = result.at[idx].set(a[idx][:, :, None] @ a[idx][:, None, :])
-        result = result.swapaxes(0, 1).at[idx].set(result[idx])
+        result = torch.zeros((n, n, 3, 3), dtype=torch.float32, device=device)
+        result[idx] = a[idx][:, :, None] @ a[idx][:, None, :]
+        tmp = result
+        result = result.swapaxes(0, 1)
+        result[idx] = tmp[idx]
 
         return result.swapaxes(1, 2).reshape((n * 3, n * 3))
 
     @classmethod
     def _get_mesh_data(cls, xyz, xyz_mesh, s):
         rr = xyz_mesh[None, :, :] - xyz[:, None, :]
-        r = jnp.linalg.norm(rr, axis=2)
+        r = torch.linalg.norm(rr, axis=2)
 
         return {
             "T0_mesh": 1.0 / r,
@@ -638,45 +722,39 @@ class MLMMCalculator:
         }
 
     @classmethod
-    @partial(jit, static_argnums=0)
     def _get_f1_slater(cls, r, s):
         return (
-            cls._get_T0_slater(r, s) * r - jnp.exp(-r / s) / s * (0.5 + r / (s * 2)) * r
+            cls._get_T0_slater(r, s) * r
+            - torch.exp(-r / s) / s * (0.5 + r / (s * 2)) * r
         )
 
     @staticmethod
-    @jit
     def _get_T0_slater(r, s):
-        return (1 - (1 + r / (s * 2)) * jnp.exp(-r / s)) / r
+        return (1 - (1 + r / (s * 2)) * torch.exp(-r / s)) / r
 
     @staticmethod
-    @jit
     def _get_T0_gaussian(t01, r, s_mat):
-        return t01 * jerf(r / (s_mat * jnp.sqrt(2)))
+        return t01 * torch.erf(r / (s_mat * np.sqrt(2)))
 
     @staticmethod
-    @jit
     def _get_T1_gaussian(t11, r, s_mat):
-        s_invsq2 = 1.0 / (s_mat * jnp.sqrt(2))
+        s_invsq2 = 1.0 / (s_mat * torch.sqrt(2))
         return t11 * (
-            jerf(r * s_invsq2)
-            - r * s_invsq2 * 2 / jnp.sqrt(jnp.pi) * jnp.exp(-r * s_invsq2) ** 2
-        ).repeat(3, axis=1)
+            torch.erf(r * s_invsq2)
+            - r * s_invsq2 * 2 / np.sqrt(np.pi) * torch.exp(-r * s_invsq2) ** 2
+        ).repeat_interleave(3, dim=1)
 
     @classmethod
-    @partial(jit, static_argnums=0)
     def _get_T2_thole(cls, tr21, tr22, au3):
         return cls._lambda3(au3) * tr21 + cls._lambda5(au3) * tr22
 
     @staticmethod
-    @jit
     def _lambda3(au3):
-        return 1 - jnp.exp(-au3)
+        return 1 - torch.exp(-au3)
 
     @staticmethod
-    @jit
     def _lambda5(au3):
-        return 1 - (1 + au3) * jnp.exp(-au3)
+        return 1 - (1 + au3) * torch.exp(-au3)
 
     @staticmethod
     def parse_orca_input(orca_input):
@@ -816,13 +894,13 @@ class MLMMCalculator:
         coords = torch.tensor(
             np.float32(xyz.reshape(1, *xyz.shape)),
             requires_grad=True,
-            device=self._torchani_device,
+            device=self._device,
         )
 
         # Convert the atomic numbers to a Torch tensor.
         atomic_numbers = torch.tensor(
             atomic_numbers.reshape(1, *atomic_numbers.shape),
-            device=self._torchani_device,
+            device=self._device,
         )
 
         # Compute the energy and gradient.

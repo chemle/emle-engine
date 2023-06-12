@@ -12,7 +12,7 @@ modifications to sander are needed.
 First create a conda environment with all of the required dependencies:
 
 ```sh
-CONDA_OVERRIDE_CUDA="11.2" conda create -n mlmm -c conda-forge ambertools ase compilers cudatoolkit=11.2 cudatoolkit-dev=11.2 eigen deepmd-kit jax jaxlib=\*=cuda\* pytorch-gpu torchani
+conda env create -f environment.yml
 conda activate mlmm
 ```
 
@@ -21,14 +21,6 @@ If this fails, try using [mamba](https://github.com/mamba-org/mamba) as a replac
 For GPU functionality, you will need to install appropriate CUDA drivers on
 your host system along with NVCC, the CUDA compiler driver. (This doesn't come
 with `cudatoolkit` from `conda-forge`.)
-
-Now install the additional, non-conda, [librascal](https://github.com/lab-cosmo/librascal) package:
-
-```sh
-git clone https://github.com/lab-cosmo/librascal.git
-cd librascal
-pip install .
-```
 
 Finally, install the `sander-mlmm` interface:
 
@@ -110,12 +102,34 @@ When multiple files are specified, energies and gradients will be averaged
 over the models. The model files need to be visible to the `mlmm-server`, so we
 recommend the use of absolute paths.
 
+## Device
+
+We currently support `CPU` and `CUDA` as the device for [PyTorch](https://pytorch.org/).
+This can be configured using the `MLMM_DEVICE` environment variable, or by
+using the `--device` argument when launching `mlmm-server`, e.g.:
+
+```
+mlmm-server --backend cuda
+```
+
+When no device is specified, we will preferentially try to use `CUDA` if it is
+available. By default, the _first_ `CUDA` device index will be used. If you want
+to specify the index, e.g. when running on a multi-GPU setup, then you can use
+the following syntax:
+
+```
+mlmm-server --backend cuda:1
+```
+
+This would tell `PyTorch` that we want to use device index `1`. The same formatting
+works for the environment varialbe, e.g. `MLMM_DEVICE=cuda:1`.
+
 ## Why do we need an ML/MM server?
 
 The ML/MM implementation uses several ML frameworks to predict energies
 and gradients. [DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html)
 or [TorchANI](https://github.com/aiqm/torchani) can be used for the in vacuo
-predictions and custom [JAX](https://github.com/google/jax) code is used to predict
+predictions and custom [PyTorch](https://pytorch.org) code is used to predict
 corrections to the in vacuo values in the presence of point charges.
 The frameworks make heavy use of
 [just-in-time compilation](https://en.wikipedia.org/wiki/Just-in-time_compilation).
@@ -138,16 +152,6 @@ Output will be written to the `demo/output` directory.
 
 ## Issues
 
-By default, when a GPU is available, [JAX](https://github.com/google/jax) will preallocate 90% of the total
-memory when the first operation is run. (See [here](https://jax.readthedocs.io/en/latest/gpu_memory_allocation.html)
-for details.) While this is designed to minimise allocation overhead and
-memory fragmentation, it can result in an "out of memory" error if the
-GPU is already partially utilised. In this case, setting the following
-environment variable will disable preallocation.
-
-```
-XLA_PYTHON_CLIENT_PREALLOCATE=false
-```
 The [DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html) conda package pulls in a version of MPI which may cause
 problems if using [ORCA](https://orcaforum.kofo.mpg.de/index.php) as the in vacuo backend, particularly when running
 on HPC resources that might enforce a specific MPI setup. (ORCA will
