@@ -9,9 +9,8 @@ dependencies:
   - eigen
   - compilers
   - deepmd-kit
-  - functorch
   - pip
-  - pytorch-gpu >= 1.13
+  - pytorch-gpu >= 2.0
   - torchani
   - pip:
     - git+https://github.com/lab-cosmo/librascal.git#egg=rascal[complete]
