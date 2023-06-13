@@ -21,6 +21,7 @@
 ######################################################################
 
 import os
+import pickle
 import numpy as np
 import shlex
 import shutil
@@ -30,10 +31,11 @@ import tempfile
 import scipy
 import scipy.io
 
-from ase import Atoms
-import ase.io.xyz
+import ase
+import ase.io
 
-from rascal.representations import SphericalExpansion, SphericalInvariants
+from rascal.models.asemd import ASEMLCalculator
+from rascal.representations import SphericalInvariants
 from rascal.utils import (
     ClebschGordanReal,
     compute_lambda_soap,
@@ -50,9 +52,12 @@ try:
 except:
     from functorch import grad_and_value
 
-ANGSTROM_TO_BOHR = 1.88973
-BOHR_TO_ANGSTROM = 0.529177
-ELECTRONVOLT_TO_HARTREE = 0.0367493
+
+from .sander_calculator import SanderCalculator
+
+ANGSTROM_TO_BOHR = 1.0 / ase.units.Bohr
+BOHR_TO_ANGSTROM = ase.units.Bohr
+EV_TO_HARTREE = 1.0 / ase.units.Hartree
 SPECIES = (1, 6, 7, 8, 16)
 SIGMA = 1e-3
 
@@ -145,7 +150,7 @@ class SOAPCalculatorSpinv:
         xyz_min = np.min(xyz, axis=0)
         xyz_max = np.max(xyz, axis=0)
         xyz_range = xyz_max - xyz_min
-        return Atoms(z, positions=xyz - xyz_min, cell=xyz_range, pbc=0)
+        return ase.Atoms(z, positions=xyz - xyz_min, cell=xyz_range, pbc=0)
 
     @staticmethod
     def get_soap(atoms, spinv, gradient=False):
@@ -183,9 +188,8 @@ class MLMMCalculator:
     # Create the name of the default model file.
     _default_model = os.path.join(_module_dir, "mlmm_spinv.mat")
 
-    # ML model parameters. For now we'll hard-code our own model parameters.
-    # Could allow the user to specify their own model, but that would require
-    # the use of consistent hyper-paramters, naming, etc.
+    # Default ML model parameters. These will be overwritten by values in the
+    # embedding model file.
 
     # Model hyper-parameters.
     _hypers = {
@@ -197,13 +201,20 @@ class MLMMCalculator:
     }
 
     # List of supported backends.
-    _supported_backends = ["torchani", "deepmd", "orca"]
+    _supported_backends = ["torchani", "deepmd", "rascal", "orca"]
 
     # List of supported devices.
     _supported_devices = ["cpu", "cuda"]
 
     def __init__(
-        self, model=None, backend="torchani", deepmd_model=None, device=None, log=True
+        self,
+        model=None,
+        backend="torchani",
+        deepmd_model=None,
+        rascal_model=None,
+        rascal_parm7=None,
+        device=None,
+        log=True,
     ):
         """Constructor.
 
@@ -217,6 +228,15 @@ class MLMMCalculator:
         deepmd_model : str
             Path to the DeePMD model file to use for in vacuo calculations. This
             must be specified if "deepmd" is the selected backend.
+
+        rascal_model : str
+            Path to the Rascal model file to use for in vacuo calculations. This
+            will override the default model provided as part of this library.
+
+        rascal_parm7 : str
+            The path to an AMBER parm7 file for the QM region. This is required when
+            using the Rascal backend in order to compute the MM contribution to the
+            in vacuo energies and gradients of the QM region.
 
         device : str
             The name of the device to be used by PyTorch. Options are "cpu"
@@ -232,9 +252,7 @@ class MLMMCalculator:
             if not isinstance(model, str):
                 raise TypeError("'model' must be of type 'str'")
             if not os.path.exists(model):
-                raise ValueError(
-                    f"Unable to locate ML/MM embedding model file: '{model}'"
-                )
+                raise IOError(f"Unable to locate ML/MM embedding model file: '{model}'")
             self._model = model
         else:
             self._model = self._default_model
@@ -243,7 +261,7 @@ class MLMMCalculator:
         try:
             self._params = scipy.io.loadmat(self._model, squeeze_me=True)
         except:
-            raise ValueError(f"Unable to load model parameters from: '{self._model}'")
+            raise IOError(f"Unable to load model parameters from: '{self._model}'")
 
         if not isinstance(backend, str):
             raise TypeError("'backend' must be of type 'bool")
@@ -276,9 +294,7 @@ class MLMMCalculator:
                 # Make sure all of the model files exist.
                 for model in deepmd_model:
                     if not os.path.exists(model):
-                        raise ValueError(
-                            f"Unable to locate DeePMD model file: '{model}'"
-                        )
+                        raise IOError(f"Unable to locate DeePMD model file: '{model}'")
 
                 # Store the list of model files, removing any duplicates.
                 self._deepmd_model = list(set(deepmd_model))
@@ -288,6 +304,54 @@ class MLMMCalculator:
                 raise ValueError(
                     "'deepmd_model' must be specified when DeePMD 'backend' is chosen!"
                 )
+
+        # Validate and load the Rascal model and QM parm7 file.
+        if backend == "rascal":
+            if rascal_model is not None:
+                if not isinstance(rascal_model, str):
+                    raise TypeError("'rascal_model' must be of type 'str'")
+            else:
+                raise ValueError(
+                    "'rascal_model' must be specified if using the Rascal backend!"
+                )
+
+            # Make sure the model file exists.
+            if not os.path.exists(model):
+                raise IOError(f"Unable to locate Rascal model file: '{rascal_model}'")
+
+            # Load the model.
+            try:
+                self._rascal_model = pickle.load(open(rascal_model, "rb"))
+            except:
+                raise IOError(f"Unable to load Rascal model file: '{rascal_model}'")
+
+            # Try to get the SOAP parameters from the model.
+            try:
+                soap = self._rascal_model.get_representation_calculator()
+            except:
+                raise ValueError("Unable to extract SOAP parameters from Rascal model!")
+
+            # Create the Rascal calculator.
+            try:
+                self._rascal_calc = ASEMLCalculator(self._rascal_model, soap)
+            except:
+                raise RuntimeError("Unable to create Rascal calculator!")
+
+            if rascal_parm7 is not None:
+                if not isinstance(rascal_parm7, str):
+                    raise ValueError("'rascal_parm7' must be of type 'str'")
+            else:
+                raise ValueError(
+                    "'rascal_parm7' must be specified if using the Rascal backend!"
+                )
+
+            # Make sure the file exists.
+            if not os.path.exists(rascal_parm7):
+                raise IOError(
+                    f"Unable to locate the 'rascal_parm7' file: '{rascal_parm7}'"
+                )
+
+            self._rascal_parm7 = rascal_parm7
 
         # Validate the PyTorch device.
         if device is not None:
@@ -429,6 +493,7 @@ class MLMMCalculator:
             dirname,
             charge,
             multi,
+            atoms,
             atomic_numbers,
             xyz_qm,
             xyz_mm,
@@ -466,8 +531,17 @@ class MLMMCalculator:
         # First try to use the specified backend to compute in vacuo
         # energies and (optionally) gradients.
 
+        # Rascal.
+        if self._backend == "rascal":
+            try:
+                E_vac, grad_vac = self._run_rascal(atoms)
+            except:
+                raise RuntimeError(
+                    "Failed to calculate in vacuo energies using Rascal backend!"
+                )
+
         # TorchANI.
-        if self._backend == "torchani":
+        elif self._backend == "torchani":
             try:
                 E_vac, grad_vac = self._run_torchani(xyz_qm, atomic_numbers)
             except:
@@ -816,7 +890,7 @@ class MLMMCalculator:
 
         # Process the QM xyz file.
         try:
-            xyz_qm = ase.io.read(xyz_file_qm)
+            atoms = ase.io.read(xyz_file_qm)
         except:
             raise IOError(f"Unable to read QM xyz file: {xyz_file_qm}")
 
@@ -848,11 +922,69 @@ class MLMMCalculator:
             dirname,
             charge,
             mult,
-            xyz_qm.get_atomic_numbers(),
-            xyz_qm.get_positions(),
+            atoms,
+            atoms.get_atomic_numbers(),
+            atoms.get_positions(),
             xyz_mm,
             charges_mm,
             xyz_file_qm,
+        )
+
+    def _run_rascal(self, atoms):
+        """
+        Internal function to compute in vacuo energies and gradients using
+        Rascal.
+
+        Parameters
+        ----------
+
+        atoms : ase
+            The coordinates of the QM region in Angstrom.
+
+        Returns
+        -------
+
+        energy : float
+            The in vacuo ML energy.
+
+        gradients : numpy.array
+            The in vacuo ML gradient in Eh/Bohr.
+        """
+
+        if not isinstance(atoms, ase.Atoms):
+            raise TypeError("'atoms' must be of type 'ase.atoms.Atoms'")
+
+        # Rascal requires periodic box information so we translate the atoms so that
+        # the lowest (x, y, z) position is zero, then set the cell to the maximum
+        # position.
+        atoms.positions -= np.min(atoms.positions, axis=0)
+        atoms.cell = np.max(atoms.positions, axis=0)
+
+        # Initialise a SanderCalculator to compute the MM contributions to the energy
+        # and force.
+        sander_calculator = SanderCalculator(self._rascal_parm7, atoms)
+
+        # Run the calculation.
+        sander_calculator.calculate(atoms)
+
+        # Get the MM contributions.
+        energy_mm = sander_calculator.results["energy"]
+        forces_mm = sander_calculator.results["forces"]
+
+        # Run the calculation.
+        self._rascal_calc.calculate(atoms)
+
+        # Get the energy and force corrections.
+        delta_energy = self._rascal_calc.results["energy"][0]
+        delta_forces = self._rascal_calc.results["forces"]
+
+        # Compute the totals.
+        energy = energy_mm + delta_energy
+        forces = forces_mm + delta_forces
+
+        return (
+            energy * EV_TO_HARTREE,
+            -forces * EV_TO_HARTREE * BOHR_TO_ANGSTROM,
         )
 
     def _run_torchani(self, xyz, atomic_numbers):
@@ -969,8 +1101,8 @@ class MLMMCalculator:
 
         # Take averages and return. (Gradient equals minus the force.)
         return (
-            (energy[0][0] * ELECTRONVOLT_TO_HARTREE) / (x + 1),
-            -(force[0] * ELECTRONVOLT_TO_HARTREE * BOHR_TO_ANGSTROM) / (x + 1),
+            (energy[0][0] * EV_TO_HARTREE) / (x + 1),
+            -(force[0] * EV_TO_HARTREE * BOHR_TO_ANGSTROM) / (x + 1),
         )
 
     def _run_orca(self, orca_input, xyz_file_qm):

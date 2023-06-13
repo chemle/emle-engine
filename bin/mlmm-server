@@ -45,6 +45,8 @@ MLMM_BACKEND = os.getenv("MLMM_BACKEND")
 MLMM_DEVICE = os.getenv("MLMM_DEVICE")
 MLMM_LOG = os.getenv("MLMM_LOG", "True").lower() in ("true", "1", "t")
 DEEPMD_MODEL = os.getenv("DEEPMD_MODEL")
+RASCAL_MODEL = os.getenv("RASCAL_MODEL")
+RASCAL_PARM7 = os.getenv("RASCAL_PARM7")
 
 # Fallback to default values.
 if not MLMM_HOST:
@@ -91,7 +93,7 @@ parser.add_argument(
     "--backend",
     type=str,
     help="the in vacuo backend",
-    choices=["deepmd", "torchani", "orca"],
+    choices=["deepmd", "rascal", "torchani", "orca"],
     required=False,
 )
 parser.add_argument(
@@ -106,6 +108,20 @@ parser.add_argument(
     type=str,
     nargs="+",
     help="path to DeepMD model file(s)",
+    required=False,
+)
+parser.add_argument(
+    "--rascal-model",
+    type=str,
+    nargs="+",
+    help="path to Rascal model file",
+    required=False,
+)
+parser.add_argument(
+    "--rascal-parm7",
+    type=str,
+    nargs="+",
+    help="path to the parm7 file used to train the Rascal model",
     required=False,
 )
 parser.add_argument(
@@ -131,6 +147,10 @@ if args.device:
     MLMM_DEVICE = args.device
 if args.deepmd_model:
     DEEPMD_MODEL = args.deepmd_model
+if args.rascal_model:
+    RASCAL_MODEL = args.rascal_model
+if args.rascal_parm7:
+    RASCAL_PARM7 = args.rascal_parm7
 if args.log is not None:
     MLMM_LOG = args.log
 
@@ -188,6 +208,8 @@ mlmm_calculator = MLMMCalculator(
     model=MLMM_MODEL,
     backend=MLMM_BACKEND,
     deepmd_model=DEEPMD_MODEL,
+    rascal_model=RASCAL_MODEL,
+    rascal_parm7=RASCAL_PARM7,
     device=MLMM_DEVICE,
     log=MLMM_LOG,
 )
