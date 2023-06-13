@@ -76,7 +76,7 @@ mlmm-stop
 
 The embedding method relies on in vacuo energies and gradients, to which
 corrections are added based on the predictions of the model. At present we
-support the use of [DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html), [TorchANI](https://githb.com/aiqm/torchani) or [ORCA](https://sites.google.com/site/orcainputlibrary/interfaces-and-qmm)
+support the use of [Rascal](https://github.com/lab-cosmo/librascal), [DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html), [TorchANI](https://githb.com/aiqm/torchani) or [ORCA](https://sites.google.com/site/orcainputlibrary/interfaces-and-qmm)
 for the backend, providing reference QM with ML/MM embedding, and pure ML/MM
 implementations. To specify a backend, use the `--backend` argument when launching
 `mlmm-server`, e.g:
@@ -86,6 +86,12 @@ mlmm-server --backend torchani
 ```
 
 (The default backend is `torchani`.)
+
+When using the `rascal` backend you will also need to specify a model file
+and the AMBER parm7 topology file that was used to train this model. These
+can be specified using the `--rascal-model` and `--rascal-parm7` command-line
+arguments, or using the `RASCAL_MODEL` and `RASCAL_PARM7` environment variables.
+Rascal can be used to train system specific delta-learning models.
 
 When using the `orca` backend, you will need to ensure that the _fake_ `orca`
 executable takes precedence in the `PATH`. (To check that ML/MM is running,
