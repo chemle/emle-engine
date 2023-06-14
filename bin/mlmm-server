@@ -197,6 +197,10 @@ try:
     # Write the PID to file in the current directory.
     with open("mlmm_pid.txt", "w") as f:
         f.write(f"{os.getpid()}\n")
+
+    # Write the port to file in the current directory.
+    with open("mlmm_port.txt", "w") as f:
+        f.write(f"{MLMM_PORT}\n")
 except:
     raise OSError(
         f"Server address already in use: ({MLMM_HOST}, {MLMM_PORT})"
