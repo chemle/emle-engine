@@ -164,7 +164,6 @@ if DEEPMD_MODEL:
     if isinstance(DEEPMD_MODEL, list) and len(DEEPMD_MODEL) == 1:
         DEEPMD_MODEL = DEEPMD_MODEL[0]
     if isinstance(DEEPMD_MODEL, str):
-        print("HERE")
         # Remove whitespace.
         DEEPMD_MODEL = DEEPMD_MODEL.replace(" ", "")
 
