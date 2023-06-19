@@ -70,7 +70,6 @@ SPHERICAL_EXPANSION_HYPERS_COMMON = {
     "global_species": SPECIES,
 }
 
-SPECIES_DICT = {1: 0, 6: 1, 7: 2, 8: 3, 16: 4}
 ELEMENT_DICT = {1: "H", 6: "C", 7: "N", 8: "O", 16: "S"}
 
 
@@ -519,7 +518,7 @@ class MLMMCalculator:
         elements = []
         for id in atomic_numbers:
             try:
-                species_id.append(SPECIES_DICT[id])
+                species_id.append(self._hypers["global_species"].index(id))
                 elements.append(ELEMENT_DICT[id])
             except:
                 raise ValueError(
