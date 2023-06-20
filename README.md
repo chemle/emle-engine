@@ -1,6 +1,6 @@
 # sander-mlmm
 
-A simple interface to allow electostatic embedding of machine learning
+A simple interface to allow electrostatic embedding of machine learning
 potentials in [sander](https://ambermd.org/AmberTools.php). Based on
 [code](https://github.com/emedio/embedding) by Kirill Zinovjev. The
 code works by reusing the existing interface between sander and
