@@ -208,6 +208,7 @@ class MLMMCalculator:
     def __init__(
         self,
         model=None,
+        embedding="electrostatic",
         backend="torchani",
         deepmd_model=None,
         rascal_model=None,
@@ -220,6 +221,9 @@ class MLMMCalculator:
         model : str
             Path to the ML/MM embedding model parameter file. If None, then a
             default model will be used.
+
+        embedding : str
+            Whether to use "electrostatic" or "mechanical" embedding.
 
         backend : str
             The backend to use to compute in vacuo energies and gradients.
@@ -255,6 +259,14 @@ class MLMMCalculator:
             self._model = model
         else:
             self._model = self._default_model
+
+        if not isinstance(embedding, str):
+            raise TypeError("'embedding' must be of type 'str'")
+        embedding = embedding.replace(" ", "").lower()
+        if not embedding in ["electrostatic", "mechanical"]:
+            raise ValueError(
+                "'embedding' must be either 'electrostatic' or 'mechanical'"
+            )
 
         # Load the model parameters.
         try:
