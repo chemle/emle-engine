@@ -205,6 +205,9 @@ class MLMMCalculator:
     # List of supported devices.
     _supported_devices = ["cpu", "cuda"]
 
+    # Default to electrostatic embedding.
+    _is_electrostatic = True
+
     def __init__(
         self,
         model=None,
@@ -267,12 +270,22 @@ class MLMMCalculator:
             raise ValueError(
                 "'embedding' must be either 'electrostatic' or 'mechanical'"
             )
+        # Flag that mechanical embedding is specified.
+        if embedding == "mechanical":
+            self._is_electrostatic = False
 
         # Load the model parameters.
         try:
             self._params = scipy.io.loadmat(self._model, squeeze_me=True)
         except:
             raise IOError(f"Unable to load model parameters from: '{self._model}'")
+
+        # Make sure that mm_charges are specified if mechanical embedding is selected.
+        if not self._is_electrostatic:
+            if not "mm_charges" in self._params:
+                raise ValueError(
+                    "'mm_charges' must be specified in the ML/MM model if using mechanical embedding!"
+                )
 
         if not isinstance(backend, str):
             raise TypeError("'backend' must be of type 'bool")
@@ -417,9 +430,14 @@ class MLMMCalculator:
                     self._hypers[key] = self._params[key]
 
         self._get_soap = SOAPCalculatorSpinv(self._hypers)
-        self._q_core = torch.tensor(
-            self._params["q_core"], dtype=torch.float32, device=self._device
-        )
+        if self._is_electrostatic:
+            self._q_core = torch.tensor(
+                self._params["q_core"], dtype=torch.float32, device=self._device
+            )
+        else:
+            self._q_core = torch.tensor(
+                self._params["mm_charges"], dtype=torch.float32, device=self._device
+            )
         self._a_QEq = self._params["a_QEq"]
         self._a_Thole = self._params["a_Thole"]
         self._k_Z = torch.tensor(
@@ -654,16 +672,22 @@ class MLMMCalculator:
         k_Z = self._k_Z[self._species_id]
         r_data = self._get_r_data(xyz_qm_bohr, self._device)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
-        q = self._get_q(r_data, s, chi)
-        q_val = q - q_core
+        if self._is_electrostatic:
+            q = self._get_q(r_data, s, chi)
+            q_val = q - q_core
+        else:
+            q_val = torch.zeros_like(q_core, dtype=torch.float32, device=self._device)
         mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k_Z)
         vpot_q_core = self._get_vpot_q(q_core, mesh_data["T0_mesh"])
         vpot_q_val = self._get_vpot_q(q_val, mesh_data["T0_mesh_slater"])
         vpot_static = vpot_q_core + vpot_q_val
         E_static = torch.sum(vpot_static @ charges_mm)
 
-        vpot_ind = self._get_vpot_mu(mu_ind, mesh_data["T1_mesh"])
-        E_ind = torch.sum(vpot_ind @ charges_mm) * 0.5
+        if self._is_electrostatic:
+            vpot_ind = self._get_vpot_mu(mu_ind, mesh_data["T1_mesh"])
+            E_ind = torch.sum(vpot_ind @ charges_mm) * 0.5
+        else:
+            E_ind = torch.tensor(0.0, dtype=torch.float32, device=self._device)
 
         return torch.stack([E_static, E_ind])
 
