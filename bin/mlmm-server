@@ -37,6 +37,7 @@ try:
 except:
     MLMM_PORT = None
 MLMM_MODEL = os.getenv("MLMM_MODEL")
+MLMM_EMBEDDING = os.getenv("MLMM_EMBEDDING")
 try:
     MLMM_NUM_CLIENTS = int(os.getenv("MLMM_NUM_CLIENTS"))
 except:
@@ -81,6 +82,13 @@ parser.add_argument("--host", type=str, help="the hostname.", required=False)
 parser.add_argument("--port", type=str, help="the port number", required=False)
 parser.add_argument(
     "--model", type=str, help="path to an ML/MM model file", required=False
+)
+parser.add_argument(
+    "--embedding",
+    type=str,
+    help="the embedding method to use",
+    choices=["electrostatic", "mechanical"],
+    required=False,
 )
 parser.add_argument(
     "--num-clients",
@@ -139,6 +147,8 @@ if args.port:
     MLMM_PORT = args.port
 if args.model:
     MLMM_MODEL = args.model
+if args.embedding:
+    MLMM_EMBEDDING = args.embedding
 if args.num_clients:
     MLMM_NUM_CLIENTS = args.num_clients
 if args.backend:
@@ -209,6 +219,7 @@ except:
 print("Initialising ML/MM calculator...")
 mlmm_calculator = MLMMCalculator(
     model=MLMM_MODEL,
+    embedding=MLMM_EMBEDDING,
     backend=MLMM_BACKEND,
     deepmd_model=DEEPMD_MODEL,
     rascal_model=RASCAL_MODEL,

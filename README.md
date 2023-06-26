@@ -130,6 +130,21 @@ mlmm-server --backend cuda:1
 This would tell `PyTorch` that we want to use device index `1`. The same formatting
 works for the environment varialbe, e.g. `MLMM_DEVICE=cuda:1`.
 
+## Embedding method
+
+We support both _electrostatic_ and _mechanical_ embedding. Obviously we are
+advocating our electrostatic embedding scheme, but the use of mechanical
+embedding provides a useful reference for determining the benefit of
+using electrostatic embedding for a given system. The embedding method
+can be specified using the `MLMM_EMBEDDING` environment variable, or when
+launching the server, e.g.:
+
+```
+mlmm-server --embedding mechanical
+```
+
+The default option is (unsurprisingly) `electrostatic`.
+
 ## Why do we need an ML/MM server?
 
 The ML/MM implementation uses several ML frameworks to predict energies
