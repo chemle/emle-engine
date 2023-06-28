@@ -58,6 +58,8 @@ if not MLMM_NUM_CLIENTS:
     MLMM_NUM_CLIENTS = 1
 if not MLMM_BACKEND:
     MLMM_BACKEND = "torchani"
+if not MLMM_EMBEDDING:
+    MLMM_EMBEDDING = "electrostatic"
 if not MLMM_DEVICE:
     MLMM_DEVICE = None
 
