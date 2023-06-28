@@ -668,7 +668,10 @@ class MLMMCalculator:
         )
 
     def _get_E_components(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
-        q_core = self._q_core[self._species_id]
+        if self._is_electrostatic:
+            q_core = self._q_core[self._species_id]
+        else:
+            q_core = self._q_core
         k_Z = self._k_Z[self._species_id]
         r_data = self._get_r_data(xyz_qm_bohr, self._device)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
