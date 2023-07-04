@@ -22,6 +22,10 @@ For GPU functionality, you will need to install appropriate CUDA drivers on
 your host system along with NVCC, the CUDA compiler driver. (This doesn't come
 with `cudatoolkit` from `conda-forge`.)
 
+(Depending on your CUDA setup, you might need to prefix the environment creation
+command above with something like `CONDA_OVERRIDE_CUDA="11.2"` to resolve an
+environment that is compatible with your CUDA driver.)
+
 Finally, install the `sander-mlmm` interface:
 
 ```sh
