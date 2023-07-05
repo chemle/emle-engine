@@ -6,9 +6,9 @@ channels:
 dependencies:
   - ambertools
   - ase
-  - eigen
   - compilers
   - deepmd-kit
+  - eigen
   - pip
   - pytorch-gpu >= 2.0
   - torchani
