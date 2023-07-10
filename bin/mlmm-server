@@ -23,6 +23,7 @@
 ######################################################################
 
 import argparse
+import numpy as np
 import os
 
 from glob import glob
@@ -38,6 +39,7 @@ except:
     MLMM_PORT = None
 MLMM_MODEL = os.getenv("MLMM_MODEL")
 MLMM_EMBEDDING = os.getenv("MLMM_EMBEDDING")
+MLMM_MM_CHARGES = os.getenv("MLMM_MM_CHARGES")
 try:
     MLMM_NUM_CLIENTS = int(os.getenv("MLMM_NUM_CLIENTS"))
 except:
@@ -60,6 +62,8 @@ if not MLMM_BACKEND:
     MLMM_BACKEND = "torchani"
 if not MLMM_EMBEDDING:
     MLMM_EMBEDDING = "electrostatic"
+if not MLMM_MM_CHARGES:
+    MLMM_MM_CHARGES = None
 if not MLMM_DEVICE:
     MLMM_DEVICE = None
 
@@ -90,6 +94,13 @@ parser.add_argument(
     type=str,
     help="the embedding method to use",
     choices=["electrostatic", "mechanical"],
+    required=False,
+)
+parser.add_argument(
+    "--mm-charges",
+    type=str,
+    nargs="*",
+    help="mm charges for atoms in the qm region in units of electron volt",
     required=False,
 )
 parser.add_argument(
@@ -151,6 +162,8 @@ if args.model:
     MLMM_MODEL = args.model
 if args.embedding:
     MLMM_EMBEDDING = args.embedding
+if args.mm_charges:
+    MLMM_MM_CHARGES = args.mm_charges
 if args.num_clients:
     MLMM_NUM_CLIENTS = args.num_clients
 if args.backend:
@@ -165,6 +178,43 @@ if args.rascal_parm7:
     RASCAL_PARM7 = args.rascal_parm7
 if args.log is not None:
     MLMM_LOG = args.log
+
+# Validate the MM charges. Don't bother doing this if the user has
+# specified "electrostatic" embedding.
+if MLMM_EMBEDDING == "mechanical":
+    if MLMM_MM_CHARGES is None:
+        raise ValueError("'mm_charges' are required when using 'mechanical' embedding")
+
+    # Whether we are parsing a list of charges, rather than a file.
+    is_list = False
+
+    if isinstance(MLMM_MM_CHARGES, str):
+        # If this isn't a path to a file, try splitting on commas.
+        if not os.path.isfile(MLMM_MM_CHARGES):
+            try:
+                MLMM_MM_CHARGES = MLMM_MM_CHARGES.split(",")
+                is_list = True
+            except:
+                raise ValueError(
+                    "Unable to parse MLMM_MM_CHARGES environment variable as a comma-separated list of floats"
+                )
+
+    # A single entry list is assumed to be the path to a file.
+    elif isinstance(MLMM_MM_CHARGES, list):
+        if len(MLMM_MM_CHARGES) == 1:
+            MLMM_MM_CHARGES = MLMM_MM_CHARGES[0]
+        else:
+            is_list = True
+
+    # Try to parse lists of MM charges as a NumPy array of floats.
+    if is_list:
+        try:
+            MLMM_MM_CHARGES = np.array([float(x) for x in MLMM_MM_CHARGES])
+        except:
+            raise TypeError("Unable to parse MM charges as an array of floats")
+
+else:
+    MLMM_MM_CHARGES = None
 
 # Work out the DeePMD model. We allow the following formatting:
 #    1) A path to a single file.
@@ -223,6 +273,7 @@ mlmm_calculator = MLMMCalculator(
     model=MLMM_MODEL,
     embedding=MLMM_EMBEDDING,
     backend=MLMM_BACKEND,
+    mm_charges=MLMM_MM_CHARGES,
     deepmd_model=DEEPMD_MODEL,
     rascal_model=RASCAL_MODEL,
     rascal_parm7=RASCAL_PARM7,
