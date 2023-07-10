@@ -213,6 +213,7 @@ class MLMMCalculator:
         model=None,
         embedding="electrostatic",
         backend="torchani",
+        mm_charges=None,
         deepmd_model=None,
         rascal_model=None,
         rascal_parm7=None,
@@ -230,6 +231,12 @@ class MLMMCalculator:
 
         backend : str
             The backend to use to compute in vacuo energies and gradients.
+
+        mm_charges : numpy.array, str
+            An array of MM charges for atoms in the QM region. This is required
+            when the embedding method is "mechanical". Alternatively, pass the
+            path to a file containing the charges. The file should contain a
+            single column. Units are electron charge.
 
         deepmd_model : str
             Path to the DeePMD model file to use for in vacuo calculations. This
@@ -274,18 +281,44 @@ class MLMMCalculator:
         if embedding == "mechanical":
             self._is_electrostatic = False
 
+            # Make sure MM charges have been passed for the QM region.
+            if mm_charges is None:
+                raise ValueError(
+                    "'mm_charges' are required when using 'mechanical' embedding"
+                )
+
+            # NumPy array.
+            if isinstance(mm_charges, np.ndarray):
+                if mm_charges.dtype != np.float64:
+                    raise TypeError("'mm_charges' must have dtype 'float64'.")
+                else:
+                    self._mm_charges = mm_charges
+
+            # Path to a file.
+            elif isinstance(mm_charges, str):
+                if not os.path.isfile(mm_charges):
+                    raise IOError(f"'mm_charges' file doesn't exist: {mm_charges}")
+
+                # Read the charges into a list.
+                charges = []
+                with open(mm_charges, "r") as f:
+                    for line in f:
+                        try:
+                            charges.append(float(line.strip()))
+                        except:
+                            raise ValueError(
+                                f"Unable to read 'mm_charges' from file: {mm_charges}"
+                            )
+                self._mm_charges = np.array(charges)
+
+            else:
+                raise TypeError("'mm_charges' must be of type 'numpy.ndarray' or 'str'")
+
         # Load the model parameters.
         try:
             self._params = scipy.io.loadmat(self._model, squeeze_me=True)
         except:
             raise IOError(f"Unable to load model parameters from: '{self._model}'")
-
-        # Make sure that mm_charges are specified if mechanical embedding is selected.
-        if not self._is_electrostatic:
-            if not "mm_charges" in self._params:
-                raise ValueError(
-                    "'mm_charges' must be specified in the ML/MM model if using mechanical embedding!"
-                )
 
         if not isinstance(backend, str):
             raise TypeError("'backend' must be of type 'bool")
@@ -436,7 +469,7 @@ class MLMMCalculator:
             )
         else:
             self._q_core = torch.tensor(
-                self._params["mm_charges"], dtype=torch.float32, device=self._device
+                self._mm_charges, dtype=torch.float32, device=self._device
             )
         self._a_QEq = self._params["a_QEq"]
         self._a_Thole = self._params["a_Thole"]
@@ -529,6 +562,15 @@ class MLMMCalculator:
             charges_mm,
             xyz_file_qm,
         ) = self.parse_orca_input(orca_input)
+
+        # Make sure that the number of QM atoms matches the number of MM atoms
+        # when using mechanical embedding.
+        if not self._is_electrostatic:
+            if len(xyz_qm) != len(self._mm_charges):
+                raise ValueError(
+                    f"Mechanical embedding is specified but the number of atoms in the QM region ({len(xyz_qm)}) "
+                    f"doesn't match the number of MM charges ({len(self._mm_charges)})"
+                )
 
         # Update the maximum number of MM atoms if this is the largest seen.
         num_mm_atoms = len(charges_mm)

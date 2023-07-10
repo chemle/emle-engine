@@ -147,7 +147,14 @@ launching the server, e.g.:
 mlmm-server --embedding mechanical
 ```
 
-The default option is (unsurprisingly) `electrostatic`.
+The default option is (unsurprisingly) `electrostatic`. When using mechanical
+embedding you will also need to specify MM charges for the atoms within the
+QM region. This can be done using the `--mm-charges` option, or via the
+`MLMM_MM_CHARGES` environment variable. The charges can be specified as a list
+of floats (space separated from the command-line, comma-separated when using
+the environment variable) or a path to a file. When using a file, this should
+be formatted as a single column, with one line per QM atom. The units
+are electron charge.
 
 ## Why do we need an ML/MM server?
 
