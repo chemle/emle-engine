@@ -93,7 +93,7 @@ parser.add_argument(
     "--embedding",
     type=str,
     help="the embedding method to use",
-    choices=["electrostatic", "mechanical"],
+    choices=["electrostatic", "mechanical", "mm"],
     required=False,
 )
 parser.add_argument(
@@ -181,9 +181,9 @@ if args.log is not None:
 
 # Validate the MM charges. Don't bother doing this if the user has
 # specified "electrostatic" embedding.
-if MLMM_EMBEDDING == "mechanical":
+if MLMM_EMBEDDING == "mm":
     if MLMM_MM_CHARGES is None:
-        raise ValueError("'mm_charges' are required when using 'mechanical' embedding")
+        raise ValueError("'mm_charges' are required when using 'mm' embedding")
 
     # Whether we are parsing a list of charges, rather than a file.
     is_list = False
