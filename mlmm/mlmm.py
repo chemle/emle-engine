@@ -474,7 +474,7 @@ class MLMMCalculator:
                     self._hypers[key] = self._params[key]
 
         self._get_soap = SOAPCalculatorSpinv(self._hypers)
-        if self._is_electrostatic:
+        if not self._is_mm:
             self._q_core = torch.tensor(
                 self._params["q_core"], dtype=torch.float32, device=self._device
             )
