@@ -207,6 +207,7 @@ class MLMMCalculator:
 
     # Default to electrostatic embedding.
     _is_electrostatic = True
+    _is_mm = False
 
     def __init__(
         self,
@@ -227,16 +228,21 @@ class MLMMCalculator:
             default model will be used.
 
         embedding : str
-            Whether to use "electrostatic" or "mechanical" embedding.
+            Whether to use "electrostatic", "mechanical", or "mm" embedding.
+            Note that "mechanical" embedding is an approximation of true
+            mechanical embedding. Here we use the embedding model to predict
+            the charges on the QM atoms, but disable the induced component of
+            the potential. In "mm" embedding we allow the user to explicitly
+            specify "mm" charges for atoms in the QM region.
 
         backend : str
             The backend to use to compute in vacuo energies and gradients.
 
         mm_charges : numpy.array, str
             An array of MM charges for atoms in the QM region. This is required
-            when the embedding method is "mechanical". Alternatively, pass the
-            path to a file containing the charges. The file should contain a
-            single column. Units are electron charge.
+            when the embedding method is "mm". Alternatively, pass the path to
+            a file containing the charges. The file should contain a single
+            column. Units are electron charge.
 
         deepmd_model : str
             Path to the DeePMD model file to use for in vacuo calculations. This
@@ -273,46 +279,51 @@ class MLMMCalculator:
         if not isinstance(embedding, str):
             raise TypeError("'embedding' must be of type 'str'")
         embedding = embedding.replace(" ", "").lower()
-        if not embedding in ["electrostatic", "mechanical"]:
+        if not embedding in ["electrostatic", "mechanical", "mm"]:
             raise ValueError(
-                "'embedding' must be either 'electrostatic' or 'mechanical'"
+                "'embedding' must be either 'electrostatic', 'mechanical', or 'mm'"
             )
-        # Flag that mechanical embedding is specified.
-        if embedding == "mechanical":
+        # Flag that we're not performing electrostatic embedding.
+        if embedding != "electrostatic":
             self._is_electrostatic = False
+            if embedding == "mm":
+                # Flag that MM embedding is specified.
+                self._is_mm = True
 
-            # Make sure MM charges have been passed for the QM region.
-            if mm_charges is None:
-                raise ValueError(
-                    "'mm_charges' are required when using 'mechanical' embedding"
-                )
+                # Make sure MM charges have been passed for the QM region.
+                if mm_charges is None:
+                    raise ValueError(
+                        "'mm_charges' are required when using 'mm' embedding"
+                    )
 
-            # NumPy array.
-            if isinstance(mm_charges, np.ndarray):
-                if mm_charges.dtype != np.float64:
-                    raise TypeError("'mm_charges' must have dtype 'float64'.")
+                # NumPy array.
+                if isinstance(mm_charges, np.ndarray):
+                    if mm_charges.dtype != np.float64:
+                        raise TypeError("'mm_charges' must have dtype 'float64'.")
+                    else:
+                        self._mm_charges = mm_charges
+
+                # Path to a file.
+                elif isinstance(mm_charges, str):
+                    if not os.path.isfile(mm_charges):
+                        raise IOError(f"'mm_charges' file doesn't exist: {mm_charges}")
+
+                    # Read the charges into a list.
+                    charges = []
+                    with open(mm_charges, "r") as f:
+                        for line in f:
+                            try:
+                                charges.append(float(line.strip()))
+                            except:
+                                raise ValueError(
+                                    f"Unable to read 'mm_charges' from file: {mm_charges}"
+                                )
+                    self._mm_charges = np.array(charges)
+
                 else:
-                    self._mm_charges = mm_charges
-
-            # Path to a file.
-            elif isinstance(mm_charges, str):
-                if not os.path.isfile(mm_charges):
-                    raise IOError(f"'mm_charges' file doesn't exist: {mm_charges}")
-
-                # Read the charges into a list.
-                charges = []
-                with open(mm_charges, "r") as f:
-                    for line in f:
-                        try:
-                            charges.append(float(line.strip()))
-                        except:
-                            raise ValueError(
-                                f"Unable to read 'mm_charges' from file: {mm_charges}"
-                            )
-                self._mm_charges = np.array(charges)
-
-            else:
-                raise TypeError("'mm_charges' must be of type 'numpy.ndarray' or 'str'")
+                    raise TypeError(
+                        "'mm_charges' must be of type 'numpy.ndarray' or 'str'"
+                    )
 
         # Load the model parameters.
         try:
@@ -564,11 +575,11 @@ class MLMMCalculator:
         ) = self.parse_orca_input(orca_input)
 
         # Make sure that the number of QM atoms matches the number of MM atoms
-        # when using mechanical embedding.
-        if not self._is_electrostatic:
+        # when using mm embedding.
+        if self._is_mm:
             if len(xyz_qm) != len(self._mm_charges):
                 raise ValueError(
-                    f"Mechanical embedding is specified but the number of atoms in the QM region ({len(xyz_qm)}) "
+                    f"MM embedding is specified but the number of atoms in the QM region ({len(xyz_qm)}) "
                     f"doesn't match the number of MM charges ({len(self._mm_charges)})"
                 )
 
@@ -710,14 +721,14 @@ class MLMMCalculator:
         )
 
     def _get_E_components(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
-        if self._is_electrostatic:
+        if not self._is_mm:
             q_core = self._q_core[self._species_id]
         else:
             q_core = self._q_core
         k_Z = self._k_Z[self._species_id]
         r_data = self._get_r_data(xyz_qm_bohr, self._device)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
-        if self._is_electrostatic:
+        if not self._is_mm:
             q = self._get_q(r_data, s, chi)
             q_val = q - q_core
         else:

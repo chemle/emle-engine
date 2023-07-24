@@ -136,18 +136,21 @@ works for the environment varialbe, e.g. `MLMM_DEVICE=cuda:1`.
 
 ## Embedding method
 
-We support both _electrostatic_ and _mechanical_ embedding. Obviously we are
-advocating our electrostatic embedding scheme, but the use of mechanical
-embedding provides a useful reference for determining the benefit of
-using electrostatic embedding for a given system. The embedding method
-can be specified using the `MLMM_EMBEDDING` environment variable, or when
-launching the server, e.g.:
+We support both _electrostatic_, _mechanical_, and _MM_ embedding. Our
+implementation of mechanical embedding uses the model to predict charges for
+the QM region, but ignores the induced component of the potential. MM embedding
+allows the user to specify fixed MM charges for the QM atoms, with induction
+once again disabled. Obviously we are advocating our electrostatic embedding
+scheme, but the use of mechanical or MM embedding provides a useful reference
+for determining the benefit of using electrostatic embedding for a given system.
+The embedding method can be specified using the `MLMM_EMBEDDING` environment
+variable, or when launching the server, e.g.:
 
 ```
 mlmm-server --embedding mechanical
 ```
 
-The default option is (unsurprisingly) `electrostatic`. When using mechanical
+The default option is (unsurprisingly) `electrostatic`. When using MM
 embedding you will also need to specify MM charges for the atoms within the
 QM region. This can be done using the `--mm-charges` option, or via the
 `MLMM_MM_CHARGES` environment variable. The charges can be specified as a list
