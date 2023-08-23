@@ -11,6 +11,7 @@ dependencies:
   - eigen
   - pip
   - pytorch-gpu >= 2.0
+  - python < 3.11
   - torchani
   - pip:
     - git+https://github.com/lab-cosmo/librascal.git#egg=rascal[complete]
