@@ -74,26 +74,26 @@ ELEMENT_DICT = {1: "H", 6: "C", 7: "N", 8: "O", 16: "S"}
 
 
 class GPRCalculator:
-    """Predicts an atomic property for a molecule with GPR."""
+    """Predicts an atomic property for a molecule with Gaussian Process Regression (GPR)."""
 
     def __init__(self, ref_values, ref_soap, n_ref, sigma):
         """
         Constructor
 
-        Paramerers
+        Parameters
         ----------
 
         ref_values: numpy.array (N_Z, N_REF)
-            The property values corresponding to the basis vectors for each species
+            The property values corresponding to the basis vectors for each species.
 
         ref_soap: numpy.array (N_Z, N_REF, N_SOAP)
-            The basis feature vectors for each species
+            The basis feature vectors for each species.
 
         n_ref: (N_Z,)
-            Number of supported species
+            Number of supported species.
 
         sigma: float
-            The uncertainty of the observations (regularizer)
+            The uncertainty of the observations (regularizer).
         """
         self.ref_soap = ref_soap
         Kinv = self.get_Kinv(ref_soap, sigma)
@@ -110,13 +110,13 @@ class GPRCalculator:
         ----------
 
         mol_soap: numpy.array (N_ATOMS, N_SOAP)
-            The feature vectors for each atom
+            The feature vectors for each atom.
 
         zid: numpy.array (N_ATOMS,)
-            zid values of the atoms
+            The species identity value of each atom.
 
         gradient: bool
-            Whether the gradient should be calculated
+            Whether the gradient should be calculated.
 
         Returns
         -------
@@ -143,21 +143,24 @@ class GPRCalculator:
 
     def get_gradient(self, mol_soap, zid):
         """
-        Returns the gradient of the predicted property w.r.t. soap features
+        Returns the gradient of the predicted property with respect to
+        soap features.
 
         Parameters
         ----------
 
         mol_soap: numpy.array (N_ATOMS, N_SOAP)
-            The feature vectors for each atom
+            The feature vectors for each atom.
 
         zid: numpy.array (N_ATOMS,)
-            zid values of the atoms
+            The species identity value of each atom.
 
         Returns
         -------
 
         result: numpy.array (N_ATOMS, N_SOAP)
+            The gradients of the property with respect to
+            the soap features.
         """
         n_at, n_soap = mol_soap.shape
         df_dsoap = np.zeros((n_at, n_soap), dtype=np.float32)
@@ -174,21 +177,22 @@ class GPRCalculator:
     @classmethod
     def get_Kinv(cls, ref_soap, sigma):
         """
-        Internal function to compute the inverse of the K matrix for GPR
+        Internal function to compute the inverse of the K matrix for GPR.
 
         Parameters
         ----------
 
         ref_soap: numpy.array (N_Z, MAX_N_REF, N_SOAP)
-            The basis feature vectors for each species
+            The basis feature vectors for each species.
 
         sigma: float
-            The uncertainty of the observations (regularizer)
+            The uncertainty of the observations (regularizer).
 
         Returns
         -------
 
         result: numpy.array (MAX_N_REF, MAX_N_REF)
+            The inverse of the K matrix.
         """
         n = ref_soap.shape[1]
         K = (ref_soap @ ref_soap.swapaxes(1, 2)) ** 2
@@ -196,7 +200,10 @@ class GPRCalculator:
 
 
 class SOAPCalculatorSpinv:
-    """Calculates SOAP feature vectors for a given system from spherical invariants."""
+    """
+    Calculates Smooth Overlap of Atomic Positions (SOAP) feature vectors for
+    a given system from spherical invariants.
+    """
 
     def __init__(self, hypers):
         """
@@ -207,32 +214,33 @@ class SOAPCalculatorSpinv:
         ----------
 
         hypers: dict
-            Hyperparameters for rascal SphericalInvariants
+            Hyperparameters for rascal SphericalInvariants.
 
         """
         self.spinv = SphericalInvariants(**hypers)
 
     def __call__(self, z, xyz, gradient=False):
         """
-        Calculates the SOAP feature vectors and their gradients for a given molecule
+        Calculates the SOAP feature vectors and their gradients for a
+        given molecule.
 
         Parameters
         ----------
 
         z: numpy.array (N_ATOMS)
-            Chemical species (element) for each atom  
-        
+            Chemical species (element) for each atom  .
+
         xyz: numpy.array (N_ATOMS, 3)
-            Atomic positions
+            Atomic positions.
 
         gradient: bool
-            Whether the gradient should be calculated
+            Whether the gradient should be calculated.
 
         Returns
         -------
 
         soap: numpy.array (N_ATOMS, N_SOAP)
-            SOAP feature vectors for each atom
+            SOAP feature vectors for each atom.
 
         gradient: numpy.array (N_ATOMS, N_SOAP, N_ATOMS, 3)
             gradients of the soap feature vectors w.r.t. atomic positions
@@ -243,21 +251,23 @@ class SOAPCalculatorSpinv:
     @staticmethod
     def get_mol(z, xyz):
         """
-        Creates ASE Atoms object from atomic species and positions
+        Creates Atomic Simulation Environment (ASE) Atoms object from atomic
+        species and positions.
 
         Parameters
         ----------
 
         z: numpy.array (N_ATOMS)
-            Chemical species (element) for each atom  
+            Chemical species (element) for each atom.
 
         xyz: numpy.array (N_ATOMS, 3)
-            Atomic positions
+            Atomic positions.
 
         Returns
         -------
 
         result: ase.Atoms
+            ASE atoms object.
         """
         xyz_min = np.min(xyz, axis=0)
         xyz_max = np.max(xyz, axis=0)
@@ -267,25 +277,25 @@ class SOAPCalculatorSpinv:
     @staticmethod
     def get_soap(atoms, spinv, gradient=False):
         """
-        Calculates the SOAP feature vectors and their gradients for ASE atoms
+        Calculates the SOAP feature vectors and their gradients for ASE atoms.
 
         Parameters
         ----------
 
         atoms: ase.Atoms
-            ASE atoms object
+            ASE atoms object.
 
         spinv: rascal.representations.SphericalInvariants
-            SphericalInvariants object to calculate SOAP features
+            SphericalInvariants object to calculate SOAP features.
 
         Returns
         -------
 
         soap: numpy.array (N_ATOMS, N_SOAP)
-            SOAP feature vectors for each atom
+            SOAP feature vectors for each atom.
 
         gradient: numpy.array (N_ATOMS, N_SOAP, N_ATOMS, 3)
-            gradients of the soap feature vectors w.r.t. atomic positions
+            Gradients of the SOAP feature vectors with respect to atomic positions.
         """
         managers = spinv.transform(atoms)
         soap = managers.get_features(spinv)
@@ -851,31 +861,32 @@ class MLMMCalculator:
 
     def _get_E(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
         """
-        Computes total ML/MM embedding energy (sum of static and induced)
+        Computes total ML/MM embedding energy (sum of static and induced).
 
         Parameters
         ----------
 
         charges_mm: torch.tensor (max_mm_atoms,)
-            MM point charges, padded to max_mm_atoms with zeros
+            MM point charges, padded to max_mm_atoms with zeros.
 
         xyz_qm_bohr: torch.tensor (N_ATOMS, 3)
-            Positions of QM atoms (in bohr units)
+            Positions of QM atoms (in bohr units).
 
         xyz_mm_bohr: torch.tensor (max_mm_atoms, 3)
-            Positions of MM atoms (in bohr units), 
-            padded to max_mm_atoms with zeros
+            Positions of MM atoms (in bohr units),
+            padded to max_mm_atoms with zeros.
 
         s: torch.tensor (N_ATOMS,)
-            MBIS valence shell widths
+            MBIS valence shell widths.
 
         chi: torch.tensor (N_ATOMS,)
-            Electronegativities
+            Electronegativities.
 
         Returns
         -------
 
         result: torch.tensor (1,)
+            Total ML/MM embedding energy.
         """
         return torch.sum(
             self._get_E_components(charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi)
@@ -889,26 +900,26 @@ class MLMMCalculator:
         ----------
 
         charges_mm: torch.tensor (max_mm_atoms,)
-            MM point charges, padded to max_mm_atoms with zeros
+            MM point charges, padded to max_mm_atoms with zeros.
 
         xyz_qm_bohr: torch.tensor (N_ATOMS, 3)
-            Positions of QM atoms (in bohr units)
+            Positions of QM atoms (in bohr units).
 
         xyz_mm_bohr: torch.tensor (max_mm_atoms, 3)
-            Positions of MM atoms (in bohr units), 
+            Positions of MM atoms (in bohr units),
             padded to max_mm_atoms with zeros
 
         s: torch.tensor (N_ATOMS,)
-            MBIS valence shell widths
+            MBIS valence shell widths.
 
         chi: torch.tensor (N_ATOMS,)
-            Electronegativities
+            Electronegativities.
 
         Returns
         -------
 
         result: torch.tensor (2,)
-            Values of static and induced ML/MM energy components
+            Values of static and induced ML/MM energy components.
         """
         if not self._is_mm:
             q_core = self._q_core[self._species_id]
@@ -947,16 +958,16 @@ class MLMMCalculator:
         r_data: r_data object (output of self._get_r_data)
 
         s: torch.tensor (N_ATOMS,)
-            MBIS valence shell widths
+            MBIS valence shell widths.
 
         chi: torch.tensor (N_ATOMS,)
-            Electronegativities
+            Electronegativities.
 
         Returns
         -------
 
         result: torch.tensor (N_ATOMS,)
-            Predicted MBIS charges
+            Predicted MBIS charges.
         """
         A = self._get_A_QEq(r_data, s)
         b = torch.hstack([-chi, self._q_total])
@@ -973,7 +984,7 @@ class MLMMCalculator:
         r_data: r_data object (output of self._get_r_data)
 
         s: torch.tensor (N_ATOMS,)
-            MBIS valence shell widths
+            MBIS valence shell widths.
 
         Returns
         -------
@@ -1021,23 +1032,22 @@ class MLMMCalculator:
         mesh_data: mesh_data object (output of self._get_mesh_data)
 
         q: torch.tensor (max_mm_atoms,)
-            MM point charges, padded to max_mm_atoms with zeros
+            MM point charges, padded to max_mm_atoms with zeros.
 
         s: torch.tensor (N_ATOMS,)
-            MBIS valence shell widths
+            MBIS valence shell widths.
 
         q_val: torch.tensor (N_ATOMS,)
-            MBIS valence charges
-        
+            MBIS valence charges.
+
         k_Z: torch.tensor (N_Z)
-            scaling factors for polarizabilities
+            Scaling factors for polarizabilities.
 
         Returns
         -------
 
         result: torch.tensor (N_ATOMS, 3)
             Array of induced dipoles
-            
         """
         A = self._get_A_thole(r_data, s, q_val, k_Z)
 
@@ -1062,18 +1072,19 @@ class MLMMCalculator:
         r_data: r_data object (output of self._get_r_data)
 
         s: torch.tensor (N_ATOMS,)
-            MBIS valence shell widths
+            MBIS valence shell widths.
 
         q_val: torch.tensor (N_ATOMS,)
-            MBIS valence charges
-        
+            MBIS charges.
+
         k_Z: torch.tensor (N_Z)
-            scaling factors for polarizabilities
+            Scaling factors for polarizabilities.
 
         Returns
         -------
 
         result: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
+            The A matrix for induced dipoles prediction.
         """
         v = -60 * q_val * s**3
         alpha = v * k_Z
@@ -1098,8 +1109,8 @@ class MLMMCalculator:
     @staticmethod
     def _get_df_dxyz(df_dsoap, dsoap_dxyz):
         """
-        Internal method, calculates gradient of some property w.r.t. xyz
-        coordinates based on gradient w.r.t. SOAP and SOAP gradients
+        Internal method to calculate the gradient of some property with respect to
+        xyz coordinates based on gradient with respect to SOAP and SOAP gradients.
 
         Parameters
         ----------
@@ -1118,60 +1129,61 @@ class MLMMCalculator:
     @staticmethod
     def _get_vpot_q(q, T0):
         """
-        Internal method, calculates electrostatic potential
+        Internal method to calculate the electrostatic potential.
 
         Parameters
         ----------
 
         q: torch.tensor (max_mm_atoms,)
-            MM point charges, padded to max_mm_atoms with zeros
+            MM point charges, padded to max_mm_atoms with zeros.
 
         T0: torch.tensor (N_ATOMS, max_mm_atoms)
-            T0 tensor for QM atoms over MM atom positions
+            T0 tensor for QM atoms over MM atom positions.
 
         Returns
         -------
 
         result: torch.tensor (max_mm_atoms)
-            Electrostatic potential over MM atoms
+            Electrostatic potential over MM atoms.
         """
         return torch.sum(T0 * q[:, None], axis=0)
 
     @staticmethod
     def _get_vpot_mu(mu, T1):
         """
-        Internal method, calculates the electrostatic potential generated
-        by atomic dipoles
+        Internal method to calculate the electrostatic potential generated
+        by atomic dipoles.
 
         Parameters
         ----------
 
         mu: torch.tensor (N_ATOMS, 3)
-            atomic dipoles
+            Atomic dipoles.
 
         T1: torch.tensor (N_ATOMS, max_mm_atoms, 3)
-            T1 tensor for QM atoms over MM atom positions
+            T1 tensor for QM atoms over MM atom positions.
 
         Returns
         -------
 
         result: torch.tensor (max_mm_atoms)
-            Electrostatic potential over MM atoms
+            Electrostatic potential over MM atoms.
         """
         return -torch.tensordot(T1, mu, ((0, 2), (0, 1)))
 
     @classmethod
     def _get_r_data(cls, xyz, device):
         """
-        Internal method, calculates r_data object
+        Internal method to calculate r_data object.
 
         Parameters
         ----------
 
-        xyz: torch.tensor (N_ATOMS, 3) 
-            atomic positions
+        xyz: torch.tensor (N_ATOMS, 3)
+            Atomic positions.
 
         device: torch.device
+            The PyTorch device to use.
 
         Returns
         -------
@@ -1221,9 +1233,10 @@ class MLMMCalculator:
         ----------
 
         a: torch.tensor (N_ATOMS, 3)
-            list of vectors
-        
+            List of vectors.
+
         device: torch.device
+            The PyTorch device to use.
 
         Returns
         -------
@@ -1244,19 +1257,19 @@ class MLMMCalculator:
     @classmethod
     def _get_mesh_data(cls, xyz, xyz_mesh, s):
         """
-        Internal method, calculates mesh_data object
+        Internal method, calculates mesh_data object.
 
         Parameters
         ----------
 
-        xyz: torch.tensor (N_ATOMS, 3) 
-            Atomic positions
+        xyz: torch.tensor (N_ATOMS, 3)
+            Atomic positions.
 
         xyz_mesh: torch.tensor (max_mm_atoms, 3)
-            MM positions
+            MM positions.
 
         s: torch.tensor (N_ATOMS,)
-            MBIS valence widths
+            MBIS valence widths.
         """
         rr = xyz_mesh[None, :, :] - xyz[:, None, :]
         r = torch.linalg.norm(rr, axis=2)
@@ -1270,20 +1283,20 @@ class MLMMCalculator:
     @classmethod
     def _get_f1_slater(cls, r, s):
         """
-        Internal method, calculates damping factors for Slater densities
+        Internal method, calculates damping factors for Slater densities.
 
         Parameters
         ----------
 
         r: torch.tensor (N_ATOMS, max_mm_atoms)
-            Distances from QM to MM atoms
+            Distances from QM to MM atoms.
 
         s: torch.tensor (N_ATOMS,)
-            MBIS valence widths
+            MBIS valence widths.
 
         Returns
         -------
-        
+
         result: torch.tensor (N_ATOMS, max_mm_atoms)
         """
         return (
@@ -1294,16 +1307,16 @@ class MLMMCalculator:
     @staticmethod
     def _get_T0_slater(r, s):
         """
-        Internal method, calculates T0 tensor for Slater densities
-        
+        Internal method, calculates T0 tensor for Slater densities.
+
         Parameters
         ----------
 
         r: torch.tensor (N_ATOMS, max_mm_atoms)
-            Distances from QM to MM atoms
+            Distances from QM to MM atoms.
 
         s: torch.tensor (N_ATOMS,)
-            MBIS valence widths
+            MBIS valence widths.
 
         Returns
         -------
@@ -1315,19 +1328,19 @@ class MLMMCalculator:
     @staticmethod
     def _get_T0_gaussian(t01, r, s_mat):
         """
-        Internal method, calculates T0 tensor for Gaussian densities (for QEq)
-        
+        Internal method, calculates T0 tensor for Gaussian densities (for QEq).
+
         Parameters
         ----------
 
         t01: torch.tensor (N_ATOMS, N_ATOMS)
-            T0 tensor for QM atoms
+            T0 tensor for QM atoms.
 
         r: torch.tensor (N_ATOMS, N_ATOMS)
-            Distance matrix for QM atoms
+            Distance matrix for QM atoms.
 
         s_mat: torch.tensor (N_ATOMS, N_ATOMS)
-            Matrix of Gaussian sigmas for QM atoms 
+            Matrix of Gaussian sigmas for QM atoms.
 
         Returns
         -------
@@ -1339,7 +1352,7 @@ class MLMMCalculator:
     @classmethod
     def _get_T2_thole(cls, tr21, tr22, au3):
         """
-        Internal method, calculates T2 tensor with Thole damping
+        Internal method, calculates T2 tensor with Thole damping.
 
         Parameters
         ----------
@@ -1351,7 +1364,7 @@ class MLMMCalculator:
             r_data["T22"]
 
         au3: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
-            scaled distance matrix (see _get_A_thole)
+            Scaled distance matrix (see _get_A_thole).
 
         Returns
         -------
@@ -1363,14 +1376,14 @@ class MLMMCalculator:
     @staticmethod
     def _lambda3(au3):
         """
-        Internal method, calculates r^3 component of T2 tensor with Thole 
-        damping
+        Internal method, calculates r^3 component of T2 tensor with Thole
+        damping.
 
         Parameters
         ----------
 
         au3: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
-            scaled distance matrix (see _get_A_thole)
+            Scaled distance matrix (see _get_A_thole).
 
         Returns
         -------
@@ -1382,14 +1395,14 @@ class MLMMCalculator:
     @staticmethod
     def _lambda5(au3):
         """
-        Internal method, calculates r^5 component of T2 tensor with Thole 
-        damping
+        Internal method, calculates r^5 component of T2 tensor with Thole
+        damping.
 
         Parameters
         ----------
 
         au3: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
-            scaled distance matrix (see _get_A_thole)
+            Scaled distance matrix (see _get_A_thole).
 
         Returns
         -------
