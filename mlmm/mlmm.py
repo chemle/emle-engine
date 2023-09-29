@@ -27,6 +27,7 @@ import shlex
 import shutil
 import subprocess
 import tempfile
+import yaml
 
 import scipy
 import scipy.io
@@ -685,6 +686,22 @@ class MLMMCalculator:
         # Initialise the maximum number of MM atom that have been seen.
         self._max_mm_atoms = 0
 
+        # Store the settings as a dictionary.
+        self._settings = {
+            "model": None if model is None else self._model,
+            "embedding": self._embedding,
+            "backend": self._backend,
+            "mm_charges": None if mm_charges is None else mm_charges.tolist(),
+            "deepmd_model": deepmd_model,
+            "rascal_model": rascal_model,
+            "rascal_parm7": rascal_parm7,
+            "device": device,
+        }
+
+        # Write to a YAML file.
+        with open("mlmm_settings.yaml", "w") as f:
+            yaml.dump(self._settings, f)
+
     # Match run function of other interface objects.
     def run(self, path=None):
         """Calculate the energy and gradients.
@@ -856,7 +873,7 @@ class MLMMCalculator:
 
         # Log the in vacuo and ML/MM energies.
         if self._log:
-            with open(dirname + f"mlmm_{self._backend}_log.txt", "a+") as f:
+            with open(dirname + "mlmm_log.txt", "a+") as f:
                 f.write(f"{E_vac:22.12f}{E_tot:22.12f}\n")
 
     def _get_E(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
