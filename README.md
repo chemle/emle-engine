@@ -52,6 +52,10 @@ For usage information, run:
 mlmm-server --help
 ```
 
+(On startup an `mlmm_settings.yaml` file will be written to the working directory
+containing the settings used to configure the server. Further `mlmm_pid.txt` and
+`mlmm_port.txt` files contain the process ID and port of the server.)
+
 To launch a client to send a job to the server:
 
 ```
@@ -99,10 +103,9 @@ Rascal can be used to train system specific delta-learning models.
 
 When using the `orca` backend, you will need to ensure that the _fake_ `orca`
 executable takes precedence in the `PATH`. (To check that ML/MM is running,
-look for an `mlmm_backend_log.txt` file in the working directory, where
-`backend` is the name of the specified backend.) The input for `orca` will
-be taken from the `&orc` section of the  `sander` configuration file, so use
-this to specify the method, etc.
+look for an `mlmm_log.txt` file in the working directory, where. The input
+for `orca` will be taken from the `&orc` section of the  `sander` configuration
+file, so use this to specify the method, etc.
 
 When using `deepmd` as the backend you will also need to specify a model
 file to use. This can be passed with the `--deepmd-model` command-line argument,
