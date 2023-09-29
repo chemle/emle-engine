@@ -373,12 +373,19 @@ class MLMMCalculator:
             default model will be used.
 
         embedding : str
-            Whether to use "electrostatic", "mechanical", or "mm" embedding.
-            Note that "mechanical" embedding is an approximation of true
-            mechanical embedding. Here we use the embedding model to predict
-            the charges on the QM atoms, but disable the induced component of
-            the potential. In "mm" embedding we allow the user to explicitly
-            specify "mm" charges for atoms in the QM region.
+            The desired embedding method. Options are:
+                "electrostatic":
+                    Full ML electrostatic embedding.
+                "mechanical":
+                    ML predicted charges for the core, but zero valence charge.
+                "nonpol":
+                    Non-polarisable ML embedding. Here the induced component of
+                    the potential is zeroed.
+                "mm":
+                    MM charges are used for the core charge and valence charges
+                    are set to zero. If this option is specified then the user
+                    should also specivfy the MM charges for atoms in the QM
+                    region.
 
         backend : str
             The backend to use to compute in vacuo energies and gradients.
@@ -424,14 +431,14 @@ class MLMMCalculator:
         if not isinstance(embedding, str):
             raise TypeError("'embedding' must be of type 'str'")
         embedding = embedding.replace(" ", "").lower()
-        if not embedding in ["electrostatic", "mechanical", "mm"]:
+        if not embedding in ["electrostatic", "mechanical", "nonpol", "mm"]:
             raise ValueError(
-                "'embedding' must be either 'electrostatic', 'mechanical', or 'mm'"
+                "'embedding' must be either 'electrostatic', 'mechanical', 'nonpol, or 'mm'"
             )
-        # Flag that we're not performing electrostatic embedding.
-        if embedding != "electrostatic":
-            self._is_electrostatic = False
-            if embedding == "mm":
+        self._embedding = embedding
+
+        if self._embedding != "electrostatic":
+            if self._embedding == "mm":
                 # Flag that MM embedding is specified.
                 self._is_mm = True
 
@@ -938,16 +945,19 @@ class MLMMCalculator:
         result: torch.tensor (2,)
             Values of static and induced ML/MM energy components.
         """
-        if not self._is_mm:
+        if self._embedding != "mm":
             q_core = self._q_core[self._species_id]
         else:
             q_core = self._q_core
         k_Z = self._k_Z[self._species_id]
         r_data = self._get_r_data(xyz_qm_bohr, self._device)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
-        if not self._is_mm:
+        if self._embedding in ["electrostastic", "nonpol"]:
             q = self._get_q(r_data, s, chi)
             q_val = q - q_core
+        elif self._embedding == "mechanical":
+            qcore = self._get_q(r_data, s, chi)
+            q_val = torch.zeros_like(q_core, dtype=torch.float32, device=self._device)
         else:
             q_val = torch.zeros_like(q_core, dtype=torch.float32, device=self._device)
         mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k_Z)
@@ -956,7 +966,7 @@ class MLMMCalculator:
         vpot_static = vpot_q_core + vpot_q_val
         E_static = torch.sum(vpot_static @ charges_mm)
 
-        if self._is_electrostatic:
+        if self._embedding == "electrostastic":
             vpot_ind = self._get_vpot_mu(mu_ind, mesh_data["T1_mesh"])
             E_ind = torch.sum(vpot_ind @ charges_mm) * 0.5
         else:

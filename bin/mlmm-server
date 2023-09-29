@@ -93,7 +93,7 @@ parser.add_argument(
     "--embedding",
     type=str,
     help="the embedding method to use",
-    choices=["electrostatic", "mechanical", "mm"],
+    choices=["electrostatic", "mechanical", "nonpol", "mm"],
     required=False,
 )
 parser.add_argument(

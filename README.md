@@ -136,12 +136,12 @@ works for the environment varialbe, e.g. `MLMM_DEVICE=cuda:1`.
 
 ## Embedding method
 
-We support both _electrostatic_, _mechanical_, and _MM_ embedding. Our
-implementation of mechanical embedding uses the model to predict charges for
-the QM region, but ignores the induced component of the potential. MM embedding
+We support both _electrostatic_, _mechanical_, non-polarisable and _MM_ embedding.
+Here non-polarisable emedding uses the ML/MM model to predict charges for the
+QM region, but ignores the induced component of the potential. MM embedding
 allows the user to specify fixed MM charges for the QM atoms, with induction
 once again disabled. Obviously we are advocating our electrostatic embedding
-scheme, but the use of mechanical or MM embedding provides a useful reference
+scheme, but the use of different embedding schemes provides a useful reference
 for determining the benefit of using electrostatic embedding for a given system.
 The embedding method can be specified using the `MLMM_EMBEDDING` environment
 variable, or when launching the server, e.g.:
