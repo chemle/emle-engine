@@ -28,7 +28,6 @@ import os
 
 from glob import glob
 
-from mlmm.mlmm import MLMMCalculator
 from mlmm.socket import Socket
 
 # Check whether any MLMM environment variables are set.
@@ -267,7 +266,13 @@ except:
         f"Server address already in use: ({MLMM_HOST}, {MLMM_PORT})"
     ) from None
 
-# Create the ML/MM calculator.
+
+# Import the ML/MM calculator here so that we avoid the import overhead when the
+# script is called to check if an existing server is running, e.g. when called
+# as a background process by the orca executable.
+from mlmm.mlmm import MLMMCalculator
+
+# Initialise the ML/MM calculator.
 print("Initialising ML/MM calculator...")
 mlmm_calculator = MLMMCalculator(
     model=MLMM_MODEL,
