@@ -952,7 +952,7 @@ class MLMMCalculator:
         k_Z = self._k_Z[self._species_id]
         r_data = self._get_r_data(xyz_qm_bohr, self._device)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
-        if self._embedding in ["electrostastic", "nonpol"]:
+        if self._embedding in ["electrostatic", "nonpol"]:
             q = self._get_q(r_data, s, chi)
             q_val = q - q_core
         elif self._embedding == "mechanical":
@@ -966,7 +966,7 @@ class MLMMCalculator:
         vpot_static = vpot_q_core + vpot_q_val
         E_static = torch.sum(vpot_static @ charges_mm)
 
-        if self._embedding == "electrostastic":
+        if self._embedding == "electrostatic":
             vpot_ind = self._get_vpot_mu(mu_ind, mesh_data["T1_mesh"])
             E_ind = torch.sum(vpot_ind @ charges_mm) * 0.5
         else:
