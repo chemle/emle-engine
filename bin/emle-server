@@ -1,26 +1,26 @@
 #!/usr/bin/env python
 
-######################################################################
-# ML/MM: https://github.com/lohedges/sander-mlmm
+#######################################################################
+# EMLE-Engine: https://github.com/chemle/emle-engine
 #
 # Copyright: 2023
 #
 # Authors: Lester Hedges   <lester.hedges@gmail.com>
 #          Kirill Zinovjev <kzinovjev@gmail.com>
 #
-# ML/MM is free software: you can redistribute it and/or modify
+# EMLE-Engine is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 #
-# ML/MM is distributed in the hope that it will be useful,
+# EMLE-Engine is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with ML/MM. If not, see <http://www.gnu.org/licenses/>.
-######################################################################
+# along with EMLE-Engine If not, see <http://www.gnu.org/licenses/>.
+#####################################################################
 
 import argparse
 import numpy as np
@@ -28,43 +28,43 @@ import os
 
 from glob import glob
 
-from mlmm.socket import Socket
+from emle.socket import Socket
 
-# Check whether any MLMM environment variables are set.
-MLMM_HOST = os.getenv("MLMM_HOST")
+# Check whether any EMLE environment variables are set.
+EMLE_HOST = os.getenv("EMLE_HOST")
 try:
-    MLMM_PORT = int(os.getenv("MLMM_PORT"))
+    EMLE_PORT = int(os.getenv("EMLE_PORT"))
 except:
-    MLMM_PORT = None
-MLMM_MODEL = os.getenv("MLMM_MODEL")
-MLMM_EMBEDDING = os.getenv("MLMM_EMBEDDING")
-MLMM_MM_CHARGES = os.getenv("MLMM_MM_CHARGES")
+    EMLE_PORT = None
+EMLE_MODEL = os.getenv("EMLE_MODEL")
+EMLE_METHOD = os.getenv("EMLE_METHOD")
+EMLE_MM_CHARGES = os.getenv("EMLE_MM_CHARGES")
 try:
-    MLMM_NUM_CLIENTS = int(os.getenv("MLMM_NUM_CLIENTS"))
+    EMLE_NUM_CLIENTS = int(os.getenv("EMLE_NUM_CLIENTS"))
 except:
-    MLMM_NUM_CLIENTS = None
-MLMM_BACKEND = os.getenv("MLMM_BACKEND")
-MLMM_DEVICE = os.getenv("MLMM_DEVICE")
-MLMM_LOG = os.getenv("MLMM_LOG", "True").lower() in ("true", "1", "t")
+    EMLE_NUM_CLIENTS = None
+EMLE_BACKEND = os.getenv("EMLE_BACKEND")
+EMLE_DEVICE = os.getenv("EMLE_DEVICE")
+EMLE_LOG = os.getenv("EMLE_LOG", "True").lower() in ("true", "1", "t")
 DEEPMD_MODEL = os.getenv("DEEPMD_MODEL")
 RASCAL_MODEL = os.getenv("RASCAL_MODEL")
 RASCAL_PARM7 = os.getenv("RASCAL_PARM7")
 
 # Fallback to default values.
-if not MLMM_HOST:
-    MLMM_HOST = "localhost"
-if not MLMM_PORT:
-    MLMM_PORT = 10000
-if not MLMM_NUM_CLIENTS:
-    MLMM_NUM_CLIENTS = 1
-if not MLMM_BACKEND:
-    MLMM_BACKEND = "torchani"
-if not MLMM_EMBEDDING:
-    MLMM_EMBEDDING = "electrostatic"
-if not MLMM_MM_CHARGES:
-    MLMM_MM_CHARGES = None
-if not MLMM_DEVICE:
-    MLMM_DEVICE = None
+if not EMLE_HOST:
+    EMLE_HOST = "localhost"
+if not EMLE_PORT:
+    EMLE_PORT = 10000
+if not EMLE_NUM_CLIENTS:
+    EMLE_NUM_CLIENTS = 1
+if not EMLE_BACKEND:
+    EMLE_BACKEND = "torchani"
+if not EMLE_METHOD:
+    EMLE_METHOD = "electrostatic"
+if not EMLE_MM_CHARGES:
+    EMLE_MM_CHARGES = None
+if not EMLE_DEVICE:
+    EMLE_DEVICE = None
 
 
 def validate_clients(num_clients):
@@ -80,13 +80,13 @@ def validate_clients(num_clients):
 
 
 # create argument parser.
-parser = argparse.ArgumentParser(description="ML/MM server")
+parser = argparse.ArgumentParser(description="EMLE server")
 
 # parse command-line options
 parser.add_argument("--host", type=str, help="the hostname.", required=False)
 parser.add_argument("--port", type=str, help="the port number", required=False)
 parser.add_argument(
-    "--model", type=str, help="path to an ML/MM model file", required=False
+    "--model", type=str, help="path to an EMLE model file", required=False
 )
 parser.add_argument(
     "--embedding",
@@ -154,21 +154,21 @@ args = parser.parse_args()
 
 # Overload using command-line arguments.
 if args.host:
-    MLMM_HOST = args.host
+    EMLE_HOST = args.host
 if args.port:
-    MLMM_PORT = args.port
+    EMLE_PORT = args.port
 if args.model:
-    MLMM_MODEL = args.model
+    EMLE_MODEL = args.model
 if args.embedding:
-    MLMM_EMBEDDING = args.embedding
+    EMLE_METHOD = args.embedding
 if args.mm_charges:
-    MLMM_MM_CHARGES = args.mm_charges
+    EMLE_MM_CHARGES = args.mm_charges
 if args.num_clients:
-    MLMM_NUM_CLIENTS = args.num_clients
+    EMLE_NUM_CLIENTS = args.num_clients
 if args.backend:
-    MLMM_BACKEND = args.backend
+    EMLE_BACKEND = args.backend
 if args.device:
-    MLMM_DEVICE = args.device
+    EMLE_DEVICE = args.device
 if args.deepmd_model:
     DEEPMD_MODEL = args.deepmd_model
 if args.rascal_model:
@@ -176,44 +176,44 @@ if args.rascal_model:
 if args.rascal_parm7:
     RASCAL_PARM7 = args.rascal_parm7
 if args.log is not None:
-    MLMM_LOG = args.log
+    EMLE_LOG = args.log
 
 # Validate the MM charges. Don't bother doing this if the user has
 # specified "electrostatic" embedding.
-if MLMM_EMBEDDING == "mm":
-    if MLMM_MM_CHARGES is None:
+if EMLE_METHOD == "mm":
+    if EMLE_MM_CHARGES is None:
         raise ValueError("'mm_charges' are required when using 'mm' embedding")
 
     # Whether we are parsing a list of charges, rather than a file.
     is_list = False
 
-    if isinstance(MLMM_MM_CHARGES, str):
+    if isinstance(EMLE_MM_CHARGES, str):
         # If this isn't a path to a file, try splitting on commas.
-        if not os.path.isfile(MLMM_MM_CHARGES):
+        if not os.path.isfile(EMLE_MM_CHARGES):
             try:
-                MLMM_MM_CHARGES = MLMM_MM_CHARGES.split(",")
+                EMLE_MM_CHARGES = EMLE_MM_CHARGES.split(",")
                 is_list = True
             except:
                 raise ValueError(
-                    "Unable to parse MLMM_MM_CHARGES environment variable as a comma-separated list of floats"
+                    "Unable to parse EMLE_MM_CHARGES environment variable as a comma-separated list of floats"
                 )
 
     # A single entry list is assumed to be the path to a file.
-    elif isinstance(MLMM_MM_CHARGES, list):
-        if len(MLMM_MM_CHARGES) == 1:
-            MLMM_MM_CHARGES = MLMM_MM_CHARGES[0]
+    elif isinstance(EMLE_MM_CHARGES, list):
+        if len(EMLE_MM_CHARGES) == 1:
+            EMLE_MM_CHARGES = EMLE_MM_CHARGES[0]
         else:
             is_list = True
 
     # Try to parse lists of MM charges as a NumPy array of floats.
     if is_list:
         try:
-            MLMM_MM_CHARGES = np.array([float(x) for x in MLMM_MM_CHARGES])
+            EMLE_MM_CHARGES = np.array([float(x) for x in EMLE_MM_CHARGES])
         except:
             raise TypeError("Unable to parse MM charges as an array of floats")
 
 else:
-    MLMM_MM_CHARGES = None
+    EMLE_MM_CHARGES = None
 
 # Work out the DeePMD model. We allow the following formatting:
 #    1) A path to a single file.
@@ -245,45 +245,45 @@ if DEEPMD_MODEL:
         else:
             DEEPMD_MODEL = models
 
-print(f"Starting ML-MM server using {MLMM_BACKEND} backend...")
+print(f"Starting ML-MM server using {EMLE_BACKEND} backend...")
 
-# Create the ML/MM socket.
+# Create the EMLE socket.
 sock = Socket()
 
 try:
-    sock.bind(MLMM_HOST, MLMM_PORT)
-    sock.listen(MLMM_NUM_CLIENTS)
+    sock.bind(EMLE_HOST, EMLE_PORT)
+    sock.listen(EMLE_NUM_CLIENTS)
 
     # Write the PID to file in the current directory.
-    with open("mlmm_pid.txt", "w") as f:
+    with open("emle_pid.txt", "w") as f:
         f.write(f"{os.getpid()}\n")
 
     # Write the port to file in the current directory.
-    with open("mlmm_port.txt", "w") as f:
-        f.write(f"{MLMM_PORT}\n")
+    with open("emle_port.txt", "w") as f:
+        f.write(f"{EMLE_PORT}\n")
 except:
     raise OSError(
-        f"Server address already in use: ({MLMM_HOST}, {MLMM_PORT})"
+        f"Server address already in use: ({EMLE_HOST}, {EMLE_PORT})"
     ) from None
 
 
-# Import the ML/MM calculator here so that we avoid the import overhead when the
+# Import the EMLE calculator here so that we avoid the import overhead when the
 # script is called to check if an existing server is running, e.g. when called
 # as a background process by the orca executable.
-from mlmm.mlmm import MLMMCalculator
+from emle.emle import EMLECalculator
 
-# Initialise the ML/MM calculator.
-print("Initialising ML/MM calculator...")
-mlmm_calculator = MLMMCalculator(
-    model=MLMM_MODEL,
-    embedding=MLMM_EMBEDDING,
-    backend=MLMM_BACKEND,
-    mm_charges=MLMM_MM_CHARGES,
+# Initialise the EMLE calculator.
+print("Initialising EMLE calculator...")
+mle_calculator = EMLECalculator(
+    model=EMLE_MODEL,
+    method=EMLE_METHOD,
+    backend=EMLE_BACKEND,
+    mm_charges=EMLE_MM_CHARGES,
     deepmd_model=DEEPMD_MODEL,
     rascal_model=RASCAL_MODEL,
     rascal_parm7=RASCAL_PARM7,
-    device=MLMM_DEVICE,
-    log=MLMM_LOG,
+    device=EMLE_DEVICE,
+    log=EMLE_LOG,
 )
 
 while True:
@@ -293,15 +293,15 @@ while True:
         print("Client connected:", client_address)
         while True:
             msg, path = connection.receive()
-            if msg == "mlmmrun":
-                # Try to run the ML/MM calculation.
-                print("Running ML/MM calculation...")
+            if msg == "emlerun":
+                # Try to run the EMLE calculation.
+                print("Running EMLE calculation...")
                 try:
-                    mlmm_calculator.run(path=path)
-                    msg = "7:mlmmfin"
+                    mle_calculator.run(path=path)
+                    msg = "7:emlefin"
                     print("Finished!")
                 except Exception as e:
-                    msg = f"mlmmfail:{str(e)}"
+                    msg = f"emlefail:{str(e)}"
                     msg = f"{len(msg)}:{msg}"
                     print("Failed!")
 

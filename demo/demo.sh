@@ -12,10 +12,10 @@ mkdir output
 cd output
 
 # Job name.
-name=mlmm
+name=emle
 
 # Launch sander.
 sander -O -i ../$name.in -o $name.out -p ../$PARM -c ../$CRD -r $name.ncrst -x $name.nc
 
-# Stop any running mlmm-server processes.
-mlmm-stop
+# Stop any running emle-server processes.
+emle-stop

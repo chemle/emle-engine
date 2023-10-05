@@ -1,24 +1,24 @@
-######################################################################
-# ML/MM: https://github.com/lohedges/sander-mlmm
+#######################################################################
+# EMLE-Engine: https://github.com/chemle/emle-engine
 #
 # Copyright: 2023
 #
 # Authors: Lester Hedges   <lester.hedges@gmail.com>
 #          Kirill Zinovjev <kzinovjev@gmail.com>
 #
-# ML/MM is free software: you can redistribute it and/or modify
+# EMLE-Engine is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 #
-# ML/MM is distributed in the hope that it will be useful,
+# EMLE-Engine is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with ML/MM. If not, see <http://www.gnu.org/licenses/>.
-######################################################################
+# along with EMLE-Engine If not, see <http://www.gnu.org/licenses/>.
+#####################################################################
 
 import socket as _socket
 
@@ -141,14 +141,14 @@ class Socket:
 
         For example, for the client:
 
-          "23:mlmmrun:/path/to/client"
+          "23:emlerun:/path/to/client"
 
-        This communicates an ML/MM calculation request to the server, also
+        This communicates an EMLE calculation request to the server, also
         passing the path from which the client was run.
 
         On succesful completion, the server will return a fixed message of:
 
-          "7:mlmmfin"
+          "7:emlefin"
 
         Parameters
         ----------

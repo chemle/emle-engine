@@ -1,24 +1,24 @@
-######################################################################
-# ML/MM: https://github.com/lohedges/sander-mlmm
+#######################################################################
+# EMLE-Engine: https://github.com/chemle/emle-engine
 #
 # Copyright: 2023
 #
 # Authors: Lester Hedges   <lester.hedges@gmail.com>
 #          Kirill Zinovjev <kzinovjev@gmail.com>
 #
-# ML/MM is free software: you can redistribute it and/or modify
+# EMLE-Engine is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 #
-# ML/MM is distributed in the hope that it will be useful,
+# EMLE-Engine is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with ML/MM. If not, see <http://www.gnu.org/licenses/>.
-######################################################################
+# along with EMLE-Engine If not, see <http://www.gnu.org/licenses/>.
+#####################################################################
 
 import os
 import pickle
@@ -312,12 +312,12 @@ class SOAPCalculatorSpinv:
         return soap, dsoap_dxyz
 
 
-class MLMMCalculator:
+class EMLECalculator:
     """
-    Predicts ML/MM energies and gradients allowing QM/MM with ML/MM embedding.
-    Requires the use of a QM (or ML) engine to compute in vacuo energies forces,
-    to which those from the ML/MM model are added. Here we use TorchANI (ML)
-    as the backend, but this can easily be generalised to any compatible engine.
+    Predicts EMLE energies and gradients allowing QM/MM with ML electrostatic
+    embedding. Requires the use of a QM (or ML) engine to compute in vacuo
+    energies forces, to which those from the EMLE model are added. Supported
+    backends are listed in the _supported_backends attribute below.
 
     WARNING: This class is assumed to be static for the purposes of working with
     PyTorch, i.e. all attributes assigned in the constructor and used within the
@@ -330,7 +330,7 @@ class MLMMCalculator:
     _module_dir = os.path.dirname(os.path.abspath(__file__))
 
     # Create the name of the default model file.
-    _default_model = os.path.join(_module_dir, "mlmm_spinv.mat")
+    _default_model = os.path.join(_module_dir, "emle_spinv.mat")
 
     # Default ML model parameters. These will be overwritten by values in the
     # embedding model file.
@@ -350,14 +350,10 @@ class MLMMCalculator:
     # List of supported devices.
     _supported_devices = ["cpu", "cuda"]
 
-    # Default to electrostatic embedding.
-    _is_electrostatic = True
-    _is_mm = False
-
     def __init__(
         self,
         model=None,
-        embedding="electrostatic",
+        method="electrostatic",
         backend="torchani",
         mm_charges=None,
         deepmd_model=None,
@@ -369,10 +365,10 @@ class MLMMCalculator:
         """Constructor.
 
         model : str
-            Path to the ML/MM embedding model parameter file. If None, then a
+            Path to the EMLE embedding model parameter file. If None, then a
             default model will be used.
 
-        embedding : str
+        method : str
             The desired embedding method. Options are:
                 "electrostatic":
                     Full ML electrostatic embedding.
@@ -414,7 +410,7 @@ class MLMMCalculator:
             or "cuda".
 
         log : bool
-            Whether to log the in vacuo and ML/MM energies to file.
+            Whether to log the in vacuo and EMLE energies to file.
         """
 
         # Validate input.
@@ -423,25 +419,22 @@ class MLMMCalculator:
             if not isinstance(model, str):
                 raise TypeError("'model' must be of type 'str'")
             if not os.path.exists(model):
-                raise IOError(f"Unable to locate ML/MM embedding model file: '{model}'")
+                raise IOError(f"Unable to locate EMLE embedding model file: '{model}'")
             self._model = model
         else:
             self._model = self._default_model
 
-        if not isinstance(embedding, str):
-            raise TypeError("'embedding' must be of type 'str'")
-        embedding = embedding.replace(" ", "").lower()
-        if not embedding in ["electrostatic", "mechanical", "nonpol", "mm"]:
+        if not isinstance(method, str):
+            raise TypeError("'method' must be of type 'str'")
+        method = method.replace(" ", "").lower()
+        if not method in ["electrostatic", "mechanical", "nonpol", "mm"]:
             raise ValueError(
-                "'embedding' must be either 'electrostatic', 'mechanical', 'nonpol, or 'mm'"
+                "'method' must be either 'electrostatic', 'mechanical', 'nonpol, or 'mm'"
             )
-        self._embedding = embedding
+        self._method = method
 
-        if self._embedding != "electrostatic":
-            if self._embedding == "mm":
-                # Flag that MM embedding is specified.
-                self._is_mm = True
-
+        if self._method != "electrostatic":
+            if self._method == "mm":
                 # Make sure MM charges have been passed for the QM region.
                 if mm_charges is None:
                     raise ValueError(
@@ -610,7 +603,7 @@ class MLMMCalculator:
         else:
             self._log = log
 
-        # Initialise ML-MM embedding model attributes.
+        # Initialise EMLE embedding model attributes.
         hypers_keys = (
             "gaussian_sigma_constant",
             "global_species",
@@ -626,7 +619,7 @@ class MLMMCalculator:
                     self._hypers[key] = self._params[key]
 
         self._get_soap = SOAPCalculatorSpinv(self._hypers)
-        if not self._is_mm:
+        if not self._method == "mm":
             self._q_core = torch.tensor(
                 self._params["q_core"], dtype=torch.float32, device=self._device
             )
@@ -696,7 +689,7 @@ class MLMMCalculator:
         # Store the settings as a dictionary.
         self._settings = {
             "model": None if model is None else self._model,
-            "embedding": self._embedding,
+            "method": self._method,
             "backend": self._backend,
             "mm_charges": None if mm_charges is None else mm_charges.tolist(),
             "deepmd_model": deepmd_model,
@@ -706,7 +699,7 @@ class MLMMCalculator:
         }
 
         # Write to a YAML file.
-        with open("mlmm_settings.yaml", "w") as f:
+        with open("emle_settings.yaml", "w") as f:
             yaml.dump(self._settings, f)
 
     # Match run function of other interface objects.
@@ -744,7 +737,7 @@ class MLMMCalculator:
 
         # Make sure that the number of QM atoms matches the number of MM atoms
         # when using mm embedding.
-        if self._is_mm:
+        if self._method == "mm":
             if len(xyz_qm) != len(self._mm_charges):
                 raise ValueError(
                     f"MM embedding is specified but the number of atoms in the QM region ({len(xyz_qm)}) "
@@ -878,14 +871,14 @@ class MLMMCalculator:
             for x, y, z in grad_mm[:num_mm_atoms]:
                 f.write(f"{x:17.12f}{y:17.12f}{z:17.12f}\n")
 
-        # Log the in vacuo and ML/MM energies.
+        # Log the in vacuo and EMLE energies.
         if self._log:
-            with open(dirname + "mlmm_log.txt", "a+") as f:
+            with open(dirname + "emle_log.txt", "a+") as f:
                 f.write(f"{E_vac:22.12f}{E_tot:22.12f}\n")
 
     def _get_E(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
         """
-        Computes total ML/MM embedding energy (sum of static and induced).
+        Computes total EMLE embedding energy (sum of static and induced).
 
         Parameters
         ----------
@@ -910,7 +903,7 @@ class MLMMCalculator:
         -------
 
         result: torch.tensor (1,)
-            Total ML/MM embedding energy.
+            Total EMLE embedding energy.
         """
         return torch.sum(
             self._get_E_components(charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi)
@@ -918,7 +911,7 @@ class MLMMCalculator:
 
     def _get_E_components(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
         """
-        Computes ML/MM energy components
+        Computes EMLE energy components
 
         Parameters
         ----------
@@ -943,19 +936,19 @@ class MLMMCalculator:
         -------
 
         result: torch.tensor (2,)
-            Values of static and induced ML/MM energy components.
+            Values of static and induced EMLE energy components.
         """
-        if self._embedding != "mm":
+        if self._method != "mm":
             q_core = self._q_core[self._species_id]
         else:
             q_core = self._q_core
         k_Z = self._k_Z[self._species_id]
         r_data = self._get_r_data(xyz_qm_bohr, self._device)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
-        if self._embedding in ["electrostatic", "nonpol"]:
+        if self._method in ["electrostatic", "nonpol"]:
             q = self._get_q(r_data, s, chi)
             q_val = q - q_core
-        elif self._embedding == "mechanical":
+        elif self._method == "mechanical":
             qcore = self._get_q(r_data, s, chi)
             q_val = torch.zeros_like(q_core, dtype=torch.float32, device=self._device)
         else:
@@ -966,7 +959,7 @@ class MLMMCalculator:
         vpot_static = vpot_q_core + vpot_q_val
         E_static = torch.sum(vpot_static @ charges_mm)
 
-        if self._embedding == "electrostatic":
+        if self._method == "electrostatic":
             vpot_ind = self._get_vpot_mu(mu_ind, mesh_data["T1_mesh"])
             E_ind = torch.sum(vpot_ind @ charges_mm) * 0.5
         else:
