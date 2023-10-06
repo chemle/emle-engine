@@ -219,6 +219,6 @@ using the `EMLE_RETRIES` environment variable.
 If you are trying to use the [ORCA](https://orcaforum.kofo.mpg.de/index.php) backend in an HPC environment then you'll
 need to make sure that the _fake_ `orca` executable takes precendence in the
 `PATH` set within your batch script, e.g. by making sure that you source the
-`mle` conda environment _after_ loading the `orca` module. It is also important
+`emle` conda environment _after_ loading the `orca` module. It is also important
 to make sure that the `emle` environment isn't active when submitting jobs,
 since the `PATH` won't be updated correctly within the batch script.
