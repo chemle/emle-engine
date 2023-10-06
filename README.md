@@ -10,7 +10,7 @@ that no modifications to sander are needed.
 First create a conda environment with all of the required dependencies:
 
 ```sh
-conda env create -f environment.yml
+conda env create -f environment.yaml
 conda activate emle
 ```
 
