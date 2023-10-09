@@ -637,6 +637,9 @@ class EMLECalculator:
         else:
             self._log = log
 
+        # Initialise a null SanderCalculator object.
+        self._sander_calculator = None
+
         # Initialise EMLE embedding model attributes.
         hypers_keys = (
             "gaussian_sigma_constant",
@@ -1680,17 +1683,18 @@ class EMLECalculator:
 
         # Initialise a SanderCalculator to compute the MM contributions to the energy
         # and force.
-        sander_calculator = SanderCalculator(self._parm7, atoms)
+        if self._sander_calculator is None:
+            self._sander_calculator = SanderCalculator(self._parm7, atoms)
 
         # Run the calculation.
-        sander_calculator.calculate(atoms)
+        self._sander_calculator.calculate(atoms)
 
         # Get the MM contributions.
-        energy = sander_calculator.results["energy"]
-        forces = sander_calculator.results["forces"]
+        energy = self._sander_calculator.results["energy"]
+        forces = self._sander_calculator.results["forces"]
 
         if not is_mm:
-            # Run the Rascal correction calculation.
+            # Run the calculation.
             self._rascal_calc.calculate(atoms)
 
             # Get the energy and force corrections.
