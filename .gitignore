@@ -19,7 +19,7 @@ setup.out
 setup.err
 dist/
 build/
-sander_mlmm.egg-info/
+emle_engine.egg-info/
 
 # Results.
 results/
