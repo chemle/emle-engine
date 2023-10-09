@@ -42,8 +42,6 @@ def test_lambda_0():
     Make sure interpolated energies at lambda=0 agree with pure MM.
     """
 
-    nrg_mm = None
-
     # First perform a pure MM simulation.
     with tempfile.TemporaryDirectory() as tmpdir:
         # Copy files to temporary directory.
