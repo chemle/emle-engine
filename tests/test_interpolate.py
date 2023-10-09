@@ -107,7 +107,7 @@ def test_lambda_0():
             lines = f.readlines()
         nrg_emle = parse_mdinfo(lines)
 
-        assert math.isclose(nrg_ref, nrg_emle, rel_tol=1e-3)
+        assert math.isclose(nrg_ref, nrg_emle, rel_tol=1e-4)
 
 
 def test_lambda_1():
