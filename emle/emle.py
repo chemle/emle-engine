@@ -1690,7 +1690,7 @@ class EMLECalculator:
         forces = sander_calculator.results["forces"]
 
         if not is_mm:
-            # Run the calculation.
+            # Run the Rascal correction calculation.
             self._rascal_calc.calculate(atoms)
 
             # Get the energy and force corrections.
