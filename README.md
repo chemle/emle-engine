@@ -94,10 +94,11 @@ emle-server --backend torchani
 (The default backend is `torchani`.)
 
 When using the `rascal` backend you will also need to specify a model file
-and the AMBER parm7 topology file that was used to train this model. These
-can be specified using the `--rascal-model` and `--rascal-parm7` command-line
-arguments, or using the `RASCAL_MODEL` and `RASCAL_PARM7` environment variables.
-Rascal can be used to train system specific delta-learning models.
+and the AMBER parm7 topology file that was used to train this model, i.e.
+the topology of the QM region. These can be specified using the
+`--rascal-model` and `--parm7` command-line arguments, or using the
+`EMLE_RASCAL_MODEL` and `EMLE_PARM7` environment variables. Rascal can be used
+to train system specific delta-learning models.
 
 When using the `orca` backend, you will need to ensure that the _fake_ `orca`
 executable takes precedence in the `PATH`. (To check that EMLE is running,
@@ -107,7 +108,7 @@ file, so use this to specify the method, etc.
 
 When using `deepmd` as the backend you will also need to specify a model
 file to use. This can be passed with the `--deepmd-model` command-line argument,
-or using the `DEEPMD_MODEL` environment variable. This can be a single file, or
+or using the `EMLE_DEEPMD_MODEL` environment variable. This can be a single file, or
 a set of model files specified using wildcards, or as a comma-separated list.
 When multiple files are specified, energies and gradients will be averaged
 over the models. The model files need to be visible to the `emle-server`, so we
@@ -185,6 +186,27 @@ cd demo
 ```
 
 Output will be written to the `demo/output` directory.
+
+## End-state correction
+
+It is possible to use ``emle-engine`` to perform end-state correction (ESC)
+for alchemical free-energy calculations. Here a λ value is used to
+interpolate between the full MM (λ = 0) and EMLE (λ = 1) modified
+potential. To use this feature specify the λ value from the command-line,
+e.g.:
+
+```
+emle-server --lambda-interpolate 0.5
+```
+
+or via the `ESC_LAMBDA_INTERPOLATE` environment variable. When performing
+interpolation it is also necessary to specifiy the path to a topology
+file for the QM region of the system being simulated. This can be specified
+using the `--parm7` command-line argument or via the `EMLE_PARM7` environment
+variable. You will also need specify MM charges for the QM atoms using the
+`--mm-charges` command-line argument or the `EMLE_MM_CHARES` environment variable.
+These are used to calculate the electrostatic interaction between point charges
+on the QM and MM regions.
 
 ## Issues
 

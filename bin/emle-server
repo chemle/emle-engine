@@ -46,9 +46,13 @@ except:
 EMLE_BACKEND = os.getenv("EMLE_BACKEND")
 EMLE_DEVICE = os.getenv("EMLE_DEVICE")
 EMLE_LOG = os.getenv("EMLE_LOG", "True").lower() in ("true", "1", "t")
-DEEPMD_MODEL = os.getenv("DEEPMD_MODEL")
-RASCAL_MODEL = os.getenv("RASCAL_MODEL")
-RASCAL_PARM7 = os.getenv("RASCAL_PARM7")
+EMLE_DEEPMD_MODEL = os.getenv("EMLE_DEEPMD_MODEL")
+EMLE_RASCAL_MODEL = os.getenv("EMLE_RASCAL_MODEL")
+EMLE_PARM7 = os.getenv("EMLE_PARM7")
+try:
+    EMLE_LAMBDA_INTERPOLATE = float(os.getenv("EMLE_LAMBDA_INTERPOLATE"))
+except:
+    EMLE_LAMBDA_INTERPOLATE = None
 
 # Fallback to default values.
 if not EMLE_HOST:
@@ -89,7 +93,7 @@ parser.add_argument(
     "--model", type=str, help="path to an EMLE model file", required=False
 )
 parser.add_argument(
-    "--embedding",
+    "--method",
     type=str,
     help="the embedding method to use",
     choices=["electrostatic", "mechanical", "nonpol", "mm"],
@@ -133,15 +137,19 @@ parser.add_argument(
 parser.add_argument(
     "--rascal-model",
     type=str,
-    nargs="+",
     help="path to Rascal model file",
     required=False,
 )
 parser.add_argument(
-    "--rascal-parm7",
+    "--lambda-interpolate",
+    type=float,
+    help="the value of lambda for interpolating between MM and EMLE potentials",
+    required=False,
+)
+parser.add_argument(
+    "--parm7",
     type=str,
-    nargs="+",
-    help="path to the parm7 file used to train the Rascal model",
+    help="path to the parm7 topology file for the QM region",
     required=False,
 )
 parser.add_argument(
@@ -153,43 +161,48 @@ parser.add_argument(
 args = parser.parse_args()
 
 # Overload using command-line arguments.
-if args.host:
+if args.host is not None:
     EMLE_HOST = args.host
-if args.port:
+if args.port is not None:
     EMLE_PORT = args.port
-if args.model:
+if args.model is not None:
     EMLE_MODEL = args.model
-if args.embedding:
-    EMLE_METHOD = args.embedding
-if args.mm_charges:
+if args.method is not None:
+    EMLE_METHOD = args.method
+if args.mm_charges is not None:
     EMLE_MM_CHARGES = args.mm_charges
-if args.num_clients:
+if args.num_clients is not None:
     EMLE_NUM_CLIENTS = args.num_clients
-if args.backend:
+if args.backend is not None:
     EMLE_BACKEND = args.backend
-if args.device:
+if args.device is not None:
     EMLE_DEVICE = args.device
-if args.deepmd_model:
-    DEEPMD_MODEL = args.deepmd_model
-if args.rascal_model:
-    RASCAL_MODEL = args.rascal_model
-if args.rascal_parm7:
-    RASCAL_PARM7 = args.rascal_parm7
+if args.deepmd_model is not None:
+    EMLE_DEEPMD_MODEL = args.deepmd_model
+if args.rascal_model is not None:
+    EMLE_RASCAL_MODEL = args.rascal_model
+if args.lambda_interpolate is not None:
+    EMLE_LAMBDA_INTERPOLATE = args.lambda_interpolate
+if args.parm7 is not None:
+    EMLE_PARM7 = args.parm7
 if args.log is not None:
     EMLE_LOG = args.log
 
 # Validate the MM charges. Don't bother doing this if the user has
 # specified "electrostatic" embedding.
-if EMLE_METHOD == "mm":
+if EMLE_METHOD == "mm" or EMLE_LAMBDA_INTERPOLATE is not None:
     if EMLE_MM_CHARGES is None:
-        raise ValueError("'mm_charges' are required when using 'mm' embedding")
+        if EMLE_METHOD == "mm":
+            raise ValueError("'mm_charges' are required when using 'mm' embedding")
+        else:
+            raise ValueError("'mm_charges' are required when interpolating")
 
     # Whether we are parsing a list of charges, rather than a file.
     is_list = False
 
     if isinstance(EMLE_MM_CHARGES, str):
         # If this isn't a path to a file, try splitting on commas.
-        if not os.path.isfile(EMLE_MM_CHARGES):
+        if not os.path.isfile(EMLE_MM_CHARGES) or not os.path.isfile(os.path.abspath(EMLE_MM_CHARGES)):
             try:
                 EMLE_MM_CHARGES = EMLE_MM_CHARGES.split(",")
                 is_list = True
@@ -212,38 +225,35 @@ if EMLE_METHOD == "mm":
         except:
             raise TypeError("Unable to parse MM charges as an array of floats")
 
-else:
-    EMLE_MM_CHARGES = None
-
 # Work out the DeePMD model. We allow the following formatting:
 #    1) A path to a single file.
 #    2) Multiple files specified using wildcards.
 #    3) A list of files, comma-separated.
 #
 # The first two can be found using glob, if empty then try splitting on ",".
-if DEEPMD_MODEL:
-    if isinstance(DEEPMD_MODEL, list) and len(DEEPMD_MODEL) == 1:
-        DEEPMD_MODEL = DEEPMD_MODEL[0]
-    if isinstance(DEEPMD_MODEL, str):
+if EMLE_DEEPMD_MODEL:
+    if isinstance(EMLE_DEEPMD_MODEL, list) and len(EMLE_DEEPMD_MODEL) == 1:
+        EMLE_DEEPMD_MODEL = EMLE_DEEPMD_MODEL[0]
+    if isinstance(EMLE_DEEPMD_MODEL, str):
         # Remove whitespace.
-        DEEPMD_MODEL = DEEPMD_MODEL.replace(" ", "")
+        EMLE_DEEPMD_MODEL = EMLE_DEEPMD_MODEL.replace(" ", "")
 
         # Try globbing.
-        models = glob(DEEPMD_MODEL)
+        models = glob(EMLE_DEEPMD_MODEL)
 
         # No matches.
         if not models:
-            models = DEEPMD_MODEL.split(",")
+            models = EMLE_DEEPMD_MODEL.split(",")
 
             # Invalid formatting.
             if len(models) == 1:
                 raise ValueError(
-                    f"DeePMD model not found, or invalid formatting: '{DEEPMD_MODEL}'"
+                    f"DeePMD model not found, or invalid formatting: '{EMLE_DEEPMD_MODEL}'"
                 )
             else:
-                DEEPMD_MODEL = models
+                EMLE_DEEPMD_MODEL = models
         else:
-            DEEPMD_MODEL = models
+            EMLE_DEEPMD_MODEL = models
 
 print(f"Starting ML-MM server using {EMLE_BACKEND} backend...")
 
@@ -279,9 +289,10 @@ mle_calculator = EMLECalculator(
     method=EMLE_METHOD,
     backend=EMLE_BACKEND,
     mm_charges=EMLE_MM_CHARGES,
-    deepmd_model=DEEPMD_MODEL,
-    rascal_model=RASCAL_MODEL,
-    rascal_parm7=RASCAL_PARM7,
+    deepmd_model=EMLE_DEEPMD_MODEL,
+    rascal_model=EMLE_RASCAL_MODEL,
+    parm7=EMLE_PARM7,
+    lambda_interpolate=EMLE_LAMBDA_INTERPOLATE,
     device=EMLE_DEVICE,
     log=EMLE_LOG,
 )

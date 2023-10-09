@@ -1,0 +1,28 @@
+Single-point
+&cntrl
+   ntpr=1,
+   ntxo=2,
+   irest=0,
+   ntx=1,
+   imin=1,
+   ntmin=2,
+   maxcyc=1,
+   ncyc=1,
+   cut=8.0,
+   iwrap=1,
+   ig=-1,
+   ifqnt=1,
+/
+ &qmmm
+  qmmask=':1-3',
+  qmcharge=0,
+  qm_theory='EXTERN',
+  qmcut=10,
+  qm_ewald=0
+ /
+ &orc
+  method='BLYP',
+  basis='6-31G*',
+  num_threads=4
+ /
+&wt type='END' /
