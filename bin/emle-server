@@ -260,7 +260,7 @@ if args.set_lambda_interpolate is not None:
 if EMLE_MM_CHARGES is None:
     if EMLE_METHOD == "mm":
         raise ValueError("'mm_charges' are required when using 'mm' embedding")
-    else:
+    elif EMLE_LAMBDA_INTERPOLATE is not None:
         raise ValueError("'mm_charges' are required when interpolating")
 
 # Whether we are parsing a list of charges, rather than a file.
