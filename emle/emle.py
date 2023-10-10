@@ -54,7 +54,6 @@ try:
 except:
     from functorch import grad_and_value
 
-
 from .sander_calculator import SanderCalculator
 
 ANGSTROM_TO_BOHR = 1.0 / ase.units.Bohr
@@ -580,23 +579,19 @@ class EMLECalculator:
                     "'parm7' must be specified if using the Rascal backend!"
                 )
 
-        # Validate the end state correction parameters.
+        # Validate the interpolation lambda parameter.
         if lambda_interpolate is not None:
-            if not isinstance(lambda_interpolate, float):
-                raise TypeError("'lambda_interpolate' must be of type 'float'")
-            if not 0.0 <= lambda_interpolate <= 1.0:
-                raise ValueError("'lambda_interpolate' must be between 0 and 1")
-            self._lambda_interpolate = lambda_interpolate
+            self._is_interpolate = True
+            self.set_lambda_interpolate(lambda_interpolate)
 
+            # Make sure a topology for the QM region has been set.
             if parm7 is None:
                 raise ValueError("'parm7' must be specified when interpolating")
 
-            # Make sure MM charges have been passed for the QM region.
+            # Make sure MM charges for the QM region have been set.
             if mm_charges is None:
                 raise ValueError("'mm_charges' are required when interpolating")
 
-            # Flag that we are interpolating.
-            self._is_interpolate = True
         else:
             self._is_interpolate = False
 
@@ -885,7 +880,7 @@ class EMLECalculator:
         grad_qm = dE_dxyz_qm_bohr + grad_vac
         grad_mm = dE_dxyz_mm_bohr
 
-        # Interpolate between the MM and EMLE modified potential.
+        # Interpolate between the MM and ML/MM potential.
         if self._is_interpolate:
             # Get the energy and MM gradients for the QM region.
             E_mm_qm, grad_mm_qm = self._run_rascal(atoms, is_mm=True)
@@ -947,7 +942,34 @@ class EMLECalculator:
         # Log the in vacuo and EMLE energies.
         if self._log:
             with open(dirname + "emle_log.txt", "a+") as f:
-                f.write(f"{E_vac:22.12f}{E_tot:22.12f}\n")
+                if self._is_interpolate:
+                    f.write(
+                        f"{E_vac:22.12f}{E_tot:22.12f}{self._lambda_interpolate:15.5f}\n"
+                    )
+                else:
+                    f.write(f"{E_vac:22.12f}{E_tot:22.12f}\n")
+
+    def set_lambda_interpolate(self, lambda_interpolate):
+        """ "
+        Set the value of the lambda interpolation parameter. Note the server must
+        already be in 'interpolation' mode, i.e. the user must have specified an
+        initial value for 'lambda_interpolate' in the constructor.
+
+        Parameters
+        ----------
+
+        lambda_interpolate : float
+            The value of lambda to use for interpolating between pure MM
+            (lambda=0) and ML/MM (lambda=1) potentials.
+        """
+        if not self._is_interpolate:
+            print("[WARNING] Server is not in interpolation mode!")
+        elif not isinstance(lambda_interpolate, (int, float)):
+            raise TypeError("'lambda_interpolate' must be of type 'float'")
+        lambda_interpolate = float(lambda_interpolate)
+        if not 0.0 <= lambda_interpolate <= 1.0:
+            raise ValueError("'lambda_interpolate' must be between 0 and 1")
+        self._lambda_interpolate = lambda_interpolate
 
     def _get_E(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
         """

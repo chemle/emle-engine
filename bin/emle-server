@@ -25,6 +25,8 @@
 import argparse
 import numpy as np
 import os
+import sys
+import time
 
 from glob import glob
 
@@ -53,6 +55,10 @@ try:
     EMLE_LAMBDA_INTERPOLATE = float(os.getenv("EMLE_LAMBDA_INTERPOLATE"))
 except:
     EMLE_LAMBDA_INTERPOLATE = None
+try:
+    EMLE_RETRIES = int(os.getenv("EMLE_RETRIES"))
+except:
+    EMLE_RETRIES = None
 
 # Fallback to default values.
 if not EMLE_HOST:
@@ -69,6 +75,8 @@ if not EMLE_MM_CHARGES:
     EMLE_MM_CHARGES = None
 if not EMLE_DEVICE:
     EMLE_DEVICE = None
+if not EMLE_RETRIES:
+    EMLE_RETRIES = 100
 
 
 def validate_clients(num_clients):
@@ -143,6 +151,12 @@ parser.add_argument(
 parser.add_argument(
     "--lambda-interpolate",
     type=float,
+    help="the initial value of lambda for interpolating between MM and EMLE potentials",
+    required=False,
+)
+parser.add_argument(
+    "--set-lambda-interpolate",
+    type=float,
     help="the value of lambda for interpolating between MM and EMLE potentials",
     required=False,
 )
@@ -188,6 +202,59 @@ if args.parm7 is not None:
 if args.log is not None:
     EMLE_LOG = args.log
 
+# If the user has requested to set the interpolation lambda for an existing server,
+# then do this fist.
+if args.set_lambda_interpolate is not None:
+    # Create a socket and connect.
+    sock = Socket()
+
+    # Try to connect to the server. We try 100 times, waiting for 2 seconds
+    # following each failure. This should (hopefully) give the server enough
+    # time to start.
+    is_connected = False
+    for x in range(0, EMLE_RETRIES):
+        try:
+            print("Trying to establish a connection with the EMLE server...")
+            sock.connect(EMLE_HOST, EMLE_PORT)
+        except:
+            print("Failed. Retrying in 2 seconds...")
+            time.sleep(2)
+        else:
+            print("Connection established!")
+            is_connected = True
+            break
+
+    if not is_connected:
+        raise ConnectionError(
+            f"Unable to connect to EMLE server at {EMLE_HOST}:{EMLE_PORT} "
+            "Please check that it is running."
+        )
+
+    # Prepend the lambda update message.
+    msg = f"emlelambda:{args.set_lambda_interpolate:.5f}"
+
+    # Prepend the message length.
+    msg = f"{len(msg)}:{msg}"
+
+    print(
+        f"Requesting EMLE server updates interpolation lambda to {args.set_lambda_interpolate:.5f}"
+    )
+    sock.send(msg, len(msg))
+
+    msg, err = sock.receive()
+
+    if msg == "emlelambdaset":
+        print("Received notice that the EMLE server has updated lambda")
+    elif msg == "emlefail":
+        print("Received notice that the request failed.")
+        print(f"[ERROR] {err}")
+    else:
+        raise RuntimeError(f"Invalid message received from EMLE server: '{msg}'")
+
+    # Exit the script.
+    sys.exit()
+
+
 # Validate the MM charges. Don't bother doing this if the user has
 # specified "electrostatic" embedding.
 if EMLE_METHOD == "mm" or EMLE_LAMBDA_INTERPOLATE is not None:
@@ -202,7 +269,9 @@ if EMLE_METHOD == "mm" or EMLE_LAMBDA_INTERPOLATE is not None:
 
     if isinstance(EMLE_MM_CHARGES, str):
         # If this isn't a path to a file, try splitting on commas.
-        if not os.path.isfile(EMLE_MM_CHARGES) or not os.path.isfile(os.path.abspath(EMLE_MM_CHARGES)):
+        if not os.path.isfile(EMLE_MM_CHARGES) or not os.path.isfile(
+            os.path.abspath(EMLE_MM_CHARGES)
+        ):
             try:
                 EMLE_MM_CHARGES = EMLE_MM_CHARGES.split(",")
                 is_list = True
@@ -311,6 +380,20 @@ while True:
                     mle_calculator.run(path=path)
                     msg = "7:emlefin"
                     print("Finished!")
+                except Exception as e:
+                    msg = f"emlefail:{str(e)}"
+                    msg = f"{len(msg)}:{msg}"
+                    print("Failed!")
+
+                # Tell the client that we have finished.
+                connection.send(msg, len(msg))
+            elif msg == "emlelambda":
+                # Try to update the interpolation lambda parameter.
+                print("Updating interpolation lambda...")
+                try:
+                    mle_calculator.set_lambda_interpolate(float(path))
+                    msg = "13:emlelambdaset"
+                    print("Lambda set!")
                 except Exception as e:
                     msg = f"emlefail:{str(e)}"
                     msg = f"{len(msg)}:{msg}"

@@ -172,7 +172,7 @@ class Socket:
         while totalsent < length:
             sent = self._sock.send(msg_bytes[totalsent:])
             if sent == 0:
-                raise RuntimeError("The socket connection was broken!")
+                raise ConnectionError("The socket connection was broken!")
             totalsent = totalsent + sent
 
     def receive(self):
