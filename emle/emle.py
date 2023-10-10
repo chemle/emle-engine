@@ -429,7 +429,7 @@ class EMLECalculator:
             # Convert to an absolute path.
             model = os.path.abspath(model)
 
-            if not os.path.exists(model):
+            if not os.path.isfile(model):
                 raise IOError(f"Unable to locate EMLE embedding model file: '{model}'")
             self._model = model
         else:
@@ -502,7 +502,7 @@ class EMLECalculator:
             parm7 = os.path.abspath(parm7)
 
             # Make sure the file exists.
-            if not os.path.exists(parm7):
+            if not os.path.isfile(parm7):
                 raise IOError(f"Unable to locate the 'parm7' file: '{parm7}'")
 
             self._parm7 = parm7
@@ -527,7 +527,7 @@ class EMLECalculator:
 
                 # Make sure all of the model files exist.
                 for model in deepmd_model:
-                    if not os.path.exists(model):
+                    if not os.path.isfile(model):
                         raise IOError(f"Unable to locate DeePMD model file: '{model}'")
 
                 # Store the list of model files, removing any duplicates.
@@ -553,7 +553,7 @@ class EMLECalculator:
             rascal_model = os.path.abspath(rascal_model)
 
             # Make sure the model file exists.
-            if not os.path.exists(rascal_model):
+            if not os.path.isfile(rascal_model):
                 raise IOError(f"Unable to locate Rascal model file: '{rascal_model}'")
 
             # Load the model.
@@ -749,7 +749,7 @@ class EMLECalculator:
         if path is not None:
             if not isinstance(path, str):
                 raise TypeError("'path' must be of type 'str'")
-            if not os.path.exists(path):
+            if not os.path.isdir(path):
                 raise ValueError(f"sander process path does not exist: {path}")
             orca_input = f"{path}/orc_job.inp"
         else:
@@ -1573,7 +1573,7 @@ class EMLECalculator:
 
         if not isinstance(orca_input, str):
             raise TypeError("'orca_input' must be of type 'str'")
-        if not os.path.exists(orca_input):
+        if not os.path.isfile(orca_input):
             raise IOError(f"Unable to locate the ORCA input file: {orca_input}")
 
         # Store the directory name for the file. Files within the input file
@@ -1614,17 +1614,17 @@ class EMLECalculator:
         if xyz_file_qm is None:
             raise ValueError("Unable to determine QM xyz file from ORCA input.")
         else:
-            if not os.path.exists(xyz_file_qm):
+            if not os.path.isfile(xyz_file_qm):
                 xyz_file_qm = dirname + xyz_file_qm
-            if not os.path.exists(xyz_file_qm):
+            if not os.path.isfile(xyz_file_qm):
                 raise ValueError(f"Unable to locate QM xyz file: {xyz_file_qm}")
 
         if xyz_file_mm is None:
             raise ValueError("Unable to determine MM xyz file from ORCA input.")
         else:
-            if not os.path.exists(xyz_file_mm):
+            if not os.path.isfile(xyz_file_mm):
                 xyz_file_mm = dirname + xyz_file_mm
-            if not os.path.exists(xyz_file_mm):
+            if not os.path.isfile(xyz_file_mm):
                 raise ValueError(f"Unable to locate MM xyz file: {xyz_file_mm}")
 
         # Process the QM xyz file.
@@ -1876,12 +1876,12 @@ class EMLECalculator:
 
         if not isinstance(orca_input, str):
             raise TypeError("'orca_input' must be of type 'str'.")
-        if not os.path.exists(orca_input):
+        if not os.path.isfile(orca_input):
             raise IOError(f"Unable to locate the ORCA input file: {orca_input}")
 
         if not isinstance(xyz_file_qm, str):
             raise TypeError("'xyz_file_qm' must be of type 'str'.")
-        if not os.path.exists(xyz_file_qm):
+        if not os.path.isfile(xyz_file_qm):
             raise IOError(f"Unable to locate the ORCA QM xyz file: {xyz_file_qm}")
 
         # Create a temporary working directory.
