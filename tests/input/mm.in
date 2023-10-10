@@ -1,14 +1,6 @@
-Single-point
-&cntrl
-   ntpr=1,
-   ntxo=2,
-   irest=0,
-   ntx=1,
-   imin=1,
-   ntmin=2,
-   maxcyc=1,
-   ncyc=1,
-   cut=8.0,
-   iwrap=1,
-   ig=-1,
+Single point
+  &cntrl
+  imin=0,
+  maxcyc=1,
+  ntmin=2,
 /

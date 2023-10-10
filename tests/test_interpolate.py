@@ -30,11 +30,8 @@ def parse_mdinfo(lines):
 
     is_nrg = False
     for line in lines:
-        if "NSTEP" in line:
-            is_nrg = True
-            continue
-        elif is_nrg:
-            return float(line.split()[1])
+        if "EPtot" in line:
+            return float(line.split()[-1])
 
 
 def test_lambda_0():
