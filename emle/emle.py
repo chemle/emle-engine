@@ -963,7 +963,7 @@ class EMLECalculator:
             (lambda=0) and ML/MM (lambda=1) potentials.
         """
         if not self._is_interpolate:
-            print("[WARNING] Server is not in interpolation mode!")
+            raise Exception("Server is not in interpolation mode!")
         elif not isinstance(lambda_interpolate, (int, float)):
             raise TypeError("'lambda_interpolate' must be of type 'float'")
         lambda_interpolate = float(lambda_interpolate)
