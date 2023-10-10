@@ -138,7 +138,7 @@ parser.add_argument(
 parser.add_argument(
     "--deepmd-model",
     type=str,
-    nargs="+",
+    nargs="*",
     help="path to DeepMD model file(s)",
     required=False,
 )
