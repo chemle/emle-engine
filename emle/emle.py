@@ -1044,7 +1044,7 @@ class EMLECalculator:
             q = self._get_q(r_data, s, chi)
             q_val = q - q_core
         elif self._method == "mechanical":
-            qcore = self._get_q(r_data, s, chi)
+            q_core = self._get_q(r_data, s, chi)
             q_val = torch.zeros_like(q_core, dtype=torch.float32, device=self._device)
         else:
             q_val = torch.zeros_like(q_core, dtype=torch.float32, device=self._device)
