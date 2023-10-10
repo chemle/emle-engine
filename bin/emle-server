@@ -257,42 +257,41 @@ if args.set_lambda_interpolate is not None:
 
 # Validate the MM charges. Don't bother doing this if the user has
 # specified "electrostatic" embedding.
-if EMLE_METHOD == "mm" or EMLE_LAMBDA_INTERPOLATE is not None:
-    if EMLE_MM_CHARGES is None:
-        if EMLE_METHOD == "mm":
-            raise ValueError("'mm_charges' are required when using 'mm' embedding")
-        else:
-            raise ValueError("'mm_charges' are required when interpolating")
+if EMLE_MM_CHARGES is None:
+    if EMLE_METHOD == "mm":
+        raise ValueError("'mm_charges' are required when using 'mm' embedding")
+    else:
+        raise ValueError("'mm_charges' are required when interpolating")
 
-    # Whether we are parsing a list of charges, rather than a file.
-    is_list = False
+# Whether we are parsing a list of charges, rather than a file.
+is_list = False
 
-    if isinstance(EMLE_MM_CHARGES, str):
-        # If this isn't a path to a file, try splitting on commas.
-        if not os.path.isfile(EMLE_MM_CHARGES) or not os.path.isfile(
-            os.path.abspath(EMLE_MM_CHARGES)
-        ):
-            try:
-                EMLE_MM_CHARGES = EMLE_MM_CHARGES.split(",")
-                is_list = True
-            except:
-                raise ValueError(
-                    "Unable to parse EMLE_MM_CHARGES environment variable as a comma-separated list of floats"
-                )
-
-    # A single entry list is assumed to be the path to a file.
-    elif isinstance(EMLE_MM_CHARGES, list):
-        if len(EMLE_MM_CHARGES) == 1:
-            EMLE_MM_CHARGES = EMLE_MM_CHARGES[0]
-        else:
-            is_list = True
-
-    # Try to parse lists of MM charges as a NumPy array of floats.
-    if is_list:
+if isinstance(EMLE_MM_CHARGES, str):
+    # If this isn't a path to a file, try splitting on commas.
+    if not os.path.isfile(EMLE_MM_CHARGES) or not os.path.isfile(
+        os.path.abspath(EMLE_MM_CHARGES)
+    ):
         try:
-            EMLE_MM_CHARGES = np.array([float(x) for x in EMLE_MM_CHARGES])
+            EMLE_MM_CHARGES = EMLE_MM_CHARGES.split(",")
+            is_list = True
         except:
-            raise TypeError("Unable to parse MM charges as an array of floats")
+            raise ValueError(
+                "Unable to parse EMLE_MM_CHARGES environment variable as a comma-separated list of floats"
+            )
+
+# A single entry list is assumed to be the path to a file.
+elif isinstance(EMLE_MM_CHARGES, list):
+    if len(EMLE_MM_CHARGES) == 1:
+        EMLE_MM_CHARGES = EMLE_MM_CHARGES[0]
+    else:
+        is_list = True
+
+# Try to parse lists of MM charges as a NumPy array of floats.
+if is_list:
+    try:
+        EMLE_MM_CHARGES = np.array([float(x) for x in EMLE_MM_CHARGES])
+    except:
+        raise TypeError("Unable to parse MM charges as an array of floats")
 
 # Work out the DeePMD model. We allow the following formatting:
 #    1) A path to a single file.
