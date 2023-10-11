@@ -980,7 +980,7 @@ class EMLECalculator:
                 if self._step == 0:
                     if self._is_interpolate:
                         f.write(
-                            f"#{'Step':>9}{'λ':>10}{'E(λ) (Eh/bohr)':>22}{'E(λ=0) (Eh/bohr)':>22}{'E(λ=1) (Eh/bohr)':>22}\n"
+                            f"#{'Step':>9}{'λ':>22}{'E(λ) (Eh/bohr)':>22}{'E(λ=0) (Eh/bohr)':>22}{'E(λ=1) (Eh/bohr)':>22}\n"
                         )
                     else:
                         f.write(
@@ -989,7 +989,7 @@ class EMLECalculator:
                 # Write the record.
                 if self._is_interpolate:
                     f.write(
-                        f"{self._step:>10}{lam:10.5f}{E_tot:22.12f}{E_mm:22.12f}{E_emle:22.12f}\n"
+                        f"{self._step:>10}{lam:22.12f}{E_tot:22.12f}{E_mm:22.12f}{E_emle:22.12f}\n"
                     )
                 else:
                     f.write(f"{self._step:>10}{E_vac:22.12f}{E_tot:22.12f}\n")
