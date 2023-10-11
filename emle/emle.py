@@ -1036,7 +1036,14 @@ class EMLECalculator:
                 raise ValueError(
                     "'lambda_interpolate' must be between 0 and 1 for both values"
                 )
+
+            if len(lambda_interpolate) == 2:
+                if np.isclose(lambda_interpolate[0], lambda_interpolate[1], atol=1e-6):
+                    raise ValueError(
+                        "The two values of 'lambda_interpolate' must be different"
+                    )
             self._lambda_interpolate = lambda_interpolate
+
         elif isinstance(lambda_interpolate, (int, float)):
             lambda_interpolate = float(lambda_interpolate)
             if not 0.0 <= lambda_interpolate <= 1.0:
