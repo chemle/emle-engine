@@ -239,14 +239,13 @@ externally using the `--set-lambda-interpolate` command line option, e.g.:
 emle-server --set-lambda-interpolate 1
 ```
 
-Alternatively, if two values are passed then these will be used as _minimum_ and
-_maximum_ values of λ, with the additional `--interpolate-steps` option specifying
-the number of steps (calls to the server) over which λ will be linearly interpolated
-between its minimum and maximum values. (This can also be specified using the
-`EMLE_INTERPOLATE_STEPS` environment variable.) In this case the `emle_log.txt` file
-will contain output similar to that shown below. The columns specify the current
-step, the current λ value, the energy at the current λ value, and the pure MM and
-EMLE energies.
+Alternatively, if two values are passed then these will be used as initial and
+final values of λ, with the additional `--interpolate-steps` option specifying
+the number of steps (calls to the server) over which λ will be linearly
+interpolated. (This can also be specified using the `EMLE_INTERPOLATE_STEPS`
+environment variable.) In this case the `emle_log.txt` file will contain output
+similar to that shown below. The columns specify the current step, the current
+λ value, the energy at the current λ value, and the pure MM and EMLE energies.
 
 ```
 #     Step                     λ        E(λ) (Eh/bohr)      E(λ=0) (Eh/bohr)      E(λ=1) (Eh/bohr)
