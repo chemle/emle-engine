@@ -350,6 +350,9 @@ class EMLECalculator:
     # List of supported devices.
     _supported_devices = ["cpu", "cuda"]
 
+    # Default to no interpolation.
+    _lambda_interpolate = None
+
     def __init__(
         self,
         model=None,
@@ -360,8 +363,9 @@ class EMLECalculator:
         rascal_model=None,
         parm7=None,
         lambda_interpolate=None,
+        interpolate_steps=None,
         device=None,
-        log=True,
+        log=1,
     ):
         """Constructor.
 
@@ -401,10 +405,15 @@ class EMLECalculator:
             Path to the Rascal model file to use for in vacuo calculations. This
             will override the default model provided as part of this library.
 
-        lambda_interpolate : float
+        lambda_interpolate : float, [float, float]
             The value of lambda to use for end-state correction calculations. This
             must be between 0 and 1, which is used to interpolate between a full MM
-            and EMLE potential.
+            and EMLE potential. If two lambda values are specified, the calculator
+            will gradually interpolate between them when called multiple times. This
+            must be used in conjunction with the 'interpolate_steps' argument.
+
+        interpolate_steps : int
+            The number of steps over which lambda is linearly interpolated.
 
         parm7 : str
             The path to an AMBER parm7 file for the QM region. This is required when
@@ -416,8 +425,8 @@ class EMLECalculator:
             The name of the device to be used by PyTorch. Options are "cpu"
             or "cuda".
 
-        log : bool
-            Whether to log the in vacuo and EMLE energies to file.
+        log : int
+            The frequency of logging energies to file.
         """
 
         # Validate input.
@@ -592,6 +601,24 @@ class EMLECalculator:
             if mm_charges is None:
                 raise ValueError("'mm_charges' are required when interpolating")
 
+            # Make sure the number of interpolation steps has been set if more
+            # than one lambda value has been specified.
+            if len(self._lambda_interpolate) == 2:
+                if interpolate_steps is None:
+                    raise ValueError(
+                        "'interpolate_steps' must be specified when interpolating between two lambda values"
+                    )
+                else:
+                    try:
+                        interpolate_steps = int(interpolate_steps)
+                    except:
+                        raise TypeError("'interpolate_steps' must be of type 'int'")
+                    if interpolate_steps < 0:
+                        raise ValueError(
+                            "'interpolate_steps' must be greater than or equal to 0"
+                        )
+                    self._interpolate_steps = interpolate_steps
+
         else:
             self._is_interpolate = False
 
@@ -627,8 +654,8 @@ class EMLECalculator:
             # Default to CUDA, if available.
             self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        if not isinstance(log, bool):
-            raise TypeError("'log' must be of type 'bool")
+        if not isinstance(log, int):
+            raise TypeError("'log' must be of type 'int")
         else:
             self._log = log
 
@@ -716,6 +743,9 @@ class EMLECalculator:
 
         # Initialise the maximum number of MM atom that have been seen.
         self._max_mm_atoms = 0
+
+        # Initialise the number of steps. (Calls to the calculator.)
+        self._step = 0
 
         # Store the settings as a dictionary.
         self._settings = {
@@ -902,18 +932,22 @@ class EMLECalculator:
             # Restore the method.
             self._method = method
 
+            # Store the the pure MM and EMLE energies.
+            E_mm = E_mm_qm + E
+            E_emle = E_tot
+
+            # Work out the current value of lambda.
+            if len(self._lambda_interpolate) == 1:
+                lam = self._lambda_interpolate[0]
+            else:
+                lam = self._lambda_interpolate[0] + (
+                    self._step / self._interpolate_steps
+                ) * (self._lambda_interpolate[1] - self._lambda_interpolate[0])
+
             # Calculate the lambda weighted energy and gradients.
-            E_tot = (self._lambda_interpolate * E_tot) + (
-                (1 - self._lambda_interpolate) * (E_mm_qm + E)
-            )
-            grad_qm = (
-                self._lambda_interpolate * grad_qm
-                + (1 - self._lambda_interpolate) * grad_mm_qm
-            )
-            grad_mm = (
-                self._lambda_interpolate * grad_mm
-                + (1 - self._lambda_interpolate) * grad
-            )
+            E_tot = (lam * E_tot) + ((1 - lam) * (E_mm_qm + E))
+            grad_qm = lam * grad_qm + (1 - lam) * grad_mm_qm
+            grad_mm = lam * grad_mm + (1 - lam) * grad
 
         # Create the file names for the ORCA format output.
         filename = os.path.splitext(orca_input)[0]
@@ -939,15 +973,29 @@ class EMLECalculator:
             for x, y, z in grad_mm[:num_mm_atoms]:
                 f.write(f"{x:17.12f}{y:17.12f}{z:17.12f}\n")
 
-        # Log the in vacuo and EMLE energies.
-        if self._log:
+        # Log energies to file.
+        if self._log > 0 and self._step % self._log == 0:
             with open(dirname + "emle_log.txt", "a+") as f:
+                # Write the header.
+                if self._step == 0:
+                    if self._is_interpolate:
+                        f.write(
+                            f"#{'Step':>9}{'λ':>10}{'E(λ) (Eh/bohr)':>22}{'E(λ=0) (Eh/bohr)':>22}{'E(λ=1) (Eh/bohr)':>22}\n"
+                        )
+                    else:
+                        f.write(
+                            f"#{'Step':>9}{'E_vac (Eh/bohr)':>22}{'E_tot (Eh/bohr)':>22}\n"
+                        )
+                # Write the record.
                 if self._is_interpolate:
                     f.write(
-                        f"{E_vac:22.12f}{E_tot:22.12f}{self._lambda_interpolate:15.5f}\n"
+                        f"{self._step:>10}{lam:10.5f}{E_tot:22.12f}{E_mm:22.12f}{E_emle:22.12f}\n"
                     )
                 else:
-                    f.write(f"{E_vac:22.12f}{E_tot:22.12f}\n")
+                    f.write(f"{self._step:>10}{E_vac:22.12f}{E_tot:22.12f}\n")
+
+        # Increment the step counter.
+        self._step += 1
 
     def set_lambda_interpolate(self, lambda_interpolate):
         """ "
@@ -958,18 +1006,42 @@ class EMLECalculator:
         Parameters
         ----------
 
-        lambda_interpolate : float
+        lambda_interpolate : float, [float, float]
             The value of lambda to use for interpolating between pure MM
-            (lambda=0) and ML/MM (lambda=1) potentials.
+            (lambda=0) and ML/MM (lambda=1) potentials.and. If two lambda
+            values are specified, the calculator will gradually interpolate
+            between them when called multiple times.
         """
         if not self._is_interpolate:
             raise Exception("Server is not in interpolation mode!")
-        elif not isinstance(lambda_interpolate, (int, float)):
-            raise TypeError("'lambda_interpolate' must be of type 'float'")
-        lambda_interpolate = float(lambda_interpolate)
-        if not 0.0 <= lambda_interpolate <= 1.0:
-            raise ValueError("'lambda_interpolate' must be between 0 and 1")
-        self._lambda_interpolate = lambda_interpolate
+        elif (
+            self._lambda_interpolate is not None and len(self._lambda_interpolate) == 2
+        ):
+            raise Exception(
+                "Cannot set lambda when interpolating between two lambda values!"
+            )
+
+        if isinstance(lambda_interpolate, (list, tuple)):
+            if len(lambda_interpolate) not in [1, 2]:
+                raise ValueError(
+                    "'lambda_interpolate' must be a single value or a list/tuple of two values"
+                )
+            try:
+                lambda_interpolate = [float(x) for x in lambda_interpolate]
+            except:
+                raise TypeError(
+                    "'lambda_interpolate' must be a single value or a list/tuple of two values"
+                )
+            if not all(0.0 <= x <= 1.0 for x in lambda_interpolate):
+                raise ValueError(
+                    "'lambda_interpolate' must be between 0 and 1 for both values"
+                )
+            self._lambda_interpolate = lambda_interpolate
+        elif isinstance(lambda_interpolate, (int, float)):
+            lambda_interpolate = float(lambda_interpolate)
+            if not 0.0 <= lambda_interpolate <= 1.0:
+                raise ValueError("'lambda_interpolate' must be between 0 and 1")
+            self._lambda_interpolate = [lambda_interpolate]
 
     def _get_E(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
         """

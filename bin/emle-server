@@ -47,14 +47,23 @@ except:
     EMLE_NUM_CLIENTS = None
 EMLE_BACKEND = os.getenv("EMLE_BACKEND")
 EMLE_DEVICE = os.getenv("EMLE_DEVICE")
-EMLE_LOG = os.getenv("EMLE_LOG", "True").lower() in ("true", "1", "t")
+try:
+    EMLE_LOG = int(os.getenv("EMLE_LOG"))
+except:
+    EMLE_LOG = 1
 EMLE_DEEPMD_MODEL = os.getenv("EMLE_DEEPMD_MODEL")
 EMLE_RASCAL_MODEL = os.getenv("EMLE_RASCAL_MODEL")
 EMLE_PARM7 = os.getenv("EMLE_PARM7")
 try:
-    EMLE_LAMBDA_INTERPOLATE = float(os.getenv("EMLE_LAMBDA_INTERPOLATE"))
+    EMLE_LAMBDA_INTERPOLATE = [
+        float(x) for x in os.getenv("EMLE_LAMBDA_INTERPOLATE").split(",")
+    ]
 except:
     EMLE_LAMBDA_INTERPOLATE = None
+try:
+    EMLE_INTERPOLATE_STEPS = int(os.getenv("EMLE_INTERPOLATE_STEPS"))
+except:
+    EMLE_INTERPOLATE_STEPS = None
 try:
     EMLE_RETRIES = int(os.getenv("EMLE_RETRIES"))
 except:
@@ -151,7 +160,14 @@ parser.add_argument(
 parser.add_argument(
     "--lambda-interpolate",
     type=float,
-    help="the initial value of lambda for interpolating between MM and EMLE potentials",
+    nargs="*",
+    help="the initial value of lambda for interpolating between MM and EMLE potentials, or the min and max values",
+    required=False,
+)
+parser.add_argument(
+    "--interpolate-steps",
+    type=int,
+    help="the number of steps over which to interpolate lambda between its min and max values",
     required=False,
 )
 parser.add_argument(
@@ -168,9 +184,10 @@ parser.add_argument(
 )
 parser.add_argument(
     "--log",
-    action=argparse.BooleanOptionalAction,
-    help="whether to log energies",
+    type=int,
+    help="The frequency of logging energies to file",
     required=False,
+    default=1,
 )
 args = parser.parse_args()
 
@@ -197,6 +214,8 @@ if args.rascal_model is not None:
     EMLE_RASCAL_MODEL = args.rascal_model
 if args.lambda_interpolate is not None:
     EMLE_LAMBDA_INTERPOLATE = args.lambda_interpolate
+if args.interpolate_steps is not None:
+    EMLE_INTERPOLATE_STEPS = args.interpolate_steps
 if args.parm7 is not None:
     EMLE_PARM7 = args.parm7
 if args.log is not None:
@@ -361,6 +380,7 @@ mle_calculator = EMLECalculator(
     rascal_model=EMLE_RASCAL_MODEL,
     parm7=EMLE_PARM7,
     lambda_interpolate=EMLE_LAMBDA_INTERPOLATE,
+    interpolate_steps=EMLE_INTERPOLATE_STEPS,
     device=EMLE_DEVICE,
     log=EMLE_LOG,
 )

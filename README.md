@@ -161,6 +161,29 @@ the environment variable) or a path to a file. When using a file, this should
 be formatted as a single column, with one line per QM atom. The units
 are electron charge.
 
+## Logging
+
+Energies can be written to a log file using the `--log` command-line argument or
+the `EMLE_LOG` environment variable. This should be an integer specifying the
+frequency at which energies are written. (The default is 1, i.e. every step
+is logged.) The output will look something like the following, where the
+columns specify the current step, the in vacuo energy and the total energy.
+
+```
+#     Step       E_vac (Eh/bohr)       E_tot (Eh/bohr)
+         0     -495.724193647246     -495.720214843750
+         1     -495.724193662147     -495.720214843750
+         2     -495.722049429755     -495.718475341797
+         3     -495.717705026011     -495.714660644531
+         4     -495.714381769041     -495.711761474609
+         5     -495.712389051656     -495.710021972656
+         6     -495.710483833889     -495.707977294922
+         7     -495.708991110067     -495.706909179688
+         8     -495.708890005688     -495.707183837891
+         9     -495.711066677908     -495.709045410156
+        10     -495.714580371718     -495.712799072266
+```
+
 ## Why do we need an EMLE server?
 
 The EMLE implementation uses several ML frameworks to predict energies
@@ -207,6 +230,38 @@ variable. You will also need specify MM charges for the QM atoms using the
 `--mm-charges` command-line argument or the `EMLE_MM_CHARES` environment variable.
 These are used to calculate the electrostatic interaction between point charges
 on the QM and MM regions.
+
+It is possible to pass one or two values for λ. If a single value is used, then
+the calculator will always use that value for interpolation, unless it is updated
+externally using the `--set-lambda-interpolate` command line option, e.g.:
+
+```
+emle-server --set-lambda-interpolate 1
+```
+
+Alternatively, if two values are passed then these will be used as _minimum_ and
+_maximum_ values of λ, with the additional `--interpolate-steps` option specifying
+the number of steps (calls to the server) over which λ will be linearly interpolated
+between its minimum and maximum values. (This can also be specified using the
+`EMLE_INTERPOLATE_STEPS` environment variable.) In this case the `emle_log.txt` file
+will contain output similar to that shown below. The columns specify the current
+step, the current λ value, the energy at the current λ value, and the pure MM and
+EMLE energies.
+
+```
+#     Step         λ        E(λ) (Eh/bohr)      E(λ=0) (Eh/bohr)      E(λ=1) (Eh/bohr)
+         0   0.00000       -0.031915396452       -0.031915396452     -495.735900878906
+         1   0.10000      -49.602313995361       -0.031915396452     -495.735900878906
+         2   0.20000      -99.172714233398       -0.031915396452     -495.735900878906
+         3   0.30000     -148.743118286133       -0.031915396452     -495.735900878906
+         4   0.40000     -198.313507080078       -0.031915396452     -495.735900878906
+         5   0.50000     -247.883911132812       -0.031915396452     -495.735900878906
+         6   0.60000     -297.454315185547       -0.031915396452     -495.735900878906
+         7   0.70000     -347.024719238281       -0.031915396452     -495.735900878906
+         8   0.80000     -396.595092773438       -0.031915396452     -495.735900878906
+         9   0.90000     -446.165496826172       -0.031915396452     -495.735900878906
+        10   1.00000     -495.735900878906       -0.031915396452     -495.735900878906
+```
 
 ## Issues
 
