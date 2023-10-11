@@ -1,10 +1,10 @@
 import math
-import tempfile
 import os
 import pytest
-import shutil
 import shlex
+import shutil
 import subprocess
+import tempfile
 
 
 @pytest.fixture(autouse=True)
@@ -34,9 +34,10 @@ def parse_mdinfo(lines):
             return float(line.split()[-1])
 
 
-def test_lambda_0():
+def test_interpolate():
     """
-    Make sure interpolated energies at lambda=0 agree with pure MM.
+    Make sure interpolated energies at lambda=0 agree with pure MM and those at
+    lambda=1 agree with pure EMLE.
     """
 
     # First perform a pure MM simulation.
@@ -106,13 +107,18 @@ def test_lambda_0():
 
         assert math.isclose(nrg_ref, nrg_emle, rel_tol=1e-4)
 
+    # Update the lambda value for the running server.
+    command = "emle-server --set-lambda-interpolate 1"
 
-def test_lambda_1():
-    """
-    Make sure interpolated energies at lambda=1 agree with pure EMLE.
-    """
+    process = subprocess.run(
+        shlex.split(command),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
 
-    # Perform and interpolated EMLE simulation at lambda=0.
+    assert process.returncode == 0
+
+    # Perform and interpolated EMLE simulation at lambda=1.
     with tempfile.TemporaryDirectory() as tmpdir:
         # Copy files to temporary directory.
         shutil.copyfile("tests/input/adp.parm7", tmpdir + "/adp.parm7")
@@ -124,9 +130,7 @@ def test_lambda_1():
         shutil.copyfile("tests/input/emle.in", tmpdir + "/emle.in")
 
         # Set environment variables.
-        os.environ["EMLE_PORT"] = "54321"
         os.environ["EMLE_MM_CHARGES"] = "adp_mm_charges.txt"
-        os.environ["EMLE_LAMBDA_INTERPOLATE"] = "1"
         os.environ["EMLE_PARM7"] = "adp_qm.parm7"
 
         # Create the sander command.
