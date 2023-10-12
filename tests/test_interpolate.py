@@ -45,10 +45,10 @@ def test_interpolate():
         # Copy files to temporary directory.
         shutil.copyfile("tests/input/adp.parm7", tmpdir + "/adp.parm7")
         shutil.copyfile("tests/input/adp.rst7", tmpdir + "/adp.rst7")
-        shutil.copyfile("tests/input/mm.in", tmpdir + "/mm.in")
+        shutil.copyfile("tests/input/mm_sp.in", tmpdir + "/mm_sp.in")
 
         # Create the sander command.
-        command = "sander -O -i mm.in -p adp.parm7 -c adp.rst7 -inf mdinfo"
+        command = "sander -O -i mm_sp.in -p adp.parm7 -c adp.rst7 -inf mdinfo"
 
         process = subprocess.run(
             shlex.split(command),
@@ -76,7 +76,7 @@ def test_interpolate():
         shutil.copyfile(
             "tests/input/adp_mm_charges.txt", tmpdir + "/adp_mm_charges.txt"
         )
-        shutil.copyfile("tests/input/emle.in", tmpdir + "/emle.in")
+        shutil.copyfile("tests/input/emle_sp.in", tmpdir + "/emle_sp.in")
 
         # Set environment variables.
         os.environ["EMLE_PORT"] = "12345"
@@ -85,7 +85,7 @@ def test_interpolate():
         os.environ["EMLE_PARM7"] = "adp_qm.parm7"
 
         # Create the sander command.
-        command = "sander -O -i emle.in -p adp.parm7 -c adp.rst7 -o emle.out -inf mdinfo"
+        command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out -inf mdinfo"
 
         process = subprocess.run(
             shlex.split(command),
@@ -121,14 +121,14 @@ def test_interpolate():
         shutil.copyfile(
             "tests/input/adp_mm_charges.txt", tmpdir + "/adp_mm_charges.txt"
         )
-        shutil.copyfile("tests/input/emle.in", tmpdir + "/emle.in")
+        shutil.copyfile("tests/input/emle_sp.in", tmpdir + "/emle_sp.in")
 
         # Set environment variables.
         os.environ["EMLE_MM_CHARGES"] = "adp_mm_charges.txt"
         os.environ["EMLE_PARM7"] = "adp_qm.parm7"
 
         # Create the sander command.
-        command = "sander -O -i emle.in -p adp.parm7 -c adp.rst7 -o emle.out -inf mdinfo"
+        command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out -inf mdinfo"
 
         process = subprocess.run(
             shlex.split(command),
