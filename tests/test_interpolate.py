@@ -85,7 +85,9 @@ def test_interpolate():
         os.environ["EMLE_PARM7"] = "adp_qm.parm7"
 
         # Create the sander command.
-        command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out -inf mdinfo"
+        command = (
+            "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out -inf mdinfo"
+        )
 
         process = subprocess.run(
             shlex.split(command),
@@ -128,7 +130,9 @@ def test_interpolate():
         os.environ["EMLE_PARM7"] = "adp_qm.parm7"
 
         # Create the sander command.
-        command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out -inf mdinfo"
+        command = (
+            "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out -inf mdinfo"
+        )
 
         process = subprocess.run(
             shlex.split(command),
@@ -146,3 +150,52 @@ def test_interpolate():
         nrg_emle = parse_mdinfo(tmpdir + "/mdinfo")
 
         assert math.isclose(nrg_ref, nrg_emle, rel_tol=1e-5)
+
+
+def test_interpolate_steps():
+    """
+    Make sure interpolated energies are correct when linearly interpolating lambda
+    over a number of steps.
+    """
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Copy files to temporary directory.
+        shutil.copyfile("tests/input/adp.parm7", tmpdir + "/adp.parm7")
+        shutil.copyfile("tests/input/adp_qm.parm7", tmpdir + "/adp_qm.parm7")
+        shutil.copyfile("tests/input/adp.rst7", tmpdir + "/adp.rst7")
+        shutil.copyfile(
+            "tests/input/adp_mm_charges.txt", tmpdir + "/adp_mm_charges.txt"
+        )
+        shutil.copyfile("tests/input/emle_prod.in", tmpdir + "/emle_prod.in")
+
+        # Set environment variables.
+        os.environ["EMLE_PORT"] = "12345"
+        os.environ["EMLE_MM_CHARGES"] = "adp_mm_charges.txt"
+        os.environ["EMLE_LAMBDA_INTERPOLATE"] = "0,1"
+        os.environ["EMLE_INTERPOLATE_STEPS"] = "20"
+        os.environ["EMLE_PARM7"] = "adp_qm.parm7"
+
+        # Create the sander command.
+        command = (
+            "sander -O -i emle_prod.in -p adp.parm7 -c adp.rst7 -o emle.out -inf mdinfo"
+        )
+
+        process = subprocess.run(
+            shlex.split(command),
+            cwd=tmpdir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        assert process.returncode == 0
+
+        # Process the log file to make sure that the interpolated energy
+        # is correct at each step.
+        with open(tmpdir + "/emle_log.txt", "r") as file:
+            for line in file:
+                if not line.startswith("#"):
+                    data = [float(x) for x in line.split()]
+                    lam = data[1]
+                    nrg_lambda = data[2]
+                    nrg_interp = lam * data[4] + (1 - lam) * data[3]
+                    assert math.isclose(nrg_lambda, nrg_interp, rel_tol=1e-5)
