@@ -57,9 +57,5 @@ class SanderCalculator(Calculator):
     def _get_box(atoms):
         if not atoms.get_pbc().all():
             return None
-        cell = atoms.get_cell().flatten()
-        if len(cell) == 6:
-            return cell
-        if len(cell) == 3:
-            return np.concatenate([cell, [90.0, 90.0, 90.0]])
-        raise CalculatorSetupError(f"Cell {atoms.cell} is not supported")
+        else:
+            return atoms.get_cell().cellpar()
