@@ -48,7 +48,7 @@ def test_interpolate():
         shutil.copyfile("tests/input/mm_sp.in", tmpdir + "/mm_sp.in")
 
         # Create the sander command.
-        command = "sander -O -i mm_sp.in -p adp.parm7 -c adp.rst7 -inf mdinfo"
+        command = "sander -O -i mm_sp.in -p adp.parm7 -c adp.rst7"
 
         process = subprocess.run(
             shlex.split(command),
@@ -85,9 +85,7 @@ def test_interpolate():
         os.environ["EMLE_PARM7"] = "adp_qm.parm7"
 
         # Create the sander command.
-        command = (
-            "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out -inf mdinfo"
-        )
+        command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
 
         process = subprocess.run(
             shlex.split(command),
@@ -130,9 +128,7 @@ def test_interpolate():
         os.environ["EMLE_PARM7"] = "adp_qm.parm7"
 
         # Create the sander command.
-        command = (
-            "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out -inf mdinfo"
-        )
+        command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
 
         process = subprocess.run(
             shlex.split(command),
@@ -176,9 +172,7 @@ def test_interpolate_steps():
         os.environ["EMLE_PARM7"] = "adp_qm.parm7"
 
         # Create the sander command.
-        command = (
-            "sander -O -i emle_prod.in -p adp.parm7 -c adp.rst7 -o emle.out -inf mdinfo"
-        )
+        command = "sander -O -i emle_prod.in -p adp.parm7 -c adp.rst7 -o emle.out"
 
         process = subprocess.run(
             shlex.split(command),

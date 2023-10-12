@@ -1,34 +1,22 @@
 Production
  &cntrl
   imin=0,
-  ntx=1,
-  irest=0,
   nstlim=20,
   dt=0.001,
-  ntf=1,
-  ntc=1,
   tempi=300.0,
   temp0=300.0,
-  ntpr=10,
-  ntwx=100,
-  ntb=1,
-  ntp=0,
-  ntt=3,
-  gamma_ln=2.0,
-  nmropt=0,
   ifqnt=1,
-  ig=12345,
-  iwrap=1
- /
+  cut=8.0,
+/
  &qmmm
   qmmask=':1-3',
   qmcharge=0,
   qm_theory='EXTERN',
   qm_ewald=0
- /
+  qmcut=8.0,
+/
  &orc
   method='BLYP',
   basis='6-31G*',
   num_threads=4
- /
-&wt type='END' /
+/
