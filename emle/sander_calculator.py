@@ -30,13 +30,18 @@ class SanderCalculator(Calculator):
     kcalmol_to_eV = ase.units.kcal / ase.units.mol
     implemented_properties = ["energy", "forces"]
 
-    def __init__(self, parm7, atoms):
+    def __init__(self, parm7, atoms, is_gas=True):
         super().__init__()
         if sander.is_setup():
             sander.cleanup()
-        sander.setup(
-            parm7, atoms.get_positions(), self._get_box(atoms), sander.gas_input()
-        )
+        if is_gas:
+            sander.setup(
+                parm7, atoms.get_positions(), self._get_box(atoms), sander.gas_input()
+            )
+        else:
+            sander.setup(
+                parm7, atoms.get_positions(), self._get_box(atoms), sander.pme_input()
+            )
 
     def calculate(
         self, atoms, properties=["energy", "forces"], system_changes=all_changes
