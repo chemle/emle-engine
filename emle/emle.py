@@ -945,7 +945,7 @@ class EMLECalculator:
                 ) * (self._lambda_interpolate[1] - self._lambda_interpolate[0])
 
             # Calculate the lambda weighted energy and gradients.
-            E_tot = (lam * E_tot) + ((1 - lam) * (E_mm_qm + E))
+            E_tot = lam * E_tot + (1 - lam) * E_mm
             grad_qm = lam * grad_qm + (1 - lam) * grad_mm_qm
             grad_mm = lam * grad_mm + (1 - lam) * grad
 
