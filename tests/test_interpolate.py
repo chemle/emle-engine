@@ -23,15 +23,15 @@ def teardown():
     )
 
 
-def parse_mdinfo(lines):
+def parse_mdinfo(mdinfo_file):
     """
     Helper function to extract the total energy from AMBER mdinfo files.
     """
 
-    is_nrg = False
-    for line in lines:
-        if "EPtot" in line:
-            return float(line.split()[-1])
+    with open(mdinfo_file, "r") as file:
+        for line in file:
+            if "EPtot" in line:
+                return float(line.split()[-1])
 
 
 def test_interpolate():
@@ -48,7 +48,7 @@ def test_interpolate():
         shutil.copyfile("tests/input/mm.in", tmpdir + "/mm.in")
 
         # Create the sander command.
-        command = "sander -O -i mm.in -p adp.parm7 -c adp.rst7 -o mm.out -r mm.crd -inf mdinfo_mm -x mm.nc"
+        command = "sander -O -i mm.in -p adp.parm7 -c adp.rst7 -inf mdinfo"
 
         process = subprocess.run(
             shlex.split(command),
@@ -59,15 +59,11 @@ def test_interpolate():
 
         assert process.returncode == 0
 
-        # Read the reference energy info file.
-        with open("tests/output/mdinfo_mm", "r") as f:
-            ref_lines = f.readlines()
-        nrg_ref = parse_mdinfo(ref_lines)
+        # Calculate the MM reference energy..
+        nrg_ref = parse_mdinfo("tests/output/mdinfo_mm")
 
-        # Read the energy info file.
-        with open(tmpdir + "/mdinfo_mm", "r") as f:
-            lines = f.readlines()
-        nrg_mm = parse_mdinfo(lines)
+        # Calculate the pure MM energy..
+        nrg_mm = parse_mdinfo(tmpdir + "/mdinfo")
 
         assert math.isclose(nrg_ref, nrg_mm, rel_tol=1e-5)
 
@@ -89,7 +85,7 @@ def test_interpolate():
         os.environ["EMLE_PARM7"] = "adp_qm.parm7"
 
         # Create the sander command.
-        command = "sander -O -i emle.in -p adp.parm7 -c adp.rst7 -o emle.out -r emle.crd -inf mdinfo_emle -x emle.nc"
+        command = "sander -O -i emle.in -p adp.parm7 -c adp.rst7 -o emle.out -inf mdinfo"
 
         process = subprocess.run(
             shlex.split(command),
@@ -100,10 +96,8 @@ def test_interpolate():
 
         assert process.returncode == 0
 
-        # Read the energy info file.
-        with open(tmpdir + "/mdinfo_emle", "r") as f:
-            lines = f.readlines()
-        nrg_emle = parse_mdinfo(lines)
+        # Calculate the interpolated MM energy.
+        nrg_emle = parse_mdinfo(tmpdir + "/mdinfo")
 
         assert math.isclose(nrg_ref, nrg_emle, rel_tol=1e-4)
 
@@ -134,7 +128,7 @@ def test_interpolate():
         os.environ["EMLE_PARM7"] = "adp_qm.parm7"
 
         # Create the sander command.
-        command = "sander -O -i emle.in -p adp.parm7 -c adp.rst7 -o emle.out -r emle.crd -inf mdinfo_emle -x emle.nc"
+        command = "sander -O -i emle.in -p adp.parm7 -c adp.rst7 -o emle.out -inf mdinfo"
 
         process = subprocess.run(
             shlex.split(command),
@@ -145,14 +139,10 @@ def test_interpolate():
 
         assert process.returncode == 0
 
-        # Read the reference energy info file.
-        with open("tests/output/mdinfo_emle", "r") as f:
-            ref_lines = f.readlines()
-        nrg_ref = parse_mdinfo(ref_lines)
+        # Calculate the reference EMLE energy..
+        nrg_ref = parse_mdinfo("tests/output/mdinfo_emle")
 
-        # Read the energy info file.
-        with open(tmpdir + "/mdinfo_emle", "r") as f:
-            lines = f.readlines()
-        nrg_emle = parse_mdinfo(lines)
+        # Calculate the interpolated EMLE energy.
+        nrg_emle = parse_mdinfo(tmpdir + "/mdinfo")
 
         assert math.isclose(nrg_ref, nrg_emle, rel_tol=1e-5)
