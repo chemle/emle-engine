@@ -912,7 +912,7 @@ class EMLECalculator:
 
         # Interpolate between the MM and ML/MM potential.
         if self._is_interpolate:
-            # Get the energy and MM gradients for the QM region.
+            # Get the MM energy and gradients for the QM region.
             E_mm_qm, grad_mm_qm = self._run_rascal(atoms, is_mm=True)
 
             # Next we need to compute the electrostatic contribution
