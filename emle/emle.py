@@ -908,7 +908,7 @@ class EMLECalculator:
         # Compute the total energy and gradients.
         E_tot = E + E_vac
         grad_qm = dE_dxyz_qm_bohr + grad_vac
-        grad_mm = dE_dxyz_mm_bohr
+        grad_mm = dE_dxyz_mm_bohr.cpu().numpy()
 
         # Interpolate between the MM and ML/MM potential.
         if self._is_interpolate:
@@ -927,7 +927,13 @@ class EMLECalculator:
             grads, E = self._get_E_with_grad(
                 charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi
             )
-            _, grad, _, _ = grads
+            dE_dxyz_qm_bohr_part, dE_dxyz_mm_bohr, dE_ds, dE_dchi = grads
+            dE_dxyz_qm_bohr = (
+                dE_dxyz_qm_bohr_part.cpu().numpy()
+                + dE_ds.cpu().numpy() @ ds_dxyz_qm_bohr.swapaxes(0, 1)
+                + dE_dchi.cpu().numpy() @ dchi_dxyz_qm_bohr.swapaxes(0, 1)
+            )
+            dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
 
             # Restore the method.
             self._method = method
@@ -946,8 +952,8 @@ class EMLECalculator:
 
             # Calculate the lambda weighted energy and gradients.
             E_tot = lam * E_tot + (1 - lam) * E_mm
-            grad_qm = lam * grad_qm + (1 - lam) * grad_mm_qm
-            grad_mm = lam * grad_mm + (1 - lam) * grad
+            grad_qm = lam * grad_qm + (1 - lam) * (grad_mm_qm + dE_dxyz_qm_bohr)
+            grad_mm = lam * grad_mm + (1 - lam) * dE_dxyz_mm_bohr
 
         # Create the file names for the ORCA format output.
         filename = os.path.splitext(orca_input)[0]
