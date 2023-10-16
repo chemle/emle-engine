@@ -223,13 +223,28 @@ emle-server --lambda-interpolate 0.5
 ```
 
 or via the `ESC_LAMBDA_INTERPOLATE` environment variable. When performing
-interpolation it is also necessary to specifiy the path to a topology
-file for the QM region of the system being simulated. This can be specified
-using the `--parm7` command-line argument or via the `EMLE_PARM7` environment
-variable. You will also need specify MM charges for the QM atoms using the
-`--mm-charges` command-line argument or the `EMLE_MM_CHARES` environment variable.
-These are used to calculate the electrostatic interaction between point charges
-on the QM and MM regions.
+interpolation it is also necessary to specifiy the path to topology files
+file for entire system being simulation, as well as that of the QM region.
+These can be specified using the `--parm7` and `--parm7-qm` command-line arguments,
+or via the `EMLE_PARM7` and `EMLE_PARM7_QM` environment variables. You will also
+need to specify the (zero-based) indices of the atoms within the QM region.
+To do so, use the `--qm-indices` command-line argument, or the `EMLE_QM_INDICES`
+environment variable. To compute MM forces for the QM region we perform a PME
+calculation with `pysander`. In order to do so, we need the _full_ system coordinates
+for each step. To specify a restart/coordinate file for the initial system, use
+the `--rst` command-line argument, or the `EMLE_RST` environment variable. Finally,
+you will need specify MM charges for the QM atoms using the `--mm-charges`
+command-line argument or the `EMLE_MM_CHARES` environment variable. These are used
+to calculate the electrostatic interactions between point charges on the QM and
+MM regions.
+
+Since we require the full system coordinates at _each_ integration step,
+it is only possible to perform interpolation when using the `ntwr=1` option, i.e.
+writing coordinates _every_ step. In addition, this should be combined with
+`ntxo=2` to ensure that the coordinates are written in binary to preserve precision.
+After the initial integration step, the EMLE calculator will look for the
+_default_ named restart file `restrt` within the simulation working directory.
+Make sure that the restart file is named accordingly.
 
 It is possible to pass one or two values for λ. If a single value is used, then
 the calculator will always use that value for interpolation, unless it is updated
@@ -298,3 +313,6 @@ need to make sure that the _fake_ `orca` executable takes precendence in the
 `emle` conda environment _after_ loading the `orca` module. It is also important
 to make sure that the `emle` environment isn't active when submitting jobs,
 since the `PATH` won't be updated correctly within the batch script.
+
+When performing interoplation it is currently not possible to use AMBER force
+fields with CMAP terms due to a memory deallocation bug in `pysander`.
