@@ -76,13 +76,19 @@ def test_interpolate():
         shutil.copyfile(
             "tests/input/adp_mm_charges.txt", tmpdir + "/adp_mm_charges.txt"
         )
+        shutil.copyfile(
+            "tests/input/adp_qm_indices.txt", tmpdir + "/adp_qm_indices.txt"
+        )
         shutil.copyfile("tests/input/emle_sp.in", tmpdir + "/emle_sp.in")
 
         # Set environment variables.
         os.environ["EMLE_PORT"] = "12345"
         os.environ["EMLE_MM_CHARGES"] = "adp_mm_charges.txt"
         os.environ["EMLE_LAMBDA_INTERPOLATE"] = "0"
-        os.environ["EMLE_PARM7"] = "adp_qm.parm7"
+        os.environ["EMLE_PARM7"] = "adp.parm7"
+        os.environ["EMLE_PARM7_QM"] = "adp_qm.parm7"
+        os.environ["EMLE_RST"] = "adp.rst7"
+        os.environ["EMLE_QM_INDICES"] = "adp_qm_indices.txt"
 
         # Create the sander command.
         command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
@@ -101,31 +107,16 @@ def test_interpolate():
 
         assert math.isclose(nrg_ref, nrg_emle, rel_tol=1e-4)
 
-    # Update the lambda value for the running server.
-    command = "emle-server --set-lambda-interpolate 1"
+        # Update the lambda value for the running server.
+        command = "emle-server --set-lambda-interpolate 1"
 
-    process = subprocess.run(
-        shlex.split(command),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-
-    assert process.returncode == 0
-
-    # Perform and interpolated EMLE simulation at lambda=1.
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Copy files to temporary directory.
-        shutil.copyfile("tests/input/adp.parm7", tmpdir + "/adp.parm7")
-        shutil.copyfile("tests/input/adp_qm.parm7", tmpdir + "/adp_qm.parm7")
-        shutil.copyfile("tests/input/adp.rst7", tmpdir + "/adp.rst7")
-        shutil.copyfile(
-            "tests/input/adp_mm_charges.txt", tmpdir + "/adp_mm_charges.txt"
+        process = subprocess.run(
+            shlex.split(command),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
-        shutil.copyfile("tests/input/emle_sp.in", tmpdir + "/emle_sp.in")
 
-        # Set environment variables.
-        os.environ["EMLE_MM_CHARGES"] = "adp_mm_charges.txt"
-        os.environ["EMLE_PARM7"] = "adp_qm.parm7"
+        assert process.returncode == 0
 
         # Create the sander command.
         command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
@@ -162,6 +153,9 @@ def test_interpolate_steps():
         shutil.copyfile(
             "tests/input/adp_mm_charges.txt", tmpdir + "/adp_mm_charges.txt"
         )
+        shutil.copyfile(
+            "tests/input/adp_qm_indices.txt", tmpdir + "/adp_qm_indices.txt"
+        )
         shutil.copyfile("tests/input/emle_prod.in", tmpdir + "/emle_prod.in")
 
         # Set environment variables.
@@ -169,7 +163,10 @@ def test_interpolate_steps():
         os.environ["EMLE_MM_CHARGES"] = "adp_mm_charges.txt"
         os.environ["EMLE_LAMBDA_INTERPOLATE"] = "0,1"
         os.environ["EMLE_INTERPOLATE_STEPS"] = "20"
-        os.environ["EMLE_PARM7"] = "adp_qm.parm7"
+        os.environ["EMLE_PARM7"] = "adp.parm7"
+        os.environ["EMLE_PARM7_QM"] = "adp_qm.parm7"
+        os.environ["EMLE_RST"] = "adp.rst7"
+        os.environ["EMLE_QM_INDICES"] = "adp_qm_indices.txt"
 
         # Create the sander command.
         command = "sander -O -i emle_prod.in -p adp.parm7 -c adp.rst7 -o emle.out"

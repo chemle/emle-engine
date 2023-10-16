@@ -54,6 +54,8 @@ except:
 EMLE_DEEPMD_MODEL = os.getenv("EMLE_DEEPMD_MODEL")
 EMLE_RASCAL_MODEL = os.getenv("EMLE_RASCAL_MODEL")
 EMLE_PARM7 = os.getenv("EMLE_PARM7")
+EMLE_PARM7_QM = os.getenv("EMLE_PARM7_QM")
+EMLE_RST = os.getenv("EMLE_RST")
 try:
     EMLE_LAMBDA_INTERPOLATE = [
         float(x) for x in os.getenv("EMLE_LAMBDA_INTERPOLATE").split(",")
@@ -64,6 +66,7 @@ try:
     EMLE_INTERPOLATE_STEPS = int(os.getenv("EMLE_INTERPOLATE_STEPS"))
 except:
     EMLE_INTERPOLATE_STEPS = None
+EMLE_QM_INDICES = os.getenv("EMLE_QM_INDICES")
 try:
     EMLE_RETRIES = int(os.getenv("EMLE_RETRIES"))
 except:
@@ -179,7 +182,26 @@ parser.add_argument(
 parser.add_argument(
     "--parm7",
     type=str,
+    help="path to the parm7 topology file for the entire system",
+    required=False,
+)
+parser.add_argument(
+    "--parm7-qm",
+    type=str,
     help="path to the parm7 topology file for the QM region",
+    required=False,
+)
+parser.add_argument(
+    "--rst",
+    type=str,
+    help="path to an AMBER restart/coordinate file containing the initial atomic positions for the entire system",
+    required=False,
+)
+parser.add_argument(
+    "--qm-indices",
+    type=str,
+    nargs="*",
+    help="the zero-based indices of the atoms within the QM region",
     required=False,
 )
 parser.add_argument(
@@ -218,6 +240,12 @@ if args.interpolate_steps is not None:
     EMLE_INTERPOLATE_STEPS = args.interpolate_steps
 if args.parm7 is not None:
     EMLE_PARM7 = args.parm7
+if args.parm7_qm is not None:
+    EMLE_PARM7_QM = args.parm7_qm
+if args.rst is not None:
+    EMLE_RST = args.rst
+if args.qm_indices is not None:
+    EMLE_QM_INDICES = args.qm_indices
 if args.log is not None:
     EMLE_LOG = args.log
 
@@ -274,43 +302,79 @@ if args.set_lambda_interpolate is not None:
     sys.exit()
 
 
-# Validate the MM charges. Don't bother doing this if the user has
-# specified "electrostatic" embedding.
+# Validate the MM charges.
 if EMLE_MM_CHARGES is None:
     if EMLE_METHOD == "mm":
         raise ValueError("'mm_charges' are required when using 'mm' embedding")
     elif EMLE_LAMBDA_INTERPOLATE is not None:
         raise ValueError("'mm_charges' are required when interpolating")
 
-# Whether we are parsing a list of charges, rather than a file.
-is_list = False
+else:
+    # Whether we are parsing a list of charges, rather than a file.
+    is_list = False
 
-if isinstance(EMLE_MM_CHARGES, str):
-    # If this isn't a path to a file, try splitting on commas.
-    if not os.path.isfile(EMLE_MM_CHARGES) or not os.path.isfile(
-        os.path.abspath(EMLE_MM_CHARGES)
-    ):
-        try:
-            EMLE_MM_CHARGES = EMLE_MM_CHARGES.split(",")
+    if isinstance(EMLE_MM_CHARGES, str):
+        # If this isn't a path to a file, try splitting on commas.
+        if not os.path.isfile(EMLE_MM_CHARGES) or not os.path.isfile(
+            os.path.abspath(EMLE_MM_CHARGES)
+        ):
+            try:
+                EMLE_MM_CHARGES = EMLE_MM_CHARGES.split(",")
+                is_list = True
+            except:
+                raise ValueError(
+                    "Unable to parse EMLE_MM_CHARGES environment variable as a comma-separated list of floats"
+                )
+
+    # A single entry list is assumed to be the path to a file.
+    elif isinstance(EMLE_MM_CHARGES, list):
+        if len(EMLE_MM_CHARGES) == 1:
+            EMLE_MM_CHARGES = EMLE_MM_CHARGES[0]
+        else:
             is_list = True
+
+    # Try to parse lists of MM charges as a NumPy array of floats.
+    if is_list:
+        try:
+            EMLE_MM_CHARGES = np.array([float(x) for x in EMLE_MM_CHARGES])
         except:
-            raise ValueError(
-                "Unable to parse EMLE_MM_CHARGES environment variable as a comma-separated list of floats"
-            )
+            raise TypeError("Unable to parse MM charges as an array of floats")
 
-# A single entry list is assumed to be the path to a file.
-elif isinstance(EMLE_MM_CHARGES, list):
-    if len(EMLE_MM_CHARGES) == 1:
-        EMLE_MM_CHARGES = EMLE_MM_CHARGES[0]
-    else:
-        is_list = True
+# Validate the QM indices.
+if EMLE_QM_INDICES is None:
+    if EMLE_LAMBDA_INTERPOLATE is not None:
+        raise ValueError("'qm_indices' are required when interpolating")
 
-# Try to parse lists of MM charges as a NumPy array of floats.
-if is_list:
-    try:
-        EMLE_MM_CHARGES = np.array([float(x) for x in EMLE_MM_CHARGES])
-    except:
-        raise TypeError("Unable to parse MM charges as an array of floats")
+else:
+    # Whether we are parsing a list of indices, rather than a file.
+    is_list = False
+
+    if isinstance(EMLE_QM_INDICES, str):
+        # If this isn't a path to a file, try splitting on commas.
+        if not os.path.isfile(EMLE_QM_INDICES) or not os.path.isfile(
+            os.path.abspath(EMLE_QM_INDICES)
+        ):
+            try:
+                EMLE_QM_INDICES = EMLE_QM_INDICES.split(",")
+                is_list = True
+            except:
+                raise ValueError(
+                    "Unable to parse EMLE_QM_INDICES environment variable as a comma-separated list of ints"
+                )
+
+    # A single entry list is assumed to be the path to a file.
+    elif isinstance(EMLE_QM_INDICES, list):
+        if len(EMLE_QM_INDICES) == 1:
+            EMLE_QM_INDICES = EMLE_QM_INDICES[0]
+        else:
+            is_list = True
+
+    # Try to parse a lists of QM indices into a list of ints.
+    if is_list:
+        try:
+            EMLE_MM_CHARGES = [int(x) for x in EMLE_MM_CHARGES]
+        except:
+            raise TypeError("Unable to parse QM indices as a list of indices")
 
 # Work out the DeePMD model. We allow the following formatting:
 #    1) A path to a single file.
@@ -379,8 +443,11 @@ mle_calculator = EMLECalculator(
     deepmd_model=EMLE_DEEPMD_MODEL,
     rascal_model=EMLE_RASCAL_MODEL,
     parm7=EMLE_PARM7,
+    parm7_qm=EMLE_PARM7_QM,
+    rst=EMLE_RST,
     lambda_interpolate=EMLE_LAMBDA_INTERPOLATE,
     interpolate_steps=EMLE_INTERPOLATE_STEPS,
+    qm_indices=EMLE_QM_INDICES,
     device=EMLE_DEVICE,
     log=EMLE_LOG,
 )

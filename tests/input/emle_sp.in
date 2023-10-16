@@ -5,8 +5,6 @@ Single point
   nstlim=1,
   ig=12345,
   ntpr=1,
-  ntwf=1,
-  ioutfm=0,
   ifqnt=1,
   cut=8.0,
 /
