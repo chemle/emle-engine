@@ -529,7 +529,7 @@ class EMLECalculator:
                 )
 
             # Make sure the model file exists.
-            if not os.path.exists(model):
+            if not os.path.exists(rascal_model):
                 raise IOError(f"Unable to locate Rascal model file: '{rascal_model}'")
 
             # Load the model.
