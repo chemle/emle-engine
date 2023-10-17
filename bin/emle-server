@@ -133,14 +133,12 @@ parser.add_argument(
 parser.add_argument(
     "--rascal-model",
     type=str,
-    nargs="+",
     help="path to Rascal model file",
     required=False,
 )
 parser.add_argument(
     "--rascal-parm7",
     type=str,
-    nargs="+",
     help="path to the parm7 file used to train the Rascal model",
     required=False,
 )
@@ -153,27 +151,27 @@ parser.add_argument(
 args = parser.parse_args()
 
 # Overload using command-line arguments.
-if args.host:
+if args.host is not None:
     EMLE_HOST = args.host
-if args.port:
+if args.port is not None:
     EMLE_PORT = args.port
-if args.model:
+if args.model is not None:
     EMLE_MODEL = args.model
-if args.embedding:
+if args.embedding is not None:
     EMLE_METHOD = args.embedding
-if args.mm_charges:
+if args.mm_charges is not None:
     EMLE_MM_CHARGES = args.mm_charges
-if args.num_clients:
+if args.num_clients is not None:
     EMLE_NUM_CLIENTS = args.num_clients
-if args.backend:
+if args.backend is not None:
     EMLE_BACKEND = args.backend
-if args.device:
+if args.device is not None:
     EMLE_DEVICE = args.device
-if args.deepmd_model:
+if args.deepmd_model is not None:
     DEEPMD_MODEL = args.deepmd_model
-if args.rascal_model:
+if args.rascal_model is not None:
     RASCAL_MODEL = args.rascal_model
-if args.rascal_parm7:
+if args.rascal_parm7 is not None:
     RASCAL_PARM7 = args.rascal_parm7
 if args.log is not None:
     EMLE_LOG = args.log
