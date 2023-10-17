@@ -3,7 +3,9 @@
 A simple interface to allow electrostatic embedding of machine learning
 potentials using an [ORCA](https://orcaforum.kofo.mpg.de/i-nde-x.php-)-like interface. Based on [code](https://github.com/emedio/embedding) by Kirill Zinovjev. An example [sander](htps://ambermd.org/AmberTools.h) implementation is provided. This
 works by reusing the existing interface between sander and [ORCA](https://orcaforum.kofo.mpg.de/index.php), meaning
-that no modifications to sander are needed.
+that no modifications to sander are needed. The embedding model currently
+supports the HCNOS elements. We plan to add support for further elements
+in the near future.
 
 ## Installation
 
