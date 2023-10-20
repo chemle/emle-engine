@@ -357,8 +357,6 @@ class EMLECalculator:
         deepmd_model=None,
         rascal_model=None,
         parm7=None,
-        parm7_qm=None,
-        rst=None,
         qm_indices=None,
         lambda_interpolate=None,
         interpolate_steps=None,
@@ -414,19 +412,9 @@ class EMLECalculator:
             The number of steps over which lambda is linearly interpolated.
 
         parm7 : str
-            The path to an AMBER parm7 file for the entire system being simulated.
-            This is needed to compute MM gradients for the QM region with pysander
-            when interpolating.
-
-        parm7_qm : str
             The path to an AMBER parm7 file for the QM region. This is needed to
             compute in vacuo MM energies for the QM region when using the Rascal
             backend, or when interpolating.
-
-        rst : str
-            The path to the initial AMBER restart/coordinate file use to initialise
-            the sander simulation. This is should contain the coordinates for the
-            entire system and is required to calculate the MM forces with pysander.
 
         qm_indices : list, str
             A list of atom indices for the QM region. This must be specified when
@@ -529,32 +517,6 @@ class EMLECalculator:
 
             self._parm7 = parm7
 
-        if parm7_qm is not None:
-            if not isinstance(parm7_qm, str):
-                raise ValueError("'parm7_qm' must be of type 'str'")
-
-            # Convert to an absolute path.
-            parm7_qm = os.path.abspath(parm7_qm)
-
-            # Make sure the file exists.
-            if not os.path.isfile(parm7_qm):
-                raise IOError(f"Unable to locate the 'parm7_qm' file: '{parm7_qm}'")
-
-            self._parm7_qm = parm7_qm
-
-        if rst is not None:
-            if not isinstance(rst, str):
-                raise ValueError("'rst' must be of type 'str'")
-
-            # Convert to an absolute path.
-            rst = os.path.abspath(rst)
-
-            # Make sure the file exists.
-            if not os.path.isfile(rst):
-                raise IOError(f"Unable to locate the 'rst' file: '{rst}'")
-
-            self._rst = rst
-
         if deepmd_model is not None:
             # We support a str, or list/tuple of strings.
             if not isinstance(deepmd_model, (str, list, tuple)):
@@ -622,9 +584,9 @@ class EMLECalculator:
             except:
                 raise RuntimeError("Unable to create Rascal calculator!")
 
-            if parm7_qm is None:
+            if parm7 is None:
                 raise ValueError(
-                    "'parm7_qm' must be specified if using the Rascal backend!"
+                    "'parm7' must be specified if using the Rascal backend!"
                 )
 
         # Validate the interpolation lambda parameter.
@@ -640,13 +602,6 @@ class EMLECalculator:
             # Make sure a topology file has been set.
             if parm7 is None:
                 raise ValueError("'parm7' must be specified when interpolating")
-
-            if parm7_qm is None:
-                raise ValueError("'parm7_qm' must be specified when interpolating")
-
-            # Make sure a coordinate/restart file has been set.
-            if rst is None:
-                raise ValueError("'rst' must be specified when interpolating")
 
             # Make sure MM charges for the QM region have been set.
             if mm_charges is None:
@@ -843,8 +798,6 @@ class EMLECalculator:
             "deepmd_model": deepmd_model,
             "rascal_model": rascal_model,
             "parm7": parm7,
-            "parm7_qm": parm7_qm,
-            "rst": rst,
             "lambda_interpolate": lambda_interpolate,
             "interpolate_steps": interpolate_steps,
             "device": device,
@@ -932,8 +885,7 @@ class EMLECalculator:
             try:
                 E_vac, grad_vac = self._run_pysander(
                     atoms=atoms,
-                    parm7=self._parm7_qm,
-                    rst=None,
+                    parm7=self._parm7,
                     is_rascal=True,
                     is_gas=True,
                 )
@@ -1008,40 +960,10 @@ class EMLECalculator:
 
         # Interpolate between the MM and ML/MM potential.
         if self._is_interpolate:
-            # Set the path to the current restart/coordinate file.
-            if self._step == 0:
-                rst = self._rst
-            else:
-                # Find the restart file for the current step.
-                rst = dirname + "restrt"
-                if not os.path.isfile(rst):
-                    raise RuntimeError(
-                        f"Unable to locate AMBER restart file for interpolation: {rst}"
-                    )
-
-            # Get the full MM gradients. This will use pysander to perform a PME
-            # calculation for the entire system.
-            _, grad = self._run_pysander(
-                atoms=None,
-                parm7=self._parm7,
-                rst=rst,
-                is_rascal=False,
-                is_gas=False,
-            )
-
-            # Try to extract the MM gradients for the QM region.
-            try:
-                grad_mm_qm = grad.take(self._qm_indices, axis=0)
-            except:
-                raise RuntimeError(
-                    "Unable to extract MM gradients for the QM region based on 'qm_indices'"
-                )
-
-            # Next compute the in vacuo MM energy and gradients for the QM region.
+            # Compute the in vacuo MM energy and gradients for the QM region.
             E_mm_qm_vac, grad_mm_qm_vac = self._run_pysander(
                 atoms=atoms,
-                parm7=self._parm7_qm,
-                rst=None,
+                parm7=self._parm7,
                 is_rascal=False,
                 is_gas=True,
             )
@@ -1079,7 +1001,7 @@ class EMLECalculator:
 
             # Calculate the lambda weighted energy and gradients.
             E_tot = lam * E_tot + (1 - lam) * E_mm
-            grad_qm = lam * grad_qm + (1 - lam) * grad_mm_qm
+            grad_qm = lam * grad_qm + (1 - lam) * (grad_mm_qm_vac + dE_dxyz_qm_bohr)
             grad_mm = lam * grad_mm + (1 - lam) * dE_dxyz_mm_bohr
 
         # Create the file names for the ORCA format output.
@@ -1887,9 +1809,7 @@ class EMLECalculator:
             xyz_file_qm,
         )
 
-    def _run_pysander(
-        self, atoms=None, parm7=None, rst=None, is_rascal=False, is_gas=True
-    ):
+    def _run_pysander(self, atoms, parm7, is_rascal=False, is_gas=True):
         """
         Internal function to compute in vacuo energies and gradients using
         pysander.
@@ -1902,9 +1822,6 @@ class EMLECalculator:
 
         parm7 : str
             The path to the AMBER topology file.
-
-        rst : str
-            The path to the restart file containing the atomic coordinates.
 
         bool : is_rascal
             Whether to apply a Rascal correction to the energy and gradient.
@@ -1922,26 +1839,17 @@ class EMLECalculator:
             The in vacuo ML gradient in Eh/Bohr.
         """
 
-        if atoms is None and rst is None:
-            raise ValueError("Either 'atoms' or 'rst' must be specified.")
-
-        if atoms is not None and not isinstance(atoms, ase.Atoms):
+        if not isinstance(atoms, ase.Atoms):
             raise TypeError("'atoms' must be of type 'ase.atoms.Atoms'")
 
         if not isinstance(parm7, str):
             raise TypeError("'parm7' must be of type 'str'")
-
-        if rst is not None and not isinstance(rst, str):
-            raise TypeError("'rst' must be of type 'str'")
 
         if not isinstance(is_rascal, bool):
             raise TypeError("'is_rascal' must be of type 'bool'")
 
         if not isinstance(is_gas, bool):
             raise TypeError("'is_gas' must be of type 'bool'")
-
-        if atoms is None and is_rascal:
-            raise ValueError("Rascal correction requires 'atoms' to be specified.")
 
         # Rascal requires periodic box information so we translate the atoms so that
         # the lowest (x, y, z) position is zero, then set the cell to the maximum
@@ -1951,13 +1859,10 @@ class EMLECalculator:
             atoms.cell = np.max(atoms.positions, axis=0)
 
         # Instantiate a SanderCalculator.
-        sander_calculator = SanderCalculator(parm7, atoms, rst, is_gas)
+        sander_calculator = SanderCalculator(atoms, parm7, is_gas)
 
         # Run the calculation.
-        if atoms is None:
-            sander_calculator.calculate(atoms=rst)
-        else:
-            sander_calculator.calculate(atoms=atoms)
+        sander_calculator.calculate(atoms)
 
         # Get the MM contributions.
         energy = sander_calculator.results["energy"]

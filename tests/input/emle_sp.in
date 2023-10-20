@@ -3,7 +3,6 @@ Single point
   imin=0,
   dt=0.001,
   nstlim=1,
-  ig=12345,
   ntpr=1,
   ifqnt=1,
   cut=8.0,

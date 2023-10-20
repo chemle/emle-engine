@@ -54,8 +54,6 @@ except:
 EMLE_DEEPMD_MODEL = os.getenv("EMLE_DEEPMD_MODEL")
 EMLE_RASCAL_MODEL = os.getenv("EMLE_RASCAL_MODEL")
 EMLE_PARM7 = os.getenv("EMLE_PARM7")
-EMLE_PARM7_QM = os.getenv("EMLE_PARM7_QM")
-EMLE_RST = os.getenv("EMLE_RST")
 try:
     EMLE_LAMBDA_INTERPOLATE = [
         float(x) for x in os.getenv("EMLE_LAMBDA_INTERPOLATE").split(",")
@@ -182,19 +180,7 @@ parser.add_argument(
 parser.add_argument(
     "--parm7",
     type=str,
-    help="path to the parm7 topology file for the entire system",
-    required=False,
-)
-parser.add_argument(
-    "--parm7-qm",
-    type=str,
     help="path to the parm7 topology file for the QM region",
-    required=False,
-)
-parser.add_argument(
-    "--rst",
-    type=str,
-    help="path to an AMBER restart/coordinate file containing the initial atomic positions for the entire system",
     required=False,
 )
 parser.add_argument(
@@ -240,10 +226,6 @@ if args.interpolate_steps is not None:
     EMLE_INTERPOLATE_STEPS = args.interpolate_steps
 if args.parm7 is not None:
     EMLE_PARM7 = args.parm7
-if args.parm7_qm is not None:
-    EMLE_PARM7_QM = args.parm7_qm
-if args.rst is not None:
-    EMLE_RST = args.rst
 if args.qm_indices is not None:
     EMLE_QM_INDICES = args.qm_indices
 if args.log is not None:
@@ -443,8 +425,6 @@ mle_calculator = EMLECalculator(
     deepmd_model=EMLE_DEEPMD_MODEL,
     rascal_model=EMLE_RASCAL_MODEL,
     parm7=EMLE_PARM7,
-    parm7_qm=EMLE_PARM7_QM,
-    rst=EMLE_RST,
     lambda_interpolate=EMLE_LAMBDA_INTERPOLATE,
     interpolate_steps=EMLE_INTERPOLATE_STEPS,
     qm_indices=EMLE_QM_INDICES,

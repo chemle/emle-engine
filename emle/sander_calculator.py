@@ -30,36 +30,38 @@ class SanderCalculator(Calculator):
     kcalmol_to_eV = ase.units.kcal / ase.units.mol
     implemented_properties = ["energy", "forces"]
 
-    def __init__(self, parm7, atoms, rst, is_gas=True):
+    def __init__(self, atoms, parm7, is_gas=True):
         """
         Constructor.
 
         Parameters
         ----------
 
-        parm7 : str
-            Path to AMBER topology file.
-
         atoms : ase.Atoms
             ASE atoms object containing atomic coordinates matching the topology.
 
-        rst : str
-            Path to AMBER restart/coordinate file containing atomic coordinates
-            matching the topology.
+        parm7 : str
+            Path to AMBER topology file.
 
         is_gas : bool
             Whether to perform a gas phase calculation.
         """
+        if not isinstance(atoms, ase.Atoms):
+            raise TypeError("'atoms' must be of type 'ase.atoms.Atoms'")
+
+        if not isinstance(parm7, str):
+            raise TypeError("'parm7' must be of type 'str'")
+
+        if not isinstance(is_gas, bool):
+            raise TypeError("'is_gas' must be of type 'bool'")
+
         super().__init__()
+
         if sander.is_setup():
             sander.cleanup()
 
-        if atoms is not None:
-            positions = atoms.get_positions()
-            box = self._get_box(atoms)
-        else:
-            positions = rst
-            box = None
+        positions = atoms.get_positions()
+        box = self._get_box(atoms)
 
         if is_gas:
             sander.setup(parm7, positions, box, sander.gas_input())
@@ -70,16 +72,9 @@ class SanderCalculator(Calculator):
         self, atoms, properties=["energy", "forces"], system_changes=all_changes
     ):
         # Get the current positions and box.
-        if isinstance(atoms, ase.Atoms):
-            super().calculate(atoms, properties, system_changes)
-            positions = atoms.get_positions()
-            box = self._get_box(atoms)
-        elif isinstance(atoms, str):
-            rst = sander.Rst7(atoms)
-            positions = rst.coordinates
-            box = rst.box
-        else:
-            raise TypeError("'atoms' must of type 'ase.Atoms' or 'str'")
+        super().calculate(atoms, properties, system_changes)
+        positions = atoms.get_positions()
+        box = self._get_box(atoms)
 
         # Update the box.
         if box is not None:

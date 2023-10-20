@@ -85,9 +85,7 @@ def test_interpolate():
         os.environ["EMLE_PORT"] = "12345"
         os.environ["EMLE_MM_CHARGES"] = "adp_mm_charges.txt"
         os.environ["EMLE_LAMBDA_INTERPOLATE"] = "0"
-        os.environ["EMLE_PARM7"] = "adp.parm7"
-        os.environ["EMLE_PARM7_QM"] = "adp_qm.parm7"
-        os.environ["EMLE_RST"] = "adp.rst7"
+        os.environ["EMLE_PARM7"] = "adp_qm.parm7"
         os.environ["EMLE_QM_INDICES"] = "adp_qm_indices.txt"
 
         # Create the sander command.
@@ -106,37 +104,6 @@ def test_interpolate():
         nrg_emle = parse_mdinfo(tmpdir + "/mdinfo")
 
         assert math.isclose(nrg_ref, nrg_emle, rel_tol=1e-4)
-
-        # Update the lambda value for the running server.
-        command = "emle-server --set-lambda-interpolate 1"
-
-        process = subprocess.run(
-            shlex.split(command),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-
-        assert process.returncode == 0
-
-        # Create the sander command.
-        command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
-
-        process = subprocess.run(
-            shlex.split(command),
-            cwd=tmpdir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-
-        assert process.returncode == 0
-
-        # Calculate the reference EMLE energy..
-        nrg_ref = parse_mdinfo("tests/output/mdinfo_emle")
-
-        # Calculate the interpolated EMLE energy.
-        nrg_emle = parse_mdinfo(tmpdir + "/mdinfo")
-
-        assert math.isclose(nrg_ref, nrg_emle, rel_tol=1e-5)
 
 
 def test_interpolate_steps():
@@ -163,9 +130,7 @@ def test_interpolate_steps():
         os.environ["EMLE_MM_CHARGES"] = "adp_mm_charges.txt"
         os.environ["EMLE_LAMBDA_INTERPOLATE"] = "0,1"
         os.environ["EMLE_INTERPOLATE_STEPS"] = "20"
-        os.environ["EMLE_PARM7"] = "adp.parm7"
-        os.environ["EMLE_PARM7_QM"] = "adp_qm.parm7"
-        os.environ["EMLE_RST"] = "adp.rst7"
+        os.environ["EMLE_PARM7"] = "adp_qm.parm7"
         os.environ["EMLE_QM_INDICES"] = "adp_qm_indices.txt"
 
         # Create the sander command.

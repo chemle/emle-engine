@@ -7,8 +7,6 @@ Production
   temp0=300.0,
   ifqnt=1,
   cut=8.0,
-  ntwr=1,
-  ntxo=2,
 /
  &qmmm
   qmmask=':1-3',
