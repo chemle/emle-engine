@@ -998,6 +998,10 @@ class EMLECalculator:
                 lam = self._lambda_interpolate[0] + (
                     self._step / self._interpolate_steps
                 ) * (self._lambda_interpolate[1] - self._lambda_interpolate[0])
+                if lam < 0.0:
+                    lam = 0.0
+                elif lam > 1.0:
+                    lam = 1.0
 
             # Calculate the lambda weighted energy and gradients.
             E_tot = lam * E_tot + (1 - lam) * E_mm
