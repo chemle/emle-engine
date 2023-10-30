@@ -340,7 +340,7 @@ class EMLECalculator:
     }
 
     # List of supported backends.
-    _supported_backends = ["torchani", "deepmd", "rascal", "orca"]
+    _supported_backends = ["torchani", "deepmd", "rascal", "orca", "sqm"]
 
     # List of supported devices.
     _supported_devices = ["cpu", "cuda"]
@@ -358,6 +358,7 @@ class EMLECalculator:
         rascal_model=None,
         parm7=None,
         qm_indices=None,
+        sqm_method="DFTB3",
         lambda_interpolate=None,
         interpolate_steps=None,
         device=None,
@@ -421,6 +422,10 @@ class EMLECalculator:
             interpolating. Alternatively, a path to a file containing the indices
             can be specified. The file should contain a single column with the
             indices being zero-based.
+
+        sqm_method : str
+            The QM method to use when using the SQM backend. See the AmberTools
+            manual for the supported methods for your version of AmberTools.
 
         device : str
             The name of the device to be used by PyTorch. Options are "cpu"
@@ -588,6 +593,14 @@ class EMLECalculator:
                 raise ValueError(
                     "'parm7' must be specified if using the Rascal backend!"
                 )
+
+        # Validate the QM method for SQM.
+        elif backend == "sqm":
+            if not isinstance(sqm_method, str):
+                raise TypeError("'sqm_method' must be of type 'str'")
+
+            # Strip whitespace.
+            self._sqm_method = sqm_method.replace(" ", "")
 
         # Validate the interpolation lambda parameter.
         if lambda_interpolate is not None:
@@ -798,6 +811,8 @@ class EMLECalculator:
             "deepmd_model": deepmd_model,
             "rascal_model": rascal_model,
             "parm7": parm7,
+            "qm_indices": qm_indices,
+            "sqm_method": sqm_method,
             "lambda_interpolate": lambda_interpolate,
             "interpolate_steps": interpolate_steps,
             "device": device,
