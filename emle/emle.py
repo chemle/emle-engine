@@ -2253,9 +2253,9 @@ class EMLECalculator:
 
             with open(out_name, "r") as f:
                 is_converged = False
-                is_grad = False
+                is_force = False
                 num_forces = 0
-                gradient = []
+                forces = []
                 for line in f:
                     # Skip lines prior to convergence.
                     if line.startswith("  ... geometry converged !"):
@@ -2274,32 +2274,34 @@ class EMLECalculator:
                         elif line.startswith(
                             "QMMM: Forces on QM atoms from SCF calculation"
                         ):
-                            # Flag that gradient records are coming.
-                            is_grad = True
-                        elif is_grad:
+                            # Flag that force records are coming.
+                            is_force = True
+                        elif is_force:
                             try:
-                                grad = [float(x) for x in line.split()[3:6]]
+                                force = [float(x) for x in line.split()[3:6]]
                             except:
                                 raise IOError(
                                     f"Unable to parse SCF gradient record: {line}"
                                 )
 
-                            # Update the gradients. (At this point, these are forces.)
-                            gradient.append(grad)
+                            # Update the forces.
+                            forces.append(force)
                             num_forces += 1
 
                             # Exit if we've got all the forces.
                             if num_forces == num_qm:
-                                is_grad = False
+                                is_force = False
                                 break
 
         if num_forces != num_qm:
-            raise IOError("Didn't find force records for all QM atoms in the SQM output!")
+            raise IOError(
+                "Didn't find force records for all QM atoms in the SQM output!"
+            )
 
         # Convert units.
         energy *= KCAL_MOL_TO_HARTREE
 
         # Convert the gradient to a NumPy array and reshape.
-        gradient = -np.array(gradient) * KCAL_MOL_TO_HARTREE * BOHR_TO_ANGSTROM
+        gradient = -np.array(forces) * KCAL_MOL_TO_HARTREE * BOHR_TO_ANGSTROM
 
         return energy, gradient
