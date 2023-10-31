@@ -84,7 +84,8 @@ emle-stop
 
 The embedding method relies on in vacuo energies and gradients, to which
 corrections are added based on the predictions of the model. At present we
-support the use of [Rascal](https://github.com/lab-cosmo/librascal), [DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html), [TorchANI](https://githb.com/aiqm/torchani) or [ORCA](https://sites.google.com/site/orcainputlibrary/interfaces-and-qmm)
+support the use of [Rascal](https://github.com/lab-cosmo/librascal), [DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html), [TorchANI](https://githb.com/aiqm/torchani), [ORCA](https://sites.google.com/site/orcainputlibrary/interfaces-and-qmm),
+or [SQM](https://ambermd.org/AmberTools.php)
 for the backend, providing reference QM with EMLE embedding, and pure EMLE
 implementations. To specify a backend, use the `--backend` argument when launching
 `emle-server`, e.g:

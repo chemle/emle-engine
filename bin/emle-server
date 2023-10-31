@@ -65,6 +65,7 @@ try:
 except:
     EMLE_INTERPOLATE_STEPS = None
 EMLE_QM_INDICES = os.getenv("EMLE_QM_INDICES")
+EMLE_SQM_THEORY = os.getenv("EMLE_SQM_THEORY")
 try:
     EMLE_RETRIES = int(os.getenv("EMLE_RETRIES"))
 except:
@@ -83,6 +84,8 @@ if not EMLE_METHOD:
     EMLE_METHOD = "electrostatic"
 if not EMLE_MM_CHARGES:
     EMLE_MM_CHARGES = None
+if not EMLE_SQM_THEORY:
+    EMLE_SQM_THEORY = "DFTB3"
 if not EMLE_DEVICE:
     EMLE_DEVICE = None
 if not EMLE_RETRIES:
@@ -135,7 +138,7 @@ parser.add_argument(
     "--backend",
     type=str,
     help="the in vacuo backend",
-    choices=["deepmd", "rascal", "torchani", "orca"],
+    choices=["deepmd", "rascal", "torchani", "orca", "sqm"],
     required=False,
 )
 parser.add_argument(
@@ -191,6 +194,12 @@ parser.add_argument(
     required=False,
 )
 parser.add_argument(
+    "--sqm-theory",
+    type=str,
+    help="the semi-empirical theory to use for the QM region when using the SQM backend",
+    required=False,
+)
+parser.add_argument(
     "--log",
     type=int,
     help="The frequency of logging energies to file",
@@ -228,6 +237,8 @@ if args.parm7 is not None:
     EMLE_PARM7 = args.parm7
 if args.qm_indices is not None:
     EMLE_QM_INDICES = args.qm_indices
+if args.sqm_theory is not None:
+    EMLE_SQM_THEORY = args.sqm_theory
 if args.log is not None:
     EMLE_LOG = args.log
 
@@ -428,6 +439,7 @@ mle_calculator = EMLECalculator(
     lambda_interpolate=EMLE_LAMBDA_INTERPOLATE,
     interpolate_steps=EMLE_INTERPOLATE_STEPS,
     qm_indices=EMLE_QM_INDICES,
+    sqm_theory=EMLE_SQM_THEORY,
     device=EMLE_DEVICE,
     log=EMLE_LOG,
 )

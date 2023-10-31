@@ -54,6 +54,7 @@ from .sander_calculator import SanderCalculator
 ANGSTROM_TO_BOHR = 1.0 / ase.units.Bohr
 BOHR_TO_ANGSTROM = ase.units.Bohr
 EV_TO_HARTREE = 1.0 / ase.units.Hartree
+KCAL_MOL_TO_HARTREE = 1.0 / ase.units.Hartree * ase.units.kcal / ase.units.mol
 SPECIES = (1, 6, 7, 8, 16)
 SIGMA = 1e-3
 
@@ -358,7 +359,7 @@ class EMLECalculator:
         rascal_model=None,
         parm7=None,
         qm_indices=None,
-        sqm_method="DFTB3",
+        sqm_theory="DFTB3",
         lambda_interpolate=None,
         interpolate_steps=None,
         device=None,
@@ -423,9 +424,9 @@ class EMLECalculator:
             can be specified. The file should contain a single column with the
             indices being zero-based.
 
-        sqm_method : str
-            The QM method to use when using the SQM backend. See the AmberTools
-            manual for the supported methods for your version of AmberTools.
+        sqm_theory : str
+            The QM theory to use when using the SQM backend. See the AmberTools
+            manual for the supported theory levels for your version of AmberTools.
 
         device : str
             The name of the device to be used by PyTorch. Options are "cpu"
@@ -596,11 +597,21 @@ class EMLECalculator:
 
         # Validate the QM method for SQM.
         elif backend == "sqm":
-            if not isinstance(sqm_method, str):
-                raise TypeError("'sqm_method' must be of type 'str'")
+            if not isinstance(sqm_theory, str):
+                raise TypeError("'sqm_theory' must be of type 'str'")
+
+            # Make sure a topology file has been set.
+            if parm7 is None:
+                raise ValueError("'parm7' must be specified when interpolating")
 
             # Strip whitespace.
-            self._sqm_method = sqm_method.replace(" ", "")
+            self._sqm_theory = sqm_theory.replace(" ", "")
+
+            from sander import AmberParm
+
+            # Store the atom names for the QM region.
+            amber_parm = AmberParm(parm7)
+            self._sqm_atom_names = [atom.name for atom in amber_parm.atoms]
 
         # Validate the interpolation lambda parameter.
         if lambda_interpolate is not None:
@@ -812,7 +823,7 @@ class EMLECalculator:
             "rascal_model": rascal_model,
             "parm7": parm7,
             "qm_indices": qm_indices,
-            "sqm_method": sqm_method,
+            "sqm_theory": sqm_theory,
             "lambda_interpolate": lambda_interpolate,
             "interpolate_steps": interpolate_steps,
             "device": device,
@@ -934,6 +945,16 @@ class EMLECalculator:
             except:
                 raise RuntimeError(
                     "Failed to calculate in vacuo energies using ORCA backend!"
+                )
+
+        # SQM.
+        elif self._backend == "sqm":
+            try:
+                E_vac, grad_vac = self._run_sqm(xyz_qm, atomic_numbers, charge)
+            except:
+                raise
+                raise RuntimeError(
+                    "Failed to calculate in vacuo energies using SQM backend!"
                 )
 
         # Convert units.
@@ -2148,5 +2169,137 @@ class EMLECalculator:
             gradient = np.array(gradient).reshape(int(len(gradient) / 3), 3)
         except:
             raise IOError("Number of ORCA gradient records isn't a multiple of 3!")
+
+        return energy, gradient
+
+    def _run_sqm(self, xyz, atomic_numbers, qm_charge):
+        """
+        Internal function to compute in vacuo energies and gradients using
+        SQM.
+
+        Parameters
+        ----------
+
+        xyz : numpy.array
+            The coordinates of the QM region in Angstrom.
+
+        atomic_numbers : numpy.array
+            The atomic numbers of the atoms in the QM region.
+
+        qm_charge : int
+            The charge on the QM region.
+
+        Returns
+        -------
+
+        energy : float
+            The in vacuo QM energy.
+
+        gradients : numpy.array
+            The in vacuo QM gradient in Eh/Bohr.
+        """
+
+        if not isinstance(xyz, np.ndarray):
+            raise TypeError("'xyz' must be of type 'numpy.ndarray'")
+        if xyz.dtype != np.float64:
+            raise TypeError("'xyz' must have dtype 'float64'.")
+
+        if not isinstance(atomic_numbers, np.ndarray):
+            raise TypeError("'atomic_numbers' must be of type 'numpy.ndarray'")
+
+        if not isinstance(qm_charge, int):
+            raise TypeError("'qm_charge' must be of type 'int'.")
+
+        # Store the number of QM atoms.
+        num_qm = len(atomic_numbers)
+
+        # Create a temporary working directory.
+        with tempfile.TemporaryDirectory() as tmp:
+            # Work out the name of the input files.
+            inp_name = f"{tmp}/sqm.in"
+            out_name = f"{tmp}/sqm.out"
+
+            # Write the input file.
+            with open(inp_name, "w") as f:
+                # Write the header.
+                f.write("Run semi-empirical minimization\n")
+                f.write(" &qmmm\n")
+                f.write(f" qm_theory='{self._sqm_theory}',\n")
+                f.write(f" qmcharge={qm_charge},\n")
+                f.write(" verbosity=4,\n")
+                f.write(f" /\n")
+
+                # Write the QM region coordinates.
+                for num, name, xyz_qm in zip(atomic_numbers, self._sqm_atom_names, xyz):
+                    x, y, z = xyz_qm
+                    f.write(f" {num} {name} {x:.4f} {y:.4f} {z:.4f}\n")
+
+            # Create the SQM command.
+            command = f"sqm -i {inp_name} -o {out_name}"
+
+            # Run the command as a sub-process.
+            proc = subprocess.run(
+                shlex.split(command),
+                shell=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            if proc.returncode != 0:
+                raise RuntimeError("SQM job failed!")
+
+            if not os.path.isfile(out_name):
+                raise IOError(f"Unable to locate SQM output file: {out_name}")
+
+            with open(out_name, "r") as f:
+                is_converged = False
+                is_grad = False
+                num_forces = 0
+                gradient = []
+                for line in f:
+                    # Skip lines prior to convergence.
+                    if line.startswith("  ... geometry converged !"):
+                        is_converged = True
+                        continue
+
+                    # Now process the final energy and force records.
+                    if is_converged:
+                        if line.startswith(" Total SCF energy"):
+                            try:
+                                energy = float(line.split()[4])
+                            except:
+                                raise IOError(
+                                    f"Unable to parse SCF energy record: {line}"
+                                )
+                        elif line.startswith(
+                            "QMMM: Forces on QM atoms from SCF calculation"
+                        ):
+                            # Flag that gradient records are coming.
+                            is_grad = True
+                        elif is_grad:
+                            try:
+                                grad = [float(x) for x in line.split()[3:6]]
+                            except:
+                                raise IOError(
+                                    f"Unable to parse SCF gradient record: {line}"
+                                )
+
+                            # Update the gradients. (At this point, these are forces.)
+                            gradient.append(grad)
+                            num_forces += 1
+
+                            # Exit if we've got all the forces.
+                            if num_forces == num_qm:
+                                is_grad = False
+                                break
+
+        if num_forces != num_qm:
+            raise IOError("Didn't find force records for all QM atoms in the SQM output!")
+
+        # Convert units.
+        energy *= KCAL_MOL_TO_HARTREE
+
+        # Convert the gradient to a NumPy array and reshape.
+        gradient = -np.array(gradient) * KCAL_MOL_TO_HARTREE * BOHR_TO_ANGSTROM
 
         return energy, gradient
