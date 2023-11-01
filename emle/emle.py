@@ -27,7 +27,6 @@ import shlex
 import shutil
 import subprocess
 import tempfile
-import warnings
 import yaml
 
 import scipy
@@ -36,20 +35,15 @@ import scipy.io
 import ase
 import ase.io
 
-from rascal.models.asemd import ASEMLCalculator
 from rascal.representations import SphericalInvariants
 
-from deepmd.infer import DeepPot
-
 import torch
-import torchani
 
 try:
     from torch.func import grad_and_value
 except:
     from functorch import grad_and_value
 
-from .sander_calculator import SanderCalculator
 
 ANGSTROM_TO_BOHR = 1.0 / ase.units.Bohr
 BOHR_TO_ANGSTROM = ase.units.Bohr
@@ -341,13 +335,16 @@ class EMLECalculator:
     }
 
     # List of supported backends.
-    _supported_backends = ["torchani", "deepmd", "rascal", "orca", "sqm"]
+    _supported_backends = ["torchani", "deepmd", "orca", "pysander", "sqm", "xtb"]
 
     # List of supported devices.
     _supported_devices = ["cpu", "cuda"]
 
     # Default to no interpolation.
     _lambda_interpolate = None
+
+    # Default to no delta-learning corrections.
+    _is_delta = False
 
     def __init__(
         self,
@@ -400,8 +397,8 @@ class EMLECalculator:
             must be specified if "deepmd" is the selected backend.
 
         rascal_model : str
-            Path to the Rascal model file to use for in vacuo calculations. This
-            will override the default model provided as part of this library.
+            Path to the Rascal model file used to apply delta-learning corrections
+            to the in vacuo energies and gradients computed by the backed.
 
         lambda_interpolate : float, [float, float]
             The value of lambda to use for end-state correction calculations. This
@@ -523,7 +520,7 @@ class EMLECalculator:
 
             self._parm7 = parm7
 
-        if deepmd_model is not None:
+        if deepmd_model is not None and backend == "deepmd":
             # We support a str, or list/tuple of strings.
             if not isinstance(deepmd_model, (str, list, tuple)):
                 raise TypeError(
@@ -549,21 +546,56 @@ class EMLECalculator:
                 # Store the list of model files, removing any duplicates.
                 self._deepmd_model = list(set(deepmd_model))
 
+                # Initialise DeePMD backend attributes.
+                try:
+                    from deepmd.infer import DeepPot
+
+                    self._deepmd_potential = [
+                        DeepPot(model) for model in self._deepmd_model
+                    ]
+                except:
+                    raise RuntimeError("Unable to create the DeePMD potentials!")
         else:
             if self._backend == "deepmd":
                 raise ValueError(
                     "'deepmd_model' must be specified when DeePMD 'backend' is chosen!"
                 )
 
-        # Validate and load the Rascal model.
-        if backend == "rascal":
-            if rascal_model is not None:
-                if not isinstance(rascal_model, str):
-                    raise TypeError("'rascal_model' must be of type 'str'")
-            else:
+        # Validate the QM method for SQM.
+        if backend == "sqm":
+            if not isinstance(sqm_theory, str):
+                raise TypeError("'sqm_theory' must be of type 'str'")
+
+            # Make sure a topology file has been set.
+            if parm7 is None:
                 raise ValueError(
-                    "'rascal_model' must be specified if using the Rascal backend!"
+                    "'parm7' must be specified when using the 'sqm' backend"
                 )
+
+            # Strip whitespace.
+            self._sqm_theory = sqm_theory.replace(" ", "")
+
+            try:
+                from sander import AmberParm
+
+                amber_parm = AmberParm(parm7)
+            except:
+                raise IOError(f"Unable to load AMBER topology file: '{parm7}'")
+
+            # Store the atom names for the QM region.
+            self._sqm_atom_names = [atom.name for atom in amber_parm.atoms]
+
+        # Make sure a QM topology file is specified for the 'pysander' backend.
+        elif backend == "pysander":
+            if parm7 is None:
+                raise ValueError(
+                    "'parm7' must be specified when using the 'pysander' backend!"
+                )
+
+        # Validate and load the Rascal model.
+        if rascal_model is not None:
+            if not isinstance(rascal_model, str):
+                raise TypeError("'rascal_model' must be of type 'str'")
 
             # Convert to an absolute path.
             rascal_model = os.path.abspath(rascal_model)
@@ -586,32 +618,14 @@ class EMLECalculator:
 
             # Create the Rascal calculator.
             try:
+                from rascal.models.asemd import ASEMLCalculator
+
                 self._rascal_calc = ASEMLCalculator(self._rascal_model, soap)
             except:
                 raise RuntimeError("Unable to create Rascal calculator!")
 
-            if parm7 is None:
-                raise ValueError(
-                    "'parm7' must be specified if using the Rascal backend!"
-                )
-
-        # Validate the QM method for SQM.
-        elif backend == "sqm":
-            if not isinstance(sqm_theory, str):
-                raise TypeError("'sqm_theory' must be of type 'str'")
-
-            # Make sure a topology file has been set.
-            if parm7 is None:
-                raise ValueError("'parm7' must be specified when interpolating")
-
-            # Strip whitespace.
-            self._sqm_theory = sqm_theory.replace(" ", "")
-
-            from sander import AmberParm
-
-            # Store the atom names for the QM region.
-            amber_parm = AmberParm(parm7)
-            self._sqm_atom_names = [atom.name for atom in amber_parm.atoms]
+            # Flag that delta-learning corrections will be applied.
+            self._is_delta = True
 
         # Validate the interpolation lambda parameter.
         if lambda_interpolate is not None:
@@ -772,14 +786,12 @@ class EMLECalculator:
 
         # Initialise TorchANI backend attributes.
         if self._backend == "torchani":
+            import torchani
+
             # Create the TorchANI model.
             self._torchani_model = torchani.models.ANI2x(periodic_table_index=True).to(
                 self._device
             )
-
-        # Initialise DeePMD backend attributes.
-        elif self._backend == "deepmd":
-            self._deepmd_potential = [DeepPot(model) for model in self._deepmd_model]
 
         # If the backend is ORCA, then try to find the executable.
         elif self._backend == "orca":
@@ -790,7 +802,6 @@ class EMLECalculator:
             # directories.
 
             exes = []
-
             for p in path.split(":"):
                 exe = shutil.which("orca", path=p)
                 if exe and not ("conda" in exe or "mamba" in exe or "miniforge" in exe):
@@ -906,22 +917,8 @@ class EMLECalculator:
         # First try to use the specified backend to compute in vacuo
         # energies and (optionally) gradients.
 
-        # Rascal.
-        if self._backend == "rascal":
-            try:
-                E_vac, grad_vac = self._run_pysander(
-                    atoms=atoms,
-                    parm7=self._parm7,
-                    is_rascal=True,
-                    is_gas=True,
-                )
-            except:
-                raise RuntimeError(
-                    "Failed to calculate in vacuo energies using Rascal backend!"
-                )
-
         # TorchANI.
-        elif self._backend == "torchani":
+        if self._backend == "torchani":
             try:
                 E_vac, grad_vac = self._run_torchani(xyz_qm, atomic_numbers)
             except:
@@ -947,15 +944,45 @@ class EMLECalculator:
                     "Failed to calculate in vacuo energies using ORCA backend!"
                 )
 
+        # PySander.
+        elif self._backend == "pysander":
+            try:
+                E_vac, grad_vac = self._run_pysander(atoms, self._parm7, is_gas=True)
+            except:
+                raise RuntimeError(
+                    "Failed to calculate in vacuo energies using PySander backend!"
+                )
+
         # SQM.
         elif self._backend == "sqm":
             try:
                 E_vac, grad_vac = self._run_sqm(xyz_qm, atomic_numbers, charge)
             except:
-                raise
                 raise RuntimeError(
                     "Failed to calculate in vacuo energies using SQM backend!"
                 )
+
+        # XTB.
+        elif self._backend == "xtb":
+            try:
+                E_vac, grad_vac = self._run_xtb(atoms)
+            except:
+                raise RuntimeError(
+                    "Failed to calculate in vacuo energies using XTB backend!"
+                )
+
+        # Apply delta-learning corrections using Rascal.
+        if self._is_delta:
+            try:
+                delta_E, delta_grad = self._run_rascal(atoms)
+            except:
+                raise RuntimeError(
+                    "Failed to compute delta-learning corrections using Rascal!"
+                )
+
+            # Add the delta-learning corrections to the in vacuo energies and gradients.
+            E_vac += delta_E
+            grad_vac += delta_grad
 
         # Convert units.
         xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
@@ -1000,7 +1027,6 @@ class EMLECalculator:
             E_mm_qm_vac, grad_mm_qm_vac = self._run_pysander(
                 atoms=atoms,
                 parm7=self._parm7,
-                is_rascal=False,
                 is_gas=True,
             )
 
@@ -1849,7 +1875,7 @@ class EMLECalculator:
             xyz_file_qm,
         )
 
-    def _run_pysander(self, atoms, parm7, is_rascal=False, is_gas=True):
+    def _run_pysander(self, atoms, parm7, is_gas=True):
         """
         Internal function to compute in vacuo energies and gradients using
         pysander.
@@ -1863,9 +1889,6 @@ class EMLECalculator:
         parm7 : str
             The path to the AMBER topology file.
 
-        bool : is_rascal
-            Whether to apply a Rascal correction to the energy and gradient.
-
         bool : is_gas
             Whether this is a gas phase calculation.
 
@@ -1873,10 +1896,10 @@ class EMLECalculator:
         -------
 
         energy : float
-            The in vacuo ML energy.
+            The in vacuo MM energy in Eh.
 
         gradients : numpy.array
-            The in vacuo ML gradient in Eh/Bohr.
+            The in vacuo MM gradient in Eh/Bohr.
         """
 
         if not isinstance(atoms, ase.Atoms):
@@ -1885,18 +1908,10 @@ class EMLECalculator:
         if not isinstance(parm7, str):
             raise TypeError("'parm7' must be of type 'str'")
 
-        if not isinstance(is_rascal, bool):
-            raise TypeError("'is_rascal' must be of type 'bool'")
-
         if not isinstance(is_gas, bool):
             raise TypeError("'is_gas' must be of type 'bool'")
 
-        # Rascal requires periodic box information so we translate the atoms so that
-        # the lowest (x, y, z) position is zero, then set the cell to the maximum
-        # position.
-        if is_rascal:
-            atoms.positions -= np.min(atoms.positions, axis=0)
-            atoms.cell = np.max(atoms.positions, axis=0)
+        from .sander_calculator import SanderCalculator
 
         # Instantiate a SanderCalculator.
         sander_calculator = SanderCalculator(atoms, parm7, is_gas)
@@ -1904,27 +1919,11 @@ class EMLECalculator:
         # Run the calculation.
         sander_calculator.calculate(atoms)
 
-        # Get the MM contributions.
+        # Get the MM energy and gradients.
         energy = sander_calculator.results["energy"]
-        forces = sander_calculator.results["forces"]
+        gradient = -sander_calculator.results["forces"]
 
-        # Add the Rascal correction.
-        if is_rascal:
-            # Run the calculation.
-            self._rascal_calc.calculate(atoms)
-
-            # Get the energy and force corrections.
-            delta_energy = self._rascal_calc.results["energy"][0]
-            delta_forces = self._rascal_calc.results["forces"]
-
-            # Add the correction.
-            energy += delta_energy
-            forces += delta_forces
-
-        return (
-            energy * EV_TO_HARTREE,
-            -forces * EV_TO_HARTREE * BOHR_TO_ANGSTROM,
-        )
+        return energy, gradient
 
     def _run_torchani(self, xyz, atomic_numbers):
         """
@@ -1944,7 +1943,7 @@ class EMLECalculator:
         -------
 
         energy : float
-            The in vacuo ML energy.
+            The in vacuo ML energy in Eh.
 
         gradients : numpy.array
             The in vacuo ML gradient in Eh/Bohr.
@@ -1998,7 +1997,7 @@ class EMLECalculator:
         -------
 
         energy : float
-            The in vacuo ML energy.
+            The in vacuo ML energy in Eh.
 
         gradients : numpy.array
             The in vacuo ML gradient in Eh/Bohr.
@@ -2062,7 +2061,7 @@ class EMLECalculator:
         -------
 
         energy : float
-            The in vacuo QM energy.
+            The in vacuo QM energy in Eh.
 
         gradients : numpy.array
             The in vacuo QM gradient in Eh/Bohr.
@@ -2193,7 +2192,7 @@ class EMLECalculator:
         -------
 
         energy : float
-            The in vacuo QM energy.
+            The in vacuo QM energy in Eh.
 
         gradients : numpy.array
             The in vacuo QM gradient in Eh/Bohr.
@@ -2303,5 +2302,85 @@ class EMLECalculator:
 
         # Convert the gradient to a NumPy array and reshape.
         gradient = -np.array(forces) * KCAL_MOL_TO_HARTREE * BOHR_TO_ANGSTROM
+
+        return energy, gradient
+
+    @staticmethod
+    def _run_xtb(atoms):
+        """
+        Internal function to compute in vacuo energies and gradients using
+        the xtb-python interface. Currently only uses the "GFN2-xTB" method.
+
+        Parameters
+        ----------
+
+        atoms : ase.atoms.Atoms
+            The atoms in the QM region.
+
+        Returns
+        -------
+
+        energy : float
+            The in vacuo ML energy in Eh.
+
+        gradients : numpy.array
+            The in vacuo gradient in Eh/Bohr.
+        """
+
+        if not isinstance(atoms, ase.Atoms):
+            raise TypeError("'atoms' must be of type 'ase.atoms.Atoms'")
+
+        from xtb.ase.calculator import XTB
+
+        # Create the calculator.
+        atoms.calc = XTB(method="GFN2-xTB")
+
+        # Get the energy and forces in atomic units.
+        energy = atoms.get_potential_energy()
+        forces = atoms.get_forces()
+
+        # Convert to Hartree and Eh/Bohr.
+        energy *= EV_TO_HARTREE
+        gradient = -forces * EV_TO_HARTREE * BOHR_TO_ANGSTROM
+
+        return energy, gradient
+
+    def _run_rascal(self, atoms):
+        """
+        Internal function to compute delta-learning corrections using Rascal.
+
+        Parameters
+        ----------
+
+        atoms : ase.atoms.Atoms
+            The atoms in the QM region.
+
+        Returns
+        -------
+
+        energy : float
+            The in vacuo MM energy in Eh.
+
+        gradients : numpy.array
+            The in vacuo MM gradient in Eh/Bohr.
+        """
+
+        if not isinstance(atoms, ase.Atoms):
+            raise TypeError("'atoms' must be of type 'ase.atoms.Atoms'")
+
+        # Rascal requires periodic box information so we translate the atoms so that
+        # the lowest (x, y, z) position is zero, then set the cell to the maximum
+        # position.
+        atoms.positions -= np.min(atoms.positions, axis=0)
+        atoms.cell = np.max(atoms.positions, axis=0)
+
+        # Run the calculation.
+        self._rascal_calc.calculate(atoms)
+
+        # Get the energy and force corrections.
+        energy = self._rascal_calc.results["energy"][0] * EV_TO_HARTREE
+        gradient = (
+            -self._rascal_calc.results["forces"] * EV_TO_HARTREE * BOHR_TO_ANGSTROM
+        )
 
         return energy, gradient

@@ -21,15 +21,12 @@
 #####################################################################
 
 import ase
-from ase.calculators.calculator import Calculator, CalculatorSetupError, all_changes
+from ase.calculators.calculator import Calculator, all_changes
 import numpy as np
 import sander
 
 
 class SanderCalculator(Calculator):
-    kcalmol_to_eV = ase.units.kcal / ase.units.mol
-    implemented_properties = ["energy", "forces"]
-
     def __init__(self, atoms, parm7, is_gas=True):
         """
         Constructor.
@@ -83,11 +80,15 @@ class SanderCalculator(Calculator):
         # Update the positions.
         sander.set_positions(positions)
 
+        from .emle import KCAL_MOL_TO_HARTREE, BOHR_TO_ANGSTROM
+
         # Compute the energy and forces.
         energy, forces = sander.energy_forces()
         self.results = {
-            "energy": energy.tot * self.kcalmol_to_eV,
-            "forces": np.array(forces).reshape((-1, 3)) * self.kcalmol_to_eV,
+            "energy": energy.tot * KCAL_MOL_TO_HARTREE,
+            "forces": np.array(forces).reshape((-1, 3))
+            * KCAL_MOL_TO_HARTREE
+            / BOHR_TO_ANGSTROM,
         }
 
     @staticmethod

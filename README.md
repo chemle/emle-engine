@@ -84,9 +84,14 @@ emle-stop
 
 The embedding method relies on in vacuo energies and gradients, to which
 corrections are added based on the predictions of the model. At present we
-support the use of [Rascal](https://github.com/lab-cosmo/librascal), [DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html), [TorchANI](https://githb.com/aiqm/torchani), [ORCA](https://sites.google.com/site/orcainputlibrary/interfaces-and-qmm),
-or [SQM](https://ambermd.org/AmberTools.php)
-for the backend, providing reference QM with EMLE embedding, and pure EMLE
+support the use of
+[DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html),
+[TorchANI](https://githb.com/aiqm/torchani),
+[ORCA](https://sites.google.com/site/orcainputlibrary/interfaces-and-qmm),
+[PySander](https://ambermd.org/AmberTools.php),
+[SQM](https://ambermd.org/AmberTools.php), or
+[XTB](https://xtb-docs.readthedocs.io/en/latest)
+ for the backend, providing reference MM or QM with EMLE embedding, and pure EMLE
 implementations. To specify a backend, use the `--backend` argument when launching
 `emle-server`, e.g:
 
@@ -95,13 +100,6 @@ emle-server --backend torchani
 ```
 
 (The default backend is `torchani`.)
-
-When using the `rascal` backend you will also need to specify a model file
-and the AMBER parm7 topology file that was used to train this model, i.e.
-the topology of the QM region. These can be specified using the
-`--rascal-model` and `--parm7` command-line arguments, or using the
-`EMLE_RASCAL_MODEL` and `EMLE_PARM7` environment variables. Rascal can be used
-to train system specific delta-learning models.
 
 When using the `orca` backend, you will need to ensure that the _fake_ `orca`
 executable takes precedence in the `PATH`. (To check that EMLE is running,
@@ -116,6 +114,18 @@ a set of model files specified using wildcards, or as a comma-separated list.
 When multiple files are specified, energies and gradients will be averaged
 over the models. The model files need to be visible to the `emle-server`, so we
 recommend the use of absolute paths.
+
+When using `pysander` or `sqm` as the backend you will also need to specify the
+path to an AMBER parm7 topology file for the QM region. This can be specified
+using the `--parm7` command-line argument, or via the `EMLE_PARM7` environment
+variable.
+
+## Delta-learning corrections
+
+We also support the use [Rascal](https://github.com/lab-cosmo/librascal)
+for the calculation of delta-learning corrections to the in vacuo energies and
+gradients. To use, you will need to specify a model file using the `--rascal-model`
+command-line argument, or via the `EMLE_RASCAL_MODEL` environment variable.
 
 ## Device
 

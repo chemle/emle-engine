@@ -138,7 +138,7 @@ parser.add_argument(
     "--backend",
     type=str,
     help="the in vacuo backend",
-    choices=["deepmd", "rascal", "torchani", "orca", "sqm"],
+    choices=["deepmd", "torchani", "orca", "pysander", "sqm", "xtb"],
     required=False,
 )
 parser.add_argument(
