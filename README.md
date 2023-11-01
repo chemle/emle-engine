@@ -318,5 +318,5 @@ need to make sure that the _fake_ `orca` executable takes precendence in the
 to make sure that the `emle` environment isn't active when submitting jobs,
 since the `PATH` won't be updated correctly within the batch script.
 
-When performing interoplation it is currently not possible to use AMBER force
+When performing interpolation it is currently not possible to use AMBER force
 fields with CMAP terms due to a memory deallocation bug in `pysander`.
