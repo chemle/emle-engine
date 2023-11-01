@@ -120,6 +120,11 @@ path to an AMBER parm7 topology file for the QM region. This can be specified
 using the `--parm7` command-line argument, or via the `EMLE_PARM7` environment
 variable.
 
+(Adding support for an additional backend is as simple as adding a new method to
+the `EMLECalculator` that performs the desired caculation, returning the energy
+in Hartree as a float along with the gradients in units of Hartree / Bohr as a
+`numpy.ndarray`.)
+
 ## Delta-learning corrections
 
 We also support the use [Rascal](https://github.com/lab-cosmo/librascal)
