@@ -47,6 +47,7 @@ except:
     EMLE_NUM_CLIENTS = None
 EMLE_BACKEND = os.getenv("EMLE_BACKEND")
 EMLE_EXTERNAL_BACKEND = os.getenv("EMLE_EXTERNAL_BACKEND")
+EMLE_PLUGIN_PATH = os.getenv("EMLE_PLUGIN_PATH")
 EMLE_DEVICE = os.getenv("EMLE_DEVICE")
 try:
     EMLE_LOG = int(os.getenv("EMLE_LOG"))
@@ -79,16 +80,6 @@ if not EMLE_PORT:
     EMLE_PORT = 10000
 if not EMLE_NUM_CLIENTS:
     EMLE_NUM_CLIENTS = 1
-if not EMLE_BACKEND:
-    EMLE_BACKEND = "torchani"
-if not EMLE_METHOD:
-    EMLE_METHOD = "electrostatic"
-if not EMLE_MM_CHARGES:
-    EMLE_MM_CHARGES = None
-if not EMLE_SQM_THEORY:
-    EMLE_SQM_THEORY = "DFTB3"
-if not EMLE_DEVICE:
-    EMLE_DEVICE = None
 if not EMLE_RETRIES:
     EMLE_RETRIES = 100
 
@@ -133,7 +124,6 @@ parser.add_argument(
     type=validate_clients,
     help="the maximum number of client connections to allow",
     required=False,
-    default=1,
 )
 parser.add_argument(
     "--backend",
@@ -146,6 +136,12 @@ parser.add_argument(
     "--external-backend",
     type=str,
     help="the external backend as a Python callback function, e.g. 'module.function'",
+    required=False,
+)
+parser.add_argument(
+    "--plugin-path",
+    type=str,
+    help="a path containing any modules/scripts for external backends",
     required=False,
 )
 parser.add_argument(
@@ -211,7 +207,6 @@ parser.add_argument(
     type=int,
     help="The frequency of logging energies to file",
     required=False,
-    default=1,
 )
 args = parser.parse_args()
 
@@ -232,6 +227,8 @@ if args.backend is not None:
     EMLE_BACKEND = args.backend
 if args.external_backend is not None:
     EMLE_EXTERNAL_BACKEND = args.external_backend
+if args.plugin_path is not None:
+    EMLE_PLUGIN_PATH = args.plugin_path
 if args.device is not None:
     EMLE_DEVICE = args.device
 if args.deepmd_model is not None:
@@ -445,6 +442,7 @@ mle_calculator = EMLECalculator(
     method=EMLE_METHOD,
     backend=EMLE_BACKEND,
     external_backend=EMLE_EXTERNAL_BACKEND,
+    plugin_path=EMLE_PLUGIN_PATH,
     mm_charges=EMLE_MM_CHARGES,
     deepmd_model=EMLE_DEEPMD_MODEL,
     rascal_model=EMLE_RASCAL_MODEL,

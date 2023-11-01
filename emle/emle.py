@@ -355,6 +355,7 @@ class EMLECalculator:
         method="electrostatic",
         backend="torchani",
         external_backend=None,
+        plugin_path=".",
         mm_charges=None,
         deepmd_model=None,
         rascal_model=None,
@@ -396,6 +397,9 @@ class EMLECalculator:
             The function should take a single argument, which is an ASE Atoms
             object for the QM region, and return the energy in Hartree along with
             the gradients in Hartree/Bohr as a numpy.ndarray.
+
+        plugin_path : str
+            The direcory containing any scripts used for external backends.
 
         mm_charges : numpy.array, str
             An array of MM charges for atoms in the QM region. This is required
@@ -459,6 +463,9 @@ class EMLECalculator:
         else:
             self._model = self._default_model
 
+        if method is None:
+            method = "electrostatic"
+
         if not isinstance(method, str):
             raise TypeError("'method' must be of type 'str'")
         method = method.replace(" ", "").lower()
@@ -508,6 +515,9 @@ class EMLECalculator:
         except:
             raise IOError(f"Unable to load model parameters from: '{self._model}'")
 
+        if backend is None:
+            backend = "torchani"
+
         if not isinstance(backend, str):
             raise TypeError("'backend' must be of type 'bool")
         # Strip whitespace and convert to lower case.
@@ -521,6 +531,16 @@ class EMLECalculator:
         if external_backend is not None:
             if not isinstance(external_backend, str):
                 raise TypeError("'external_backend' must be of type 'str'")
+
+            if plugin_path is None:
+                plugin_path = "."
+
+            if not isinstance(plugin_path, str):
+                raise TypeError("'plugin_path' must be of type 'str'")
+
+            if not os.path.isdir(plugin_path):
+                raise IOError(f"Unable to locate plugin directory: {plugin_path}")
+            self._plugin_path = plugin_path
 
             # Strip whitespace.
             external_backend = external_backend.replace(" ", "")
@@ -543,8 +563,8 @@ class EMLECalculator:
                 try:
                     import sys
 
-                    # Try adding the current directory to the path.
-                    sys.path.append(os.getcwd())
+                    # Try adding the plugin directory to the path.
+                    sys.path.append(plugin_path)
                     module = import_module(module)
                     sys.path.pop()
                 except:
@@ -614,6 +634,9 @@ class EMLECalculator:
 
         # Validate the QM method for SQM.
         if backend == "sqm":
+            if sqm_theory is None:
+                sqm_theory = "DFTB3"
+
             if not isinstance(sqm_theory, str):
                 raise TypeError("'sqm_theory' must be of type 'str'")
 
@@ -780,6 +803,9 @@ class EMLECalculator:
             # Default to CUDA, if available.
             self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        if log is None:
+            log = 1
+
         if not isinstance(log, int):
             raise TypeError("'log' must be of type 'int")
         else:
@@ -889,6 +915,7 @@ class EMLECalculator:
             "lambda_interpolate": lambda_interpolate,
             "interpolate_steps": interpolate_steps,
             "device": device,
+            "plugin_path": plugin_path,
             "log": log,
         }
 

@@ -134,7 +134,11 @@ can also be supplied using the `EMLE_EXTERNAL_BACKEND` environment variable.
 When set, the external backend will take precendence over any other backend.
 If the callback is a function within a local module, then make sure that the
 directory containing the module is in `sys.path`, or is visible to the `emle-server`,
-e.g. the server is launched from the same directory as the module.
+e.g. the server is launched from the same directory as the module. Alternatively,
+use `--plugin-path` to specify the path to a directory containing the module.
+This can also be specified using the `EMLE_PLUGIN_PATH` environment variable.
+Make sure that this is an absolute path so that it is visible to the server
+regardless of where it is launched.
 
 ## Delta-learning corrections
 
