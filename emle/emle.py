@@ -554,7 +554,7 @@ class EMLECalculator:
                     f"Unable to parse 'external_backend' callback string: {external_backend}"
                 )
 
-            # Try to import the function.
+            # Try to import the module.
             try:
                 from importlib import import_module
 
