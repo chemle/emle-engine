@@ -46,6 +46,7 @@ try:
 except:
     EMLE_NUM_CLIENTS = None
 EMLE_BACKEND = os.getenv("EMLE_BACKEND")
+EMLE_EXTERNAL_BACKEND = os.getenv("EMLE_EXTERNAL_BACKEND")
 EMLE_DEVICE = os.getenv("EMLE_DEVICE")
 try:
     EMLE_LOG = int(os.getenv("EMLE_LOG"))
@@ -142,6 +143,12 @@ parser.add_argument(
     required=False,
 )
 parser.add_argument(
+    "--external-backend",
+    type=str,
+    help="the external backend as a Python callback function, e.g. 'module.function'",
+    required=False,
+)
+parser.add_argument(
     "--device",
     type=str,
     help="the device to be used by PyTorch",
@@ -223,6 +230,8 @@ if args.num_clients is not None:
     EMLE_NUM_CLIENTS = args.num_clients
 if args.backend is not None:
     EMLE_BACKEND = args.backend
+if args.external_backend is not None:
+    EMLE_EXTERNAL_BACKEND = args.external_backend
 if args.device is not None:
     EMLE_DEVICE = args.device
 if args.deepmd_model is not None:
@@ -399,7 +408,10 @@ if EMLE_DEEPMD_MODEL:
         else:
             EMLE_DEEPMD_MODEL = models
 
-print(f"Starting ML-MM server using {EMLE_BACKEND} backend...")
+if EMLE_EXTERNAL_BACKEND is None:
+    print(f"Starting ML-MM server using {EMLE_BACKEND} backend...")
+else:
+    print(f"Starting ML-MM server using external backend...")
 
 # Create the EMLE socket.
 sock = Socket()
@@ -432,6 +444,7 @@ mle_calculator = EMLECalculator(
     model=EMLE_MODEL,
     method=EMLE_METHOD,
     backend=EMLE_BACKEND,
+    external_backend=EMLE_EXTERNAL_BACKEND,
     mm_charges=EMLE_MM_CHARGES,
     deepmd_model=EMLE_DEEPMD_MODEL,
     rascal_model=EMLE_RASCAL_MODEL,

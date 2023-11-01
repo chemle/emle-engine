@@ -346,11 +346,15 @@ class EMLECalculator:
     # Default to no delta-learning corrections.
     _is_delta = False
 
+    # Default to no external callback.
+    is_external_backend = False
+
     def __init__(
         self,
         model=None,
         method="electrostatic",
         backend="torchani",
+        external_backend=None,
         mm_charges=None,
         deepmd_model=None,
         rascal_model=None,
@@ -385,6 +389,13 @@ class EMLECalculator:
 
         backend : str
             The backend to use to compute in vacuo energies and gradients.
+
+        external_backend : str
+            The name of an external backend to use to compute in vacuo energies.
+            This should be a callback function formatted as 'module.function'.
+            The function should take a single argument, which is an ASE Atoms
+            object for the QM region, and return the energy in Hartree along with
+            the gradients in Hartree/Bohr as a numpy.ndarray.
 
         mm_charges : numpy.array, str
             An array of MM charges for atoms in the QM region. This is required
@@ -506,6 +517,46 @@ class EMLECalculator:
                 f"Unsupported backend '{backend}'. Options are: {', '.join(self._supported_backends)}"
             )
         self._backend = backend
+
+        if external_backend is not None:
+            if not isinstance(external_backend, str):
+                raise TypeError("'external_backend' must be of type 'str'")
+
+            # Strip whitespace.
+            external_backend = external_backend.replace(" ", "")
+
+            # Split the module and function names.
+            try:
+                function = external_backend.split(".")[-1]
+                module = external_backend.strip("." + function)
+            except:
+                raise ValueError(
+                    f"Unable to parse 'external_backend' callback string: {external_backend}"
+                )
+
+            # Try to import the function.
+            try:
+                from importlib import import_module
+
+                module = import_module(module)
+            except:
+                try:
+                    import sys
+
+                    # Try adding the current directory to the path.
+                    sys.path.append(os.getcwd())
+                    module = import_module(module)
+                    sys.path.pop()
+                except:
+                    raise ImportError(
+                        f"Unable to import function '{function}' from module '{module}'"
+                    )
+
+            # Bind the function to the class.
+            self._external_backend = getattr(module, function)
+
+            # Flag that an external backend is being used.
+            self.is_external_backend = True
 
         if parm7 is not None:
             if not isinstance(parm7, str):
@@ -917,58 +968,72 @@ class EMLECalculator:
         # First try to use the specified backend to compute in vacuo
         # energies and (optionally) gradients.
 
-        # TorchANI.
-        if self._backend == "torchani":
-            try:
-                E_vac, grad_vac = self._run_torchani(xyz_qm, atomic_numbers)
-            except:
-                raise RuntimeError(
-                    "Failed to calculate in vacuo energies using TorchANI backend!"
-                )
+        # Internal backends.
+        if not self.is_external_backend:
+            # TorchANI.
+            if self._backend == "torchani":
+                try:
+                    E_vac, grad_vac = self._run_torchani(xyz_qm, atomic_numbers)
+                except:
+                    raise RuntimeError(
+                        "Failed to calculate in vacuo energies using TorchANI backend!"
+                    )
 
-        # DeePMD.
-        if self._backend == "deepmd":
-            try:
-                E_vac, grad_vac = self._run_deepmd(xyz_qm, elements)
-            except:
-                raise RuntimeError(
-                    "Failed to calculate in vacuo energies using DeePMD backend!"
-                )
+            # DeePMD.
+            if self._backend == "deepmd":
+                try:
+                    E_vac, grad_vac = self._run_deepmd(xyz_qm, elements)
+                except:
+                    raise RuntimeError(
+                        "Failed to calculate in vacuo energies using DeePMD backend!"
+                    )
 
-        # ORCA.
-        elif self._backend == "orca":
-            try:
-                E_vac, grad_vac = self._run_orca(orca_input, xyz_file_qm)
-            except:
-                raise RuntimeError(
-                    "Failed to calculate in vacuo energies using ORCA backend!"
-                )
+            # ORCA.
+            elif self._backend == "orca":
+                try:
+                    E_vac, grad_vac = self._run_orca(orca_input, xyz_file_qm)
+                except:
+                    raise RuntimeError(
+                        "Failed to calculate in vacuo energies using ORCA backend!"
+                    )
 
-        # PySander.
-        elif self._backend == "pysander":
-            try:
-                E_vac, grad_vac = self._run_pysander(atoms, self._parm7, is_gas=True)
-            except:
-                raise RuntimeError(
-                    "Failed to calculate in vacuo energies using PySander backend!"
-                )
+            # PySander.
+            elif self._backend == "pysander":
+                try:
+                    E_vac, grad_vac = self._run_pysander(
+                        atoms, self._parm7, is_gas=True
+                    )
+                except:
+                    raise RuntimeError(
+                        "Failed to calculate in vacuo energies using PySander backend!"
+                    )
 
-        # SQM.
-        elif self._backend == "sqm":
-            try:
-                E_vac, grad_vac = self._run_sqm(xyz_qm, atomic_numbers, charge)
-            except:
-                raise RuntimeError(
-                    "Failed to calculate in vacuo energies using SQM backend!"
-                )
+            # SQM.
+            elif self._backend == "sqm":
+                try:
+                    E_vac, grad_vac = self._run_sqm(xyz_qm, atomic_numbers, charge)
+                except:
+                    raise RuntimeError(
+                        "Failed to calculate in vacuo energies using SQM backend!"
+                    )
 
-        # XTB.
-        elif self._backend == "xtb":
+            # XTB.
+            elif self._backend == "xtb":
+                try:
+                    E_vac, grad_vac = self._run_xtb(atoms)
+                except:
+                    raise RuntimeError(
+                        "Failed to calculate in vacuo energies using XTB backend!"
+                    )
+
+        # External backend.
+        else:
             try:
-                E_vac, grad_vac = self._run_xtb(atoms)
+                E_vac, grad_vac = self._external_backend(atoms)
             except:
+                raise
                 raise RuntimeError(
-                    "Failed to calculate in vacuo energies using XTB backend!"
+                    "Failed to calculate in vacuo energies using external backend!"
                 )
 
         # Apply delta-learning corrections using Rascal.

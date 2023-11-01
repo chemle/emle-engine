@@ -120,10 +120,21 @@ path to an AMBER parm7 topology file for the QM region. This can be specified
 using the `--parm7` command-line argument, or via the `EMLE_PARM7` environment
 variable.
 
-(Adding support for an additional backend is as simple as adding a new method to
-the `EMLECalculator` that performs the desired caculation, returning the energy
-in Hartree as a float along with the gradients in units of Hartree / Bohr as a
-`numpy.ndarray`.)
+We also provide a flexible way of supporting external backends via a callback
+function that can be specified via:
+
+```
+emle-server --external-backend module.function
+```
+
+The `function` should take a single argument, an [ase.Atoms](https://wiki.fysik.dtu.dk/ase/ase/atoms.html)
+object for the QM region, and return the energy in Hartree as a float along
+with the gradients in Hartree/Bohr as a `numpy.ndarray`. The external backend
+can also be supplied using the `EMLE_EXTERNAL_BACKEND` environment variable.
+When set, the external backend will take precendence over any other backend.
+If the callback is a function within a local module, then make sure that the
+directory containing the module is in `sys.path`, or is visible to the `emle-server`,
+e.g. the server is launched from the same directory as the module.
 
 ## Delta-learning corrections
 
