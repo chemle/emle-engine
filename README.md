@@ -85,12 +85,12 @@ emle-stop
 The embedding method relies on in vacuo energies and gradients, to which
 corrections are added based on the predictions of the model. At present we
 support the use of
-[DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html),
 [TorchANI](https://githb.com/aiqm/torchani),
+[DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html),
 [ORCA](https://sites.google.com/site/orcainputlibrary/interfaces-and-qmm),
-[PySander](https://ambermd.org/AmberTools.php),
-[SQM](https://ambermd.org/AmberTools.php), or
-[XTB](https://xtb-docs.readthedocs.io/en/latest)
+[SQM](https://ambermd.org/AmberTools.php),
+[XTB](https://xtb-docs.readthedocs.io/en/latest), or
+[PySander](https://ambermd.org/AmberTools.php)
  for the backend, providing reference MM or QM with EMLE embedding, and pure EMLE
 implementations. To specify a backend, use the `--backend` argument when launching
 `emle-server`, e.g:
