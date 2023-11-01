@@ -127,6 +127,10 @@ for the calculation of delta-learning corrections to the in vacuo energies and
 gradients. To use, you will need to specify a model file using the `--rascal-model`
 command-line argument, or via the `EMLE_RASCAL_MODEL` environment variable.
 
+Note that the chosen [backend](#backends) _must_ match the one used to train the model. At
+present this is left to the user to specify. In future we aim to encode the
+backend in the model file so that it can be selected automatically.
+
 ## Device
 
 We currently support `CPU` and `CUDA` as the device for [PyTorch](https://pytorch.org/).
