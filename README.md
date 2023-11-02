@@ -53,8 +53,10 @@ emle-server --help
 ```
 
 (On startup an `emle_settings.yaml` file will be written to the working directory
-containing the settings used to configure the server. Further `emle_pid.txt` and
-`emle_port.txt` files contain the process ID and port of the server.)
+containing the settings used to configure the server. This can be used to re-run
+an existing simulation using the `--config` option or `EMLE_CONFIG` environment
+variable. Additional `emle_pid.txt` and `emle_port.txt` files contain the process
+ID and port of the server.)
 
 To launch a client to send a job to the server:
 
