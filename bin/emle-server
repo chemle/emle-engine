@@ -347,7 +347,7 @@ if set_lambda_interpolate is not None:
 if args["mm_charges"] is None:
     if method == "mm":
         raise ValueError("'mm_charges' are required when using 'mm' embedding")
-    elif lambda_interpolate is not None:
+    elif args["lambda_interpolate"] is not None:
         raise ValueError("'mm_charges' are required when interpolating")
 
 else:
@@ -383,7 +383,7 @@ else:
 
 # Validate the QM indices.
 if args["qm_indices"] is None:
-    if lambda_interpolate is not None:
+    if args["lambda_interpolate"] is not None:
         raise ValueError("'qm_indices' are required when interpolating")
 
 else:
