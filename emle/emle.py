@@ -603,8 +603,8 @@ class EMLECalculator:
             else:
                 # Make sure all values are strings.
                 if isinstance(deepmd_model, (list, tuple)):
-                    for model in deepmd_model:
-                        if not isinstance(model, str):
+                    for mod in deepmd_model:
+                        if not isinstance(mod, str):
                             raise TypeError(
                                 "'deepmd_model' must be of type 'str', or a list of 'str' types"
                             )
