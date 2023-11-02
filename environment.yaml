@@ -10,8 +10,8 @@ dependencies:
   - deepmd-kit
   - eigen
   - pip
-  - pytorch-gpu >= 2.0
-  - python < 3.11
+  - pytorch
+  - python
   - torchani
   - xtb-python
   - pip:
