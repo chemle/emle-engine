@@ -242,7 +242,7 @@ if args["config"] is not None:
 
 # Load the YAML config file.
 if config is not None:
-    # Convert the config file to an absolute path.
+    # Convert to an absolute path.
     config = os.path.abspath(config)
 
     if not os.path.isfile(config):
@@ -280,7 +280,7 @@ else:
 set_lambda_interpolate = args.pop("set_lambda_interpolate")
 args.pop("config")
 
-# Update any None value args with the environment variables.
+# Update any None value args with values from the environment variables.
 for key, value in args.items():
     if value is None:
         try:
