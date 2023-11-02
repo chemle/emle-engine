@@ -11,7 +11,7 @@ dependencies:
   - eigen
   - pip
   - pytorch
-  - python
+  - python < 3.11
   - torchani
   - xtb-python
   - pip:
