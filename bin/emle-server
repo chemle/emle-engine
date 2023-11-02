@@ -249,7 +249,7 @@ if args.log is not None:
     EMLE_LOG = args.log
 
 # If the user has requested to set the interpolation lambda for an existing server,
-# then do this fist.
+# then do this first.
 if args.set_lambda_interpolate is not None:
     # Create a socket and connect.
     sock = Socket()
