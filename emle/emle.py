@@ -538,6 +538,9 @@ class EMLECalculator:
             if not isinstance(plugin_path, str):
                 raise TypeError("'plugin_path' must be of type 'str'")
 
+            # Convert to an absolute path.
+            plugin_path = os.path.abspath(plugin_path)
+
             if not os.path.isdir(plugin_path):
                 raise IOError(f"Unable to locate plugin directory: {plugin_path}")
             self._plugin_path = plugin_path
