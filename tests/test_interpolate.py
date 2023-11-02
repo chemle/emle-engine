@@ -155,3 +155,45 @@ def test_interpolate_steps():
                     nrg_lambda = data[2]
                     nrg_interp = lam * data[4] + (1 - lam) * data[3]
                     assert math.isclose(nrg_lambda, nrg_interp, rel_tol=1e-5)
+
+
+def test_interpolate_steps_config():
+    """
+    Make sure interpolated energies are correct when linearly interpolating lambda
+    over a number of steps when using a config file.
+    """
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Copy files to temporary directory.
+        shutil.copyfile("tests/input/adp.parm7", tmpdir + "/adp.parm7")
+        shutil.copyfile("tests/input/adp_qm.parm7", tmpdir + "/adp_qm.parm7")
+        shutil.copyfile("tests/input/adp.rst7", tmpdir + "/adp.rst7")
+        shutil.copyfile("tests/input/emle_prod.in", tmpdir + "/emle_prod.in")
+        shutil.copyfile("tests/input/config.yaml", tmpdir + "/config.yaml")
+
+        # Set environment variables.
+        os.environ["EMLE_PORT"] = "12345"
+        os.environ["EMLE_CONFIG"] = "config.yaml"
+
+        # Create the sander command.
+        command = "sander -O -i emle_prod.in -p adp.parm7 -c adp.rst7 -o emle.out"
+
+        process = subprocess.run(
+            shlex.split(command),
+            cwd=tmpdir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        assert process.returncode == 0
+
+        # Process the log file to make sure that the interpolated energy
+        # is correct at each step.
+        with open(tmpdir + "/emle_log.txt", "r") as file:
+            for line in file:
+                if not line.startswith("#"):
+                    data = [float(x) for x in line.split()]
+                    lam = data[1]
+                    nrg_lambda = data[2]
+                    nrg_interp = lam * data[4] + (1 - lam) * data[3]
+                    assert math.isclose(nrg_lambda, nrg_interp, rel_tol=1e-5)

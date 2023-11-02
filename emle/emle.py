@@ -335,7 +335,7 @@ class EMLECalculator:
     }
 
     # List of supported backends.
-    _supported_backends = ["torchani", "deepmd", "orca", "pysander", "sqm", "xtb"]
+    _supported_backends = ["torchani", "deepmd", "orca", "sander", "sqm", "xtb"]
 
     # List of supported devices.
     _supported_devices = ["cpu", "cuda"]
@@ -455,11 +455,11 @@ class EMLECalculator:
                 raise TypeError("'model' must be of type 'str'")
 
             # Convert to an absolute path.
-            model = os.path.abspath(model)
+            abs_model = os.path.abspath(model)
 
-            if not os.path.isfile(model):
+            if not os.path.isfile(abs_model):
                 raise IOError(f"Unable to locate EMLE embedding model file: '{model}'")
-            self._model = model
+            self._model = abs_model
         else:
             self._model = self._default_model
 
@@ -539,11 +539,11 @@ class EMLECalculator:
                 raise TypeError("'plugin_path' must be of type 'str'")
 
             # Convert to an absolute path.
-            plugin_path = os.path.abspath(plugin_path)
+            abs_plugin_path = os.path.abspath(plugin_path)
 
-            if not os.path.isdir(plugin_path):
+            if not os.path.isdir(abs_plugin_path):
                 raise IOError(f"Unable to locate plugin directory: {plugin_path}")
-            self._plugin_path = plugin_path
+            self._plugin_path = abs_plugin_path
 
             # Strip whitespace.
             external_backend = external_backend.replace(" ", "")
@@ -586,13 +586,13 @@ class EMLECalculator:
                 raise ValueError("'parm7' must be of type 'str'")
 
             # Convert to an absolute path.
-            parm7 = os.path.abspath(parm7)
+            abs_parm7 = os.path.abspath(parm7)
 
             # Make sure the file exists.
-            if not os.path.isfile(parm7):
+            if not os.path.isfile(abs_parm7):
                 raise IOError(f"Unable to locate the 'parm7' file: '{parm7}'")
 
-            self._parm7 = parm7
+            self._parm7 = abs_parm7
 
         if deepmd_model is not None and backend == "deepmd":
             # We support a str, or list/tuple of strings.
@@ -655,18 +655,18 @@ class EMLECalculator:
             try:
                 from sander import AmberParm
 
-                amber_parm = AmberParm(parm7)
+                amber_parm = AmberParm(self._parm7)
             except:
                 raise IOError(f"Unable to load AMBER topology file: '{parm7}'")
 
             # Store the atom names for the QM region.
             self._sqm_atom_names = [atom.name for atom in amber_parm.atoms]
 
-        # Make sure a QM topology file is specified for the 'pysander' backend.
-        elif backend == "pysander":
+        # Make sure a QM topology file is specified for the 'sander' backend.
+        elif backend == "sander":
             if parm7 is None:
                 raise ValueError(
-                    "'parm7' must be specified when using the 'pysander' backend!"
+                    "'parm7' must be specified when using the 'sander' backend!"
                 )
 
         # Validate and load the Rascal model.
@@ -675,15 +675,15 @@ class EMLECalculator:
                 raise TypeError("'rascal_model' must be of type 'str'")
 
             # Convert to an absolute path.
-            rascal_model = os.path.abspath(rascal_model)
+            abs_rascal_model = os.path.abspath(rascal_model)
 
             # Make sure the model file exists.
-            if not os.path.isfile(rascal_model):
+            if not os.path.isfile(abs_rascal_model):
                 raise IOError(f"Unable to locate Rascal model file: '{rascal_model}'")
 
             # Load the model.
             try:
-                self._rascal_model = pickle.load(open(rascal_model, "rb"))
+                self._rascal_model = pickle.load(open(abs_rascal_model, "rb"))
             except:
                 raise IOError(f"Unable to load Rascal model file: '{rascal_model}'")
 
@@ -733,7 +733,7 @@ class EMLECalculator:
                     raise TypeError("'qm_indices' must be a list of 'int' types")
                 self._qm_indices = qm_indices
             elif isinstance(qm_indices, str):
-                # Take the absolute path.
+                # Convert to an absolute path.
                 qm_indices = os.path.abspath(qm_indices)
 
                 if not os.path.isfile(qm_indices):
@@ -913,7 +913,7 @@ class EMLECalculator:
             "deepmd_model": deepmd_model,
             "rascal_model": rascal_model,
             "parm7": parm7,
-            "qm_indices": qm_indices,
+            "qm_indices": None if qm_indices is None else self._qm_indices,
             "sqm_theory": sqm_theory,
             "lambda_interpolate": lambda_interpolate,
             "interpolate_steps": interpolate_steps,
@@ -1027,15 +1027,15 @@ class EMLECalculator:
                         "Failed to calculate in vacuo energies using ORCA backend!"
                     )
 
-            # PySander.
-            elif self._backend == "pysander":
+            # Sander.
+            elif self._backend == "sander":
                 try:
                     E_vac, grad_vac = self._run_pysander(
                         atoms, self._parm7, is_gas=True
                     )
                 except:
                     raise RuntimeError(
-                        "Failed to calculate in vacuo energies using PySander backend!"
+                        "Failed to calculate in vacuo energies using Sander backend!"
                     )
 
             # SQM.
