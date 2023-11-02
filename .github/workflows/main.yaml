@@ -1,0 +1,57 @@
+name: Build and test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - "main"
+
+jobs:
+  build:
+    name: build (${{ matrix.python-version }}, ${{ matrix.platform.name }})
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      max-parallel: 9
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+        platform:
+          - { name: "windows", os: "windows-latest", shell: "pwsh" }
+          - { name: "linux", os: "ubuntu-latest", shell: "bash -l {0}" }
+          - { name: "macos", os: "macos-latest", shell: "bash -l {0}" }
+    defaults:
+      run:
+        shell: ${{ matrix.platform.shell }}
+    steps:
+#
+      - name: Checkout the repository (commit)
+        uses: actions/checkout@v4
+        if: github.event_name != 'pull_request'
+#
+      - name: Checkout the repository (PR)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+        if: github.event_name == 'pull_request'
+#
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python-version }}
+          activate-environment: emle
+          environment-file: environment.yaml
+          miniforge-version: latest
+          miniforge-variant: Mambaforge
+          use-mamba: true
+#
+      - name: Install pytest
+        run: mamba install pytest
+#
+      - name: Install the package
+        run: pip install .
+#
+      - name: Run the tests
+        run: python -m pytest -svvv --color=yes tests
