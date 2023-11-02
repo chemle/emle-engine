@@ -180,7 +180,7 @@ works for the environment varialbe, e.g. `EMLE_DEVICE=cuda:1`.
 
 ## Embedding method
 
-We support both _electrostatic_, _mechanical_, non-polarisable and _MM_ embedding.
+We support _electrostatic_, _mechanical_, _non-polarisable_, and _MM_ embedding.
 Here non-polarisable emedding uses the EMLE model to predict charges for the
 QM region, but ignores the induced component of the potential. MM embedding
 allows the user to specify fixed MM charges for the QM atoms, with induction
