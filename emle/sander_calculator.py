@@ -21,45 +21,79 @@
 #####################################################################
 
 import ase
-from ase.calculators.calculator import Calculator, CalculatorSetupError, all_changes
+from ase.calculators.calculator import Calculator, all_changes
 import numpy as np
 import sander
 
 
 class SanderCalculator(Calculator):
-    kcalmol_to_eV = ase.units.kcal / ase.units.mol
-    implemented_properties = ["energy", "forces"]
+    def __init__(self, atoms, parm7, is_gas=True):
+        """
+        Constructor.
 
-    def __init__(self, parm7, atoms):
+        Parameters
+        ----------
+
+        atoms : ase.Atoms
+            ASE atoms object containing atomic coordinates matching the topology.
+
+        parm7 : str
+            Path to AMBER topology file.
+
+        is_gas : bool
+            Whether to perform a gas phase calculation.
+        """
+        if not isinstance(atoms, ase.Atoms):
+            raise TypeError("'atoms' must be of type 'ase.atoms.Atoms'")
+
+        if not isinstance(parm7, str):
+            raise TypeError("'parm7' must be of type 'str'")
+
+        if not isinstance(is_gas, bool):
+            raise TypeError("'is_gas' must be of type 'bool'")
+
         super().__init__()
+
         if sander.is_setup():
             sander.cleanup()
-        sander.setup(
-            parm7, atoms.get_positions(), self._get_box(atoms), sander.gas_input()
-        )
+
+        positions = atoms.get_positions()
+        box = self._get_box(atoms)
+
+        if is_gas:
+            sander.setup(parm7, positions, box, sander.gas_input())
+        else:
+            sander.setup(parm7, positions, box, sander.pme_input())
 
     def calculate(
         self, atoms, properties=["energy", "forces"], system_changes=all_changes
     ):
+        # Get the current positions and box.
         super().calculate(atoms, properties, system_changes)
-        sander.set_positions(atoms.get_positions())
+        positions = atoms.get_positions()
         box = self._get_box(atoms)
+
+        # Update the box.
         if box is not None:
             sander.set_box(*box)
 
+        # Update the positions.
+        sander.set_positions(positions)
+
+        from .emle import KCAL_MOL_TO_HARTREE, BOHR_TO_ANGSTROM
+
+        # Compute the energy and forces.
         energy, forces = sander.energy_forces()
         self.results = {
-            "energy": energy.tot * self.kcalmol_to_eV,
-            "forces": np.array(forces).reshape((-1, 3)) * self.kcalmol_to_eV,
+            "energy": energy.tot * KCAL_MOL_TO_HARTREE,
+            "forces": np.array(forces).reshape((-1, 3))
+            * KCAL_MOL_TO_HARTREE
+            / BOHR_TO_ANGSTROM,
         }
 
     @staticmethod
     def _get_box(atoms):
         if not atoms.get_pbc().all():
             return None
-        cell = atoms.get_cell().flatten()
-        if len(cell) == 6:
-            return cell
-        if len(cell) == 3:
-            return np.concatenate([cell, [90.0, 90.0, 90.0]])
-        raise CalculatorSetupError(f"Cell {atoms.cell} is not supported")
+        else:
+            return atoms.get_cell().cellpar()

@@ -25,46 +25,86 @@
 import argparse
 import numpy as np
 import os
+import sys
+import time
 
 from glob import glob
 
 from emle.socket import Socket
 
 # Check whether any EMLE environment variables are set.
-EMLE_HOST = os.getenv("EMLE_HOST")
+config = os.getenv("EMLE_CONFIG")
+host = os.getenv("EMLE_HOST")
 try:
-    EMLE_PORT = int(os.getenv("EMLE_PORT"))
+    port = int(os.getenv("EMLE_PORT"))
 except:
-    EMLE_PORT = None
-EMLE_MODEL = os.getenv("EMLE_MODEL")
-EMLE_METHOD = os.getenv("EMLE_METHOD")
-EMLE_MM_CHARGES = os.getenv("EMLE_MM_CHARGES")
+    port = None
+model = os.getenv("EMLE_MODEL")
+method = os.getenv("EMLE_METHOD")
+mm_charges = os.getenv("EMLE_MM_CHARGES")
 try:
-    EMLE_NUM_CLIENTS = int(os.getenv("EMLE_NUM_CLIENTS"))
+    num_clients = int(os.getenv("EMLE_NUM_CLIENTS"))
 except:
-    EMLE_NUM_CLIENTS = None
-EMLE_BACKEND = os.getenv("EMLE_BACKEND")
-EMLE_DEVICE = os.getenv("EMLE_DEVICE")
-EMLE_LOG = os.getenv("EMLE_LOG", "True").lower() in ("true", "1", "t")
-DEEPMD_MODEL = os.getenv("DEEPMD_MODEL")
-RASCAL_MODEL = os.getenv("RASCAL_MODEL")
-RASCAL_PARM7 = os.getenv("RASCAL_PARM7")
+    num_clients = None
+backend = os.getenv("EMLE_BACKEND")
+external_backend = os.getenv("EMLE_EXTERNAL_BACKEND")
+plugin_path = os.getenv("EMLE_PLUGIN_PATH")
+device = os.getenv("EMLE_DEVICE")
+try:
+    log = int(os.getenv("EMLE_LOG"))
+except:
+    log = 1
+deepmd_model = os.getenv("EMLE_DEEPMD_MODEL")
+rascal_model = os.getenv("EMLE_RASCAL_MODEL")
+parm7 = os.getenv("EMLE_PARM7")
+try:
+    lambda_interpolate = [
+        float(x) for x in os.getenv("EMLE_LAMBDA_INTERPOLATE").split(",")
+    ]
+except:
+    lambda_interpolate = None
+try:
+    interpolate_steps = int(os.getenv("EMLE_INTERPOLATE_STEPS"))
+except:
+    interpolate_steps = None
+qm_indices = os.getenv("EMLE_QM_INDICES")
+sqm_theory = os.getenv("EMLE_SQM_THEORY")
+try:
+    retries = int(os.getenv("EMLE_RETRIES"))
+except:
+    retries = None
 
 # Fallback to default values.
-if not EMLE_HOST:
-    EMLE_HOST = "localhost"
-if not EMLE_PORT:
-    EMLE_PORT = 10000
-if not EMLE_NUM_CLIENTS:
-    EMLE_NUM_CLIENTS = 1
-if not EMLE_BACKEND:
-    EMLE_BACKEND = "torchani"
-if not EMLE_METHOD:
-    EMLE_METHOD = "electrostatic"
-if not EMLE_MM_CHARGES:
-    EMLE_MM_CHARGES = None
-if not EMLE_DEVICE:
-    EMLE_DEVICE = None
+if not host:
+    host = "localhost"
+if not port:
+    port = 10000
+if not num_clients:
+    num_clients = 1
+if not retries:
+    retries = 100
+
+# Assemble the environment variables into a dictionary.
+env = {
+    "host": host,
+    "port": port,
+    "model": model,
+    "method": method,
+    "mm_charges": mm_charges,
+    "num_clients": num_clients,
+    "backend": backend,
+    "external_backend": external_backend,
+    "plugin_path": plugin_path,
+    "device": device,
+    "deepmd_model": deepmd_model,
+    "rascal_model": rascal_model,
+    "lambda_interpolate": lambda_interpolate,
+    "interpolate_steps": interpolate_steps,
+    "parm7": parm7,
+    "qm_indices": qm_indices,
+    "sqm_theory": sqm_theory,
+    "log": log,
+}
 
 
 def validate_clients(num_clients):
@@ -83,13 +123,16 @@ def validate_clients(num_clients):
 parser = argparse.ArgumentParser(description="EMLE server")
 
 # parse command-line options
-parser.add_argument("--host", type=str, help="the hostname.", required=False)
+parser.add_argument(
+    "--config", type=str, help="path to a YAML configuration file", required=False
+)
+parser.add_argument("--host", type=str, help="the hostname", required=False)
 parser.add_argument("--port", type=str, help="the port number", required=False)
 parser.add_argument(
     "--model", type=str, help="path to an EMLE model file", required=False
 )
 parser.add_argument(
-    "--embedding",
+    "--method",
     type=str,
     help="the embedding method to use",
     choices=["electrostatic", "mechanical", "nonpol", "mm"],
@@ -107,13 +150,24 @@ parser.add_argument(
     type=validate_clients,
     help="the maximum number of client connections to allow",
     required=False,
-    default=1,
 )
 parser.add_argument(
     "--backend",
     type=str,
     help="the in vacuo backend",
-    choices=["deepmd", "rascal", "torchani", "orca"],
+    choices=["torchani", "deepmd", "orca", "sander", "sqm", "xtb"],
+    required=False,
+)
+parser.add_argument(
+    "--external-backend",
+    type=str,
+    help="the external backend as a Python callback function, e.g. 'module.function'",
+    required=False,
+)
+parser.add_argument(
+    "--plugin-path",
+    type=str,
+    help="a path containing any modules/scripts for external backends",
     required=False,
 )
 parser.add_argument(
@@ -126,8 +180,8 @@ parser.add_argument(
 parser.add_argument(
     "--deepmd-model",
     type=str,
-    nargs="+",
-    help="path to DeepMD model file(s)",
+    nargs="*",
+    help="path to DeePMD model file(s)",
     required=False,
 )
 parser.add_argument(
@@ -137,59 +191,176 @@ parser.add_argument(
     required=False,
 )
 parser.add_argument(
-    "--rascal-parm7",
+    "--lambda-interpolate",
+    type=float,
+    nargs="*",
+    help="the initial value of lambda for interpolating between MM and EMLE potentials, or the min and max values",
+    required=False,
+)
+parser.add_argument(
+    "--interpolate-steps",
+    type=int,
+    help="the number of steps over which to interpolate lambda between its min and max values",
+    required=False,
+)
+parser.add_argument(
+    "--set-lambda-interpolate",
+    type=float,
+    help="the value of lambda for interpolating between MM and EMLE potentials",
+    required=False,
+)
+parser.add_argument(
+    "--parm7",
     type=str,
-    help="path to the parm7 file used to train the Rascal model",
+    help="path to the parm7 topology file for the QM region",
+    required=False,
+)
+parser.add_argument(
+    "--qm-indices",
+    type=str,
+    nargs="*",
+    help="the zero-based indices of the atoms within the QM region",
+    required=False,
+)
+parser.add_argument(
+    "--sqm-theory",
+    type=str,
+    help="the semi-empirical theory to use for the QM region when using the SQM backend",
     required=False,
 )
 parser.add_argument(
     "--log",
-    action=argparse.BooleanOptionalAction,
-    help="whether to log energies",
+    type=int,
+    help="The frequency of logging energies to file",
     required=False,
 )
-args = parser.parse_args()
+args = vars(parser.parse_args())
 
-# Overload using command-line arguments.
-if args.host is not None:
-    EMLE_HOST = args.host
-if args.port is not None:
-    EMLE_PORT = args.port
-if args.model is not None:
-    EMLE_MODEL = args.model
-if args.embedding is not None:
-    EMLE_METHOD = args.embedding
-if args.mm_charges is not None:
-    EMLE_MM_CHARGES = args.mm_charges
-if args.num_clients is not None:
-    EMLE_NUM_CLIENTS = args.num_clients
-if args.backend is not None:
-    EMLE_BACKEND = args.backend
-if args.device is not None:
-    EMLE_DEVICE = args.device
-if args.deepmd_model is not None:
-    DEEPMD_MODEL = args.deepmd_model
-if args.rascal_model is not None:
-    RASCAL_MODEL = args.rascal_model
-if args.rascal_parm7 is not None:
-    RASCAL_PARM7 = args.rascal_parm7
-if args.log is not None:
-    EMLE_LOG = args.log
+# Pop the config.
+if args["config"] is not None:
+    config = args.pop("config")
 
-# Validate the MM charges. Don't bother doing this if the user has
-# specified "electrostatic" embedding.
-if EMLE_METHOD == "mm":
-    if EMLE_MM_CHARGES is None:
+# Load the YAML config file.
+if config is not None:
+    # Convert to an absolute path.
+    config = os.path.abspath(config)
+
+    if not os.path.isfile(config):
+        raise FileNotFoundError(f"Config file not found: '{config}'")
+
+    # Try to read the config into a dictionary.
+    try:
+        import yaml
+
+        with open(config, "r") as f:
+            config = yaml.safe_load(f)
+
+    except Exception as e:
+        raise ValueError(f"Could not load YAML config file: {e}")
+
+    # Reparse the command-line arguments using the existing config
+    # as a Namespace. Any non-default arguments from the command line
+    # will override those in the config.
+    args = vars(parser.parse_args(namespace=argparse.Namespace(**config)))
+
+# Overload environment variables using command-line arguments, popping options
+# that are specific to the server, not the EMLECalculator.
+if args["host"] is not None:
+    host = args.pop("host")
+else:
+    args.pop("host")
+if args["port"] is not None:
+    port = args.pop("port")
+else:
+    args.pop("port")
+if args["num_clients"] is not None:
+    num_clients = args.pop("num_clients")
+else:
+    args.pop("num_clients")
+set_lambda_interpolate = args.pop("set_lambda_interpolate")
+args.pop("config")
+
+# Update any None value args with values from the environment variables.
+for key, value in args.items():
+    if value is None:
+        try:
+            args[key] = env[key]
+        except:
+            pass
+
+# If the user has requested to set the interpolation lambda for an existing server,
+# then do this first.
+if set_lambda_interpolate is not None:
+    # Create a socket and connect.
+    sock = Socket()
+
+    # Try to connect to the server. We try 100 times, waiting for 2 seconds
+    # following each failure. This should (hopefully) give the server enough
+    # time to start.
+    is_connected = False
+    for x in range(0, retries):
+        try:
+            print("Trying to establish a connection with the EMLE server...")
+            sock.connect(host, port)
+        except:
+            print("Failed. Retrying in 2 seconds...")
+            time.sleep(2)
+        else:
+            print("Connection established!")
+            is_connected = True
+            break
+
+    if not is_connected:
+        raise ConnectionError(
+            f"Unable to connect to EMLE server at {host}:{port} "
+            "Please check that it is running."
+        )
+
+    # Prepend the lambda update message.
+    msg = f"emlelambda:{args.set_lambda_interpolate:.5f}"
+
+    # Prepend the message length.
+    msg = f"{len(msg)}:{msg}"
+
+    print(
+        f"Requesting EMLE server updates interpolation lambda to {set_lambda_interpolate:.5f}"
+    )
+    sock.send(msg, len(msg))
+
+    msg, err = sock.receive()
+
+    if msg == "emlelambdaset":
+        print("Received notice that the EMLE server has updated lambda")
+    elif msg == "emlefail":
+        print("Received notice that the request failed.")
+        print(f"[ERROR] {err}")
+    else:
+        raise RuntimeError(f"Invalid message received from EMLE server: '{msg}'")
+
+    # Exit the script.
+    sys.exit()
+
+
+# Handle special case formatting for environment variables.
+
+# Validate the MM charges.
+if args["mm_charges"] is None:
+    if method == "mm":
         raise ValueError("'mm_charges' are required when using 'mm' embedding")
+    elif args["lambda_interpolate"] is not None:
+        raise ValueError("'mm_charges' are required when interpolating")
 
+else:
     # Whether we are parsing a list of charges, rather than a file.
     is_list = False
 
-    if isinstance(EMLE_MM_CHARGES, str):
+    if isinstance(args["mm_charges"], str):
         # If this isn't a path to a file, try splitting on commas.
-        if not os.path.isfile(EMLE_MM_CHARGES):
+        if not os.path.isfile(args["mm_charges"]) or not os.path.isfile(
+            os.path.abspath(args["mm_charges"])
+        ):
             try:
-                EMLE_MM_CHARGES = EMLE_MM_CHARGES.split(",")
+                args["mm_charges"] = args["mm_charges"].split(",")
                 is_list = True
             except:
                 raise ValueError(
@@ -197,21 +368,54 @@ if EMLE_METHOD == "mm":
                 )
 
     # A single entry list is assumed to be the path to a file.
-    elif isinstance(EMLE_MM_CHARGES, list):
-        if len(EMLE_MM_CHARGES) == 1:
-            EMLE_MM_CHARGES = EMLE_MM_CHARGES[0]
+    elif isinstance(args["mm_charges"], list):
+        if len(args["mm_charges"]) == 1:
+            args["mm_charges"] = args["mm_charges"][0]
         else:
             is_list = True
 
     # Try to parse lists of MM charges as a NumPy array of floats.
     if is_list:
         try:
-            EMLE_MM_CHARGES = np.array([float(x) for x in EMLE_MM_CHARGES])
+            args["mm_charges"] = np.array([float(x) for x in args["mm_charges"]])
         except:
             raise TypeError("Unable to parse MM charges as an array of floats")
 
+# Validate the QM indices.
+if args["qm_indices"] is None:
+    if args["lambda_interpolate"] is not None:
+        raise ValueError("'qm_indices' are required when interpolating")
+
 else:
-    EMLE_MM_CHARGES = None
+    # Whether we are parsing a list of indices, rather than a file.
+    is_list = False
+
+    if isinstance(args["qm_indices"], str):
+        # If this isn't a path to a file, try splitting on commas.
+        if not os.path.isfile(args["qm_indices"]) or not os.path.isfile(
+            os.path.abspath(args["qm_indices"])
+        ):
+            try:
+                args["qm_indices"] = args["qm_indices"].split(",")
+                is_list = True
+            except:
+                raise ValueError(
+                    "Unable to parse EMLE_QM_INDICES environment variable as a comma-separated list of ints"
+                )
+
+    # A single entry list is assumed to be the path to a file.
+    elif isinstance(args["qm_indices"], list):
+        if len(args["qm_indices"]) == 1:
+            args["qm_indices"] = args["qm_indices"][0]
+        else:
+            is_list = True
+
+    # Try to parse a lists of QM indices into a list of ints.
+    if is_list:
+        try:
+            args["qm_indices"] = [int(x) for x in args["qm_indices"]]
+        except:
+            raise TypeError("Unable to parse QM indices as a list of indices")
 
 # Work out the DeePMD model. We allow the following formatting:
 #    1) A path to a single file.
@@ -219,38 +423,41 @@ else:
 #    3) A list of files, comma-separated.
 #
 # The first two can be found using glob, if empty then try splitting on ",".
-if DEEPMD_MODEL:
-    if isinstance(DEEPMD_MODEL, list) and len(DEEPMD_MODEL) == 1:
-        DEEPMD_MODEL = DEEPMD_MODEL[0]
-    if isinstance(DEEPMD_MODEL, str):
+if args["deepmd_model"] is not None:
+    if isinstance(args["deepmd_model"], list) and len(args["deepmd_model"]) == 1:
+        args["deepmd_model"] = args["deepmd_model"][0]
+    if isinstance(args["deepmd_model"], str):
         # Remove whitespace.
-        DEEPMD_MODEL = DEEPMD_MODEL.replace(" ", "")
+        args["deepmd_model"] = args["deepmd_model"].replace(" ", "")
 
         # Try globbing.
-        models = glob(DEEPMD_MODEL)
+        models = glob(args["deepmd_model"])
 
         # No matches.
         if not models:
-            models = DEEPMD_MODEL.split(",")
+            models = args["deepmd_model"].split(",")
 
             # Invalid formatting.
             if len(models) == 1:
                 raise ValueError(
-                    f"DeePMD model not found, or invalid formatting: '{DEEPMD_MODEL}'"
+                    f"DeePMD model not found, or invalid formatting: '{args['deepmd_model']}'"
                 )
             else:
-                DEEPMD_MODEL = models
+                args["deepmd_model"] = models
         else:
-            DEEPMD_MODEL = models
+            args["deepmd_model"] = models
 
-print(f"Starting ML-MM server using {EMLE_BACKEND} backend...")
+if args["external_backend"] is None:
+    print(f"Starting ML-MM server using {args['backend']} backend...")
+else:
+    print(f"Starting ML-MM server using external backend...")
 
 # Create the EMLE socket.
 sock = Socket()
 
 try:
-    sock.bind(EMLE_HOST, EMLE_PORT)
-    sock.listen(EMLE_NUM_CLIENTS)
+    sock.bind(host, port)
+    sock.listen(num_clients)
 
     # Write the PID to file in the current directory.
     with open("emle_pid.txt", "w") as f:
@@ -258,11 +465,9 @@ try:
 
     # Write the port to file in the current directory.
     with open("emle_port.txt", "w") as f:
-        f.write(f"{EMLE_PORT}\n")
+        f.write(f"{port}\n")
 except:
-    raise OSError(
-        f"Server address already in use: ({EMLE_HOST}, {EMLE_PORT})"
-    ) from None
+    raise OSError(f"Server address already in use: ({host}, {port})") from None
 
 
 # Import the EMLE calculator here so that we avoid the import overhead when the
@@ -272,17 +477,7 @@ from emle.emle import EMLECalculator
 
 # Initialise the EMLE calculator.
 print("Initialising EMLE calculator...")
-mle_calculator = EMLECalculator(
-    model=EMLE_MODEL,
-    method=EMLE_METHOD,
-    backend=EMLE_BACKEND,
-    mm_charges=EMLE_MM_CHARGES,
-    deepmd_model=DEEPMD_MODEL,
-    rascal_model=RASCAL_MODEL,
-    rascal_parm7=RASCAL_PARM7,
-    device=EMLE_DEVICE,
-    log=EMLE_LOG,
-)
+mle_calculator = EMLECalculator(**args)
 
 while True:
     print("Waiting for a connection...")
@@ -298,6 +493,20 @@ while True:
                     mle_calculator.run(path=path)
                     msg = "7:emlefin"
                     print("Finished!")
+                except Exception as e:
+                    msg = f"emlefail:{str(e)}"
+                    msg = f"{len(msg)}:{msg}"
+                    print("Failed!")
+
+                # Tell the client that we have finished.
+                connection.send(msg, len(msg))
+            elif msg == "emlelambda":
+                # Try to update the interpolation lambda parameter.
+                print("Updating interpolation lambda...")
+                try:
+                    mle_calculator.set_lambda_interpolate(float(path))
+                    msg = "13:emlelambdaset"
+                    print("Lambda set!")
                 except Exception as e:
                     msg = f"emlefail:{str(e)}"
                     msg = f"{len(msg)}:{msg}"

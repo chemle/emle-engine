@@ -1,0 +1,21 @@
+Single point
+ &cntrl
+  imin=0,
+  dt=0.001,
+  nstlim=1,
+  ntpr=1,
+  ifqnt=1,
+  cut=8.0,
+/
+ &qmmm
+  qmmask=':1-3',
+  qmcharge=0,
+  qm_theory='EXTERN',
+  qm_ewald=0
+  qmcut=8.0,
+/
+ &orc
+  method='BLYP',
+  basis='6-31G*',
+  num_threads=4
+/

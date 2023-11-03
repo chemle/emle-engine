@@ -1,0 +1,22 @@
+Production
+ &cntrl
+  imin=0,
+  nstlim=20,
+  dt=0.001,
+  tempi=300.0,
+  temp0=300.0,
+  ifqnt=1,
+  cut=8.0,
+/
+ &qmmm
+  qmmask=':1-3',
+  qmcharge=0,
+  qm_theory='EXTERN',
+  qm_ewald=0
+  qmcut=8.0,
+/
+ &orc
+  method='BLYP',
+  basis='6-31G*',
+  num_threads=4
+/

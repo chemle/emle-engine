@@ -10,8 +10,9 @@ dependencies:
   - deepmd-kit
   - eigen
   - pip
-  - pytorch-gpu >= 2.0
+  - pytorch
   - python < 3.11
   - torchani
+  - xtb-python
   - pip:
     - git+https://github.com/lab-cosmo/librascal.git#egg=rascal[complete]

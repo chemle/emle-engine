@@ -37,7 +37,7 @@ if len(sys.argv) != 2:
 
 # Get the ORCA input file name and validate.
 orca_input = sys.argv[1]
-if not os.path.exists(orca_input):
+if not os.path.isfile(orca_input):
     raise ValueError(f"Couldn't locate ORCA input file: {orca_input}")
 
 # Try to start and EMLE server in the background. This will
@@ -91,8 +91,8 @@ for x in range(0, EMLE_RETRIES):
         break
 
 if not is_connected:
-    raise OSError(
-        "Unable to establish connection with the EMLE server. "
+    raise ConnectionError(
+        f"Unable to connect to EMLE server at {EMLE_HOST}:{EMLE_PORT} "
         "Please check that it is running."
     )
 
