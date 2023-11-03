@@ -1153,7 +1153,7 @@ class EMLECalculator:
                 lam = self._lambda_interpolate[0]
             else:
                 lam = self._lambda_interpolate[0] + (
-                    self._step / self._interpolate_steps
+                    (self._step / (self._interpolate_steps - 1))
                 ) * (self._lambda_interpolate[1] - self._lambda_interpolate[0])
                 if lam < 0.0:
                     lam = 0.0
