@@ -212,7 +212,7 @@ is logged.) The output will look something like the following, where the
 columns specify the current step, the in vacuo energy and the total energy.
 
 ```
-#     Step       E_vac (Eh/bohr)       E_tot (Eh/bohr)
+#     Step            E_vac (Eh)            E_tot (Eh)
          0     -495.724193647246     -495.720214843750
          1     -495.724193662147     -495.720214843750
          2     -495.722049429755     -495.718475341797
@@ -292,7 +292,7 @@ similar to that shown below. The columns specify the current step, the current
 λ value, the energy at the current λ value, and the pure MM and EMLE energies.
 
 ```
-#     Step                     λ        E(λ) (Eh/bohr)      E(λ=0) (Eh/bohr)      E(λ=1) (Eh/bohr)
+#     Step                     λ             E(λ) (Eh)           E(λ=0) (Eh)           E(λ=1) (Eh)
          0        0.000000000000       -0.031915396452       -0.031915396452     -495.735900878906
          5        0.100000000000      -49.588279724121       -0.017992891371     -495.720855712891
         10        0.200000000000      -99.163040161133       -0.023267691955     -495.722106933594
