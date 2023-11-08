@@ -1643,7 +1643,7 @@ class EMLECalculator:
     def _get_outer(a, device):
         """
         Internal method, calculates stacked matrix of outer products of a
-        list of vectors
+        list of vectors.
 
         Parameters
         ----------
