@@ -27,6 +27,13 @@ import sander
 
 
 class SanderCalculator(Calculator):
+    """An ASE calculator for the AMBER Sander molecular dynamics engine."""
+
+    implemented_properties = [
+        "energy",
+        "forces",
+    ]
+
     def __init__(self, atoms, parm7, is_gas=True):
         """
         Constructor.
