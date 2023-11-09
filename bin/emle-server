@@ -32,6 +32,24 @@ from glob import glob
 
 from emle.socket import Socket
 
+
+# Copied from distutils.util.strtobool, which is deprecated.
+def strtobool(val):
+    """Convert a string representation of truth to true (1) or false (0).
+
+    True values are case insensitive 'y', 'yes', 't', 'true', 'on', and '1'.
+    false values are case insensitive 'n', 'no', 'f', 'false', 'off', and '0'.
+    Raises ValueError if 'val' is anything else.
+    """
+    val = val.replace(" ", "").lower()
+    if val in ("y", "yes", "t", "true", "on", "1"):
+        return True
+    elif val in ("n", "no", "f", "false", "off", "0"):
+        return False
+    else:
+        raise ValueError("invalid truth value %r" % (val,))
+
+
 # Check whether any EMLE environment variables are set.
 config = os.getenv("EMLE_CONFIG")
 host = os.getenv("EMLE_HOST")
@@ -70,6 +88,10 @@ except:
 qm_indices = os.getenv("EMLE_QM_INDICES")
 sqm_theory = os.getenv("EMLE_SQM_THEORY")
 try:
+    restart = strtobool(os.getenv("EMLE_RESTART"))
+except:
+    restart = False
+try:
     retries = int(os.getenv("EMLE_RETRIES"))
 except:
     retries = None
@@ -103,6 +125,7 @@ env = {
     "parm7": parm7,
     "qm_indices": qm_indices,
     "sqm_theory": sqm_theory,
+    "restart": restart,
     "log": log,
 }
 
@@ -226,6 +249,11 @@ parser.add_argument(
     "--sqm-theory",
     type=str,
     help="the semi-empirical theory to use for the QM region when using the SQM backend",
+    required=False,
+)
+parser.add_argument(
+    "--restart",
+    action=argparse.BooleanOptionalAction,
     required=False,
 )
 parser.add_argument(
@@ -448,6 +476,8 @@ if args["deepmd_model"] is not None:
             args["deepmd_model"] = models
 
 if args["external_backend"] is None:
+    if backend is None:
+        args["backend"] = "torchani"
     print(f"Starting ML-MM server using {args['backend']} backend...")
 else:
     print(f"Starting ML-MM server using external backend...")

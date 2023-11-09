@@ -364,6 +364,7 @@ class EMLECalculator:
         sqm_theory="DFTB3",
         lambda_interpolate=None,
         interpolate_steps=None,
+        restart=False,
         device=None,
         log=1,
     ):
@@ -439,6 +440,10 @@ class EMLECalculator:
         sqm_theory : str
             The QM theory to use when using the SQM backend. See the AmberTools
             manual for the supported theory levels for your version of AmberTools.
+
+        restart : bool
+            Whether this is a restart simulation with sander. If True, then energies
+            are logged immediately.
 
         device : str
             The name of the device to be used by PyTorch. Options are "cpu"
@@ -704,6 +709,13 @@ class EMLECalculator:
             # Flag that delta-learning corrections will be applied.
             self._is_delta = True
 
+        if restart is not None:
+            if not isinstance(restart, bool):
+                raise TypeError("'restart' must be of type 'bool'")
+        else:
+            restart = False
+        self._restart = restart
+
         # Validate the interpolation lambda parameter.
         if lambda_interpolate is not None:
             if self._backend == "rascal":
@@ -899,10 +911,11 @@ class EMLECalculator:
         # Initialise the number of steps. (Calls to the calculator.)
         self._step = 0
 
-        # Flag whether that this is the first step since lambda has been set.
-        # This is used to avoid writing duplicate energy records since sander
-        # will call orca on startup, i.e. not just after each integration step.
-        self._is_first_step = True
+        # Flag whether to skip logging the first call to the server. This is
+        # used to avoid writing duplicate energy records since sander will call
+        # orca on startup when not performing a restart simulation,  i.e. not
+        # just after each integration step.
+        self._is_first_step = not self._restart
 
         # Store the settings as a dictionary.
         self._settings = {
@@ -917,6 +930,7 @@ class EMLECalculator:
             "sqm_theory": sqm_theory,
             "lambda_interpolate": lambda_interpolate,
             "interpolate_steps": interpolate_steps,
+            "restart": restart,
             "device": device,
             "plugin_path": plugin_path,
             "log": log,
@@ -1152,8 +1166,9 @@ class EMLECalculator:
             if len(self._lambda_interpolate) == 1:
                 lam = self._lambda_interpolate[0]
             else:
+                offset = int(not self._restart)
                 lam = self._lambda_interpolate[0] + (
-                    (self._step / (self._interpolate_steps - 1))
+                    (self._step / (self._interpolate_steps - offset))
                 ) * (self._lambda_interpolate[1] - self._lambda_interpolate[0])
                 if lam < 0.0:
                     lam = 0.0
@@ -1199,9 +1214,7 @@ class EMLECalculator:
                             f"#{'Step':>9}{'λ':>22}{'E(λ) (Eh)':>22}{'E(λ=0) (Eh)':>22}{'E(λ=1) (Eh)':>22}\n"
                         )
                     else:
-                        f.write(
-                            f"#{'Step':>9}{'E_vac (Eh)':>22}{'E_tot (Eh)':>22}\n"
-                        )
+                        f.write(f"#{'Step':>9}{'E_vac (Eh)':>22}{'E_tot (Eh)':>22}\n")
                 # Write the record.
                 if self._is_interpolate:
                     f.write(
@@ -1270,7 +1283,7 @@ class EMLECalculator:
             self._lambda_interpolate = [lambda_interpolate]
 
         # Reset the first step flag.
-        self._is_first_step = True
+        self._is_first_step = not self._restart
 
     def _get_E(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
         """
