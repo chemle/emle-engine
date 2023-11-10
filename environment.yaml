@@ -10,6 +10,7 @@ dependencies:
   - deepmd-kit
   - eigen
   - pip
+  - pybind11
   - pytorch
   - python < 3.11
   - torchani
