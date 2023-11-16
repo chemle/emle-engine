@@ -347,7 +347,7 @@ class EMLECalculator:
     _is_delta = False
 
     # Default to no external callback.
-    is_external_backend = False
+    _is_external_backend = False
 
     def __init__(
         self,
@@ -584,7 +584,7 @@ class EMLECalculator:
             self._external_backend = getattr(module, function)
 
             # Flag that an external backend is being used.
-            self.is_external_backend = True
+            self._is_external_backend = True
 
         if parm7 is not None:
             if not isinstance(parm7, str):
@@ -1013,7 +1013,7 @@ class EMLECalculator:
         # energies and (optionally) gradients.
 
         # Internal backends.
-        if not self.is_external_backend:
+        if not self._is_external_backend:
             # TorchANI.
             if self._backend == "torchani":
                 try:
