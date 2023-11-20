@@ -386,7 +386,7 @@ class EMLECalculator:
                 "mm":
                     MM charges are used for the core charge and valence charges
                     are set to zero. If this option is specified then the user
-                    should also specivfy the MM charges for atoms in the QM
+                    should also specify the MM charges for atoms in the QM
                     region.
 
         backend : str
