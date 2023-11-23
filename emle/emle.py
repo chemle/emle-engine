@@ -1577,7 +1577,7 @@ class EMLECalculator:
         return (
             E_tot.item() * HARTREE_TO_KJ_MOL,
             (-grad_qm * HARTREE_TO_KJ_MOL * NANOMETER_TO_BOHR).tolist(),
-            (-grad_mm * HARTREE_TO_KJ_MOL * NANOMETER_TO_BOHR).tolist(),
+            (-grad_mm[:num_mm_atoms] * HARTREE_TO_KJ_MOL * NANOMETER_TO_BOHR).tolist(),
         )
 
     def _get_E(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
