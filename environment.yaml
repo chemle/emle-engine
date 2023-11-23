@@ -16,4 +16,4 @@ dependencies:
   - torchani
   - xtb-python
   - pip:
-    - git+https://github.com/lab-cosmo/librascal.git#egg=rascal[complete]
+    - git+https://github.com/lab-cosmo/librascal.git
