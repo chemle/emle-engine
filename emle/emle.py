@@ -1575,7 +1575,7 @@ class EMLECalculator:
 
         # Return the energy and forces in OpenMM units.
         return (
-            E_tot * HARTREE_TO_KJ_MOL,
+            E_tot.item() * HARTREE_TO_KJ_MOL,
             (-grad_qm * HARTREE_TO_KJ_MOL * NANOMETER_TO_BOHR).tolist(),
             (-grad_mm * HARTREE_TO_KJ_MOL * NANOMETER_TO_BOHR).tolist(),
         )
