@@ -1105,7 +1105,7 @@ class EMLECalculator:
         xyz_mm_bohr = xyz_mm * ANGSTROM_TO_BOHR
 
         mol_soap, dsoap_dxyz = self._get_soap(atomic_numbers, xyz_qm, gradient=True)
-        dsoap_dxyz_qm_bohr = dsoap_dxyz / ANGSTROM_TO_BOHR
+        dsoap_dxyz_qm_bohr = dsoap_dxyz * BOHR_TO_ANGSTROM
 
         s, ds_dsoap = self._get_s(mol_soap, self._species_id, gradient=True)
         chi, dchi_dsoap = self._get_chi(mol_soap, self._species_id, gradient=True)
@@ -1462,7 +1462,7 @@ class EMLECalculator:
         xyz_mm_bohr = xyz_mm * ANGSTROM_TO_BOHR
 
         mol_soap, dsoap_dxyz = self._get_soap(atomic_numbers, xyz_qm, gradient=True)
-        dsoap_dxyz_qm_bohr = dsoap_dxyz / ANGSTROM_TO_BOHR
+        dsoap_dxyz_qm_bohr = dsoap_dxyz * BOHR_TO_ANGSTROM
 
         s, ds_dsoap = self._get_s(mol_soap, self._species_id, gradient=True)
         chi, dchi_dsoap = self._get_chi(mol_soap, self._species_id, gradient=True)
