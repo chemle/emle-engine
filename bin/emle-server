@@ -72,6 +72,7 @@ try:
     log = int(os.getenv("EMLE_LOG"))
 except:
     log = 1
+orca_template = os.getenv("EMLE_ORCA_TEMPLATE")
 deepmd_model = os.getenv("EMLE_DEEPMD_MODEL")
 rascal_model = os.getenv("EMLE_RASCAL_MODEL")
 parm7 = os.getenv("EMLE_PARM7")
@@ -126,6 +127,7 @@ env = {
     "qm_indices": qm_indices,
     "sqm_theory": sqm_theory,
     "restart": restart,
+    "orca_template": orca_template,
     "log": log,
 }
 
@@ -254,6 +256,12 @@ parser.add_argument(
 parser.add_argument(
     "--restart",
     action=argparse.BooleanOptionalAction,
+    required=False,
+)
+parser.add_argument(
+    "--orca-template",
+    type=str,
+    help="the path to a template ORCA input file (only used when using the ORCA backend via Sire)",
     required=False,
 )
 parser.add_argument(

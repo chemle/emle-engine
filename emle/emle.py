@@ -368,6 +368,7 @@ class EMLECalculator:
         interpolate_steps=None,
         restart=False,
         device=None,
+        orca_template=None,
         log=1,
     ):
         """Constructor.
@@ -450,6 +451,10 @@ class EMLECalculator:
         device : str
             The name of the device to be used by PyTorch. Options are "cpu"
             or "cuda".
+
+        orca_template: str
+            The path to a template ORCA input file. This is required when using
+            the ORCA backend when using emle-engine with Sire.
 
         log : int
             The frequency of logging energies to file.
@@ -828,6 +833,18 @@ class EMLECalculator:
         else:
             self._log = log
 
+        if orca_template is not None:
+            if not isinstance(template, str):
+                raise TypeError("'orca_template' must be of type 'str'")
+            # Convert to an absolute path.
+            abs_orca_template = os.path.abspath(orca_template)
+
+            if not os.path.isfile(abs_orca_template):
+                raise IOError(f"Unable to locate ORCA template file: '{orca_template}'")
+            self._orca_template = abs_orca_template
+        else:
+            self._orca_template = None
+
         # Initialise a null SanderCalculator object.
         self._sander_calculator = None
 
@@ -939,6 +956,7 @@ class EMLECalculator:
             "interpolate_steps": interpolate_steps,
             "restart": restart,
             "device": device,
+            "orca_template": None if orca_template is None else self._orca_template,
             "plugin_path": plugin_path,
             "log": log,
         }
@@ -1396,9 +1414,12 @@ class EMLECalculator:
 
             # ORCA.
             elif self._backend == "orca":
-                raise ValueError(
-                    "Sire interface is currently unsupported when using the ORCA backend!"
-                )
+                try:
+                    E_vac, grad_vac = self._run_orca(orca_input, xyz_file_qm)
+                except:
+                    raise RuntimeError(
+                        "Failed to calculate in vacuo energies using ORCA backend!"
+                    )
 
             # Sander.
             elif self._backend == "sander":
@@ -2446,7 +2467,9 @@ class EMLECalculator:
             -(force[0] * EV_TO_HARTREE * BOHR_TO_ANGSTROM) / (x + 1),
         )
 
-    def _run_orca(self, orca_input, xyz_file_qm):
+    def _run_orca(
+        self, orca_input=None, xyz_file_qm=None, atomic_numbers=None, xyz_qm=None
+    ):
         """
         Internal function to compute in vacuo energies and gradients using
         ORCA.
@@ -2470,15 +2493,60 @@ class EMLECalculator:
             The in vacuo QM gradient in Eh/Bohr.
         """
 
-        if not isinstance(orca_input, str):
+        if orca_input is not None and not isinstance(orca_input, str):
             raise TypeError("'orca_input' must be of type 'str'.")
-        if not os.path.isfile(orca_input):
+        if orca_input is not None and not os.path.isfile(orca_input):
             raise IOError(f"Unable to locate the ORCA input file: {orca_input}")
 
-        if not isinstance(xyz_file_qm, str):
+        if xyz_qm_file is not None and not isinstance(xyz_file_qm, str):
             raise TypeError("'xyz_file_qm' must be of type 'str'.")
-        if not os.path.isfile(xyz_file_qm):
+        if xyz_qm_file is not None and not os.path.isfile(xyz_file_qm):
             raise IOError(f"Unable to locate the ORCA QM xyz file: {xyz_file_qm}")
+
+        if atomic_numbers is not None and not isinstance(atomic_numbers, np.ndarray):
+            raise TypeError("'atomic_numbers' must be of type 'numpy.ndarray'")
+        if atomic_numbers is not None and atomic_numbers.dtype != np.int64:
+            raise TypeError("'atomic_numbers' must have dtype 'int'.")
+
+        if xyz_qm is not None and not isinstance(xyz_qm, np.ndarray):
+            raise TypeError("'xyz_qm' must be of type 'numpy.ndarray'")
+        if xyz_qm is not None and xyz_qm.dtype != np.float64:
+            raise TypeError("'xyz_qm' must have dtype 'float64'.")
+
+        # ORCA input files take precedence.
+        is_orca_input = True
+        if orca_input is None or xyz_file_qm is None:
+            if atomic_numbers is None:
+                raise ValueError("No atomic numbers specified!")
+            if xyz_qm is None:
+                raise ValueError("No QM coordinates specified!")
+
+            is_orca_input = False
+
+            if self._orca_template is None:
+                raise ValueError("No ORCA template file specified!")
+
+            fd_orca_input, orca_input = tempfile.mkstemp(
+                prefix="orc_job_", suffix=".inp", text=True
+            )
+            fd_xyz_file_qm, xyz_file_qm = tempfile.mkstemp(
+                prefix="inpfile_", suffix=".xyz", text=True
+            )
+
+            # Copy the template file.
+            shutil.copyfile(self._orca_template, orca_input)
+
+            # Add the QM coordinate file path.
+            with open(orca_input, "w") as f:
+                f.write(f'*xyzfile "{os.path.basename(xyz_file_qm)}"\n')
+
+            # Write the xyz input file.
+            with open(xyz_file_qm, "w") as f:
+                f.write(f"{len(atomic_numbers):5d}\n\n")
+                for num, xyz in zip(atomic_numbers, xyz_qm):
+                    f.write(
+                        f"{num:3d} {xyz[0]:21.17f} {xyz[1]:21.17f} {xyz[2]:21.17f}\n"
+                    )
 
         # Create a temporary working directory.
         with tempfile.TemporaryDirectory() as tmp:
@@ -2487,18 +2555,22 @@ class EMLECalculator:
             xyz_name = f"{tmp}/{os.path.basename(xyz_file_qm)}"
 
             # Copy the files to the working directory.
-            shutil.copyfile(orca_input, inp_name)
-            shutil.copyfile(xyz_file_qm, xyz_name)
+            if is_orca_input:
+                shutil.copyfile(orca_input, inp_name)
+                shutil.copyfile(xyz_file_qm, xyz_name)
 
-            # Edit the input file to remove the point charges.
-            lines = []
-            with open(inp_name, "r") as f:
-                for line in f:
-                    if not line.startswith("%pointcharges"):
-                        lines.append(line)
-            with open(inp_name, "w") as f:
-                for line in lines:
-                    f.write(line)
+                # Edit the input file to remove the point charges.
+                lines = []
+                with open(inp_name, "r") as f:
+                    for line in f:
+                        if not line.startswith("%pointcharges"):
+                            lines.append(line)
+                with open(inp_name, "w") as f:
+                    for line in lines:
+                        f.write(line)
+            else:
+                shutil.move(orca_input, inp_name)
+                shutil.move(xyz_file_qm, xyz_name)
 
             # Create the ORCA command.
             command = f"{self._orca_exe} {inp_name}"
