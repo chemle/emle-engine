@@ -72,6 +72,7 @@ try:
     log = int(os.getenv("EMLE_LOG"))
 except:
     log = 1
+save_settings = os.getenv("EMLE_SAVE_SETTINGS")
 orca_template = os.getenv("EMLE_ORCA_TEMPLATE")
 deepmd_model = os.getenv("EMLE_DEEPMD_MODEL")
 rascal_model = os.getenv("EMLE_RASCAL_MODEL")
@@ -129,6 +130,7 @@ env = {
     "restart": restart,
     "orca_template": orca_template,
     "log": log,
+    "save_settings": save_settings,
 }
 
 
@@ -268,6 +270,11 @@ parser.add_argument(
     "--log",
     type=int,
     help="The frequency of logging energies to file",
+    required=False,
+)
+parser.add_argument(
+    "--save-settings",
+    action=argparse.BooleanOptionalAction,
     required=False,
 )
 args = vars(parser.parse_args())

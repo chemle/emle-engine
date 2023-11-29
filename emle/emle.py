@@ -370,6 +370,7 @@ class EMLECalculator:
         device=None,
         orca_template=None,
         log=1,
+        save_settings=True,
     ):
         """Constructor.
 
@@ -458,6 +459,10 @@ class EMLECalculator:
 
         log : int
             The frequency of logging energies to file.
+
+        save_settings : bool
+            Whether to write a YAML file containing the settings used to initialise
+            the calculator.
         """
 
         # Validate input.
@@ -833,6 +838,14 @@ class EMLECalculator:
         else:
             self._log = log
 
+        if save_settings is None:
+            save_settings = True
+
+        if not isinstance(save_settings, bool):
+            raise TypeError("'save_settings' must be of type 'bool'")
+        else:
+            self._save_settings = save_settings
+
         if orca_template is not None:
             if not isinstance(template, str):
                 raise TypeError("'orca_template' must be of type 'str'")
@@ -962,8 +975,9 @@ class EMLECalculator:
         }
 
         # Write to a YAML file.
-        with open("emle_settings.yaml", "w") as f:
-            yaml.dump(self._settings, f)
+        if save_settings:
+            with open("emle_settings.yaml", "w") as f:
+                yaml.dump(self._settings, f)
 
     def run(self, path=None):
         """
