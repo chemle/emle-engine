@@ -94,7 +94,8 @@ class SanderCalculator(Calculator):
         self.results = {
             "energy": energy.tot * KCAL_MOL_TO_HARTREE,
             "forces": np.array(forces).reshape((-1, 3))
-            * KCAL_MOL_TO_HARTREE * BOHR_TO_ANGSTROM,
+            * KCAL_MOL_TO_HARTREE
+            * BOHR_TO_ANGSTROM,
         }
 
     @staticmethod
