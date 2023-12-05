@@ -4,7 +4,7 @@ BOHR_TO_ANGSTROM = ase.units.Bohr
 EV_TO_HARTREE = 1.0 / ase.units.Hartree
 
 
-def run_xtb(atoms):
+def run_external(atoms):
     """
     Internal function to compute in vacuo energies and gradients using
     the xtb-python interface. Currently only uses the "GFN2-xTB" method.

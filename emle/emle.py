@@ -568,7 +568,7 @@ class EMLECalculator:
             # Split the module and function names.
             try:
                 function = external_backend.split(".")[-1]
-                module = external_backend.strip("." + function)
+                module = external_backend.replace("." + function, "")
             except:
                 raise ValueError(
                     f"Unable to parse 'external_backend' callback string: {external_backend}"
