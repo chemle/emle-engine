@@ -337,7 +337,15 @@ class EMLECalculator:
     }
 
     # List of supported backends.
-    _supported_backends = ["torchani", "deepmd", "orca", "sander", "sqm", "xtb"]
+    _supported_backends = [
+        "torchani",
+        "deepmd",
+        "orca",
+        "sander",
+        "sqm",
+        "xtb",
+        "external",
+    ]
 
     # List of supported devices.
     _supported_devices = ["cpu", "cuda"]
@@ -597,6 +605,9 @@ class EMLECalculator:
 
             # Flag that an external backend is being used.
             self._is_external_backend = True
+
+            # Set the backed to "external".
+            self._backend = "external"
 
         if parm7 is not None:
             if not isinstance(parm7, str):
@@ -959,6 +970,7 @@ class EMLECalculator:
             "model": None if model is None else self._model,
             "method": self._method,
             "backend": self._backend,
+            "external_backend": None if external_backend is None else external_backend,
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),
             "deepmd_model": deepmd_model,
             "rascal_model": rascal_model,
