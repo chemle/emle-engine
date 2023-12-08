@@ -41,7 +41,7 @@ If you are developing and want an editable install, use:
 python setup.py develop
 ```
 
-If you plan on using the [ACE]((https://acesuit.github.io/) backend, then you will need to install some additional
+If you plan on using the [ACE](https://acesuit.github.io/) backend, then you will need to install some additional
 Julia packages from within the Julia REPL:
 
 ```julia
