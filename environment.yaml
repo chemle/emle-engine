@@ -9,13 +9,14 @@ dependencies:
   - compilers
   - deepmd-kit
   - eigen
+  - julia
   - pip
   - pybind11
+  - pyjulia
   - pytorch
   - python < 3.11
   - torchani
   - xtb-python
   - pip:
-    - julia
     - git+https://github.com/lab-cosmo/librascal.git
-    - git+https://github.com/casv2/pyjulip.git
+    - git+https://github.com/casv2/pyjulip.git@72280a6ac3
