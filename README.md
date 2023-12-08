@@ -94,7 +94,8 @@ support the use of
 [DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html),
 [ORCA](https://sites.google.com/site/orcainputlibrary/interfaces-and-qmm),
 [SQM](https://ambermd.org/AmberTools.php),
-[XTB](https://xtb-docs.readthedocs.io/en/latest), or
+[XTB](https://xtb-docs.readthedocs.io/en/latest),
+[ACE]( https://acesuit.github.io/) (implemented using [PyJulip](https://github.com/casv2/pyjulip)), or
 [PySander](https://ambermd.org/AmberTools.php)
  for the backend, providing reference MM or QM with EMLE embedding, and pure EMLE
 implementations. To specify a backend, use the `--backend` argument when launching

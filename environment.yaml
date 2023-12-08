@@ -16,4 +16,6 @@ dependencies:
   - torchani
   - xtb-python
   - pip:
+    - julia
     - git+https://github.com/lab-cosmo/librascal.git
+    - git+https://github.com/casv2/pyjulip.git

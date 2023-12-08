@@ -344,6 +344,7 @@ class EMLECalculator:
         "sander",
         "sqm",
         "xtb",
+        "ace",
         "external",
     ]
 
@@ -369,6 +370,7 @@ class EMLECalculator:
         mm_charges=None,
         deepmd_model=None,
         rascal_model=None,
+        ace_model=None,
         parm7=None,
         qm_indices=None,
         sqm_theory="DFTB3",
@@ -427,6 +429,10 @@ class EMLECalculator:
         rascal_model : str
             Path to the Rascal model file used to apply delta-learning corrections
             to the in vacuo energies and gradients computed by the backed.
+
+        ace_model : str
+            Path to the ACE model file to use for in vacuo calculations. This
+            must be specified if "ace" is the selected backend.
 
         lambda_interpolate : float, [float, float]
             The value of lambda to use for end-state correction calculations. This
@@ -732,6 +738,26 @@ class EMLECalculator:
             # Flag that delta-learning corrections will be applied.
             self._is_delta = True
 
+        # Validate and load the ACE model.
+        if ace_model is not None:
+            if not isinstance(ace_model, str):
+                raise TypeError("'ace_model' must be of type 'str'")
+
+            # Convert to an absolute path.
+            abs_ace_model = os.path.abspath(ace_model)
+
+            # Make sure the model file exists.
+            if not os.path.isfile(abs_ace_model):
+                raise IOError(f"Unable to locate ACE model file: '{ace_model}'")
+
+            # Load the model.
+            try:
+                import pyjulip
+
+                self._ace_calc = pyjulip.ACE(abs_ace_model)
+            except:
+                raise RuntimeError("Unable to create ACE calculator!")
+
         if restart is not None:
             if not isinstance(restart, bool):
                 raise TypeError("'restart' must be of type 'bool'")
@@ -974,6 +1000,7 @@ class EMLECalculator:
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),
             "deepmd_model": deepmd_model,
             "rascal_model": rascal_model,
+            "ace_model": ace_model,
             "parm7": parm7,
             "qm_indices": None if qm_indices is None else self._qm_indices,
             "sqm_theory": sqm_theory,
@@ -1119,6 +1146,15 @@ class EMLECalculator:
                 except:
                     raise RuntimeError(
                         "Failed to calculate in vacuo energies using XTB backend!"
+                    )
+
+            # ACE.
+            elif self._backend == "ace":
+                try:
+                    E_vac, grad_vac = self._run_ace(atoms)
+                except:
+                    raise RuntimeError(
+                        "Failed to calculate in vacuo energies using ACE backend!"
                     )
 
         # External backend.
@@ -2799,6 +2835,50 @@ class EMLECalculator:
 
         # Create the calculator.
         atoms.calc = XTB(method="GFN2-xTB")
+
+        # Get the energy and forces in atomic units.
+        energy = atoms.get_potential_energy()
+        forces = atoms.get_forces()
+
+        # Convert to Hartree and Eh/Bohr.
+        energy *= EV_TO_HARTREE
+        gradient = -forces * EV_TO_HARTREE * BOHR_TO_ANGSTROM
+
+        return energy, gradient
+
+    @staticmethod
+    def _run_ace(atoms):
+        """
+        Internal function to compute in vacuo energies and gradients using
+        ACE (via PyJulip).
+
+        Parameters
+        ----------
+
+        atoms : ase.atoms.Atoms
+            The atoms in the QM region.
+
+        Returns
+        -------
+
+        energy : float
+            The in vacuo ML energy in Eh.
+
+        gradients : numpy.array
+            The in vacuo gradient in Eh/Bohr.
+        """
+
+        if not isinstance(atoms, ase.Atoms):
+            raise TypeError("'atoms' must be of type 'ase.atoms.Atoms'")
+
+        # ACE requires periodic box information so we translate the atoms so that
+        # the lowest (x, y, z) position is zero, then set the cell to the maximum
+        # position.
+        atoms.positions -= np.min(atoms.positions, axis=0)
+        atoms.cell = np.max(atoms.positions, axis=0)
+
+        # Bind the calculator to the atoms.
+        atoms.calc = self._ace_calc
 
         # Get the energy and forces in atomic units.
         energy = atoms.get_potential_energy()

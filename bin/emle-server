@@ -76,6 +76,7 @@ save_settings = os.getenv("EMLE_SAVE_SETTINGS")
 orca_template = os.getenv("EMLE_ORCA_TEMPLATE")
 deepmd_model = os.getenv("EMLE_DEEPMD_MODEL")
 rascal_model = os.getenv("EMLE_RASCAL_MODEL")
+ace_model = os.getenv("EMLE_ACE_MODEL")
 parm7 = os.getenv("EMLE_PARM7")
 try:
     lambda_interpolate = [
@@ -122,6 +123,7 @@ env = {
     "device": device,
     "deepmd_model": deepmd_model,
     "rascal_model": rascal_model,
+    "ace_model": ace_model,
     "lambda_interpolate": lambda_interpolate,
     "interpolate_steps": interpolate_steps,
     "parm7": parm7,
@@ -215,6 +217,12 @@ parser.add_argument(
     "--rascal-model",
     type=str,
     help="path to Rascal model file",
+    required=False,
+)
+parser.add_argument(
+    "--ace-model",
+    type=str,
+    help="path to ACE model file",
     required=False,
 )
 parser.add_argument(
