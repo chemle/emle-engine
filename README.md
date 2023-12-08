@@ -41,6 +41,20 @@ If you are developing and want an editable install, use:
 python setup.py develop
 ```
 
+If you plan on using the [ACE]((https://acesuit.github.io/) backend, then you will need to install some additional
+Julia packages from within the Julia REPL:
+
+```julia
+using Pkg
+
+Pkg.Registry.add(RegistrySpec(url="https://github.com/JuliaMolSim/MolSim.git"))
+Pkg.add(PackageSpec(name="JuLIP", version="0.10.1"))
+Pkg.add(PackageSpec(name="ACE", version="0.8.4"))
+Pkg.add(PackageSpec(name="IPFitting", version="0.5.0"))
+Pkg.add("ASE")"
+Pkg.add("PyCall")
+```
+
 ## Usage
 
 To start an EMLE calculation server:
@@ -346,3 +360,8 @@ since the `PATH` won't be updated correctly within the batch script.
 
 When performing interpolation it is currently not possible to use AMBER force
 fields with CMAP terms due to a memory deallocation bug in `pysander`.
+
+Startup can be incredibly slow when using the [ACE](https://acesuit.git^hub.io/) backend due to the time taken
+to import the [PyJulip](https://github.com/casv2/pyjulip) module. As such, you may need to increase the number of
+retries. (See above.) In addition, it is not possible to exit the Python process
+cleanly using CTRL-C when using this backend.
