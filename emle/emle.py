@@ -2846,8 +2846,7 @@ class EMLECalculator:
 
         return energy, gradient
 
-    @staticmethod
-    def _run_ace(atoms):
+    def _run_ace(self, atoms):
         """
         Internal function to compute in vacuo energies and gradients using
         ACE (via PyJulip).
