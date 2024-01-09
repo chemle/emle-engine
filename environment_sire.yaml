@@ -1,0 +1,22 @@
+name: emle-sire
+
+channels:
+  - conda-forge
+  - openbiosim/label/emle
+
+dependencies:
+  - ambertools
+  - ase
+  - compilers
+  - deepmd-kit
+  - eigen
+  - openmm >= 8.1
+  - pip
+  - pybind11
+  - pytorch
+  - python < 3.11
+  - sire
+  - torchani
+  - xtb-python
+  - pip:
+    - git+https://github.com/lab-cosmo/librascal.git
