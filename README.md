@@ -306,6 +306,30 @@ similar to that shown below. The columns specify the current step, the current
         50        1.000000000000     -495.725952148438       -0.020683377981     -495.725952148438
 ```
 
+## OpenMM integration
+
+We provide an interface between `emle-engine` and [OpenMM](https://openmm.org) via the
+[Sire](https://sire.openbiosim.org/) molecular simulation framework. This allows QM/MM simulations
+to be run with OpenMM using EMLE for the embedding model. This provides improved
+performance and flexibility in comparison to the `sander` interface, although
+the implementation should currently be treated as being _experimental_.
+
+To use, first create an `emle-sire` conda environment:
+
+```sh
+conda env create -f environment_sire.yaml
+conda activate emle-sire
+```
+
+Next install `emle-engine` into the environment:
+
+```sh
+python setup.py install
+```
+
+For instructions on how to use the `emle-sire` interface, see the tutorial
+documentation [here](https://github.com/OpenBioSim/sire/blob/feature_emle/doc/source/tutorial/part07/01_qmmm.rst).
+
 ## Issues
 
 The [DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html) conda package pulls in a version of MPI which may cause
