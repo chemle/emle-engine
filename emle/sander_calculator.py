@@ -87,7 +87,7 @@ class SanderCalculator(Calculator):
         # Update the positions.
         sander.set_positions(positions)
 
-        from .emle import KCAL_MOL_TO_HARTREE, BOHR_TO_ANGSTROM
+        from .calculator import KCAL_MOL_TO_HARTREE, BOHR_TO_ANGSTROM
 
         # Compute the energy and forces.
         energy, forces = sander.energy_forces()
