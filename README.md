@@ -328,7 +328,7 @@ python setup.py install
 ```
 
 For instructions on how to use the `emle-sire` interface, see the tutorial
-documentation [here](https://github.com/OpenBioSim/sire/blob/feature_emle/doc/source/tutorial/part07/01_qmmm.rst).
+documentation [here](https://github.com/OpenBioSim/sire/blob/feature_emle/doc/source/tutorial/part07/01_emle.rst).
 
 ## Issues
 
