@@ -13,6 +13,7 @@ dependencies:
   - pybind11
   - pytorch
   - python < 3.11
+  - pyyaml
   - torchani
   - xtb-python
   - pip:
