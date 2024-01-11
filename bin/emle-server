@@ -518,11 +518,11 @@ except:
 # Import the EMLE calculator here so that we avoid the import overhead when the
 # script is called to check if an existing server is running, e.g. when called
 # as a background process by the orca executable.
-from emle.emle import EMLECalculator
+from emle.calculator import EMLECalculator
 
 # Initialise the EMLE calculator.
 print("Initialising EMLE calculator...")
-mle_calculator = EMLECalculator(**args)
+emle_calculator = EMLECalculator(**args)
 
 while True:
     print("Waiting for a connection...")
@@ -535,7 +535,7 @@ while True:
                 # Try to run the EMLE calculation.
                 print("Running EMLE calculation...")
                 try:
-                    mle_calculator.run(path=path)
+                    emle_calculator.run(path=path)
                     msg = "7:emlefin"
                     print("Finished!")
                 except Exception as e:
@@ -549,7 +549,7 @@ while True:
                 # Try to update the interpolation lambda parameter.
                 print("Updating interpolation lambda...")
                 try:
-                    mle_calculator.set_lambda_interpolate(float(path))
+                    emle_calculator.set_lambda_interpolate(float(path))
                     msg = "13:emlelambdaset"
                     print("Lambda set!")
                 except Exception as e:
