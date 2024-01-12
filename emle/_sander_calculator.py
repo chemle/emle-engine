@@ -1,7 +1,7 @@
 #######################################################################
 # EMLE-Engine: https://github.com/chemle/emle-engine
 #
-# Copyright: 2023
+# Copyright: 2023-2024
 #
 # Authors: Lester Hedges   <lester.hedges@gmail.com>
 #          Kirill Zinovjev <kzinovjev@gmail.com>
@@ -20,13 +20,21 @@
 # along with EMLE-Engine If not, see <http://www.gnu.org/licenses/>.
 #####################################################################
 
-import ase
-from ase.calculators.calculator import Calculator, all_changes
-import numpy as np
-import sander
+"""ASE sander calculator implementation."""
+
+__author__ = "Lester Hedges"
+__email__ = "lester.hedges@gmail.com"
+
+__all__ = ["SanderCalculator"]
+
+import ase as _ase
+from ase.calculators.calculator import Calculator as _Calculator
+from ase.calculators.calculator import all_changes as _all_changes
+import numpy as _np
+import sander as _sander
 
 
-class SanderCalculator(Calculator):
+class SanderCalculator(_Calculator):
     """An ASE calculator for the AMBER Sander molecular dynamics engine."""
 
     implemented_properties = [
@@ -50,8 +58,8 @@ class SanderCalculator(Calculator):
         is_gas : bool
             Whether to perform a gas phase calculation.
         """
-        if not isinstance(atoms, ase.Atoms):
-            raise TypeError("'atoms' must be of type 'ase.atoms.Atoms'")
+        if not isinstance(atoms, _ase.Atoms):
+            raise TypeError("'atoms' must be of type 'ase.Atoms'")
 
         if not isinstance(parm7, str):
             raise TypeError("'parm7' must be of type 'str'")
@@ -61,19 +69,19 @@ class SanderCalculator(Calculator):
 
         super().__init__()
 
-        if sander.is_setup():
-            sander.cleanup()
+        if _sander.is_setup():
+            _sander.cleanup()
 
         positions = atoms.get_positions()
         box = self._get_box(atoms)
 
         if is_gas:
-            sander.setup(parm7, positions, box, sander.gas_input())
+            _sander.setup(parm7, positions, box, _sander.gas_input())
         else:
-            sander.setup(parm7, positions, box, sander.pme_input())
+            _sander.setup(parm7, positions, box, _sander.pme_input())
 
     def calculate(
-        self, atoms, properties=["energy", "forces"], system_changes=all_changes
+        self, atoms, properties=["energy", "forces"], system_changes=_all_changes
     ):
         # Get the current positions and box.
         super().calculate(atoms, properties, system_changes)
@@ -82,20 +90,20 @@ class SanderCalculator(Calculator):
 
         # Update the box.
         if box is not None:
-            sander.set_box(*box)
+            _sander.set_box(*box)
 
         # Update the positions.
-        sander.set_positions(positions)
+        _sander.set_positions(positions)
 
-        from .calculator import KCAL_MOL_TO_HARTREE, BOHR_TO_ANGSTROM
+        from .calculator import _KCAL_MOL_TO_HARTREE, _BOHR_TO_ANGSTROM
 
         # Compute the energy and forces.
-        energy, forces = sander.energy_forces()
+        energy, forces = _sander.energy_forces()
         self.results = {
-            "energy": energy.tot * KCAL_MOL_TO_HARTREE,
-            "forces": np.array(forces).reshape((-1, 3))
-            * KCAL_MOL_TO_HARTREE
-            * BOHR_TO_ANGSTROM,
+            "energy": energy.tot * _KCAL_MOL_TO_HARTREE,
+            "forces": _np.array(forces).reshape((-1, 3))
+            * _KCAL_MOL_TO_HARTREE
+            * _BOHR_TO_ANGSTROM,
         }
 
     @staticmethod
