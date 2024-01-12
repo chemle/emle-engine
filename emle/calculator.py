@@ -1006,7 +1006,7 @@ class EMLECalculator:
         Parameters
         ----------
 
-        path : str
+        path: str
             Path to the sander process.
         """
 
@@ -1299,7 +1299,7 @@ class EMLECalculator:
         Parameters
         ----------
 
-        lambda_interpolate : float, [float, float]
+        lambda_interpolate: float, [float, float]
             The value of lambda to use for interpolating between pure MM
             (lambda=0) and ML/MM (lambda=1) potentials.and. If two lambda
             values are specified, the calculator will gradually interpolate
@@ -1353,28 +1353,28 @@ class EMLECalculator:
         Parameters
         ----------
 
-        atomic_numbers : [float]
+        atomic_numbers: [float]
             A list of atomic numbers for the QM region.
 
-        charges_mm : [float]
+        charges_mm: [float]
             The charges on the MM atoms.
 
-        xyz_qm : [[float, float, float]]
+        xyz_qm: [[float, float, float]]
             The coordinates of the QM atoms in Angstrom.
 
-        xyz_mm : [[float, float, float]]
+        xyz_mm: [[float, float, float]]
             The coordinates of the MM atoms in Angstrom.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The energy in kJ/mol.
 
-        force_qm : [[float, float, float]]
+        force_qm: [[float, float, float]]
             The forces on the QM atoms in kJ/mol/nanometer.
 
-        force_mm : [[float, float, float]]
+        force_mm: [[float, float, float]]
             The forces on the MM atoms in kJ/mol/nanometer.
         """
 
@@ -2168,40 +2168,40 @@ class EMLECalculator:
         Parameters
         ----------
 
-        orca_input : str
+        orca_input: str
             The path to the ORCA input file.
 
         Returns
         -------
 
-        dirname : str
+        dirname: str
             The path to the directory containing the ORCA file.
 
-        charge : int
+        charge: int
             The charge on the QM region.
 
-        mult : int
+        mult: int
             The spin multiplicity of the QM region.
 
-        atoms : ase.Atoms
+        atoms: ase.Atoms
             The atoms in the QM region.
 
-        atomic_numbers : numpy.array
+        atomic_numbers: numpy.array
             The atomic numbers of the atoms in the QM region.
 
-        xyz_qm : numpy.array
+        xyz_qm: numpy.array
             The positions of the atoms in the QM region.
 
-        xyz_mm : numpy.array
+        xyz_mm: numpy.array
             The positions of the atoms in the MM region.
 
-        charges_mm : numpy.array
+        charges_mm: numpy.array
             The charges of the atoms in the MM region.
 
-        xyz_file_qm : str
+        xyz_file_qm: str
             The path to the QM xyz file.
 
-        atoms_mm : ase.Atoms
+        atoms_mm: ase.Atoms
             The atoms in the MM region.
         """
 
@@ -2311,22 +2311,22 @@ class EMLECalculator:
         Parameters
         ----------
 
-        atoms : ase.Atoms
+        atoms: ase.Atoms
             The atoms in the QM region.
 
-        parm7 : str
+        parm7: str
             The path to the AMBER topology file.
 
-        bool : is_gas
+        bool: is_gas
             Whether this is a gas phase calculation.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The in vacuo MM energy in Eh.
 
-        gradients : numpy.array
+        gradients: numpy.array
             The in vacuo MM gradient in Eh/Bohr.
         """
 
@@ -2361,19 +2361,19 @@ class EMLECalculator:
         Parameters
         ----------
 
-        xyz : numpy.array
+        xyz: numpy.array
             The coordinates of the QM region in Angstrom.
 
-        atomic_numbers : numpy.array
+        atomic_numbers: numpy.array
             The atomic numbers of the QM region.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The in vacuo ML energy in Eh.
 
-        gradients : numpy.array
+        gradients: numpy.array
             The in vacuo ML gradient in Eh/Bohr.
         """
 
@@ -2415,19 +2415,19 @@ class EMLECalculator:
         Parameters
         ----------
 
-        xyz : numpy.array
+        xyz: numpy.array
             The coordinates of the QM region in Angstrom.
 
-        elements : [str]
+        elements: [str]
             The list of elements.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The in vacuo ML energy in Eh.
 
-        gradients : numpy.array
+        gradients: numpy.array
             The in vacuo ML gradient in Eh/Bohr.
         """
 
@@ -2481,19 +2481,19 @@ class EMLECalculator:
         Parameters
         ----------
 
-        orca_input : str
+        orca_input: str
             The path to the ORCA input file.
 
-        xyz_file_qm : str
+        xyz_file_qm: str
             The path to the xyz coordinate file for the QM region.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The in vacuo QM energy in Eh.
 
-        gradients : numpy.array
+        gradients: numpy.array
             The in vacuo QM gradient in Eh/Bohr.
         """
 
@@ -2660,22 +2660,22 @@ class EMLECalculator:
         Parameters
         ----------
 
-        xyz : numpy.array
+        xyz: numpy.array
             The coordinates of the QM region in Angstrom.
 
-        atomic_numbers : numpy.array
+        atomic_numbers: numpy.array
             The atomic numbers of the atoms in the QM region.
 
-        qm_charge : int
+        qm_charge: int
             The charge on the QM region.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The in vacuo QM energy in Eh.
 
-        gradients : numpy.array
+        gradients: numpy.array
             The in vacuo QM gradient in Eh/Bohr.
         """
 
@@ -2795,16 +2795,16 @@ class EMLECalculator:
         Parameters
         ----------
 
-        atoms : ase.Atoms
+        atoms: ase.Atoms
             The atoms in the QM region.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The in vacuo ML energy in Eh.
 
-        gradients : numpy.array
+        gradients: numpy.array
             The in vacuo gradient in Eh/Bohr.
         """
 
@@ -2833,16 +2833,16 @@ class EMLECalculator:
         Parameters
         ----------
 
-        atoms : ase.Atoms
+        atoms: ase.Atoms
             The atoms in the QM region.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The in vacuo MM energy in Eh.
 
-        gradients : numpy.array
+        gradients: numpy.array
             The in vacuo MM gradient in Eh/Bohr.
         """
 
