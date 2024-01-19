@@ -377,6 +377,7 @@ class EMLECalculator:
         rascal_model=None,
         parm7=None,
         qm_indices=None,
+        orca_path=None,
         sqm_theory="DFTB3",
         lambda_interpolate=None,
         interpolate_steps=None,
@@ -454,6 +455,10 @@ class EMLECalculator:
             interpolating. Alternatively, a path to a file containing the indices
             can be specified. The file should contain a single column with the
             indices being zero-based.
+
+        orca_path : str
+            The path to the ORCA executable. This is required when using the ORCA
+            backend.
 
         sqm_theory : str
             The QM theory to use when using the SQM backend. See the AmberTools
@@ -943,23 +948,19 @@ class EMLECalculator:
 
         # If the backend is ORCA, then try to find the executable.
         elif self._backend == "orca":
-            # Get the PATH for the environment.
-            path = _os.environ["PATH"]
+            if orca_path is None:
+                raise ValueError("'orca_path' must be specified when using the ORCA backend")
 
-            # Search the PATH for a matching executable, ignoring any conda
-            # directories.
+            if not isinstance(orca_path, str):
+                raise TypeError("'orca_path' must be of type 'str'")
 
-            exes = []
-            for p in path.split(":"):
-                exe = _shutil.which("orca", path=p)
-                if exe and not ("conda" in exe or "mamba" in exe or "miniforge" in exe):
-                    exes.append(exe)
+            # Convert to an absolute path.
+            abs_orca_path = _os.path.abspath(orca_path)
 
-            # Use the first executable.
-            if len(exes) > 0:
-                self._orca_exe = exes[0]
-            else:
-                raise OSError("Couldn't find ORCA executable for in vacuo backend!")
+            if not _os.path.isfile(abs_orca_path):
+                raise IOError(f"Unable to locate ORCA executable: '{orca_path}'")
+
+            self._orca_path = abs_orca_path
 
         # Initialise the maximum number of MM atom that have been seen.
         self._max_mm_atoms = 0
@@ -984,6 +985,7 @@ class EMLECalculator:
             "rascal_model": rascal_model,
             "parm7": parm7,
             "qm_indices": None if qm_indices is None else self._qm_indices,
+            "orca_path": orca_path,
             "sqm_theory": sqm_theory,
             "lambda_interpolate": lambda_interpolate,
             "interpolate_steps": interpolate_steps,
@@ -2577,7 +2579,7 @@ class EMLECalculator:
                 _shutil.move(xyz_file_qm, xyz_name)
 
             # Create the ORCA command.
-            command = f"{self._orca_exe} {inp_name}"
+            command = f"{self._orca_path} {inp_name}"
 
             # Run the command as a sub-process.
             proc = _subprocess.run(

@@ -106,11 +106,12 @@ emle-server --backend torchani
 
 (The default backend is `torchani`.)
 
-When using the `orca` backend, you will need to ensure that the _fake_ `orca`
-executable takes precedence in the `PATH`. (To check that EMLE is running,
-look for an `emle_log.txt` file in the working directory, where. The input
-for `orca` will be taken from the `&orc` section of the `sander` configuration
-file, so use this to specify the method, etc.
+When using the `orca` backend, you will also need to specify the path to the
+*real* `orca` exectubale using the `--orca-path` command-line argument, or the
+`EMLE_ORCA_PATH` environment variable. (To check that EMLE is running, look for
+an `emle_log.txt` file in the working directory, where. The input for `orca` will
+be taken from the `&orc` section of the `sander` configuration file, so use this
+to specify the method, etc.
 
 When using `deepmd` as the backend you will also need to specify a model
 file to use. This can be passed with the `--deepmd-model` command-line argument,

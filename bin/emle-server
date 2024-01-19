@@ -89,6 +89,7 @@ except:
     interpolate_steps = None
 qm_indices = os.getenv("EMLE_QM_INDICES")
 sqm_theory = os.getenv("EMLE_SQM_THEORY")
+orca_path = os.getenv("EMLE_ORCA_PATH")
 try:
     restart = strtobool(os.getenv("EMLE_RESTART"))
 except:
@@ -127,6 +128,7 @@ env = {
     "parm7": parm7,
     "qm_indices": qm_indices,
     "sqm_theory": sqm_theory,
+    "orca_path": orca_path,
     "restart": restart,
     "orca_template": orca_template,
     "log": log,
@@ -253,6 +255,12 @@ parser.add_argument(
     "--sqm-theory",
     type=str,
     help="the semi-empirical theory to use for the QM region when using the SQM backend",
+    required=False,
+)
+parser.add_argument(
+    "--orca-path",
+    type=str,
+    help="the path to the ORCA executable (required when using the ORCA backend)",
     required=False,
 )
 parser.add_argument(
