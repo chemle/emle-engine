@@ -491,7 +491,7 @@ if args["deepmd_model"] is not None:
             args["deepmd_model"] = models
 
 if args["external_backend"] is None:
-    if backend is None:
+    if args["backend"] is None:
         args["backend"] = "torchani"
     print(f"Starting ML-MM server using {args['backend']} backend...")
 else:
