@@ -2502,9 +2502,9 @@ class EMLECalculator:
         if orca_input is not None and not _os.path.isfile(orca_input):
             raise IOError(f"Unable to locate the ORCA input file: {orca_input}")
 
-        if xyz_qm_file is not None and not isinstance(xyz_file_qm, str):
+        if xyz_file_qm is not None and not isinstance(xyz_file_qm, str):
             raise TypeError("'xyz_file_qm' must be of type 'str'.")
-        if xyz_qm_file is not None and not _os.path.isfile(xyz_file_qm):
+        if xyz_file_qm is not None and not _os.path.isfile(xyz_file_qm):
             raise IOError(f"Unable to locate the ORCA QM xyz file: {xyz_file_qm}")
 
         if atomic_numbers is not None and not isinstance(atomic_numbers, _np.ndarray):
