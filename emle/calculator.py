@@ -2708,6 +2708,7 @@ class EMLECalculator:
                 f.write(" &qmmm\n")
                 f.write(f" qm_theory='{self._sqm_theory}',\n")
                 f.write(f" qmcharge={qm_charge},\n")
+                f.write(" maxcyc=0,\n")
                 f.write(" verbosity=4,\n")
                 f.write(f" /\n")
 
@@ -2740,7 +2741,7 @@ class EMLECalculator:
                 forces = []
                 for line in f:
                     # Skip lines prior to convergence.
-                    if line.startswith("  ... geometry converged !"):
+                    if line.startswith(" QMMM SCC-DFTB: SCC-DFTB for step     0 converged"):
                         is_converged = True
                         continue
 
@@ -2784,7 +2785,9 @@ class EMLECalculator:
         energy *= _KCAL_MOL_TO_HARTREE
 
         # Convert the gradient to a NumPy array and reshape.
-        gradient = -_np.array(forces) * _KCAL_MOL_TO_HARTREE * _BOHR_TO_ANGSTROM
+        # Misleading comment in sqm output, the "forces" are actually gradients
+        # So, no need to multiply by -1
+        gradient = _np.array(forces) * _KCAL_MOL_TO_HARTREE * _BOHR_TO_ANGSTROM
 
         return energy, gradient
 
