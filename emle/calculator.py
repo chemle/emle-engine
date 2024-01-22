@@ -949,7 +949,9 @@ class EMLECalculator:
         # If the backend is ORCA, then try to find the executable.
         elif self._backend == "orca":
             if orca_path is None:
-                raise ValueError("'orca_path' must be specified when using the ORCA backend")
+                raise ValueError(
+                    "'orca_path' must be specified when using the ORCA backend"
+                )
 
             if not isinstance(orca_path, str):
                 raise TypeError("'orca_path' must be of type 'str'")
@@ -2741,7 +2743,9 @@ class EMLECalculator:
                 forces = []
                 for line in f:
                     # Skip lines prior to convergence.
-                    if line.startswith(" QMMM SCC-DFTB: SCC-DFTB for step     0 converged"):
+                    if line.startswith(
+                        " QMMM SCC-DFTB: SCC-DFTB for step     0 converged"
+                    ):
                         is_converged = True
                         continue
 
@@ -2784,9 +2788,9 @@ class EMLECalculator:
         # Convert units.
         energy *= _KCAL_MOL_TO_HARTREE
 
-        # Convert the gradient to a NumPy array and reshape.
-        # Misleading comment in sqm output, the "forces" are actually gradients
-        # So, no need to multiply by -1
+        # Convert the gradient to a NumPy array and reshape. Misleading comment
+        # in sqm output, the "forces" are actually gradients so no need to
+        # multiply by -1
         gradient = _np.array(forces) * _KCAL_MOL_TO_HARTREE * _BOHR_TO_ANGSTROM
 
         return energy, gradient
