@@ -10,6 +10,7 @@ dependencies:
   - compilers
   - deepmd-kit
   - eigen
+  - loguru
   - openmm >= 8.1
   - pip
   - pybind11
