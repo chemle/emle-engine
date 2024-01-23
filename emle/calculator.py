@@ -209,7 +209,6 @@ class _SOAPCalculatorSpinv:
 
     def __init__(self, hypers):
         """
-
         Constructor
 
         Parameters
@@ -393,7 +392,8 @@ class EMLECalculator:
         log_file=None,
         save_settings=True,
     ):
-        """Constructor.
+        """
+        Constructor
 
         model: str
             Path to the EMLE embedding model parameter file. If None, then a
