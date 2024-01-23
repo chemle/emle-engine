@@ -147,7 +147,7 @@ def test_interpolate_steps():
 
         # Process the log file to make sure that the interpolated energy
         # is correct at each step.
-        with open(tmpdir + "/emle_log.txt", "r") as file:
+        with open(tmpdir + "/emle_energy.txt", "r") as file:
             for line in file:
                 if not line.startswith("#"):
                     data = [float(x) for x in line.split()]
@@ -189,7 +189,7 @@ def test_interpolate_steps_config():
 
         # Process the log file to make sure that the interpolated energy
         # is correct at each step.
-        with open(tmpdir + "/emle_log.txt", "r") as file:
+        with open(tmpdir + "/emle_energy.txt", "r") as file:
             for line in file:
                 if not line.startswith("#"):
                     data = [float(x) for x in line.split()]
