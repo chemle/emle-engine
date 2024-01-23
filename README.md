@@ -209,10 +209,10 @@ are electron charge.
 Energies can be written to a file using the `--energy-file` command-line argument
 or the `EMLE_ENERGY_FILE` environment variable. The frequency of logging can be
 specified using `--energy-frequency` or `EMLE_ENERGY_FREQUENCY`. This should be an
-integer specifying the frequency at which energies are written. (The default is
-0, which means that energies aren't logged.) The output will look something like
-the following, where the columns specify the current step, the in vacuo energy
-and the total energy.
+integer specifying the frequency, in integration steps, at which energies are
+written. (The default is 0, which means that energies aren't logged.) The output
+will look something like the following, where the columns specify the current
+step, the in vacuo energy and the total energy.
 
 General log messages are written to the file specified by the `--log-file` or
 `EMLE_LOG_FILE` options. (By default, no log file is used and diagnostic messages
