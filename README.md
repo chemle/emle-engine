@@ -280,7 +280,7 @@ argument, or via the `EMLE_PARM7` environment variables You will also need to
 specify the (zero-based) indices of the atoms within the QM region. To do so,
 use the `--qm-indices` command-line argument, or the `EMLE_QM_INDICES` environment
 variable. Finally, you will need specify MM charges for the QM atoms using
-the `--mm-charges` command-line argument or the `EMLE_MM_CHARES` environment
+the `--mm-charges` command-line argument or the `EMLE_MM_CHARGES` environment
 variable. These are used to calculate the electrostatic interactions between
 point charges on the QM and MM regions.
 
