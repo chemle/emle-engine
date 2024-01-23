@@ -387,7 +387,7 @@ class EMLECalculator:
         restart=False,
         device=None,
         orca_template=None,
-        energy_frequency=1,
+        energy_frequency=0,
         energy_file="emle_energy.txt",
         log_level="ERROR",
         log_file=None,
@@ -483,7 +483,8 @@ class EMLECalculator:
             the ORCA backend when using emle-engine with Sire.
 
         energy_frequency: int
-            The frequency of logging energies to file.
+            The frequency of logging energies to file. If 0, then no energies are
+            logged.
 
         energy_file: str
             The name of the file to which energies are logged.

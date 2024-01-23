@@ -87,6 +87,7 @@ def test_interpolate():
         os.environ["EMLE_LAMBDA_INTERPOLATE"] = "0"
         os.environ["EMLE_PARM7"] = "adp_qm.parm7"
         os.environ["EMLE_QM_INDICES"] = "adp_qm_indices.txt"
+        os.environ["EMLE_ENERGY_FREQUENCY"] = "1"
 
         # Create the sander command.
         command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
@@ -132,6 +133,7 @@ def test_interpolate_steps():
         os.environ["EMLE_INTERPOLATE_STEPS"] = "20"
         os.environ["EMLE_PARM7"] = "adp_qm.parm7"
         os.environ["EMLE_QM_INDICES"] = "adp_qm_indices.txt"
+        os.environ["EMLE_ENERGY_FREQUENCY"] = "1"
 
         # Create the sander command.
         command = "sander -O -i emle_prod.in -p adp.parm7 -c adp.rst7 -o emle.out"

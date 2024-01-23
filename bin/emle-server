@@ -71,7 +71,7 @@ device = os.getenv("EMLE_DEVICE")
 try:
     energy_frequency = int(os.getenv("EMLE_ENERGY_FREQUENCY"))
 except:
-    energy_frequency = 1
+    energy_frequency = 0
 energy_file = os.getenv("EMLE_energy_file")
 log_level = os.getenv("EMLE_LOG_LEVEL")
 log_file = os.getenv("EMLE_LOG_FILE")
