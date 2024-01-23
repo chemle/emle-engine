@@ -978,7 +978,7 @@ class EMLECalculator:
             )
 
         if energy_frequency is None:
-            energy_frequency = 1
+            energy_frequency = 0
 
         if not isinstance(energy_frequency, int):
             msg = "'energy_frequency' must be of type 'int'"
