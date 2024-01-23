@@ -9,6 +9,7 @@ dependencies:
   - compilers
   - deepmd-kit
   - eigen
+  - loguru
   - pip
   - pybind11
   - pytorch

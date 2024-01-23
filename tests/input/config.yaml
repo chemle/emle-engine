@@ -5,7 +5,7 @@ interpolate_steps: 20
 lambda_interpolate:
 - 0.0
 - 1.0
-log: 1
+energy_frequency: 1
 method: electrostatic
 mm_charges:
 - 0.1123

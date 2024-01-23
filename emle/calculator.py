@@ -27,12 +27,15 @@ __email__ = "lester.hedges@gmail.com"
 
 __all__ = ["EMLECalculator"]
 
+from loguru import logger as _logger
+
 import os as _os
 import pickle as _pickle
 import numpy as _np
 import shlex as _shlex
 import shutil as _shutil
 import subprocess as _subprocess
+import sys as _sys
 import tempfile as _tempfile
 import yaml as _yaml
 
@@ -206,7 +209,6 @@ class _SOAPCalculatorSpinv:
 
     def __init__(self, hypers):
         """
-
         Constructor
 
         Parameters
@@ -384,16 +386,20 @@ class EMLECalculator:
         restart=False,
         device=None,
         orca_template=None,
-        log=1,
-        save_settings=True,
+        energy_frequency=0,
+        energy_file="emle_energy.txt",
+        log_level="ERROR",
+        log_file=None,
+        save_settings=False,
     ):
-        """Constructor.
+        """
+        Constructor
 
-        model : str
+        model: str
             Path to the EMLE embedding model parameter file. If None, then a
             default model will be used.
 
-        method : str
+        method: str
             The desired embedding method. Options are:
                 "electrostatic":
                     Full ML electrostatic embedding.
@@ -408,67 +414,67 @@ class EMLECalculator:
                     should also specify the MM charges for atoms in the QM
                     region.
 
-        backend : str
+        backend: str
             The backend to use to compute in vacuo energies and gradients.
 
-        external_backend : str
+        external_backend: str
             The name of an external backend to use to compute in vacuo energies.
             This should be a callback function formatted as 'module.function'.
             The function should take a single argument, which is an ASE Atoms
             object for the QM region, and return the energy in Hartree along with
             the gradients in Hartree/Bohr as a numpy.ndarray.
 
-        plugin_path : str
+        plugin_path: str
             The direcory containing any scripts used for external backends.
 
-        mm_charges : numpy.array, str
+        mm_charges: numpy.array, str
             An array of MM charges for atoms in the QM region. This is required
             when the embedding method is "mm". Alternatively, pass the path to
             a file containing the charges. The file should contain a single
             column. Units are electron charge.
 
-        deepmd_model : str
+        deepmd_model: str
             Path to the DeePMD model file to use for in vacuo calculations. This
             must be specified if "deepmd" is the selected backend.
 
-        rascal_model : str
+        rascal_model: str
             Path to the Rascal model file used to apply delta-learning corrections
             to the in vacuo energies and gradients computed by the backed.
 
-        lambda_interpolate : float, [float, float]
+        lambda_interpolate: float, [float, float]
             The value of lambda to use for end-state correction calculations. This
             must be between 0 and 1, which is used to interpolate between a full MM
             and EMLE potential. If two lambda values are specified, the calculator
             will gradually interpolate between them when called multiple times. This
             must be used in conjunction with the 'interpolate_steps' argument.
 
-        interpolate_steps : int
+        interpolate_steps: int
             The number of steps over which lambda is linearly interpolated.
 
-        parm7 : str
+        parm7: str
             The path to an AMBER parm7 file for the QM region. This is needed to
             compute in vacuo MM energies for the QM region when using the Rascal
             backend, or when interpolating.
 
-        qm_indices : list, str
+        qm_indices: list, str
             A list of atom indices for the QM region. This must be specified when
             interpolating. Alternatively, a path to a file containing the indices
             can be specified. The file should contain a single column with the
             indices being zero-based.
 
-        orca_path : str
+        orca_path: str
             The path to the ORCA executable. This is required when using the ORCA
             backend.
 
-        sqm_theory : str
+        sqm_theory: str
             The QM theory to use when using the SQM backend. See the AmberTools
             manual for the supported theory levels for your version of AmberTools.
 
-        restart : bool
+        restart: bool
             Whether this is a restart simulation with sander. If True, then energies
             are logged immediately.
 
-        device : str
+        device: str
             The name of the device to be used by PyTorch. Options are "cpu"
             or "cuda".
 
@@ -476,25 +482,81 @@ class EMLECalculator:
             The path to a template ORCA input file. This is required when using
             the ORCA backend when using emle-engine with Sire.
 
-        log : int
-            The frequency of logging energies to file.
+        energy_frequency: int
+            The frequency of logging energies to file. If 0, then no energies are
+            logged.
 
-        save_settings : bool
+        energy_file: str
+            The name of the file to which energies are logged.
+
+        log_level: str
+            The logging level to use. Options are "TRACE", "DEBUG", "INFO", "WARNING",
+            "ERROR", and "CRITICAL".
+
+        log_file: str
+            The name of the file to which log messages are written.
+
+        save_settings: bool
             Whether to write a YAML file containing the settings used to initialise
             the calculator.
         """
 
         # Validate input.
 
+        # First handle the logger.
+
+        if log_level is None:
+            log_level = "ERROR"
+        else:
+            if not isinstance(log_level, str):
+                raise TypeError("'log_level' must be of type 'str'")
+
+            # Delete whitespace and convert to upper case.
+            log_level = log_level.upper().replace(" ", "")
+
+            # Validate the log level.
+            if not log_level in _logger._core.levels.keys():
+                raise ValueError(
+                    f"Unsupported logging level '{log_level}'. Options are: {', '.join(_logger._core.levels.keys())}"
+                )
+        self._log_level = log_level
+
+        # Validate the log file.
+
+        if log_file is not None:
+            if not isinstance(log_file, str):
+                raise TypeError("'log_file' must be of type 'str'")
+
+            # Try to create the directory.
+            dirname = _os.path.dirname(log_file)
+            if dirname != "":
+                try:
+                    _os.makedirs(dirname, exist_ok=True)
+                except:
+                    raise IOError(
+                        f"Unable to create directory for log file: {log_file}"
+                    )
+            self._log_file = _os.path.abspath(log_file)
+        else:
+            self._log_file = _sys.stderr
+
+        # Update the logger.
+        _logger.remove()
+        _logger.add(self._log_file, level=self._log_level)
+
         if model is not None:
             if not isinstance(model, str):
-                raise TypeError("'model' must be of type 'str'")
+                msg = "'model' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
             # Convert to an absolute path.
             abs_model = _os.path.abspath(model)
 
             if not _os.path.isfile(abs_model):
-                raise IOError(f"Unable to locate EMLE embedding model file: '{model}'")
+                msg = f"Unable to locate EMLE embedding model file: '{model}'"
+                _logger.error(msg)
+                raise IOError(msg)
             self._model = abs_model
         else:
             self._model = self._default_model
@@ -503,18 +565,22 @@ class EMLECalculator:
             method = "electrostatic"
 
         if not isinstance(method, str):
-            raise TypeError("'method' must be of type 'str'")
+            msg = "'method' must be of type 'str'"
+            _logger.error(msg)
+            raise TypeError(msg)
         method = method.replace(" ", "").lower()
         if not method in ["electrostatic", "mechanical", "nonpol", "mm"]:
-            raise ValueError(
-                "'method' must be either 'electrostatic', 'mechanical', 'nonpol, or 'mm'"
-            )
+            msg = "'method' must be either 'electrostatic', 'mechanical', 'nonpol, or 'mm'"
+            _logger.error(msg)
+            raise ValueError(msg)
         self._method = method
 
         if mm_charges is not None:
             if isinstance(mm_charges, _np.ndarray):
                 if mm_charges.dtype != _np.float64:
-                    raise TypeError("'mm_charges' must have dtype 'float64'.")
+                    msg = "'mm_charges' must have dtype 'float64'"
+                    _logger.error(msg)
+                    raise TypeError(msg)
                 else:
                     self._mm_charges = mm_charges
 
@@ -523,7 +589,9 @@ class EMLECalculator:
                 mm_charges = _os.path.abspath(mm_charges)
 
                 if not _os.path.isfile(mm_charges):
-                    raise IOError(f"'mm_charges' file doesn't exist: {mm_charges}")
+                    msg = f"Unable to locate 'mm_charges' file: {mm_charges}"
+                    _logger.error(msg)
+                    raise IOError(msg)
 
                 # Read the charges into a list.
                 charges = []
@@ -532,53 +600,67 @@ class EMLECalculator:
                         try:
                             charges.append(float(line.strip()))
                         except:
-                            raise ValueError(
-                                f"Unable to read 'mm_charges' from file: {mm_charges}"
-                            )
+                            msg = f"Unable to read 'mm_charges' from file: {mm_charges}"
+                            _logger.error(msg)
+                            raise ValueError(msg)
                 self._mm_charges = _np.array(charges)
 
             else:
-                raise TypeError("'mm_charges' must be of type 'numpy.ndarray' or 'str'")
+                msg = "'mm_charges' must be of type 'numpy.ndarray' or 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
         if self._method == "mm":
             # Make sure MM charges have been passed for the QM region.
             if mm_charges is None:
-                raise ValueError("'mm_charges' are required when using 'mm' embedding")
+                msg = "'mm_charges' are required when using 'mm' embedding"
+                _logger.error(msg)
+                raise ValueError(msg)
 
         # Load the model parameters.
         try:
             self._params = _scipy_io.loadmat(self._model, squeeze_me=True)
         except:
-            raise IOError(f"Unable to load model parameters from: '{self._model}'")
+            msg = f"Unable to load model parameters from: '{self._model}'"
+            _logger.error(msg)
+            raise IOError(msg)
 
         if backend is None:
             backend = "torchani"
 
         if not isinstance(backend, str):
-            raise TypeError("'backend' must be of type 'bool")
+            msg = "'backend' must be of type 'str'"
+            _logger.error(msg)
+            raise TypeError(msg)
         # Strip whitespace and convert to lower case.
         backend = backend.lower().replace(" ", "")
         if not backend in self._supported_backends:
-            raise ValueError(
-                f"Unsupported backend '{backend}'. Options are: {', '.join(self._supported_backends)}"
-            )
+            msg = f"Unsupported backend '{backend}'. Options are: {', '.join(self._supported_backends)}"
+            _logger.error(msg)
+            raise ValueError(msg)
         self._backend = backend
 
         if external_backend is not None:
             if not isinstance(external_backend, str):
-                raise TypeError("'external_backend' must be of type 'str'")
+                msg = "'external_backend' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
             if plugin_path is None:
                 plugin_path = "."
 
             if not isinstance(plugin_path, str):
-                raise TypeError("'plugin_path' must be of type 'str'")
+                msg = "'plugin_path' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
             # Convert to an absolute path.
             abs_plugin_path = _os.path.abspath(plugin_path)
 
             if not _os.path.isdir(abs_plugin_path):
-                raise IOError(f"Unable to locate plugin directory: {plugin_path}")
+                msg = f"Unable to locate plugin directory: {plugin_path}"
+                _logger.error(msg)
+                raise IOError(msg)
             self._plugin_path = abs_plugin_path
 
             # Strip whitespace.
@@ -589,9 +671,9 @@ class EMLECalculator:
                 function = external_backend.split(".")[-1]
                 module = external_backend.replace("." + function, "")
             except:
-                raise ValueError(
-                    f"Unable to parse 'external_backend' callback string: {external_backend}"
-                )
+                msg = f"Unable to parse 'external_backend' callback string: {external_backend}"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             # Try to import the module.
             try:
@@ -607,9 +689,9 @@ class EMLECalculator:
                     module = import_module(module)
                     sys.path.pop()
                 except:
-                    raise ImportError(
-                        f"Unable to import function '{function}' from module '{module}'"
-                    )
+                    msg = f"Unable to import module '{module}'"
+                    _logger.error(msg)
+                    raise ImportError(msg)
 
             # Bind the function to the class.
             self._external_backend = getattr(module, function)
@@ -622,31 +704,34 @@ class EMLECalculator:
 
         if parm7 is not None:
             if not isinstance(parm7, str):
-                raise ValueError("'parm7' must be of type 'str'")
+                msg = "'parm7' must be of type 'str'"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             # Convert to an absolute path.
             abs_parm7 = _os.path.abspath(parm7)
 
             # Make sure the file exists.
             if not _os.path.isfile(abs_parm7):
-                raise IOError(f"Unable to locate the 'parm7' file: '{parm7}'")
+                msg = f"Unable to locate the 'parm7' file: '{parm7}'"
+                raise IOError(msg)
 
             self._parm7 = abs_parm7
 
         if deepmd_model is not None and backend == "deepmd":
             # We support a str, or list/tuple of strings.
             if not isinstance(deepmd_model, (str, list, tuple)):
-                raise TypeError(
-                    "'deepmd_model' must be of type 'str', or a list of 'str' types"
-                )
+                msg = "'deepmd_model' must be of type 'str', or a list of 'str' types"
+                _logger.error(msg)
+                raise TypeError(msg)
             else:
                 # Make sure all values are strings.
                 if isinstance(deepmd_model, (list, tuple)):
                     for mod in deepmd_model:
                         if not isinstance(mod, str):
-                            raise TypeError(
-                                "'deepmd_model' must be of type 'str', or a list of 'str' types"
-                            )
+                            msg = "'deepmd_model' must be of type 'str', or a list of 'str' types"
+                            _logger.error(msg)
+                            raise TypeError(msg)
                 # Convert to a list.
                 else:
                     deepmd_model = [deepmd_model]
@@ -654,7 +739,9 @@ class EMLECalculator:
                 # Make sure all of the model files exist.
                 for model in deepmd_model:
                     if not _os.path.isfile(model):
-                        raise IOError(f"Unable to locate DeePMD model file: '{model}'")
+                        msg = f"Unable to locate DeePMD model file: '{model}'"
+                        _logger.error(msg)
+                        raise IOError(msg)
 
                 # Store the list of model files, removing any duplicates.
                 self._deepmd_model = list(set(deepmd_model))
@@ -667,12 +754,14 @@ class EMLECalculator:
                         _DeepPot(model) for model in self._deepmd_model
                     ]
                 except:
-                    raise RuntimeError("Unable to create the DeePMD potentials!")
+                    msg = "Unable to create the DeePMD potentials!"
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
         else:
             if self._backend == "deepmd":
-                raise ValueError(
-                    "'deepmd_model' must be specified when DeePMD 'backend' is chosen!"
-                )
+                msg = "'deepmd_model' must be specified when using the DeePMD backend!"
+                _logger.error(msg)
+                raise ValueError(msg)
 
         # Validate the QM method for SQM.
         if backend == "sqm":
@@ -680,13 +769,15 @@ class EMLECalculator:
                 sqm_theory = "DFTB3"
 
             if not isinstance(sqm_theory, str):
-                raise TypeError("'sqm_theory' must be of type 'str'")
+                msg = "'sqm_theory' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
             # Make sure a topology file has been set.
             if parm7 is None:
-                raise ValueError(
-                    "'parm7' must be specified when using the 'sqm' backend"
-                )
+                msg = "'parm7' must be specified when using the SQM backend"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             # Strip whitespace.
             self._sqm_theory = sqm_theory.replace(" ", "")
@@ -696,7 +787,9 @@ class EMLECalculator:
 
                 amber_parm = _AmberParm(self._parm7)
             except:
-                raise IOError(f"Unable to load AMBER topology file: '{parm7}'")
+                msg = f"Unable to load AMBER topology file: '{parm7}'"
+                _logger.error(msg)
+                raise IOError(msg)
 
             # Store the atom names for the QM region.
             self._sqm_atom_names = [atom.name for atom in amber_parm.atoms]
@@ -704,33 +797,41 @@ class EMLECalculator:
         # Make sure a QM topology file is specified for the 'sander' backend.
         elif backend == "sander":
             if parm7 is None:
-                raise ValueError(
-                    "'parm7' must be specified when using the 'sander' backend!"
-                )
+                msg = "'parm7' must be specified when using the 'sander' backend"
+                _logger.error(msg)
+                raise ValueError(msg)
 
         # Validate and load the Rascal model.
         if rascal_model is not None:
             if not isinstance(rascal_model, str):
-                raise TypeError("'rascal_model' must be of type 'str'")
+                msg = "'rascal_model' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
             # Convert to an absolute path.
             abs_rascal_model = _os.path.abspath(rascal_model)
 
             # Make sure the model file exists.
             if not _os.path.isfile(abs_rascal_model):
-                raise IOError(f"Unable to locate Rascal model file: '{rascal_model}'")
+                msg = f"Unable to locate Rascal model file: '{rascal_model}'"
+                _logger.error(msg)
+                raise IOError(msg)
 
             # Load the model.
             try:
                 self._rascal_model = _pickle.load(open(abs_rascal_model, "rb"))
             except:
-                raise IOError(f"Unable to load Rascal model file: '{rascal_model}'")
+                msg = f"Unable to load Rascal model file: '{rascal_model}'"
+                _logger.error(msg)
+                raise IOError(msg)
 
             # Try to get the SOAP parameters from the model.
             try:
                 soap = self._rascal_model.get_representation_calculator()
             except:
-                raise ValueError("Unable to extract SOAP parameters from Rascal model!")
+                msg = "Unable to extract SOAP parameters from Rascal model!"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             # Create the Rascal calculator.
             try:
@@ -738,14 +839,18 @@ class EMLECalculator:
 
                 self._rascal_calc = _ASEMLCalculator(self._rascal_model, soap)
             except:
-                raise RuntimeError("Unable to create Rascal calculator!")
+                msg = "Unable to create Rascal calculator!"
+                _logger.error(msg)
+                raise RuntimeError(msg)
 
             # Flag that delta-learning corrections will be applied.
             self._is_delta = True
 
         if restart is not None:
             if not isinstance(restart, bool):
-                raise TypeError("'restart' must be of type 'bool'")
+                msg = "'restart' must be of type 'bool'"
+                _logger.error(msg)
+                raise TypeError(msg)
         else:
             restart = False
         self._restart = restart
@@ -753,37 +858,47 @@ class EMLECalculator:
         # Validate the interpolation lambda parameter.
         if lambda_interpolate is not None:
             if self._backend == "rascal":
-                raise ValueError(
-                    "'lambda_interpolate' is currently unsupported when using the the Rascal backend!"
-                )
+                msg = "'lambda_interpolate' is currently unsupported when using the the Rascal backend!"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             self._is_interpolate = True
             self.set_lambda_interpolate(lambda_interpolate)
 
             # Make sure a topology file has been set.
             if parm7 is None:
-                raise ValueError("'parm7' must be specified when interpolating")
+                msg = "'parm7' must be specified when interpolating"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             # Make sure MM charges for the QM region have been set.
             if mm_charges is None:
-                raise ValueError("'mm_charges' are required when interpolating")
+                msg = "'mm_charges' are required when interpolating"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             # Make sure indices for the QM region have been passed.
             if qm_indices is None:
-                raise ValueError("'qm_indices' must be specified when interpolating")
+                msg = "'qm_indices' must be specified when interpolating"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             # Validate the indices. Note that we don't check that the are valid, only
             # that they are the correct type.
             if isinstance(qm_indices, list):
                 if not all(isinstance(x, int) for x in qm_indices):
-                    raise TypeError("'qm_indices' must be a list of 'int' types")
+                    msg = "'qm_indices' must be a list of 'int' types"
+                    _logger.error(msg)
+                    raise TypeError(msg)
                 self._qm_indices = qm_indices
             elif isinstance(qm_indices, str):
                 # Convert to an absolute path.
                 qm_indices = _os.path.abspath(qm_indices)
 
                 if not _os.path.isfile(qm_indices):
-                    raise IOError(f"Unable to locate 'qm_indices' file: {qm_indices}")
+                    msg = f"Unable to locate 'qm_indices' file: {qm_indices}"
+                    _logger.error(msg)
+                    raise IOError(msg)
 
                 # Read the indices into a list.
                 indices = []
@@ -792,29 +907,33 @@ class EMLECalculator:
                         try:
                             indices.append(int(line.strip()))
                         except:
-                            raise ValueError(
-                                f"Unable to read 'qm_indices' from file: {qm_indices}"
-                            )
+                            msg = f"Unable to read 'qm_indices' from file: {qm_indices}"
+                            _logger.error(msg)
+                            raise ValueError(msg)
                 self._qm_indices = indices
             else:
-                raise TypeError("'qm_indices' must be of type 'list' or 'str'")
+                msg = "'qm_indices' must be of type 'list' or 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
             # Make sure the number of interpolation steps has been set if more
             # than one lambda value has been specified.
             if len(self._lambda_interpolate) == 2:
                 if interpolate_steps is None:
-                    raise ValueError(
-                        "'interpolate_steps' must be specified when interpolating between two lambda values"
-                    )
+                    msg = "'interpolate_steps' must be specified when interpolating between two lambda values"
+                    _logger.error(msg)
+                    raise ValueError(msg)
                 else:
                     try:
                         interpolate_steps = int(interpolate_steps)
                     except:
-                        raise TypeError("'interpolate_steps' must be of type 'int'")
+                        msg = "'interpolate_steps' must be of type 'int'"
+                        _logger.error(msg)
+                        raise TypeError(msg)
                     if interpolate_steps < 0:
-                        raise ValueError(
-                            "'interpolate_steps' must be greater than or equal to 0"
-                        )
+                        msg = "'interpolate_steps' must be greater than or equal to 0"
+                        _logger.error(msg)
+                        raise ValueError(msg)
                     self._interpolate_steps = interpolate_steps
 
         else:
@@ -823,7 +942,9 @@ class EMLECalculator:
         # Validate the PyTorch device.
         if device is not None:
             if not isinstance(device, str):
-                raise TypError("'device' must be of type 'str'")
+                msg = "'device' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
             # Strip whitespace and convert to lower case.
             device = device.lower().replace(" ", "")
             # See if the user has specified a GPU index.
@@ -837,12 +958,14 @@ class EMLECalculator:
                 try:
                     index = int(index)
                 except:
-                    raise ValueError(f"Invalid GPU index: {index}") from None
+                    msg = f"Invalid GPU index: {index}"
+                    _logger.error(msg)
+                    raise ValueError(msg)
 
             if not device in self._supported_devices:
-                raise ValueError(
-                    f"Unsupported device '{device}'. Options are: {', '.join(self._supported_devices)}"
-                )
+                msg = f"Unsupported device '{device}'. Options are: {', '.join(self._supported_devices)}"
+                _logger.error(msg)
+                raise ValueError(msg)
             # Create the full CUDA device string.
             if device == "cuda":
                 device = f"cuda:{index}"
@@ -854,30 +977,58 @@ class EMLECalculator:
                 "cuda" if _torch.cuda.is_available() else "cpu"
             )
 
-        if log is None:
-            log = 1
+        if energy_frequency is None:
+            energy_frequency = 0
 
-        if not isinstance(log, int):
-            raise TypeError("'log' must be of type 'int")
+        if not isinstance(energy_frequency, int):
+            msg = "'energy_frequency' must be of type 'int'"
+            _logger.error(msg)
+            raise TypeError(msg)
         else:
-            self._log = log
+            self._energy_frequency = energy_frequency
+
+        if energy_file is None:
+            energy_file = "emle_energy.txt"
+        else:
+            if not isinstance(energy_file, str):
+                msg = "'energy_file' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
+
+            # Try to create the directory.
+            dirname = _os.path.dirname(energy_file)
+            if dirname != "":
+                try:
+                    _os.makedirs(dirname, exist_ok=True)
+                except:
+                    msg = f"Unable to create directory for energy file: {energy_file}"
+                    _logger.error(msg)
+                    raise IOError(msg)
+
+        self._energy_file = _os.path.abspath(energy_file)
 
         if save_settings is None:
             save_settings = True
 
         if not isinstance(save_settings, bool):
-            raise TypeError("'save_settings' must be of type 'bool'")
+            msg = "'save_settings' must be of type 'bool'"
+            _logger.error(msg)
+            raise TypeError(msg)
         else:
             self._save_settings = save_settings
 
         if orca_template is not None:
             if not isinstance(template, str):
-                raise TypeError("'orca_template' must be of type 'str'")
+                msg = "'orca_template' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
             # Convert to an absolute path.
             abs_orca_template = _os.path.abspath(orca_template)
 
             if not _os.path.isfile(abs_orca_template):
-                raise IOError(f"Unable to locate ORCA template file: '{orca_template}'")
+                msg = f"Unable to locate ORCA template file: '{orca_template}'"
+                _logger.error(msg)
+                raise IOError(msg)
             self._orca_template = abs_orca_template
         else:
             self._orca_template = None
@@ -949,18 +1100,22 @@ class EMLECalculator:
         # If the backend is ORCA, then try to find the executable.
         elif self._backend == "orca":
             if orca_path is None:
-                raise ValueError(
-                    "'orca_path' must be specified when using the ORCA backend"
-                )
+                msg = "'orca_path' must be specified when using the ORCA backend"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             if not isinstance(orca_path, str):
-                raise TypeError("'orca_path' must be of type 'str'")
+                msg = "'orca_path' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
             # Convert to an absolute path.
             abs_orca_path = _os.path.abspath(orca_path)
 
             if not _os.path.isfile(abs_orca_path):
-                raise IOError(f"Unable to locate ORCA executable: '{orca_path}'")
+                msg = f"Unable to locate ORCA executable: '{orca_path}'"
+                _logger.error(msg)
+                raise IOError(msg)
 
             self._orca_path = abs_orca_path
 
@@ -995,7 +1150,10 @@ class EMLECalculator:
             "device": device,
             "orca_template": None if orca_template is None else self._orca_template,
             "plugin_path": plugin_path,
-            "log": log,
+            "energy_frequency": energy_frequency,
+            "energy_file": energy_file,
+            "log_level": self._log_level,
+            "log_file": log_file,
         }
 
         # Write to a YAML file.
@@ -1016,9 +1174,13 @@ class EMLECalculator:
 
         if path is not None:
             if not isinstance(path, str):
-                raise TypeError("'path' must be of type 'str'")
+                msg = "'path' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
             if not _os.path.isdir(path):
-                raise ValueError(f"sander process path does not exist: {path}")
+                msg = f"sander process path does not exist: {path}"
+                _logger.error(msg)
+                raise ValueError(msg)
             orca_input = f"{path}/orc_job.inp"
         else:
             orca_input = "orc_job.inp"
@@ -1040,10 +1202,13 @@ class EMLECalculator:
         # when using mm embedding.
         if self._method == "mm":
             if len(xyz_qm) != len(self._mm_charges):
-                raise ValueError(
-                    f"MM embedding is specified but the number of atoms in the QM region ({len(xyz_qm)}) "
-                    f"doesn't match the number of MM charges ({len(self._mm_charges)})"
+                msg = (
+                    "MM embedding is specified but the number of atoms in the QM "
+                    f"region ({len(xyz_qm)}) doesn't match the number of MM charges "
+                    f"({len(self._mm_charges)})"
                 )
+                _logger.error(msg)
+                raise ValueError(msg)
 
         # Update the maximum number of MM atoms if this is the largest seen.
         num_mm_atoms = len(charges_mm)
@@ -1066,10 +1231,12 @@ class EMLECalculator:
                 species_id.append(self._hypers["global_species"].index(id))
                 elements.append(_ase.Atom(id).symbol)
             except:
-                raise ValueError(
+                msg = (
                     f"Unsupported element index '{id}'. "
                     f"The current model supports {', '.join(self._supported_elements)}"
                 )
+                _logger.error(msg)
+                raise ValueError(msg)
         self._species_id = _np.array(species_id)
 
         # First try to use the specified backend to compute in vacuo
@@ -1081,28 +1248,30 @@ class EMLECalculator:
             if self._backend == "torchani":
                 try:
                     E_vac, grad_vac = self._run_torchani(xyz_qm, atomic_numbers)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using TorchANI backend!"
-                    )
+                except Exception as e:
+                    msg = f"Failed to calculate in vacuo energies using TorchANI backend: {e}"
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # DeePMD.
             if self._backend == "deepmd":
                 try:
                     E_vac, grad_vac = self._run_deepmd(xyz_qm, elements)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using DeePMD backend!"
-                    )
+                except Exception as e:
+                    msg = f"Failed to calculate in vacuo energies using DeePMD backend: {e}"
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # ORCA.
             elif self._backend == "orca":
                 try:
                     E_vac, grad_vac = self._run_orca(orca_input, xyz_file_qm)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using ORCA backend!"
+                except Exception as e:
+                    msg = (
+                        f"Failed to calculate in vacuo energies using ORCA backend: {e}"
                     )
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # Sander.
             elif self._backend == "sander":
@@ -1110,47 +1279,52 @@ class EMLECalculator:
                     E_vac, grad_vac = self._run_pysander(
                         atoms, self._parm7, is_gas=True
                     )
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using Sander backend!"
-                    )
+                except Exception as e:
+                    msg = f"Failed to calculate in vacuo energies using Sander backend: {e}"
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # SQM.
             elif self._backend == "sqm":
                 try:
                     E_vac, grad_vac = self._run_sqm(xyz_qm, atomic_numbers, charge)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using SQM backend!"
+                except Exception as e:
+                    msg = (
+                        f"Failed to calculate in vacuo energies using SQM backend: {e}"
                     )
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # XTB.
             elif self._backend == "xtb":
                 try:
                     E_vac, grad_vac = self._run_xtb(atoms)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using XTB backend!"
+                except Exception as e:
+                    msg = (
+                        f"Failed to calculate in vacuo energies using XTB backend: {e}"
                     )
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
         # External backend.
         else:
             try:
                 E_vac, grad_vac = self._external_backend(atoms)
-            except:
-                raise
-                raise RuntimeError(
-                    "Failed to calculate in vacuo energies using external backend!"
+            except Exception as e:
+                msg = (
+                    f"Failed to calculate in vacuo energies using external backend: {e}"
                 )
+                _logger.error(msg)
+                raise RuntimeError(msg)
 
         # Apply delta-learning corrections using Rascal.
         if self._is_delta:
             try:
                 delta_E, delta_grad = self._run_rascal(atoms)
-            except:
-                raise RuntimeError(
-                    "Failed to compute delta-learning corrections using Rascal!"
-                )
+            except Exception as e:
+                msg = f"Failed to compute delta-learning corrections using Rascal: {e}"
+                _logger.error(msg)
+                raise RuntimeError(msg)
 
             # Add the delta-learning corrections to the in vacuo energies and gradients.
             E_vac += delta_E
@@ -1270,8 +1444,12 @@ class EMLECalculator:
                 f.write(f"{x:17.12f}{y:17.12f}{z:17.12f}\n")
 
         # Log energies to file.
-        if self._log > 0 and not self._is_first_step and self._step % self._log == 0:
-            with open("emle_log.txt", "a+") as f:
+        if (
+            self._energy_frequency > 0
+            and not self._is_first_step
+            and self._step % self._energy_frequency == 0
+        ):
+            with open(self._energy_file, "a+") as f:
                 # Write the header.
                 if self._step == 0:
                     if self._is_interpolate:
@@ -1310,41 +1488,45 @@ class EMLECalculator:
             between them when called multiple times.
         """
         if not self._is_interpolate:
-            raise Exception("Server is not in interpolation mode!")
+            msg = "Server is not in interpolation mode!"
+            _logger.error(msg)
+            raise Exception(msg)
         elif (
             self._lambda_interpolate is not None and len(self._lambda_interpolate) == 2
         ):
-            raise Exception(
-                "Cannot set lambda when interpolating between two lambda values!"
-            )
+            msg = "Cannot set lambda when interpolating between two lambda values!"
+            _logger.error(msg)
+            raise Exception(msg)
 
         if isinstance(lambda_interpolate, (list, tuple)):
             if len(lambda_interpolate) not in [1, 2]:
-                raise ValueError(
-                    "'lambda_interpolate' must be a single value or a list/tuple of two values"
-                )
+                msg = "'lambda_interpolate' must be a single value or a list/tuple of two values"
+                _logger.error(msg)
+                raise ValueError(msg)
             try:
                 lambda_interpolate = [float(x) for x in lambda_interpolate]
             except:
-                raise TypeError(
-                    "'lambda_interpolate' must be a single value or a list/tuple of two values"
-                )
+                msg = "'lambda_interpolate' must be a single value or a list/tuple of two values"
+                _logger.error(msg)
+                raise TypeError(msg)
             if not all(0.0 <= x <= 1.0 for x in lambda_interpolate):
-                raise ValueError(
-                    "'lambda_interpolate' must be between 0 and 1 for both values"
-                )
+                msg = "'lambda_interpolate' must be between 0 and 1 for both values"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             if len(lambda_interpolate) == 2:
                 if _np.isclose(lambda_interpolate[0], lambda_interpolate[1], atol=1e-6):
-                    raise ValueError(
-                        "The two values of 'lambda_interpolate' must be different"
-                    )
+                    msg = "The two values of 'lambda_interpolate' must be different"
+                    _logger.error(msg)
+                    raise ValueError(msg)
             self._lambda_interpolate = lambda_interpolate
 
         elif isinstance(lambda_interpolate, (int, float)):
             lambda_interpolate = float(lambda_interpolate)
             if not 0.0 <= lambda_interpolate <= 1.0:
-                raise ValueError("'lambda_interpolate' must be between 0 and 1")
+                msg = "'lambda_interpolate' must be between 0 and 1"
+                _logger.error(msg)
+                raise ValueError(msg)
             self._lambda_interpolate = [lambda_interpolate]
 
         # Reset the first step flag.
@@ -1397,10 +1579,13 @@ class EMLECalculator:
         # when using mm embedding.
         if self._method == "mm":
             if len(xyz_qm) != len(self._mm_charges):
-                raise ValueError(
-                    f"MM embedding is specified but the number of atoms in the QM region ({len(xyz_qm)}) "
-                    f"doesn't match the number of MM charges ({len(self._mm_charges)})"
+                msg = (
+                    "MM embedding is specified but the number of atoms in the "
+                    f"QM region ({len(xyz_qm)}) doesn't match the number of MM "
+                    f"charges ({len(self._mm_charges)})"
                 )
+                _logger.error(msg)
+                raise ValueError(msg)
 
         # Update the maximum number of MM atoms if this is the largest seen.
         num_mm_atoms = len(charges_mm)
@@ -1423,10 +1608,12 @@ class EMLECalculator:
                 species_id.append(self._hypers["global_species"].index(id))
                 elements.append(_ase.Atom(id).symbol)
             except:
-                raise ValueError(
+                msg = (
                     f"Unsupported element index '{id}'. "
                     f"The current model supports {', '.join(self._supported_elements)}"
                 )
+                _logger.error(msg)
+                raise ValueError(msg)
         self._species_id = _np.array(species_id)
 
         # First try to use the specified backend to compute in vacuo
@@ -1438,28 +1625,30 @@ class EMLECalculator:
             if self._backend == "torchani":
                 try:
                     E_vac, grad_vac = self._run_torchani(xyz_qm, atomic_numbers)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using TorchANI backend!"
-                    )
+                except Exception as e:
+                    msg = f"Failed to calculate in vacuo energies using TorchANI backend: {e}"
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # DeePMD.
             if self._backend == "deepmd":
                 try:
                     E_vac, grad_vac = self._run_deepmd(xyz_qm, elements)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using DeePMD backend!"
-                    )
+                except Exception as e:
+                    msg = f"Failed to calculate in vacuo energies using DeePMD backend: {e}"
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # ORCA.
             elif self._backend == "orca":
                 try:
                     E_vac, grad_vac = self._run_orca(orca_input, xyz_file_qm)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using ORCA backend!"
+                except Exception as e:
+                    msg = (
+                        f"Failed to calculate in vacuo energies using ORCA backend: {e}"
                     )
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # Sander.
             elif self._backend == "sander":
@@ -1468,40 +1657,45 @@ class EMLECalculator:
                     E_vac, grad_vac = self._run_pysander(
                         atoms, self._parm7, is_gas=True
                     )
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using Sander backend!"
-                    )
+                except Exception as e:
+                    msg = f"Failed to calculate in vacuo energies using Sander backend: {e}"
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # SQM.
             elif self._backend == "sqm":
                 try:
                     E_vac, grad_vac = self._run_sqm(xyz_qm, atomic_numbers, charge)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using SQM backend!"
+                except Exception as e:
+                    msg = (
+                        f"Failed to calculate in vacuo energies using SQM backend: {e}"
                     )
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # XTB.
             elif self._backend == "xtb":
                 try:
                     atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
                     E_vac, grad_vac = self._run_xtb(atoms)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using XTB backend!"
+                except Exception as e:
+                    msg = (
+                        f"Failed to calculate in vacuo energies using XTB backend: {e}"
                     )
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
         # External backend.
         else:
             try:
                 atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
                 E_vac, grad_vac = self._external_backend(atoms)
-            except:
-                raise
-                raise RuntimeError(
-                    "Failed to calculate in vacuo energies using external backend!"
+            except Exception as e:
+                msg = (
+                    f"Failed to calculate in vacuo energies using external backend: {e}"
                 )
+                _logger.error(msg)
+                raise RuntimeError(msg)
 
         # Apply delta-learning corrections using Rascal.
         if self._is_delta:
@@ -1509,10 +1703,10 @@ class EMLECalculator:
                 if atoms is None:
                     atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
                 delta_E, delta_grad = self._run_rascal(atoms)
-            except:
-                raise RuntimeError(
-                    "Failed to compute delta-learning corrections using Rascal!"
-                )
+            except Exception as e:
+                msg = f"Failed to compute delta-learning corrections using Rascal: {e}"
+                _logger.error(msg)
+                raise RuntimeError(msg)
 
             # Add the delta-learning corrections to the in vacuo energies and gradients.
             E_vac += delta_E
@@ -1612,8 +1806,12 @@ class EMLECalculator:
             grad_mm = lam * grad_mm + (1 - lam) * dE_dxyz_mm_bohr
 
         # Log energies to file.
-        if self._log > 0 and not self._is_first_step and self._step % self._log == 0:
-            with open("emle_log.txt", "a+") as f:
+        if (
+            self._energy_frequency > 0
+            and not self._is_first_step
+            and self._step % self._energy_frequency == 0
+        ):
+            with open(self._energy_file, "a+") as f:
                 # Write the header.
                 if self._step == 0:
                     if self._is_interpolate:
@@ -2210,9 +2408,13 @@ class EMLECalculator:
         """
 
         if not isinstance(orca_input, str):
-            raise TypeError("'orca_input' must be of type 'str'")
+            msg = "'orca_input' must be of type 'str'"
+            _logger.error(msg)
+            raise TypeError(msg)
         if not _os.path.isfile(orca_input):
-            raise IOError(f"Unable to locate the ORCA input file: {orca_input}")
+            msg = f"Unable to locate the ORCA input file: {orca_input}"
+            _logger.error(msg)
+            raise IOError(msg)
 
         # Store the directory name for the file. Files within the input file
         # should be relative to this.
@@ -2242,34 +2444,46 @@ class EMLECalculator:
         # Validate that the information was found.
 
         if charge is None:
-            raise ValueError("Unable to determine QM charge from ORCA input.")
+            msg = "Unable to determine QM charge from ORCA input."
+            _logger.error(msg)
+            raise ValueError(msg)
 
         if mult is None:
-            raise ValueError(
-                "Unable to determine QM spin multiplicity from ORCA input."
-            )
+            msg = "Unable to determine QM spin multiplicity from ORCA input."
+            _logger.error(msg)
+            raise ValueError(msg)
 
         if xyz_file_qm is None:
-            raise ValueError("Unable to determine QM xyz file from ORCA input.")
+            msg = "Unable to determine QM xyz file from ORCA input."
+            _logger.error(msg)
+            raise ValueError(msg)
         else:
             if not _os.path.isfile(xyz_file_qm):
                 xyz_file_qm = dirname + xyz_file_qm
             if not _os.path.isfile(xyz_file_qm):
-                raise ValueError(f"Unable to locate QM xyz file: {xyz_file_qm}")
+                msg = f"Unable to locate QM xyz file: {xyz_file_qm}"
+                _logger.error(msg)
+                raise ValueError(msg)
 
         if xyz_file_mm is None:
-            raise ValueError("Unable to determine MM xyz file from ORCA input.")
+            msg = "Unable to determine MM xyz file from ORCA input."
+            _logger.error(msg)
+            raise ValueError(msg)
         else:
             if not _os.path.isfile(xyz_file_mm):
                 xyz_file_mm = dirname + xyz_file_mm
             if not _os.path.isfile(xyz_file_mm):
-                raise ValueError(f"Unable to locate MM xyz file: {xyz_file_mm}")
+                msg = f"Unable to locate MM xyz file: {xyz_file_mm}"
+                _logger.error(msg)
+                raise ValueError(msg)
 
         # Process the QM xyz file.
         try:
             atoms = _ase_io.read(xyz_file_qm)
         except:
-            raise IOError(f"Unable to read QM xyz file: {xyz_file_qm}")
+            msg = f"Unable to read QM xyz file: {xyz_file_qm}"
+            _logger.error(msg)
+            raise IOError(msg)
 
         charges_mm = []
         xyz_mm = []
@@ -2284,12 +2498,16 @@ class EMLECalculator:
                     try:
                         charges_mm.append(float(data[0]))
                     except:
-                        raise ValueError("Unable to parse MM charge.")
+                        msg = "Unable to parse MM charge."
+                        _logger.error(msg)
+                        raise ValueError(msg)
 
                     try:
                         xyz_mm.append([float(x) for x in data[1:]])
                     except:
-                        raise ValueError("Unable to parse MM coordinates.")
+                        msg = "Unable to parse MM coordinates."
+                        _logger.error(msg)
+                        raise ValueError(msg)
 
         # Convert to NumPy arrays.
         charges_mm = _np.array(charges_mm)

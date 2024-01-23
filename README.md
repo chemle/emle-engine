@@ -109,7 +109,7 @@ emle-server --backend torchani
 When using the `orca` backend, you will also need to specify the path to the
 *real* `orca` exectubale using the `--orca-path` command-line argument, or the
 `EMLE_ORCA_PATH` environment variable. (To check that EMLE is running, look for
-an `emle_log.txt` file in the working directory, where. The input for `orca` will
+a log or settings  file in the working directory.) The input for `orca` will
 be taken from the `&orc` section of the `sander` configuration file, so use this
 to specify the method, etc.
 
@@ -206,11 +206,19 @@ are electron charge.
 
 ## Logging
 
-Energies can be written to a log file using the `--log` command-line argument or
-the `EMLE_LOG` environment variable. This should be an integer specifying the
-frequency at which energies are written. (The default is 1, i.e. every step
-is logged.) The output will look something like the following, where the
-columns specify the current step, the in vacuo energy and the total energy.
+Energies can be written to a file using the `--energy-file` command-line argument
+or the `EMLE_ENERGY_FILE` environment variable. The frequency of logging can be
+specified using `--energy-frequency` or `EMLE_ENERGY_FREQUENCY`. This should be an
+integer specifying the frequency at which energies are written. (The default is
+0, which means that energies aren't logged.) The output will look something like
+the following, where the columns specify the current step, the in vacuo energy
+and the total energy.
+
+General log messages are written to the file specified by the `--log-file` or
+`EMLE_LOG_FILE` options. (By default, no log file is used and diagnostic messages
+are written to `sys.stderr`.) The log level can be adjusted by using the
+`--log-level` or `EMLE_LOG_LEVEL` options. For performance, the default log level
+is set to `ERROR`.
 
 ```
 #     Step            E_vac (Eh)            E_tot (Eh)
@@ -288,9 +296,10 @@ Alternatively, if two values are passed then these will be used as initial and
 final values of λ, with the additional `--interpolate-steps` option specifying
 the number of steps (calls to the server) over which λ will be linearly
 interpolated. (This can also be specified using the `EMLE_INTERPOLATE_STEPS`
-environment variable.) In this case the `emle_log.txt` file will contain output
-similar to that shown below. The columns specify the current step, the current
-λ value, the energy at the current λ value, and the pure MM and EMLE energies.
+environment variable.) In this case the energy file (if written) will contain
+output similar to that shown below. The columns specify the current step, the
+current λ value, the energy at the current λ value, and the pure MM and EMLE
+energies.
 
 ```
 #     Step                     λ             E(λ) (Eh)           E(λ=0) (Eh)           E(λ=1) (Eh)

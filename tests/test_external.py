@@ -38,6 +38,7 @@ def test_external_local_directory():
         # Set environment variables.
         os.environ["EMLE_PORT"] = "12345"
         os.environ["EMLE_EXTERNAL_BACKEND"] = "external.run_external"
+        os.environ["EMLE_ENERGY_FREQUENCY"] = "1"
 
         # Create the sander command.
         command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
@@ -52,8 +53,8 @@ def test_external_local_directory():
         # Make sure that the process exited successfully.
         assert process.returncode == 0
 
-        # Make sure that a log file is written.
-        assert os.path.isfile(tmpdir + "/emle_log.txt")
+        # Make sure that an energy file is written.
+        assert os.path.isfile(tmpdir + "/emle_energy.txt")
 
 
 def test_external_plugin_directory():
@@ -72,6 +73,7 @@ def test_external_plugin_directory():
         os.environ["EMLE_PORT"] = "12345"
         os.environ["EMLE_EXTERNAL_BACKEND"] = "external.run_external"
         os.environ["EMLE_PLUGIN_PATH"] = os.getcwd() + "/tests/input"
+        os.environ["EMLE_ENERGY_FREQUENCY"] = "1"
 
         # Create the sander command.
         command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
@@ -86,5 +88,5 @@ def test_external_plugin_directory():
         # Make sure that the process exited successfully.
         assert process.returncode == 0
 
-        # Make sure that a log file is written.
-        assert os.path.isfile(tmpdir + "/emle_log.txt")
+        # Make sure that an energy file is written.
+        assert os.path.isfile(tmpdir + "/emle_energy.txt")
