@@ -527,11 +527,11 @@ class EMLECalculator:
             if not isinstance(log_file, str):
                 raise TypeError("'log_file' must be of type 'str'")
 
-            dirname = _os.path.dirname(log_file)
             # Try to create the directory.
+            dirname = _os.path.dirname(log_file)
             if dirname != "":
                 try:
-                    _os.makedirs(_os.path.dirname(log_file), exist_ok=True)
+                    _os.makedirs(dirname, exist_ok=True)
                 except:
                     raise IOError(
                         f"Unable to create directory for log file: {log_file}"
@@ -995,12 +995,11 @@ class EMLECalculator:
                 _logger.error(msg)
                 raise TypeError(msg)
 
-            dirname = _os.path.dirname(energy_file)
-
             # Try to create the directory.
+            dirname = _os.path.dirname(energy_file)
             if dirname != "":
                 try:
-                    _os.makedirs(_os.path.dirname(energy_file), exist_ok=True)
+                    _os.makedirs(dirname, exist_ok=True)
                 except:
                     msg = f"Unable to create directory for energy file: {energy_file}"
                     _logger.error(msg)
