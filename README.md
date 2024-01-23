@@ -215,9 +215,10 @@ where the columns specify the current step, the in vacuo energy and the total
 energy.
 
 General log messages are written to the file specified by the `--log-file` or
-`EMLE_LOG_FILE` options. (The default is `emle_log.txt`.) The log level can be
-adjusted by using the `--log-level` or `EMLE_LOG_LEVEL` options. For performance,
-the default log level is set to `ERROR`.
+`EMLE_LOG_FILE` options. (By default, no log file is used and diagnostic messages
+are written to `sys.stderr`.) The log level can be adjusted by using the
+`--log-level` or `EMLE_LOG_LEVEL` options. For performance, the default log level
+is set to `ERROR`.
 
 ```
 #     Step            E_vac (Eh)            E_tot (Eh)

@@ -35,6 +35,7 @@ import numpy as _np
 import shlex as _shlex
 import shutil as _shutil
 import subprocess as _subprocess
+import sys as _sys
 import tempfile as _tempfile
 import yaml as _yaml
 
@@ -389,7 +390,7 @@ class EMLECalculator:
         energy_frequency=1,
         energy_file="emle_energy.txt",
         log_level="ERROR",
-        log_file="emle_log.txt",
+        log_file=None,
         save_settings=True,
     ):
         """Constructor.
@@ -521,9 +522,7 @@ class EMLECalculator:
 
         # Validate the log file.
 
-        if log_file is None:
-            log_file = "emle_log.txt"
-        else:
+        if log_file is not None:
             if not isinstance(log_file, str):
                 raise TypeError("'log_file' must be of type 'str'")
 
@@ -536,7 +535,9 @@ class EMLECalculator:
                     raise IOError(
                         f"Unable to create directory for log file: {log_file}"
                     )
-        self._log_file = _os.path.abspath(log_file)
+            self._log_file = _os.path.abspath(log_file)
+        else:
+            self._log_file = _sys.stderr
 
         # Update the logger.
         _logger.remove()
