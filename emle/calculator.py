@@ -390,7 +390,7 @@ class EMLECalculator:
         energy_file="emle_energy.txt",
         log_level="ERROR",
         log_file=None,
-        save_settings=True,
+        save_settings=False,
     ):
         """
         Constructor
