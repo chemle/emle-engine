@@ -55,7 +55,7 @@ For usage information, run:
 emle-server --help
 ```
 
-(On startup an `emle_settings.yaml` file will be written to the working directory
+(By default, an `emle_settings.yaml` file will be written to the working directory
 containing the settings used to configure the server. This can be used to re-run
 an existing simulation using the `--config` option or `EMLE_CONFIG` environment
 variable. Additional `emle_pid.txt` and `emle_port.txt` files contain the process
@@ -215,10 +215,11 @@ will look something like the following, where the columns specify the current
 step, the in vacuo energy and the total energy.
 
 General log messages are written to the file specified by the `--log-file` or
-`EMLE_LOG_FILE` options. (By default, no log file is used and diagnostic messages
-are written to `sys.stderr`.) The log level can be adjusted by using the
-`--log-level` or `EMLE_LOG_LEVEL` options. For performance, the default log level
-is set to `ERROR`.
+`EMLE_LOG_FILE` options. (When using the Python API, by default, no log file is
+used and diagnostic messages are written to `sys.stderr`. When using `emle-server`,
+logs are by default redirected to `emle_log.txt`.) The log level can be adjusted
+by using the `--log-level` or `EMLE_LOG_LEVEL` options. For performance, the default
+log level is set to `ERROR`.
 
 ```
 #     Step            E_vac (Eh)            E_tot (Eh)

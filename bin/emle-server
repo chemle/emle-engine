@@ -523,6 +523,15 @@ if args["deepmd_model"] is not None:
         else:
             args["deepmd_model"] = models
 
+# Log errors by default.
+if args["log_file"] is None:
+    args["log_file"] = "emle_log.txt"
+
+# Save settings by default.
+if args["save_settings"] is None:
+    args["save_settings"] = True
+
+# Use the default backend if no external backend is specified.
 if args["external_backend"] is None:
     if args["backend"] is None:
         args["backend"] = "torchani"
