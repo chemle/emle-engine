@@ -339,12 +339,12 @@ python setup.py install
 ```
 
 For instructions on how to use the `emle-sire` interface, see the tutorial
-documentation [here](https://github.com/OpenBioSim/sire/blob/feature_emle/doc/source/tutorial/part07/01_emle.rst).
+documentation [here](https://github.com/OpenBioSim/sire/blob/feature_emle/doc/source/tutorial/part08/01_emle.rst).
 
 When performing end-state correction simulations using the `emle-sire` interface
 there is no need to specify the `lambda_interpolate` keyword when creating an
 `EMLECalculator` instance. Instead, interpolation can be enabled when creating a
-`Sire` dynamics object via the same keyword. (See the [tutorial](https://github.com/OpenBioSim/sire/blob/feature_emle/doc/source/tutorial/part07/01_eml.rst) for details.)
+`Sire` dynamics object via the same keyword. (See the [tutorial](https://github.com/OpenBioSim/sire/blob/feature_emle/doc/source/tutorial/part08/01_eml.rst) for details.)
 
 ## Issues
 
