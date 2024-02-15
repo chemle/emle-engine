@@ -229,7 +229,7 @@ class _SOAPCalculatorSpinv:
         ----------
 
         z: numpy.array (N_ATOMS)
-            Chemical species (element) for each atom  .
+            Chemical species (element) for each atom.
 
         xyz: numpy.array (N_ATOMS, 3)
             Atomic positions.
