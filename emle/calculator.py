@@ -376,6 +376,7 @@ class EMLECalculator:
         plugin_path=".",
         mm_charges=None,
         deepmd_model=None,
+        deepmd_deviation=None,
         rascal_model=None,
         parm7=None,
         qm_indices=None,
@@ -436,6 +437,10 @@ class EMLECalculator:
         deepmd_model: str
             Path to the DeePMD model file to use for in vacuo calculations. This
             must be specified if "deepmd" is the selected backend.
+
+        deepmd_deviation: str
+            Path to the file to dump max deviation between forces predicted
+            with the deepmd models.
 
         rascal_model: str
             Path to the Rascal model file used to apply delta-learning corrections
@@ -745,6 +750,11 @@ class EMLECalculator:
 
                 # Store the list of model files, removing any duplicates.
                 self._deepmd_model = list(set(deepmd_model))
+                if len(self._deepmd_model == 1 and deepmd_deviation):
+                    msg = "More that one deepmd model needed to calculate deviation"
+                    _logger.error(msg)
+                    raise IOError(msg)
+                self.deepmd_deviation = deepmd_deviation
 
                 # Initialise DeePMD backend attributes.
                 try:
@@ -1139,6 +1149,7 @@ class EMLECalculator:
             "external_backend": None if external_backend is None else external_backend,
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),
             "deepmd_model": deepmd_model,
+            "deepmd_deviation": deepmd_deviation,
             "rascal_model": rascal_model,
             "parm7": parm7,
             "qm_indices": None if qm_indices is None else self._qm_indices,
@@ -2666,6 +2677,8 @@ class EMLECalculator:
         # Reshape to a frames x (natoms x 3) array.
         xyz = xyz.reshape([1, -1])
 
+        f_list = []
+
         # Run a calculation for each model and take the average.
         for x, dp in enumerate(self._deepmd_potential):
             # Work out the mapping between the elements and the type indices
@@ -2682,10 +2695,17 @@ class EMLECalculator:
 
             if x == 0:
                 energy, force, _ = dp.eval(xyz, cells=None, atom_types=atom_types)
+                f_list.append(force[0])
             else:
                 e, f, _ = dp.eval(xyz, cells=None, atom_types=atom_types)
                 energy += e
                 force += f
+                f_list.append(f[0])
+
+        if self.deepmd_deviation:
+            max_f_std = _np.max(_np.std(_np.array(f_list), axis=0))
+            with open(self.deepmd_deviation, 'a') as deepmd_dev_file:
+                deepmd_dev_file.write(f'{max_f_std:12.5f}\n')
 
         # Take averages and return. (Gradient equals minus the force.)
         return (
