@@ -759,7 +759,7 @@ class EMLECalculator:
 
                 # Store the list of model files, removing any duplicates.
                 self._deepmd_model = list(set(deepmd_model))
-                if len(self._deepmd_model == 1 and deepmd_deviation):
+                if len(self._deepmd_model) == 1 and deepmd_deviation:
                     msg = (
                         "More that one DeePMD model needed to calculate the deviation!"
                     )
