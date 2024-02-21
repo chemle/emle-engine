@@ -439,8 +439,8 @@ class EMLECalculator:
             must be specified if "deepmd" is the selected backend.
 
         deepmd_deviation: str
-            Path to the file to dump max deviation between forces predicted
-            with the deepmd models.
+            Path to a file to write the max deviation between forces predicted
+            with the DeePMD models.
 
         rascal_model: str
             Path to the Rascal model file used to apply delta-learning corrections
@@ -748,13 +748,23 @@ class EMLECalculator:
                         _logger.error(msg)
                         raise IOError(msg)
 
+                # Validate the deviation file.
+                if deepmd_deviation is not None:
+                    if not isinstance(deepmd_deviation, str):
+                        msg = "'deepmd_deviation' must be of type 'str'"
+                        _logger.error(msg)
+                        raise TypeError(msg)
+
+                    self._deepmd_deviation = deepmd_deviation
+
                 # Store the list of model files, removing any duplicates.
                 self._deepmd_model = list(set(deepmd_model))
                 if len(self._deepmd_model == 1 and deepmd_deviation):
-                    msg = "More that one deepmd model needed to calculate deviation"
+                    msg = (
+                        "More that one DeePMD model needed to calculate the deviation!"
+                    )
                     _logger.error(msg)
                     raise IOError(msg)
-                self.deepmd_deviation = deepmd_deviation
 
                 # Initialise DeePMD backend attributes.
                 try:
@@ -2702,10 +2712,11 @@ class EMLECalculator:
                 force += f
                 f_list.append(f[0])
 
-        if self.deepmd_deviation:
+        # Write the maximum DeePMD force deviation to file.
+        if self._deepmd_deviation:
             max_f_std = _np.max(_np.std(_np.array(f_list), axis=0))
-            with open(self.deepmd_deviation, 'a') as deepmd_dev_file:
-                deepmd_dev_file.write(f'{max_f_std:12.5f}\n')
+            with open(self._deepmd_deviation, "a") as f:
+                f.write(f"{max_f_std:12.5f}\n")
 
         # Take averages and return. (Gradient equals minus the force.)
         return (

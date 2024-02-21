@@ -78,6 +78,7 @@ log_file = os.getenv("EMLE_LOG_FILE")
 save_settings = os.getenv("EMLE_SAVE_SETTINGS")
 orca_template = os.getenv("EMLE_ORCA_TEMPLATE")
 deepmd_model = os.getenv("EMLE_DEEPMD_MODEL")
+deepmd_deviation = os.getenv("EMLE_DEEPMD_DEVIATION")
 rascal_model = os.getenv("EMLE_RASCAL_MODEL")
 parm7 = os.getenv("EMLE_PARM7")
 try:
@@ -125,6 +126,7 @@ env = {
     "plugin_path": plugin_path,
     "device": device,
     "deepmd_model": deepmd_model,
+    "deepmd_deviation": deepmd_deviation,
     "rascal_model": rascal_model,
     "lambda_interpolate": lambda_interpolate,
     "interpolate_steps": interpolate_steps,
@@ -217,6 +219,12 @@ parser.add_argument(
     type=str,
     nargs="*",
     help="path to DeePMD model file(s)",
+    required=False,
+)
+parser.add_argument(
+    "--deepmd-deviation",
+    type=str,
+    help="path to a file to write the max deviation between forces predicted with the DeePMD models",
     required=False,
 )
 parser.add_argument(
