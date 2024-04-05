@@ -448,7 +448,7 @@ class EMLECalculator:
             Path to write out xyz trajectory of the QM region.
 
         qm_xyz_frequency: int
-            How often to write the xyz trajectory of the QM region. zero turns
+            How often to write the xyz trajectory of the QM region. Zero turns
             off writing.
 
         rascal_model: str
