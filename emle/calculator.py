@@ -377,6 +377,8 @@ class EMLECalculator:
         mm_charges=None,
         deepmd_model=None,
         deepmd_deviation=None,
+        qm_xyz_file="qm.xyz",
+        qm_xyz_frequency=0,
         rascal_model=None,
         parm7=None,
         qm_indices=None,
@@ -441,6 +443,13 @@ class EMLECalculator:
         deepmd_deviation: str
             Path to a file to write the max deviation between forces predicted
             with the DeePMD models.
+
+        qm_xyz_file: str
+            Path to write out xyz trajectory of the QM region.
+
+        qm_xyz_frequency: int
+            How often to write the xyz trajectory of the QM region. zero turns
+            off writing.
 
         rascal_model: str
             Path to the Rascal model file used to apply delta-learning corrections
@@ -782,6 +791,9 @@ class EMLECalculator:
                 msg = "'deepmd_model' must be specified when using the DeePMD backend!"
                 _logger.error(msg)
                 raise ValueError(msg)
+
+        self.qm_xyz_frequency = qm_xyz_frequency
+        self.qm_xyz_file = qm_xyz_file
 
         # Validate the QM method for SQM.
         if backend == "sqm":
@@ -1160,6 +1172,8 @@ class EMLECalculator:
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),
             "deepmd_model": deepmd_model,
             "deepmd_deviation": deepmd_deviation,
+            "qm_xyz_file": qm_xyz_file,
+            "qm_xyz_frequency": qm_xyz_frequency,
             "rascal_model": rascal_model,
             "parm7": parm7,
             "qm_indices": None if qm_indices is None else self._qm_indices,
@@ -1486,6 +1500,13 @@ class EMLECalculator:
                     )
                 else:
                     f.write(f"{self._step:>10}{E_vac:22.12f}{E_tot:22.12f}\n")
+
+        if self.qm_xyz_frequency > 0 and self._step % self.qm_xyz_frequency == 0:
+            # Write out the QM region to xyz trajectory file
+            atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+            if hasattr(self, 'max_f_std'):
+                atoms.info = {'max_f_std': self.max_f_std}
+            _ase_io.write(self.qm_xyz_file, atoms, append=True)
 
         # Increment the step counter.
         if self._is_first_step:
@@ -2717,6 +2738,7 @@ class EMLECalculator:
             max_f_std = _np.max(_np.std(_np.array(f_list), axis=0))
             with open(self._deepmd_deviation, "a") as f:
                 f.write(f"{max_f_std:12.5f}\n")
+            self.max_f_std = max_f_std # To be written to qm_xyz_file
 
         # Take averages and return. (Gradient equals minus the force.)
         return (
