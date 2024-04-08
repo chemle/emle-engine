@@ -2763,6 +2763,7 @@ class EMLECalculator:
         # Write the maximum DeePMD force deviation to file.
         if self._deepmd_deviation:
             from deepmd.infer.model_devi import calc_model_devi_f
+
             max_f_std = calc_model_devi_f(_np.array(f_list))[0][0]
             with open(self._deepmd_deviation, "a") as f:
                 f.write(f"{max_f_std:12.5f}\n")
