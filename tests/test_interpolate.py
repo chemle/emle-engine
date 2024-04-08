@@ -7,22 +7,6 @@ import subprocess
 import tempfile
 
 
-@pytest.fixture(autouse=True)
-def teardown():
-    """
-    Clean up the environment.
-    """
-
-    yield
-
-    # Stop the EMLE server.
-    process = subprocess.run(
-        shlex.split("emle-stop"),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-
-
 def parse_mdinfo(mdinfo_file):
     """
     Helper function to extract the total energy from AMBER mdinfo files.

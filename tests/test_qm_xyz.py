@@ -6,22 +6,6 @@ import subprocess
 import tempfile
 
 
-@pytest.fixture(autouse=True)
-def teardown():
-    """
-    Clean up the environment.
-    """
-
-    yield
-
-    # Stop the EMLE server.
-    process = subprocess.run(
-        shlex.split("emle-stop"),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-
-
 def test_qm_xyz():
     """
     Make sure that an xyz file for the QM region is written when requested.
