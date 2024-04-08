@@ -793,6 +793,9 @@ class EMLECalculator:
                 _logger.error(msg)
                 raise ValueError(msg)
 
+            # Set the deviation file to None in case it was spuriously set.
+            self._deepmd_deviation = None
+
         # Validate the QM XYZ file options.
 
         if qm_xyz_file is None:
