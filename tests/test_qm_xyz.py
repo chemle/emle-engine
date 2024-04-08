@@ -60,4 +60,3 @@ def test_qm_xyz():
                 if line.startswith("22"):
                     num_frames += 1
         assert num_frames == 11
-
