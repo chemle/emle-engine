@@ -445,7 +445,8 @@ class EMLECalculator:
             with the DeePMD models.
 
         qm_xyz_file: str
-            Path to write out xyz trajectory of the QM region.
+            Path to an output file for writing the xyz trajectory of the QM
+            region.
 
         qm_xyz_frequency: int
             How often to write the xyz trajectory of the QM region. Zero turns
@@ -792,8 +793,34 @@ class EMLECalculator:
                 _logger.error(msg)
                 raise ValueError(msg)
 
-        self.qm_xyz_frequency = qm_xyz_frequency
-        self.qm_xyz_file = qm_xyz_file
+            # Set the deviation file to None in case it was spuriously set.
+            self._deepmd_deviation = None
+
+        # Validate the QM XYZ file options.
+
+        if qm_xyz_file is None:
+            qm_xyz_file = "qm.xyz"
+        else:
+            if not isinstance(qm_xyz_file, str):
+                msg = "'qm_xyz_file' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
+        self._qm_xyz_file = qm_xyz_file
+
+        if qm_xyz_frequency is None:
+            qm_xyz_frequency = 0
+        else:
+            try:
+                qm_xyz_frequency = int(qm_xyz_frequency)
+            except:
+                msg = "'qm_xyz_frequency' must be of type 'int'"
+                _logger.error(msg)
+                raise TypeError(msg)
+            if qm_xyz_frequency < 0:
+                msg = "'qm_xyz_frequency' must be greater than or equal to 0"
+                _logger.error(msg)
+                raise ValueError(msg)
+        self._qm_xyz_frequency = qm_xyz_frequency
 
         # Validate the QM method for SQM.
         if backend == "sqm":
@@ -1501,12 +1528,12 @@ class EMLECalculator:
                 else:
                     f.write(f"{self._step:>10}{E_vac:22.12f}{E_tot:22.12f}\n")
 
-        if self.qm_xyz_frequency > 0 and self._step % self.qm_xyz_frequency == 0:
-            # Write out the QM region to xyz trajectory file
+        # Write out the QM region to the xyz trajectory file.
+        if self._qm_xyz_frequency > 0 and self._step % self._qm_xyz_frequency == 0:
             atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
-            if hasattr(self, 'max_f_std'):
-                atoms.info = {'max_f_std': self.max_f_std}
-            _ase_io.write(self.qm_xyz_file, atoms, append=True)
+            if hasattr(self, "_max_f_std"):
+                atoms.info = {"max_f_std": self._max_f_std}
+            _ase_io.write(self._qm_xyz_file, atoms, append=True)
 
         # Increment the step counter.
         if self._is_first_step:
@@ -2739,7 +2766,8 @@ class EMLECalculator:
             max_f_std = calc_model_devi_f(_np.array(f_list))[0][0]
             with open(self._deepmd_deviation, "a") as f:
                 f.write(f"{max_f_std:12.5f}\n")
-            self.max_f_std = max_f_std # To be written to qm_xyz_file
+            # To be written to qm_xyz_file.
+            self._max_f_std = max_f_std
 
         # Take averages and return. (Gradient equals minus the force.)
         return (

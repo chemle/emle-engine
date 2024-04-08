@@ -79,6 +79,11 @@ save_settings = os.getenv("EMLE_SAVE_SETTINGS")
 orca_template = os.getenv("EMLE_ORCA_TEMPLATE")
 deepmd_model = os.getenv("EMLE_DEEPMD_MODEL")
 deepmd_deviation = os.getenv("EMLE_DEEPMD_DEVIATION")
+qm_xyz_file = os.getenv("EMLE_QM_XYZ_FILE")
+try:
+    qm_xyz_frequency = int(os.getenv("EMLE_QM_XYZ_FREQUENCY"))
+except:
+    qm_xyz_frequency = 0
 rascal_model = os.getenv("EMLE_RASCAL_MODEL")
 parm7 = os.getenv("EMLE_PARM7")
 try:
@@ -127,6 +132,8 @@ env = {
     "device": device,
     "deepmd_model": deepmd_model,
     "deepmd_deviation": deepmd_deviation,
+    "qm_xyz_file": qm_xyz_file,
+    "qm_xyz_frequency": qm_xyz_frequency,
     "rascal_model": rascal_model,
     "lambda_interpolate": lambda_interpolate,
     "interpolate_steps": interpolate_steps,
@@ -225,6 +232,18 @@ parser.add_argument(
     "--deepmd-deviation",
     type=str,
     help="path to a file to write the max deviation between forces predicted with the DeePMD models",
+    required=False,
+)
+parser.add_argument(
+    "--qm-xyz-file",
+    type=str,
+    help="path to a file to write the QM region coordinates",
+    required=False,
+)
+parser.add_argument(
+    "--qm-xyz-frequency",
+    type=int,
+    help="the frequency of writing the QM region coordinates to file (0 to disable)",
     required=False,
 )
 parser.add_argument(
