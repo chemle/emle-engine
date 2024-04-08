@@ -2726,16 +2726,17 @@ class EMLECalculator:
 
             if x == 0:
                 energy, force, _ = dp.eval(xyz, cells=None, atom_types=atom_types)
-                f_list.append(force[0])
+                f_list.append(force)
             else:
                 e, f, _ = dp.eval(xyz, cells=None, atom_types=atom_types)
                 energy += e
                 force += f
-                f_list.append(f[0])
+                f_list.append(f)
 
         # Write the maximum DeePMD force deviation to file.
         if self._deepmd_deviation:
-            max_f_std = _np.max(_np.std(_np.array(f_list), axis=0))
+            from deepmd.infer.model_devi import calc_model_devi_f
+            max_f_std = calc_model_devi_f(_np.array(f_list))[0][0]
             with open(self._deepmd_deviation, "a") as f:
                 f.write(f"{max_f_std:12.5f}\n")
             self.max_f_std = max_f_std # To be written to qm_xyz_file
