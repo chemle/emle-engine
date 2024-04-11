@@ -2735,10 +2735,11 @@ class EMLECalculator:
         # Reshape to a frames x (natoms x 3) array.
         xyz = xyz.reshape([1, -1])
 
+        e_list = []
         f_list = []
 
         # Run a calculation for each model and take the average.
-        for x, dp in enumerate(self._deepmd_potential):
+        for dp in self._deepmd_potential:
             # Work out the mapping between the elements and the type indices
             # used by the model.
             try:
@@ -2751,14 +2752,9 @@ class EMLECalculator:
             # Now determine the atom types based on the mapping.
             atom_types = [mapping[element] for element in elements]
 
-            if x == 0:
-                energy, force, _ = dp.eval(xyz, cells=None, atom_types=atom_types)
-                f_list.append(force)
-            else:
-                e, f, _ = dp.eval(xyz, cells=None, atom_types=atom_types)
-                energy += e
-                force += f
-                f_list.append(f)
+            e, f, _ = dp.eval(xyz, cells=None, atom_types=atom_types)
+            e_list.append(e)
+            f_list.append(f)
 
         # Write the maximum DeePMD force deviation to file.
         if self._deepmd_deviation:
@@ -2771,9 +2767,11 @@ class EMLECalculator:
             self._max_f_std = max_f_std
 
         # Take averages and return. (Gradient equals minus the force.)
+        e_mean = _np.mean(_np.array(e_list), axis=0)
+        grad_mean = -_np.mean(_np.array(f_list), axis=0)
         return (
-            (energy[0][0] * _EV_TO_HARTREE) / (x + 1),
-            -(force[0] * _EV_TO_HARTREE * _BOHR_TO_ANGSTROM) / (x + 1),
+            e_mean[0][0] * _EV_TO_HARTREE,
+            grad_mean[0] * _EV_TO_HARTREE * _BOHR_TO_ANGSTROM,
         )
 
     def _run_orca(
