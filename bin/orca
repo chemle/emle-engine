@@ -3,7 +3,7 @@
 #######################################################################
 # EMLE-Engine: https://github.com/chemle/emle-engine
 #
-# Copyright: 2023
+# Copyright: 2023-2024
 #
 # Authors: Lester Hedges   <lester.hedges@gmail.com>
 #          Kirill Zinovjev <kzinovjev@gmail.com>
@@ -27,7 +27,7 @@ import subprocess
 import sys
 import time
 
-from emle.socket import Socket
+from emle._socket import Socket
 
 print("Starting EMLE client...")
 

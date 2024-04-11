@@ -1,7 +1,7 @@
 #######################################################################
 # EMLE-Engine: https://github.com/chemle/emle-engine
 #
-# Copyright: 2023
+# Copyright: 2023-2024
 #
 # Authors: Lester Hedges   <lester.hedges@gmail.com>
 #          Kirill Zinovjev <kzinovjev@gmail.com>
@@ -20,9 +20,14 @@
 # along with EMLE-Engine If not, see <http://www.gnu.org/licenses/>.
 #####################################################################
 
-import socket as _socket
+"""Simple TCP socket-server implementation."""
+
+__author__ = "Lester Hedges"
+__email__ = "lester.hedges@gmail.com"
 
 __all__ = ["Socket"]
+
+import socket as _socket
 
 
 class Socket:

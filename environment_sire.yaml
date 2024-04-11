@@ -1,7 +1,8 @@
-name: emle
+name: emle-sire
 
 channels:
   - conda-forge
+  - openbiosim/label/emle
 
 dependencies:
   - ambertools
@@ -9,16 +10,15 @@ dependencies:
   - compilers
   - deepmd-kit
   - eigen
-  - julia
   - loguru
+  - openmm >= 8.1
   - pip
   - pybind11
-  - pyjulia
   - pytorch
   - python < 3.11
   - pyyaml
+  - sire
   - torchani
   - xtb-python
   - pip:
     - git+https://github.com/lab-cosmo/librascal.git
-    - git+https://github.com/casv2/pyjulip.git@72280a6ac3

@@ -10,6 +10,10 @@ that no modifications to sander are needed. The embedding model currently
 supports the HCNOS elements. We plan to add support for further elements
 in the near future.
 
+Further details can be found in our preprint, available [here](https://doi.org/10.26434/chemrxiv-2023-6rng3-v2). Please
+cite this work if you use `emle-engine` in your research. Supplementary
+information and data can be found [here](https://github.com/chemle/emle-engine-paper).
+
 ## Installation
 
 First create a conda environment with all of the required dependencies:
@@ -69,7 +73,7 @@ For usage information, run:
 emle-server --help
 ```
 
-(On startup an `emle_settings.yaml` file will be written to the working directory
+(By default, an `emle_settings.yaml` file will be written to the working directory
 containing the settings used to configure the server. This can be used to re-run
 an existing simulation using the `--config` option or `EMLE_CONFIG` environment
 variable. Additional `emle_pid.txt` and `emle_port.txt` files contain the process
@@ -121,11 +125,12 @@ emle-server --backend torchani
 
 (The default backend is `torchani`.)
 
-When using the `orca` backend, you will need to ensure that the _fake_ `orca`
-executable takes precedence in the `PATH`. (To check that EMLE is running,
-look for an `emle_log.txt` file in the working directory, where. The input
-for `orca` will be taken from the `&orc` section of the `sander` configuration
-file, so use this to specify the method, etc.
+When using the `orca` backend, you will also need to specify the path to the
+*real* `orca` exectubale using the `--orca-path` command-line argument, or the
+`EMLE_ORCA_PATH` environment variable. (To check that EMLE is running, look for
+a log or settings  file in the working directory.) The input for `orca` will
+be taken from the `&orc` section of the `sander` configuration file, so use this
+to specify the method, etc.
 
 When using `deepmd` as the backend you will also need to specify a model
 file to use. This can be passed with the `--deepmd-model` command-line argument,
@@ -220,11 +225,20 @@ are electron charge.
 
 ## Logging
 
-Energies can be written to a log file using the `--log` command-line argument or
-the `EMLE_LOG` environment variable. This should be an integer specifying the
-frequency at which energies are written. (The default is 1, i.e. every step
-is logged.) The output will look something like the following, where the
-columns specify the current step, the in vacuo energy and the total energy.
+Energies can be written to a file using the `--energy-file` command-line argument
+or the `EMLE_ENERGY_FILE` environment variable. The frequency of logging can be
+specified using `--energy-frequency` or `EMLE_ENERGY_FREQUENCY`. This should be an
+integer specifying the frequency, in integration steps, at which energies are
+written. (The default is 0, which means that energies aren't logged.) The output
+will look something like the following, where the columns specify the current
+step, the in vacuo energy and the total energy.
+
+General log messages are written to the file specified by the `--log-file` or
+`EMLE_LOG_FILE` options. (When using the Python API, by default, no log file is
+used and diagnostic messages are written to `sys.stderr`. When using `emle-server`,
+logs are by default redirected to `emle_log.txt`.) The log level can be adjusted
+by using the `--log-level` or `EMLE_LOG_LEVEL` options. For performance, the default
+log level is set to `ERROR`.
 
 ```
 #     Step            E_vac (Eh)            E_tot (Eh)
@@ -286,7 +300,7 @@ argument, or via the `EMLE_PARM7` environment variables You will also need to
 specify the (zero-based) indices of the atoms within the QM region. To do so,
 use the `--qm-indices` command-line argument, or the `EMLE_QM_INDICES` environment
 variable. Finally, you will need specify MM charges for the QM atoms using
-the `--mm-charges` command-line argument or the `EMLE_MM_CHARES` environment
+the `--mm-charges` command-line argument or the `EMLE_MM_CHARGES` environment
 variable. These are used to calculate the electrostatic interactions between
 point charges on the QM and MM regions.
 
@@ -302,9 +316,10 @@ Alternatively, if two values are passed then these will be used as initial and
 final values of λ, with the additional `--interpolate-steps` option specifying
 the number of steps (calls to the server) over which λ will be linearly
 interpolated. (This can also be specified using the `EMLE_INTERPOLATE_STEPS`
-environment variable.) In this case the `emle_log.txt` file will contain output
-similar to that shown below. The columns specify the current step, the current
-λ value, the energy at the current λ value, and the pure MM and EMLE energies.
+environment variable.) In this case the energy file (if written) will contain
+output similar to that shown below. The columns specify the current step, the
+current λ value, the energy at the current λ value, and the pure MM and EMLE
+energies.
 
 ```
 #     Step                     λ             E(λ) (Eh)           E(λ=0) (Eh)           E(λ=1) (Eh)
@@ -320,6 +335,35 @@ similar to that shown below. The columns specify the current step, the current
         45        0.900000000000     -446.150207519531       -0.019694851711     -495.720275878906
         50        1.000000000000     -495.725952148438       -0.020683377981     -495.725952148438
 ```
+
+## OpenMM integration
+
+We provide an interface between `emle-engine` and [OpenMM](https://openmm.org) via the
+[Sire](https://sire.openbiosim.org/) molecular simulation framework. This allows QM/MM simulations
+to be run with OpenMM using EMLE for the embedding model. This provides improved
+performance and flexibility in comparison to the `sander` interface, although
+the implementation should currently be treated as being _experimental_.
+
+To use, first create an `emle-sire` conda environment:
+
+```sh
+conda env create -f environment_sire.yaml
+conda activate emle-sire
+```
+
+Next install `emle-engine` into the environment:
+
+```sh
+python setup.py install
+```
+
+For instructions on how to use the `emle-sire` interface, see the tutorial
+documentation [here](https://github.com/OpenBioSim/sire/blob/feature_emle/doc/source/tutorial/partXX/01_emle.rst).
+
+When performing end-state correction simulations using the `emle-sire` interface
+there is no need to specify the `lambda_interpolate` keyword when creating an
+`EMLECalculator` instance. Instead, interpolation can be enabled when creating a
+`Sire` dynamics object via the same keyword. (See the [tutorial](https://github.com/OpenBioSim/sire/blob/feature_emle/doc/source/tutorial/partXX/01_emle.rst) for details.)
 
 ## Issues
 

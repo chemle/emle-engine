@@ -1,7 +1,7 @@
 #######################################################################
 # EMLE-Engine: https://github.com/chemle/emle-engine
 #
-# Copyright: 2023
+# Copyright: 2023-2024
 #
 # Authors: Lester Hedges   <lester.hedges@gmail.com>
 #          Kirill Zinovjev <kzinovjev@gmail.com>
@@ -20,53 +20,62 @@
 # along with EMLE-Engine If not, see <http://www.gnu.org/licenses/>.
 #####################################################################
 
-import os
-import pickle
-import numpy as np
-import shlex
-import shutil
-import subprocess
-import tempfile
-import yaml
+"""EMLE calculator implementation."""
 
-import scipy
-import scipy.io
+__author__ = "Lester Hedges"
+__email__ = "lester.hedges@gmail.com"
 
-import ase
-import ase.io
+__all__ = ["EMLECalculator"]
 
-from rascal.representations import SphericalInvariants
+from loguru import logger as _logger
 
-import torch
+import os as _os
+import pickle as _pickle
+import numpy as _np
+import shlex as _shlex
+import shutil as _shutil
+import subprocess as _subprocess
+import sys as _sys
+import tempfile as _tempfile
+import yaml as _yaml
+
+import scipy.io as _scipy_io
+
+import ase as _ase
+import ase.io as _ase_io
+
+from rascal.representations import SphericalInvariants as _SphericalInvariants
+
+import torch as _torch
 
 try:
-    from torch.func import grad_and_value
+    from torch.func import grad_and_value as _grad_and_value
 except:
-    from functorch import grad_and_value
+    from func_torch import grad_and_value as _grad_and_value
 
 
-ANGSTROM_TO_BOHR = 1.0 / ase.units.Bohr
-NANOMETER_TO_BOHR = 10.0 / ase.units.Bohr
-BOHR_TO_ANGSTROM = ase.units.Bohr
-EV_TO_HARTREE = 1.0 / ase.units.Hartree
-KCAL_MOL_TO_HARTREE = 1.0 / ase.units.Hartree * ase.units.kcal / ase.units.mol
-HARTREE_TO_KJ_MOL = ase.units.Hartree / ase.units.kJ * ase.units.mol
+_ANGSTROM_TO_BOHR = 1.0 / _ase.units.Bohr
+_NANOMETER_TO_BOHR = 10.0 / _ase.units.Bohr
+_BOHR_TO_ANGSTROM = _ase.units.Bohr
+_EV_TO_HARTREE = 1.0 / _ase.units.Hartree
+_KCAL_MOL_TO_HARTREE = 1.0 / _ase.units.Hartree * _ase.units.kcal / _ase.units.mol
+_HARTREE_TO_KJ_MOL = _ase.units.Hartree / _ase.units.kJ * _ase.units.mol
 
 # Settings for the default model. For system specific models, these will be
 # overwritten by values in the model file.
-SPECIES = (1, 6, 7, 8, 16)
-SIGMA = 1e-3
-SPHERICAL_EXPANSION_HYPERS_COMMON = {
+_SPECIES = (1, 6, 7, 8, 16)
+_SIGMA = 1e-3
+_SPHERICAL_EXPANSION_HYPERS_COMMON = {
     "gaussian_sigma_constant": 0.5,
     "gaussian_sigma_type": "Constant",
     "cutoff_smooth_width": 0.5,
     "radial_basis": "GTO",
     "expansion_by_species_method": "user defined",
-    "global_species": SPECIES,
+    "global_species": _SPECIES,
 }
 
 
-class GPRCalculator:
+class _GPRCalculator:
     """Predicts an atomic property for a molecule with Gaussian Process Regression (GPR)."""
 
     def __init__(self, ref_values, ref_soap, n_ref, sigma):
@@ -92,7 +101,7 @@ class GPRCalculator:
         Kinv = self.get_Kinv(ref_soap, sigma)
         self.n_ref = n_ref
         self.n_z = len(n_ref)
-        self.ref_mean = np.sum(ref_values, axis=1) / n_ref
+        self.ref_mean = _np.sum(ref_values, axis=1) / n_ref
         ref_shifted = ref_values - self.ref_mean[:, None]
         self.c = (Kinv @ ref_shifted[:, :, None]).squeeze()
 
@@ -118,10 +127,10 @@ class GPRCalculator:
             The values of the predicted property for each atom
 
         gradient: numpy.array (N_ATOMS, N_SOAP)
-            The gradients of the property w.r.t. the soap features
+            The gradients of the property w.r.t. the SOAP features
         """
 
-        result = np.zeros(len(zid), dtype=np.float32)
+        result = _np.zeros(len(zid), dtype=_np.float32)
         for i in range(self.n_z):
             n_ref = self.n_ref[i]
             ref_soap_z = self.ref_soap[i, :n_ref]
@@ -137,7 +146,7 @@ class GPRCalculator:
     def get_gradient(self, mol_soap, zid):
         """
         Returns the gradient of the predicted property with respect to
-        soap features.
+        SOAP features.
 
         Parameters
         ----------
@@ -156,7 +165,7 @@ class GPRCalculator:
             the soap features.
         """
         n_at, n_soap = mol_soap.shape
-        df_dsoap = np.zeros((n_at, n_soap), dtype=np.float32)
+        df_dsoap = _np.zeros((n_at, n_soap), dtype=_np.float32)
         for i in range(self.n_z):
             n_ref = self.n_ref[i]
             ref_soap_z = self.ref_soap[i, :n_ref]
@@ -189,10 +198,10 @@ class GPRCalculator:
         """
         n = ref_soap.shape[1]
         K = (ref_soap @ ref_soap.swapaxes(1, 2)) ** 2
-        return np.linalg.inv(K + sigma**2 * np.eye(n, dtype=np.float32))
+        return _np.linalg.inv(K + sigma**2 * _np.eye(n, dtype=_np.float32))
 
 
-class SOAPCalculatorSpinv:
+class _SOAPCalculatorSpinv:
     """
     Calculates Smooth Overlap of Atomic Positions (SOAP) feature vectors for
     a given system from spherical invariants.
@@ -200,7 +209,6 @@ class SOAPCalculatorSpinv:
 
     def __init__(self, hypers):
         """
-
         Constructor
 
         Parameters
@@ -210,7 +218,7 @@ class SOAPCalculatorSpinv:
             Hyperparameters for rascal SphericalInvariants.
 
         """
-        self.spinv = SphericalInvariants(**hypers)
+        self.spinv = _SphericalInvariants(**hypers)
 
     def __call__(self, z, xyz, gradient=False):
         """
@@ -221,7 +229,7 @@ class SOAPCalculatorSpinv:
         ----------
 
         z: numpy.array (N_ATOMS)
-            Chemical species (element) for each atom  .
+            Chemical species (element) for each atom.
 
         xyz: numpy.array (N_ATOMS, 3)
             Atomic positions.
@@ -262,10 +270,10 @@ class SOAPCalculatorSpinv:
         result: ase.Atoms
             ASE atoms object.
         """
-        xyz_min = np.min(xyz, axis=0)
-        xyz_max = np.max(xyz, axis=0)
+        xyz_min = _np.min(xyz, axis=0)
+        xyz_max = _np.max(xyz, axis=0)
         xyz_range = xyz_max - xyz_min
-        return ase.Atoms(z, positions=xyz - xyz_min, cell=xyz_range, pbc=0)
+        return _ase.Atoms(z, positions=xyz - xyz_min, cell=xyz_range, pbc=0)
 
     @staticmethod
     def get_soap(atoms, spinv, gradient=False):
@@ -297,7 +305,7 @@ class SOAPCalculatorSpinv:
         grad = managers.get_features_gradient(spinv)
         meta = managers.get_gradients_info()
         n_at, n_soap = soap.shape
-        dsoap_dxyz = np.zeros((n_at, n_soap, n_at, 3))
+        dsoap_dxyz = _np.zeros((n_at, n_soap, n_at, 3))
         dsoap_dxyz[meta[:, 1], :, meta[:, 2], :] = grad.reshape(
             (-1, 3, n_soap)
         ).swapaxes(2, 1)
@@ -319,10 +327,10 @@ class EMLECalculator:
     # Class attributes.
 
     # Get the directory of this module file.
-    _module_dir = os.path.dirname(os.path.abspath(__file__))
+    _module_dir = _os.path.dirname(_os.path.abspath(__file__))
 
     # Create the name of the default model file.
-    _default_model = os.path.join(_module_dir, "emle_spinv.mat")
+    _default_model = _os.path.join(_module_dir, "emle_spinv.mat")
 
     # Default ML model parameters. These will be overwritten by values in the
     # embedding model file.
@@ -333,7 +341,7 @@ class EMLECalculator:
         "max_radial": 4,
         "max_angular": 4,
         "compute_gradients": True,
-        **SPHERICAL_EXPANSION_HYPERS_COMMON,
+        **_SPHERICAL_EXPANSION_HYPERS_COMMON,
     }
 
     # List of supported backends.
@@ -369,26 +377,34 @@ class EMLECalculator:
         plugin_path=".",
         mm_charges=None,
         deepmd_model=None,
+        deepmd_deviation=None,
+        qm_xyz_file="qm.xyz",
+        qm_xyz_frequency=0,
         rascal_model=None,
         ace_model=None,
         parm7=None,
         qm_indices=None,
+        orca_path=None,
         sqm_theory="DFTB3",
         lambda_interpolate=None,
         interpolate_steps=None,
         restart=False,
         device=None,
         orca_template=None,
-        log=1,
-        save_settings=True,
+        energy_frequency=0,
+        energy_file="emle_energy.txt",
+        log_level="ERROR",
+        log_file=None,
+        save_settings=False,
     ):
-        """Constructor.
+        """
+        Constructor
 
-        model : str
+        model: str
             Path to the EMLE embedding model parameter file. If None, then a
             default model will be used.
 
-        method : str
+        method: str
             The desired embedding method. Options are:
                 "electrostatic":
                     Full ML electrostatic embedding.
@@ -403,30 +419,42 @@ class EMLECalculator:
                     should also specify the MM charges for atoms in the QM
                     region.
 
-        backend : str
+        backend: str
             The backend to use to compute in vacuo energies and gradients.
 
-        external_backend : str
+        external_backend: str
             The name of an external backend to use to compute in vacuo energies.
             This should be a callback function formatted as 'module.function'.
             The function should take a single argument, which is an ASE Atoms
             object for the QM region, and return the energy in Hartree along with
             the gradients in Hartree/Bohr as a numpy.ndarray.
 
-        plugin_path : str
+        plugin_path: str
             The direcory containing any scripts used for external backends.
 
-        mm_charges : numpy.array, str
+        mm_charges: numpy.array, str
             An array of MM charges for atoms in the QM region. This is required
             when the embedding method is "mm". Alternatively, pass the path to
             a file containing the charges. The file should contain a single
             column. Units are electron charge.
 
-        deepmd_model : str
+        deepmd_model: str
             Path to the DeePMD model file to use for in vacuo calculations. This
             must be specified if "deepmd" is the selected backend.
 
-        rascal_model : str
+        deepmd_deviation: str
+            Path to a file to write the max deviation between forces predicted
+            with the DeePMD models.
+
+        qm_xyz_file: str
+            Path to an output file for writing the xyz trajectory of the QM
+            region.
+
+        qm_xyz_frequency: int
+            How often to write the xyz trajectory of the QM region. Zero turns
+            off writing.
+
+        rascal_model: str
             Path to the Rascal model file used to apply delta-learning corrections
             to the in vacuo energies and gradients computed by the backed.
 
@@ -434,36 +462,40 @@ class EMLECalculator:
             Path to the ACE model file to use for in vacuo calculations. This
             must be specified if "ace" is the selected backend.
 
-        lambda_interpolate : float, [float, float]
+        lambda_interpolate: float, [float, float]
             The value of lambda to use for end-state correction calculations. This
             must be between 0 and 1, which is used to interpolate between a full MM
             and EMLE potential. If two lambda values are specified, the calculator
             will gradually interpolate between them when called multiple times. This
             must be used in conjunction with the 'interpolate_steps' argument.
 
-        interpolate_steps : int
+        interpolate_steps: int
             The number of steps over which lambda is linearly interpolated.
 
-        parm7 : str
+        parm7: str
             The path to an AMBER parm7 file for the QM region. This is needed to
             compute in vacuo MM energies for the QM region when using the Rascal
             backend, or when interpolating.
 
-        qm_indices : list, str
+        qm_indices: list, str
             A list of atom indices for the QM region. This must be specified when
             interpolating. Alternatively, a path to a file containing the indices
             can be specified. The file should contain a single column with the
             indices being zero-based.
 
-        sqm_theory : str
+        orca_path: str
+            The path to the ORCA executable. This is required when using the ORCA
+            backend.
+
+        sqm_theory: str
             The QM theory to use when using the SQM backend. See the AmberTools
             manual for the supported theory levels for your version of AmberTools.
 
-        restart : bool
+        restart: bool
             Whether this is a restart simulation with sander. If True, then energies
             are logged immediately.
 
-        device : str
+        device: str
             The name of the device to be used by PyTorch. Options are "cpu"
             or "cuda".
 
@@ -471,25 +503,81 @@ class EMLECalculator:
             The path to a template ORCA input file. This is required when using
             the ORCA backend when using emle-engine with Sire.
 
-        log : int
-            The frequency of logging energies to file.
+        energy_frequency: int
+            The frequency of logging energies to file. If 0, then no energies are
+            logged.
 
-        save_settings : bool
+        energy_file: str
+            The name of the file to which energies are logged.
+
+        log_level: str
+            The logging level to use. Options are "TRACE", "DEBUG", "INFO", "WARNING",
+            "ERROR", and "CRITICAL".
+
+        log_file: str
+            The name of the file to which log messages are written.
+
+        save_settings: bool
             Whether to write a YAML file containing the settings used to initialise
             the calculator.
         """
 
         # Validate input.
 
+        # First handle the logger.
+
+        if log_level is None:
+            log_level = "ERROR"
+        else:
+            if not isinstance(log_level, str):
+                raise TypeError("'log_level' must be of type 'str'")
+
+            # Delete whitespace and convert to upper case.
+            log_level = log_level.upper().replace(" ", "")
+
+            # Validate the log level.
+            if not log_level in _logger._core.levels.keys():
+                raise ValueError(
+                    f"Unsupported logging level '{log_level}'. Options are: {', '.join(_logger._core.levels.keys())}"
+                )
+        self._log_level = log_level
+
+        # Validate the log file.
+
+        if log_file is not None:
+            if not isinstance(log_file, str):
+                raise TypeError("'log_file' must be of type 'str'")
+
+            # Try to create the directory.
+            dirname = _os.path.dirname(log_file)
+            if dirname != "":
+                try:
+                    _os.makedirs(dirname, exist_ok=True)
+                except:
+                    raise IOError(
+                        f"Unable to create directory for log file: {log_file}"
+                    )
+            self._log_file = _os.path.abspath(log_file)
+        else:
+            self._log_file = _sys.stderr
+
+        # Update the logger.
+        _logger.remove()
+        _logger.add(self._log_file, level=self._log_level)
+
         if model is not None:
             if not isinstance(model, str):
-                raise TypeError("'model' must be of type 'str'")
+                msg = "'model' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
             # Convert to an absolute path.
-            abs_model = os.path.abspath(model)
+            abs_model = _os.path.abspath(model)
 
-            if not os.path.isfile(abs_model):
-                raise IOError(f"Unable to locate EMLE embedding model file: '{model}'")
+            if not _os.path.isfile(abs_model):
+                msg = f"Unable to locate EMLE embedding model file: '{model}'"
+                _logger.error(msg)
+                raise IOError(msg)
             self._model = abs_model
         else:
             self._model = self._default_model
@@ -498,27 +586,33 @@ class EMLECalculator:
             method = "electrostatic"
 
         if not isinstance(method, str):
-            raise TypeError("'method' must be of type 'str'")
+            msg = "'method' must be of type 'str'"
+            _logger.error(msg)
+            raise TypeError(msg)
         method = method.replace(" ", "").lower()
         if not method in ["electrostatic", "mechanical", "nonpol", "mm"]:
-            raise ValueError(
-                "'method' must be either 'electrostatic', 'mechanical', 'nonpol, or 'mm'"
-            )
+            msg = "'method' must be either 'electrostatic', 'mechanical', 'nonpol, or 'mm'"
+            _logger.error(msg)
+            raise ValueError(msg)
         self._method = method
 
         if mm_charges is not None:
-            if isinstance(mm_charges, np.ndarray):
-                if mm_charges.dtype != np.float64:
-                    raise TypeError("'mm_charges' must have dtype 'float64'.")
+            if isinstance(mm_charges, _np.ndarray):
+                if mm_charges.dtype != _np.float64:
+                    msg = "'mm_charges' must have dtype 'float64'"
+                    _logger.error(msg)
+                    raise TypeError(msg)
                 else:
                     self._mm_charges = mm_charges
 
             elif isinstance(mm_charges, str):
                 # Convert to an absolute path.
-                mm_charges = os.path.abspath(mm_charges)
+                mm_charges = _os.path.abspath(mm_charges)
 
-                if not os.path.isfile(mm_charges):
-                    raise IOError(f"'mm_charges' file doesn't exist: {mm_charges}")
+                if not _os.path.isfile(mm_charges):
+                    msg = f"Unable to locate 'mm_charges' file: {mm_charges}"
+                    _logger.error(msg)
+                    raise IOError(msg)
 
                 # Read the charges into a list.
                 charges = []
@@ -527,53 +621,67 @@ class EMLECalculator:
                         try:
                             charges.append(float(line.strip()))
                         except:
-                            raise ValueError(
-                                f"Unable to read 'mm_charges' from file: {mm_charges}"
-                            )
-                self._mm_charges = np.array(charges)
+                            msg = f"Unable to read 'mm_charges' from file: {mm_charges}"
+                            _logger.error(msg)
+                            raise ValueError(msg)
+                self._mm_charges = _np.array(charges)
 
             else:
-                raise TypeError("'mm_charges' must be of type 'numpy.ndarray' or 'str'")
+                msg = "'mm_charges' must be of type 'numpy.ndarray' or 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
         if self._method == "mm":
             # Make sure MM charges have been passed for the QM region.
             if mm_charges is None:
-                raise ValueError("'mm_charges' are required when using 'mm' embedding")
+                msg = "'mm_charges' are required when using 'mm' embedding"
+                _logger.error(msg)
+                raise ValueError(msg)
 
         # Load the model parameters.
         try:
-            self._params = scipy.io.loadmat(self._model, squeeze_me=True)
+            self._params = _scipy_io.loadmat(self._model, squeeze_me=True)
         except:
-            raise IOError(f"Unable to load model parameters from: '{self._model}'")
+            msg = f"Unable to load model parameters from: '{self._model}'"
+            _logger.error(msg)
+            raise IOError(msg)
 
         if backend is None:
             backend = "torchani"
 
         if not isinstance(backend, str):
-            raise TypeError("'backend' must be of type 'bool")
+            msg = "'backend' must be of type 'str'"
+            _logger.error(msg)
+            raise TypeError(msg)
         # Strip whitespace and convert to lower case.
         backend = backend.lower().replace(" ", "")
         if not backend in self._supported_backends:
-            raise ValueError(
-                f"Unsupported backend '{backend}'. Options are: {', '.join(self._supported_backends)}"
-            )
+            msg = f"Unsupported backend '{backend}'. Options are: {', '.join(self._supported_backends)}"
+            _logger.error(msg)
+            raise ValueError(msg)
         self._backend = backend
 
         if external_backend is not None:
             if not isinstance(external_backend, str):
-                raise TypeError("'external_backend' must be of type 'str'")
+                msg = "'external_backend' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
             if plugin_path is None:
                 plugin_path = "."
 
             if not isinstance(plugin_path, str):
-                raise TypeError("'plugin_path' must be of type 'str'")
+                msg = "'plugin_path' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
             # Convert to an absolute path.
-            abs_plugin_path = os.path.abspath(plugin_path)
+            abs_plugin_path = _os.path.abspath(plugin_path)
 
-            if not os.path.isdir(abs_plugin_path):
-                raise IOError(f"Unable to locate plugin directory: {plugin_path}")
+            if not _os.path.isdir(abs_plugin_path):
+                msg = f"Unable to locate plugin directory: {plugin_path}"
+                _logger.error(msg)
+                raise IOError(msg)
             self._plugin_path = abs_plugin_path
 
             # Strip whitespace.
@@ -584,9 +692,9 @@ class EMLECalculator:
                 function = external_backend.split(".")[-1]
                 module = external_backend.replace("." + function, "")
             except:
-                raise ValueError(
-                    f"Unable to parse 'external_backend' callback string: {external_backend}"
-                )
+                msg = f"Unable to parse 'external_backend' callback string: {external_backend}"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             # Try to import the module.
             try:
@@ -602,9 +710,9 @@ class EMLECalculator:
                     module = import_module(module)
                     sys.path.pop()
                 except:
-                    raise ImportError(
-                        f"Unable to import function '{function}' from module '{module}'"
-                    )
+                    msg = f"Unable to import module '{module}'"
+                    _logger.error(msg)
+                    raise ImportError(msg)
 
             # Bind the function to the class.
             self._external_backend = getattr(module, function)
@@ -617,57 +725,108 @@ class EMLECalculator:
 
         if parm7 is not None:
             if not isinstance(parm7, str):
-                raise ValueError("'parm7' must be of type 'str'")
+                msg = "'parm7' must be of type 'str'"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             # Convert to an absolute path.
-            abs_parm7 = os.path.abspath(parm7)
+            abs_parm7 = _os.path.abspath(parm7)
 
             # Make sure the file exists.
-            if not os.path.isfile(abs_parm7):
-                raise IOError(f"Unable to locate the 'parm7' file: '{parm7}'")
+            if not _os.path.isfile(abs_parm7):
+                msg = f"Unable to locate the 'parm7' file: '{parm7}'"
+                raise IOError(msg)
 
             self._parm7 = abs_parm7
 
         if deepmd_model is not None and backend == "deepmd":
             # We support a str, or list/tuple of strings.
             if not isinstance(deepmd_model, (str, list, tuple)):
-                raise TypeError(
-                    "'deepmd_model' must be of type 'str', or a list of 'str' types"
-                )
+                msg = "'deepmd_model' must be of type 'str', or a list of 'str' types"
+                _logger.error(msg)
+                raise TypeError(msg)
             else:
                 # Make sure all values are strings.
                 if isinstance(deepmd_model, (list, tuple)):
                     for mod in deepmd_model:
                         if not isinstance(mod, str):
-                            raise TypeError(
-                                "'deepmd_model' must be of type 'str', or a list of 'str' types"
-                            )
+                            msg = "'deepmd_model' must be of type 'str', or a list of 'str' types"
+                            _logger.error(msg)
+                            raise TypeError(msg)
                 # Convert to a list.
                 else:
                     deepmd_model = [deepmd_model]
 
                 # Make sure all of the model files exist.
                 for model in deepmd_model:
-                    if not os.path.isfile(model):
-                        raise IOError(f"Unable to locate DeePMD model file: '{model}'")
+                    if not _os.path.isfile(model):
+                        msg = f"Unable to locate DeePMD model file: '{model}'"
+                        _logger.error(msg)
+                        raise IOError(msg)
+
+                # Validate the deviation file.
+                if deepmd_deviation is not None:
+                    if not isinstance(deepmd_deviation, str):
+                        msg = "'deepmd_deviation' must be of type 'str'"
+                        _logger.error(msg)
+                        raise TypeError(msg)
+
+                    self._deepmd_deviation = deepmd_deviation
 
                 # Store the list of model files, removing any duplicates.
                 self._deepmd_model = list(set(deepmd_model))
+                if len(self._deepmd_model) == 1 and deepmd_deviation:
+                    msg = (
+                        "More that one DeePMD model needed to calculate the deviation!"
+                    )
+                    _logger.error(msg)
+                    raise IOError(msg)
 
                 # Initialise DeePMD backend attributes.
                 try:
-                    from deepmd.infer import DeepPot
+                    from deepmd.infer import DeepPot as _DeepPot
 
                     self._deepmd_potential = [
-                        DeepPot(model) for model in self._deepmd_model
+                        _DeepPot(model) for model in self._deepmd_model
                     ]
                 except:
-                    raise RuntimeError("Unable to create the DeePMD potentials!")
+                    msg = "Unable to create the DeePMD potentials!"
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
         else:
             if self._backend == "deepmd":
-                raise ValueError(
-                    "'deepmd_model' must be specified when DeePMD 'backend' is chosen!"
-                )
+                msg = "'deepmd_model' must be specified when using the DeePMD backend!"
+                _logger.error(msg)
+                raise ValueError(msg)
+
+            # Set the deviation file to None in case it was spuriously set.
+            self._deepmd_deviation = None
+
+        # Validate the QM XYZ file options.
+
+        if qm_xyz_file is None:
+            qm_xyz_file = "qm.xyz"
+        else:
+            if not isinstance(qm_xyz_file, str):
+                msg = "'qm_xyz_file' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
+        self._qm_xyz_file = qm_xyz_file
+
+        if qm_xyz_frequency is None:
+            qm_xyz_frequency = 0
+        else:
+            try:
+                qm_xyz_frequency = int(qm_xyz_frequency)
+            except:
+                msg = "'qm_xyz_frequency' must be of type 'int'"
+                _logger.error(msg)
+                raise TypeError(msg)
+            if qm_xyz_frequency < 0:
+                msg = "'qm_xyz_frequency' must be greater than or equal to 0"
+                _logger.error(msg)
+                raise ValueError(msg)
+        self._qm_xyz_frequency = qm_xyz_frequency
 
         # Validate the QM method for SQM.
         if backend == "sqm":
@@ -675,23 +834,27 @@ class EMLECalculator:
                 sqm_theory = "DFTB3"
 
             if not isinstance(sqm_theory, str):
-                raise TypeError("'sqm_theory' must be of type 'str'")
+                msg = "'sqm_theory' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
             # Make sure a topology file has been set.
             if parm7 is None:
-                raise ValueError(
-                    "'parm7' must be specified when using the 'sqm' backend"
-                )
+                msg = "'parm7' must be specified when using the SQM backend"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             # Strip whitespace.
             self._sqm_theory = sqm_theory.replace(" ", "")
 
             try:
-                from sander import AmberParm
+                from sander import AmberParm as _AmberParm
 
-                amber_parm = AmberParm(self._parm7)
+                amber_parm = _AmberParm(self._parm7)
             except:
-                raise IOError(f"Unable to load AMBER topology file: '{parm7}'")
+                msg = f"Unable to load AMBER topology file: '{parm7}'"
+                _logger.error(msg)
+                raise IOError(msg)
 
             # Store the atom names for the QM region.
             self._sqm_atom_names = [atom.name for atom in amber_parm.atoms]
@@ -699,41 +862,51 @@ class EMLECalculator:
         # Make sure a QM topology file is specified for the 'sander' backend.
         elif backend == "sander":
             if parm7 is None:
-                raise ValueError(
-                    "'parm7' must be specified when using the 'sander' backend!"
-                )
+                msg = "'parm7' must be specified when using the 'sander' backend"
+                _logger.error(msg)
+                raise ValueError(msg)
 
         # Validate and load the Rascal model.
         if rascal_model is not None:
             if not isinstance(rascal_model, str):
-                raise TypeError("'rascal_model' must be of type 'str'")
+                msg = "'rascal_model' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
             # Convert to an absolute path.
-            abs_rascal_model = os.path.abspath(rascal_model)
+            abs_rascal_model = _os.path.abspath(rascal_model)
 
             # Make sure the model file exists.
-            if not os.path.isfile(abs_rascal_model):
-                raise IOError(f"Unable to locate Rascal model file: '{rascal_model}'")
+            if not _os.path.isfile(abs_rascal_model):
+                msg = f"Unable to locate Rascal model file: '{rascal_model}'"
+                _logger.error(msg)
+                raise IOError(msg)
 
             # Load the model.
             try:
-                self._rascal_model = pickle.load(open(abs_rascal_model, "rb"))
+                self._rascal_model = _pickle.load(open(abs_rascal_model, "rb"))
             except:
-                raise IOError(f"Unable to load Rascal model file: '{rascal_model}'")
+                msg = f"Unable to load Rascal model file: '{rascal_model}'"
+                _logger.error(msg)
+                raise IOError(msg)
 
             # Try to get the SOAP parameters from the model.
             try:
                 soap = self._rascal_model.get_representation_calculator()
             except:
-                raise ValueError("Unable to extract SOAP parameters from Rascal model!")
+                msg = "Unable to extract SOAP parameters from Rascal model!"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             # Create the Rascal calculator.
             try:
-                from rascal.models.asemd import ASEMLCalculator
+                from rascal.models.asemd import ASEMLCalculator as _ASEMLCalculator
 
-                self._rascal_calc = ASEMLCalculator(self._rascal_model, soap)
+                self._rascal_calc = _ASEMLCalculator(self._rascal_model, soap)
             except:
-                raise RuntimeError("Unable to create Rascal calculator!")
+                msg = "Unable to create Rascal calculator!"
+                _logger.error(msg)
+                raise RuntimeError(msg)
 
             # Flag that delta-learning corrections will be applied.
             self._is_delta = True
@@ -760,7 +933,9 @@ class EMLECalculator:
 
         if restart is not None:
             if not isinstance(restart, bool):
-                raise TypeError("'restart' must be of type 'bool'")
+                msg = "'restart' must be of type 'bool'"
+                _logger.error(msg)
+                raise TypeError(msg)
         else:
             restart = False
         self._restart = restart
@@ -768,37 +943,47 @@ class EMLECalculator:
         # Validate the interpolation lambda parameter.
         if lambda_interpolate is not None:
             if self._backend == "rascal":
-                raise ValueError(
-                    "'lambda_interpolate' is currently unsupported when using the the Rascal backend!"
-                )
+                msg = "'lambda_interpolate' is currently unsupported when using the the Rascal backend!"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             self._is_interpolate = True
             self.set_lambda_interpolate(lambda_interpolate)
 
             # Make sure a topology file has been set.
             if parm7 is None:
-                raise ValueError("'parm7' must be specified when interpolating")
+                msg = "'parm7' must be specified when interpolating"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             # Make sure MM charges for the QM region have been set.
             if mm_charges is None:
-                raise ValueError("'mm_charges' are required when interpolating")
+                msg = "'mm_charges' are required when interpolating"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             # Make sure indices for the QM region have been passed.
             if qm_indices is None:
-                raise ValueError("'qm_indices' must be specified when interpolating")
+                msg = "'qm_indices' must be specified when interpolating"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             # Validate the indices. Note that we don't check that the are valid, only
             # that they are the correct type.
             if isinstance(qm_indices, list):
                 if not all(isinstance(x, int) for x in qm_indices):
-                    raise TypeError("'qm_indices' must be a list of 'int' types")
+                    msg = "'qm_indices' must be a list of 'int' types"
+                    _logger.error(msg)
+                    raise TypeError(msg)
                 self._qm_indices = qm_indices
             elif isinstance(qm_indices, str):
                 # Convert to an absolute path.
-                qm_indices = os.path.abspath(qm_indices)
+                qm_indices = _os.path.abspath(qm_indices)
 
-                if not os.path.isfile(qm_indices):
-                    raise IOError(f"Unable to locate 'qm_indices' file: {qm_indices}")
+                if not _os.path.isfile(qm_indices):
+                    msg = f"Unable to locate 'qm_indices' file: {qm_indices}"
+                    _logger.error(msg)
+                    raise IOError(msg)
 
                 # Read the indices into a list.
                 indices = []
@@ -807,29 +992,33 @@ class EMLECalculator:
                         try:
                             indices.append(int(line.strip()))
                         except:
-                            raise ValueError(
-                                f"Unable to read 'qm_indices' from file: {qm_indices}"
-                            )
+                            msg = f"Unable to read 'qm_indices' from file: {qm_indices}"
+                            _logger.error(msg)
+                            raise ValueError(msg)
                 self._qm_indices = indices
             else:
-                raise TypeError("'qm_indices' must be of type 'list' or 'str'")
+                msg = "'qm_indices' must be of type 'list' or 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
             # Make sure the number of interpolation steps has been set if more
             # than one lambda value has been specified.
             if len(self._lambda_interpolate) == 2:
                 if interpolate_steps is None:
-                    raise ValueError(
-                        "'interpolate_steps' must be specified when interpolating between two lambda values"
-                    )
+                    msg = "'interpolate_steps' must be specified when interpolating between two lambda values"
+                    _logger.error(msg)
+                    raise ValueError(msg)
                 else:
                     try:
                         interpolate_steps = int(interpolate_steps)
                     except:
-                        raise TypeError("'interpolate_steps' must be of type 'int'")
+                        msg = "'interpolate_steps' must be of type 'int'"
+                        _logger.error(msg)
+                        raise TypeError(msg)
                     if interpolate_steps < 0:
-                        raise ValueError(
-                            "'interpolate_steps' must be greater than or equal to 0"
-                        )
+                        msg = "'interpolate_steps' must be greater than or equal to 0"
+                        _logger.error(msg)
+                        raise ValueError(msg)
                     self._interpolate_steps = interpolate_steps
 
         else:
@@ -838,7 +1027,9 @@ class EMLECalculator:
         # Validate the PyTorch device.
         if device is not None:
             if not isinstance(device, str):
-                raise TypError("'device' must be of type 'str'")
+                msg = "'device' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
             # Strip whitespace and convert to lower case.
             device = device.lower().replace(" ", "")
             # See if the user has specified a GPU index.
@@ -852,45 +1043,77 @@ class EMLECalculator:
                 try:
                     index = int(index)
                 except:
-                    raise ValueError(f"Invalid GPU index: {index}") from None
+                    msg = f"Invalid GPU index: {index}"
+                    _logger.error(msg)
+                    raise ValueError(msg)
 
             if not device in self._supported_devices:
-                raise ValueError(
-                    f"Unsupported device '{device}'. Options are: {', '.join(self._supported_devices)}"
-                )
+                msg = f"Unsupported device '{device}'. Options are: {', '.join(self._supported_devices)}"
+                _logger.error(msg)
+                raise ValueError(msg)
             # Create the full CUDA device string.
             if device == "cuda":
                 device = f"cuda:{index}"
             # Set the device.
-            self._device = torch.device(device)
+            self._device = _torch.device(device)
         else:
             # Default to CUDA, if available.
-            self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self._device = _torch.device(
+                "cuda" if _torch.cuda.is_available() else "cpu"
+            )
 
-        if log is None:
-            log = 1
+        if energy_frequency is None:
+            energy_frequency = 0
 
-        if not isinstance(log, int):
-            raise TypeError("'log' must be of type 'int")
+        if not isinstance(energy_frequency, int):
+            msg = "'energy_frequency' must be of type 'int'"
+            _logger.error(msg)
+            raise TypeError(msg)
         else:
-            self._log = log
+            self._energy_frequency = energy_frequency
+
+        if energy_file is None:
+            energy_file = "emle_energy.txt"
+        else:
+            if not isinstance(energy_file, str):
+                msg = "'energy_file' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
+
+            # Try to create the directory.
+            dirname = _os.path.dirname(energy_file)
+            if dirname != "":
+                try:
+                    _os.makedirs(dirname, exist_ok=True)
+                except:
+                    msg = f"Unable to create directory for energy file: {energy_file}"
+                    _logger.error(msg)
+                    raise IOError(msg)
+
+        self._energy_file = _os.path.abspath(energy_file)
 
         if save_settings is None:
             save_settings = True
 
         if not isinstance(save_settings, bool):
-            raise TypeError("'save_settings' must be of type 'bool'")
+            msg = "'save_settings' must be of type 'bool'"
+            _logger.error(msg)
+            raise TypeError(msg)
         else:
             self._save_settings = save_settings
 
         if orca_template is not None:
             if not isinstance(template, str):
-                raise TypeError("'orca_template' must be of type 'str'")
+                msg = "'orca_template' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
             # Convert to an absolute path.
-            abs_orca_template = os.path.abspath(orca_template)
+            abs_orca_template = _os.path.abspath(orca_template)
 
-            if not os.path.isfile(abs_orca_template):
-                raise IOError(f"Unable to locate ORCA template file: '{orca_template}'")
+            if not _os.path.isfile(abs_orca_template):
+                msg = f"Unable to locate ORCA template file: '{orca_template}'"
+                _logger.error(msg)
+                raise IOError(msg)
             self._orca_template = abs_orca_template
         else:
             self._orca_template = None
@@ -916,68 +1139,70 @@ class EMLECalculator:
         # Work out the supported elements.
         self._supported_elements = []
         for id in self._hypers["global_species"]:
-            self._supported_elements.append(ase.atoms.Atom(id).symbol)
+            self._supported_elements.append(_ase.Atom(id).symbol)
 
-        self._get_soap = SOAPCalculatorSpinv(self._hypers)
-        self._q_core = torch.tensor(
-            self._params["q_core"], dtype=torch.float32, device=self._device
+        self._get_soap = _SOAPCalculatorSpinv(self._hypers)
+        self._q_core = _torch.tensor(
+            self._params["q_core"], dtype=_torch.float32, device=self._device
         )
         if self._method == "mm" or self._is_interpolate:
-            self._q_core_mm = torch.tensor(
-                self._mm_charges, dtype=torch.float32, device=self._device
+            self._q_core_mm = _torch.tensor(
+                self._mm_charges, dtype=_torch.float32, device=self._device
             )
         self._a_QEq = self._params["a_QEq"]
         self._a_Thole = self._params["a_Thole"]
-        self._k_Z = torch.tensor(
-            self._params["k_Z"], dtype=torch.float32, device=self._device
+        self._k_Z = _torch.tensor(
+            self._params["k_Z"], dtype=_torch.float32, device=self._device
         )
-        self._q_total = torch.tensor(
+        self._q_total = _torch.tensor(
             self._params.get("total_charge", 0),
-            dtype=torch.float32,
+            dtype=_torch.float32,
             device=self._device,
         )
-        self._get_s = GPRCalculator(
+        self._get_s = _GPRCalculator(
             self._params["s_ref"],
             self._params["ref_soap"],
             self._params["n_ref"],
             1e-3,
         )
-        self._get_chi = GPRCalculator(
+        self._get_chi = _GPRCalculator(
             self._params["chi_ref"],
             self._params["ref_soap"],
             self._params["n_ref"],
             1e-3,
         )
-        self._get_E_with_grad = grad_and_value(self._get_E, argnums=(1, 2, 3, 4))
+        self._get_E_with_grad = _grad_and_value(self._get_E, argnums=(1, 2, 3, 4))
 
         # Initialise TorchANI backend attributes.
         if self._backend == "torchani":
-            import torchani
+            import torchani as _torchani
 
             # Create the TorchANI model.
-            self._torchani_model = torchani.models.ANI2x(periodic_table_index=True).to(
+            self._torchani_model = _torchani.models.ANI2x(periodic_table_index=True).to(
                 self._device
             )
 
         # If the backend is ORCA, then try to find the executable.
         elif self._backend == "orca":
-            # Get the PATH for the environment.
-            path = os.environ["PATH"]
+            if orca_path is None:
+                msg = "'orca_path' must be specified when using the ORCA backend"
+                _logger.error(msg)
+                raise ValueError(msg)
 
-            # Search the PATH for a matching executable, ignoring any conda
-            # directories.
+            if not isinstance(orca_path, str):
+                msg = "'orca_path' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
 
-            exes = []
-            for p in path.split(":"):
-                exe = shutil.which("orca", path=p)
-                if exe and not ("conda" in exe or "mamba" in exe or "miniforge" in exe):
-                    exes.append(exe)
+            # Convert to an absolute path.
+            abs_orca_path = _os.path.abspath(orca_path)
 
-            # Use the first executable.
-            if len(exes) > 0:
-                self._orca_exe = exes[0]
-            else:
-                raise OSError("Couldn't find ORCA executable for in vacuo backend!")
+            if not _os.path.isfile(abs_orca_path):
+                msg = f"Unable to locate ORCA executable: '{orca_path}'"
+                _logger.error(msg)
+                raise IOError(msg)
+
+            self._orca_path = abs_orca_path
 
         # Initialise the maximum number of MM atom that have been seen.
         self._max_mm_atoms = 0
@@ -987,7 +1212,7 @@ class EMLECalculator:
 
         # Flag whether to skip logging the first call to the server. This is
         # used to avoid writing duplicate energy records since sander will call
-        # orca on startup when not performing a restart simulation,  i.e. not
+        # orca on startup when not performing a restart simulation, i.e. not
         # just after each integration step.
         self._is_first_step = not self._restart
 
@@ -999,10 +1224,14 @@ class EMLECalculator:
             "external_backend": None if external_backend is None else external_backend,
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),
             "deepmd_model": deepmd_model,
+            "deepmd_deviation": deepmd_deviation,
+            "qm_xyz_file": qm_xyz_file,
+            "qm_xyz_frequency": qm_xyz_frequency,
             "rascal_model": rascal_model,
             "ace_model": ace_model,
             "parm7": parm7,
             "qm_indices": None if qm_indices is None else self._qm_indices,
+            "orca_path": orca_path,
             "sqm_theory": sqm_theory,
             "lambda_interpolate": lambda_interpolate,
             "interpolate_steps": interpolate_steps,
@@ -1010,13 +1239,16 @@ class EMLECalculator:
             "device": device,
             "orca_template": None if orca_template is None else self._orca_template,
             "plugin_path": plugin_path,
-            "log": log,
+            "energy_frequency": energy_frequency,
+            "energy_file": energy_file,
+            "log_level": self._log_level,
+            "log_file": log_file,
         }
 
         # Write to a YAML file.
         if save_settings:
             with open("emle_settings.yaml", "w") as f:
-                yaml.dump(self._settings, f)
+                _yaml.dump(self._settings, f)
 
     def run(self, path=None):
         """
@@ -1025,15 +1257,19 @@ class EMLECalculator:
         Parameters
         ----------
 
-        path : str
+        path: str
             Path to the sander process.
         """
 
         if path is not None:
             if not isinstance(path, str):
-                raise TypeError("'path' must be of type 'str'")
-            if not os.path.isdir(path):
-                raise ValueError(f"sander process path does not exist: {path}")
+                msg = "'path' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
+            if not _os.path.isdir(path):
+                msg = f"sander process path does not exist: {path}"
+                _logger.error(msg)
+                raise ValueError(msg)
             orca_input = f"{path}/orc_job.inp"
         else:
             orca_input = "orc_job.inp"
@@ -1055,10 +1291,13 @@ class EMLECalculator:
         # when using mm embedding.
         if self._method == "mm":
             if len(xyz_qm) != len(self._mm_charges):
-                raise ValueError(
-                    f"MM embedding is specified but the number of atoms in the QM region ({len(xyz_qm)}) "
-                    f"doesn't match the number of MM charges ({len(self._mm_charges)})"
+                msg = (
+                    "MM embedding is specified but the number of atoms in the QM "
+                    f"region ({len(xyz_qm)}) doesn't match the number of MM charges "
+                    f"({len(self._mm_charges)})"
                 )
+                _logger.error(msg)
+                raise ValueError(msg)
 
         # Update the maximum number of MM atoms if this is the largest seen.
         num_mm_atoms = len(charges_mm)
@@ -1070,8 +1309,8 @@ class EMLECalculator:
             num_pad = self._max_mm_atoms - num_mm_atoms
             xyz_mm_pad = num_pad * [[0.0, 0.0, 0.0]]
             charges_mm_pad = num_pad * [0.0]
-            xyz_mm = np.append(xyz_mm, xyz_mm_pad, axis=0)
-            charges_mm = np.append(charges_mm, charges_mm_pad)
+            xyz_mm = _np.append(xyz_mm, xyz_mm_pad, axis=0)
+            charges_mm = _np.append(charges_mm, charges_mm_pad)
 
         # Convert the QM atomic numbers to elements and species IDs.
         species_id = []
@@ -1079,13 +1318,15 @@ class EMLECalculator:
         for id in atomic_numbers:
             try:
                 species_id.append(self._hypers["global_species"].index(id))
-                elements.append(ase.atom.Atom(id).symbol)
+                elements.append(_ase.Atom(id).symbol)
             except:
-                raise ValueError(
+                msg = (
                     f"Unsupported element index '{id}'. "
                     f"The current model supports {', '.join(self._supported_elements)}"
                 )
-        self._species_id = np.array(species_id)
+                _logger.error(msg)
+                raise ValueError(msg)
+        self._species_id = _np.array(species_id)
 
         # First try to use the specified backend to compute in vacuo
         # energies and (optionally) gradients.
@@ -1096,28 +1337,30 @@ class EMLECalculator:
             if self._backend == "torchani":
                 try:
                     E_vac, grad_vac = self._run_torchani(xyz_qm, atomic_numbers)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using TorchANI backend!"
-                    )
+                except Exception as e:
+                    msg = f"Failed to calculate in vacuo energies using TorchANI backend: {e}"
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # DeePMD.
             if self._backend == "deepmd":
                 try:
                     E_vac, grad_vac = self._run_deepmd(xyz_qm, elements)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using DeePMD backend!"
-                    )
+                except Exception as e:
+                    msg = f"Failed to calculate in vacuo energies using DeePMD backend: {e}"
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # ORCA.
             elif self._backend == "orca":
                 try:
                     E_vac, grad_vac = self._run_orca(orca_input, xyz_file_qm)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using ORCA backend!"
+                except Exception as e:
+                    msg = (
+                        f"Failed to calculate in vacuo energies using ORCA backend: {e}"
                     )
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # Sander.
             elif self._backend == "sander":
@@ -1125,28 +1368,32 @@ class EMLECalculator:
                     E_vac, grad_vac = self._run_pysander(
                         atoms, self._parm7, is_gas=True
                     )
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using Sander backend!"
-                    )
+                except Exception as e:
+                    msg = f"Failed to calculate in vacuo energies using Sander backend: {e}"
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # SQM.
             elif self._backend == "sqm":
                 try:
                     E_vac, grad_vac = self._run_sqm(xyz_qm, atomic_numbers, charge)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using SQM backend!"
+                except Exception as e:
+                    msg = (
+                        f"Failed to calculate in vacuo energies using SQM backend: {e}"
                     )
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # XTB.
             elif self._backend == "xtb":
                 try:
                     E_vac, grad_vac = self._run_xtb(atoms)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using XTB backend!"
+                except Exception as e:
+                    msg = (
+                        f"Failed to calculate in vacuo energies using XTB backend: {e}"
                     )
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # ACE.
             elif self._backend == "ace":
@@ -1161,47 +1408,50 @@ class EMLECalculator:
         else:
             try:
                 E_vac, grad_vac = self._external_backend(atoms)
-            except:
-                raise
-                raise RuntimeError(
-                    "Failed to calculate in vacuo energies using external backend!"
+            except Exception as e:
+                msg = (
+                    f"Failed to calculate in vacuo energies using external backend: {e}"
                 )
+                _logger.error(msg)
+                raise RuntimeError(msg)
 
         # Apply delta-learning corrections using Rascal.
         if self._is_delta:
             try:
                 delta_E, delta_grad = self._run_rascal(atoms)
-            except:
-                raise RuntimeError(
-                    "Failed to compute delta-learning corrections using Rascal!"
-                )
+            except Exception as e:
+                msg = f"Failed to compute delta-learning corrections using Rascal: {e}"
+                _logger.error(msg)
+                raise RuntimeError(msg)
 
             # Add the delta-learning corrections to the in vacuo energies and gradients.
             E_vac += delta_E
             grad_vac += delta_grad
 
         # Convert units.
-        xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
-        xyz_mm_bohr = xyz_mm * ANGSTROM_TO_BOHR
+        xyz_qm_bohr = xyz_qm * _ANGSTROM_TO_BOHR
+        xyz_mm_bohr = xyz_mm * _ANGSTROM_TO_BOHR
 
         mol_soap, dsoap_dxyz = self._get_soap(atomic_numbers, xyz_qm, gradient=True)
-        dsoap_dxyz_qm_bohr = dsoap_dxyz * BOHR_TO_ANGSTROM
+        dsoap_dxyz_qm_bohr = dsoap_dxyz * _BOHR_TO_ANGSTROM
 
         s, ds_dsoap = self._get_s(mol_soap, self._species_id, gradient=True)
         chi, dchi_dsoap = self._get_chi(mol_soap, self._species_id, gradient=True)
         ds_dxyz_qm_bohr = self._get_df_dxyz(ds_dsoap, dsoap_dxyz_qm_bohr)
         dchi_dxyz_qm_bohr = self._get_df_dxyz(dchi_dsoap, dsoap_dxyz_qm_bohr)
 
-        # Convert inputs to PyTorch tensors.
-        xyz_qm_bohr = torch.tensor(
-            xyz_qm_bohr, dtype=torch.float32, device=self._device
+        # Convert inputs to Torch tensors.
+        xyz_qm_bohr = _torch.tensor(
+            xyz_qm_bohr, dtype=_torch.float32, device=self._device
         )
-        xyz_mm_bohr = torch.tensor(
-            xyz_mm_bohr, dtype=torch.float32, device=self._device
+        xyz_mm_bohr = _torch.tensor(
+            xyz_mm_bohr, dtype=_torch.float32, device=self._device
         )
-        charges_mm = torch.tensor(charges_mm, dtype=torch.float32, device=self._device)
-        s = torch.tensor(s, dtype=torch.float32, device=self._device)
-        chi = torch.tensor(chi, dtype=torch.float32, device=self._device)
+        charges_mm = _torch.tensor(
+            charges_mm, dtype=_torch.float32, device=self._device
+        )
+        s = _torch.tensor(s, dtype=_torch.float32, device=self._device)
+        chi = _torch.tensor(chi, dtype=_torch.float32, device=self._device)
 
         # Compute gradients and energy.
         grads, E = self._get_E_with_grad(charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi)
@@ -1268,7 +1518,7 @@ class EMLECalculator:
             grad_mm = lam * grad_mm + (1 - lam) * dE_dxyz_mm_bohr
 
         # Create the file names for the ORCA format output.
-        filename = os.path.splitext(orca_input)[0]
+        filename = _os.path.splitext(orca_input)[0]
         engrad = filename + ".engrad"
         pcgrad = filename + ".pcgrad"
 
@@ -1292,8 +1542,12 @@ class EMLECalculator:
                 f.write(f"{x:17.12f}{y:17.12f}{z:17.12f}\n")
 
         # Log energies to file.
-        if self._log > 0 and not self._is_first_step and self._step % self._log == 0:
-            with open("emle_log.txt", "a+") as f:
+        if (
+            self._energy_frequency > 0
+            and not self._is_first_step
+            and self._step % self._energy_frequency == 0
+        ):
+            with open(self._energy_file, "a+") as f:
                 # Write the header.
                 if self._step == 0:
                     if self._is_interpolate:
@@ -1310,6 +1564,13 @@ class EMLECalculator:
                 else:
                     f.write(f"{self._step:>10}{E_vac:22.12f}{E_tot:22.12f}\n")
 
+        # Write out the QM region to the xyz trajectory file.
+        if self._qm_xyz_frequency > 0 and self._step % self._qm_xyz_frequency == 0:
+            atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+            if hasattr(self, "_max_f_std"):
+                atoms.info = {"max_f_std": self._max_f_std}
+            _ase_io.write(self._qm_xyz_file, atoms, append=True)
+
         # Increment the step counter.
         if self._is_first_step:
             self._is_first_step = False
@@ -1325,48 +1586,52 @@ class EMLECalculator:
         Parameters
         ----------
 
-        lambda_interpolate : float, [float, float]
+        lambda_interpolate: float, [float, float]
             The value of lambda to use for interpolating between pure MM
             (lambda=0) and ML/MM (lambda=1) potentials.and. If two lambda
             values are specified, the calculator will gradually interpolate
             between them when called multiple times.
         """
         if not self._is_interpolate:
-            raise Exception("Server is not in interpolation mode!")
+            msg = "Server is not in interpolation mode!"
+            _logger.error(msg)
+            raise Exception(msg)
         elif (
             self._lambda_interpolate is not None and len(self._lambda_interpolate) == 2
         ):
-            raise Exception(
-                "Cannot set lambda when interpolating between two lambda values!"
-            )
+            msg = "Cannot set lambda when interpolating between two lambda values!"
+            _logger.error(msg)
+            raise Exception(msg)
 
         if isinstance(lambda_interpolate, (list, tuple)):
             if len(lambda_interpolate) not in [1, 2]:
-                raise ValueError(
-                    "'lambda_interpolate' must be a single value or a list/tuple of two values"
-                )
+                msg = "'lambda_interpolate' must be a single value or a list/tuple of two values"
+                _logger.error(msg)
+                raise ValueError(msg)
             try:
                 lambda_interpolate = [float(x) for x in lambda_interpolate]
             except:
-                raise TypeError(
-                    "'lambda_interpolate' must be a single value or a list/tuple of two values"
-                )
+                msg = "'lambda_interpolate' must be a single value or a list/tuple of two values"
+                _logger.error(msg)
+                raise TypeError(msg)
             if not all(0.0 <= x <= 1.0 for x in lambda_interpolate):
-                raise ValueError(
-                    "'lambda_interpolate' must be between 0 and 1 for both values"
-                )
+                msg = "'lambda_interpolate' must be between 0 and 1 for both values"
+                _logger.error(msg)
+                raise ValueError(msg)
 
             if len(lambda_interpolate) == 2:
-                if np.isclose(lambda_interpolate[0], lambda_interpolate[1], atol=1e-6):
-                    raise ValueError(
-                        "The two values of 'lambda_interpolate' must be different"
-                    )
+                if _np.isclose(lambda_interpolate[0], lambda_interpolate[1], atol=1e-6):
+                    msg = "The two values of 'lambda_interpolate' must be different"
+                    _logger.error(msg)
+                    raise ValueError(msg)
             self._lambda_interpolate = lambda_interpolate
 
         elif isinstance(lambda_interpolate, (int, float)):
             lambda_interpolate = float(lambda_interpolate)
             if not 0.0 <= lambda_interpolate <= 1.0:
-                raise ValueError("'lambda_interpolate' must be between 0 and 1")
+                msg = "'lambda_interpolate' must be between 0 and 1"
+                _logger.error(msg)
+                raise ValueError(msg)
             self._lambda_interpolate = [lambda_interpolate]
 
         # Reset the first step flag.
@@ -1379,38 +1644,38 @@ class EMLECalculator:
         Parameters
         ----------
 
-        atomic_numbers : [float]
+        atomic_numbers: [float]
             A list of atomic numbers for the QM region.
 
-        charges_mm : [float]
+        charges_mm: [float]
             The charges on the MM atoms.
 
-        xyz_qm : [[float, float, float]]
+        xyz_qm: [[float, float, float]]
             The coordinates of the QM atoms in Angstrom.
 
-        xyz_mm : [[float, float, float]]
+        xyz_mm: [[float, float, float]]
             The coordinates of the MM atoms in Angstrom.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The energy in kJ/mol.
 
-        force_qm : [[float, float, float]]
+        force_qm: [[float, float, float]]
             The forces on the QM atoms in kJ/mol/nanometer.
 
-        force_mm : [[float, float, float]]
+        force_mm: [[float, float, float]]
             The forces on the MM atoms in kJ/mol/nanometer.
         """
 
         # For performance, we assume that the input is already validated.
 
         # Convert to numpy arrays.
-        atomic_numbers = np.array(atomic_numbers)
-        charges_mm = np.array(charges_mm)
-        xyz_qm = np.array(xyz_qm)
-        xyz_mm = np.array(xyz_mm)
+        atomic_numbers = _np.array(atomic_numbers)
+        charges_mm = _np.array(charges_mm)
+        xyz_qm = _np.array(xyz_qm)
+        xyz_mm = _np.array(xyz_mm)
 
         # Initialise a null ASE atoms object.
         atoms = None
@@ -1419,10 +1684,13 @@ class EMLECalculator:
         # when using mm embedding.
         if self._method == "mm":
             if len(xyz_qm) != len(self._mm_charges):
-                raise ValueError(
-                    f"MM embedding is specified but the number of atoms in the QM region ({len(xyz_qm)}) "
-                    f"doesn't match the number of MM charges ({len(self._mm_charges)})"
+                msg = (
+                    "MM embedding is specified but the number of atoms in the "
+                    f"QM region ({len(xyz_qm)}) doesn't match the number of MM "
+                    f"charges ({len(self._mm_charges)})"
                 )
+                _logger.error(msg)
+                raise ValueError(msg)
 
         # Update the maximum number of MM atoms if this is the largest seen.
         num_mm_atoms = len(charges_mm)
@@ -1434,8 +1702,8 @@ class EMLECalculator:
             num_pad = self._max_mm_atoms - num_mm_atoms
             xyz_mm_pad = num_pad * [[0.0, 0.0, 0.0]]
             charges_mm_pad = num_pad * [0.0]
-            xyz_mm = np.append(xyz_mm, xyz_mm_pad, axis=0)
-            charges_mm = np.append(charges_mm, charges_mm_pad)
+            xyz_mm = _np.append(xyz_mm, xyz_mm_pad, axis=0)
+            charges_mm = _np.append(charges_mm, charges_mm_pad)
 
         # Convert the QM atomic numbers to elements and species IDs.
         species_id = []
@@ -1443,13 +1711,15 @@ class EMLECalculator:
         for id in atomic_numbers:
             try:
                 species_id.append(self._hypers["global_species"].index(id))
-                elements.append(ase.atom.Atom(id).symbol)
+                elements.append(_ase.Atom(id).symbol)
             except:
-                raise ValueError(
+                msg = (
                     f"Unsupported element index '{id}'. "
                     f"The current model supports {', '.join(self._supported_elements)}"
                 )
-        self._species_id = np.array(species_id)
+                _logger.error(msg)
+                raise ValueError(msg)
+        self._species_id = _np.array(species_id)
 
         # First try to use the specified backend to compute in vacuo
         # energies and (optionally) gradients.
@@ -1460,108 +1730,117 @@ class EMLECalculator:
             if self._backend == "torchani":
                 try:
                     E_vac, grad_vac = self._run_torchani(xyz_qm, atomic_numbers)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using TorchANI backend!"
-                    )
+                except Exception as e:
+                    msg = f"Failed to calculate in vacuo energies using TorchANI backend: {e}"
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # DeePMD.
             if self._backend == "deepmd":
                 try:
                     E_vac, grad_vac = self._run_deepmd(xyz_qm, elements)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using DeePMD backend!"
-                    )
+                except Exception as e:
+                    msg = f"Failed to calculate in vacuo energies using DeePMD backend: {e}"
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # ORCA.
             elif self._backend == "orca":
                 try:
                     E_vac, grad_vac = self._run_orca(orca_input, xyz_file_qm)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using ORCA backend!"
+                except Exception as e:
+                    msg = (
+                        f"Failed to calculate in vacuo energies using ORCA backend: {e}"
                     )
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # Sander.
             elif self._backend == "sander":
                 try:
-                    atoms = ase.atoms.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+                    atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
                     E_vac, grad_vac = self._run_pysander(
                         atoms, self._parm7, is_gas=True
                     )
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using Sander backend!"
-                    )
+                except Exception as e:
+                    msg = f"Failed to calculate in vacuo energies using Sander backend: {e}"
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # SQM.
             elif self._backend == "sqm":
                 try:
                     E_vac, grad_vac = self._run_sqm(xyz_qm, atomic_numbers, charge)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using SQM backend!"
+                except Exception as e:
+                    msg = (
+                        f"Failed to calculate in vacuo energies using SQM backend: {e}"
                     )
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             # XTB.
             elif self._backend == "xtb":
                 try:
-                    atoms = ase.atoms.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+                    atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
                     E_vac, grad_vac = self._run_xtb(atoms)
-                except:
-                    raise RuntimeError(
-                        "Failed to calculate in vacuo energies using XTB backend!"
+                except Exception as e:
+                    msg = (
+                        f"Failed to calculate in vacuo energies using XTB backend: {e}"
                     )
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
         # External backend.
         else:
             try:
-                atoms = ase.atoms.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+                atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
                 E_vac, grad_vac = self._external_backend(atoms)
-            except:
-                raise
-                raise RuntimeError(
-                    "Failed to calculate in vacuo energies using external backend!"
+            except Exception as e:
+                msg = (
+                    f"Failed to calculate in vacuo energies using external backend: {e}"
                 )
+                _logger.error(msg)
+                raise RuntimeError(msg)
 
         # Apply delta-learning corrections using Rascal.
         if self._is_delta:
             try:
                 if atoms is None:
-                    atoms = ase.atoms.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+                    atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
                 delta_E, delta_grad = self._run_rascal(atoms)
-            except:
-                raise RuntimeError(
-                    "Failed to compute delta-learning corrections using Rascal!"
-                )
+            except Exception as e:
+                msg = f"Failed to compute delta-learning corrections using Rascal: {e}"
+                _logger.error(msg)
+                raise RuntimeError(msg)
 
             # Add the delta-learning corrections to the in vacuo energies and gradients.
             E_vac += delta_E
             grad_vac += delta_grad
 
         # Convert units.
-        xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
-        xyz_mm_bohr = xyz_mm * ANGSTROM_TO_BOHR
+        xyz_qm_bohr = xyz_qm * _ANGSTROM_TO_BOHR
+        xyz_mm_bohr = xyz_mm * _ANGSTROM_TO_BOHR
 
         mol_soap, dsoap_dxyz = self._get_soap(atomic_numbers, xyz_qm, gradient=True)
-        dsoap_dxyz_qm_bohr = dsoap_dxyz * BOHR_TO_ANGSTROM
+        dsoap_dxyz_qm_bohr = dsoap_dxyz * _BOHR_TO_ANGSTROM
 
         s, ds_dsoap = self._get_s(mol_soap, self._species_id, gradient=True)
         chi, dchi_dsoap = self._get_chi(mol_soap, self._species_id, gradient=True)
         ds_dxyz_qm_bohr = self._get_df_dxyz(ds_dsoap, dsoap_dxyz_qm_bohr)
         dchi_dxyz_qm_bohr = self._get_df_dxyz(dchi_dsoap, dsoap_dxyz_qm_bohr)
 
-        # Convert inputs to PyTorch tensors.
-        xyz_qm_bohr = torch.tensor(
-            xyz_qm_bohr, dtype=torch.float32, device=self._device
+        # Convert inputs to Torch tensors.
+        xyz_qm_bohr = _torch.tensor(
+            xyz_qm_bohr, dtype=_torch.float32, device=self._device
         )
-        xyz_mm_bohr = torch.tensor(
-            xyz_mm_bohr, dtype=torch.float32, device=self._device
+        xyz_mm_bohr = _torch.tensor(
+            xyz_mm_bohr, dtype=_torch.float32, device=self._device
         )
-        charges_mm = torch.tensor(charges_mm, dtype=torch.float32, device=self._device)
-        s = torch.tensor(s, dtype=torch.float32, device=self._device)
-        chi = torch.tensor(chi, dtype=torch.float32, device=self._device)
+        charges_mm = _torch.tensor(
+            charges_mm, dtype=_torch.float32, device=self._device
+        )
+        s = _torch.tensor(s, dtype=_torch.float32, device=self._device)
+        chi = _torch.tensor(chi, dtype=_torch.float32, device=self._device)
 
         # Compute gradients and energy.
         grads, E = self._get_E_with_grad(charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi)
@@ -1581,7 +1860,7 @@ class EMLECalculator:
         if self._is_interpolate:
             # Create the ASE atoms object if it wasn't already created by the backend.
             if atoms is None:
-                atoms = ase.atoms.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+                atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
 
             # Compute the in vacuo MM energy and gradients for the QM region.
             E_mm_qm_vac, grad_mm_qm_vac = self._run_pysander(
@@ -1632,8 +1911,12 @@ class EMLECalculator:
             grad_mm = lam * grad_mm + (1 - lam) * dE_dxyz_mm_bohr
 
         # Log energies to file.
-        if self._log > 0 and not self._is_first_step and self._step % self._log == 0:
-            with open("emle_log.txt", "a+") as f:
+        if (
+            self._energy_frequency > 0
+            and not self._is_first_step
+            and self._step % self._energy_frequency == 0
+        ):
+            with open(self._energy_file, "a+") as f:
                 # Write the header.
                 if self._step == 0:
                     if self._is_interpolate:
@@ -1658,9 +1941,11 @@ class EMLECalculator:
 
         # Return the energy and forces in OpenMM units.
         return (
-            E_tot.item() * HARTREE_TO_KJ_MOL,
-            (-grad_qm * HARTREE_TO_KJ_MOL * NANOMETER_TO_BOHR).tolist(),
-            (-grad_mm[:num_mm_atoms] * HARTREE_TO_KJ_MOL * NANOMETER_TO_BOHR).tolist(),
+            E_tot.item() * _HARTREE_TO_KJ_MOL,
+            (-grad_qm * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_BOHR).tolist(),
+            (
+                -grad_mm[:num_mm_atoms] * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_BOHR
+            ).tolist(),
         )
 
     def _get_E(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
@@ -1692,7 +1977,7 @@ class EMLECalculator:
         result: torch.tensor (1,)
             Total EMLE embedding energy.
         """
-        return torch.sum(
+        return _torch.sum(
             self._get_E_components(charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi)
         )
 
@@ -1737,22 +2022,22 @@ class EMLECalculator:
             q_val = q - q_core
         elif self._method == "mechanical":
             q_core = self._get_q(r_data, s, chi)
-            q_val = torch.zeros_like(q_core, dtype=torch.float32, device=self._device)
+            q_val = _torch.zeros_like(q_core, dtype=_torch.float32, device=self._device)
         else:
-            q_val = torch.zeros_like(q_core, dtype=torch.float32, device=self._device)
+            q_val = _torch.zeros_like(q_core, dtype=_torch.float32, device=self._device)
         mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k_Z)
         vpot_q_core = self._get_vpot_q(q_core, mesh_data["T0_mesh"])
         vpot_q_val = self._get_vpot_q(q_val, mesh_data["T0_mesh_slater"])
         vpot_static = vpot_q_core + vpot_q_val
-        E_static = torch.sum(vpot_static @ charges_mm)
+        E_static = _torch.sum(vpot_static @ charges_mm)
 
         if self._method == "electrostatic":
             vpot_ind = self._get_vpot_mu(mu_ind, mesh_data["T1_mesh"])
-            E_ind = torch.sum(vpot_ind @ charges_mm) * 0.5
+            E_ind = _torch.sum(vpot_ind @ charges_mm) * 0.5
         else:
-            E_ind = torch.tensor(0.0, dtype=torch.float32, device=self._device)
+            E_ind = _torch.tensor(0.0, dtype=_torch.float32, device=self._device)
 
-        return torch.stack([E_static, E_ind])
+        return _torch.stack([E_static, E_ind])
 
     def _get_q(self, r_data, s, chi):
         """
@@ -1777,8 +2062,8 @@ class EMLECalculator:
             Predicted MBIS charges.
         """
         A = self._get_A_QEq(r_data, s)
-        b = torch.hstack([-chi, self._q_total])
-        return torch.linalg.solve(A, b)[:-1]
+        b = _torch.hstack([-chi, self._q_total])
+        return _torch.linalg.solve(A, b)[:-1]
 
     def _get_A_QEq(self, r_data, s):
         """
@@ -1800,23 +2085,23 @@ class EMLECalculator:
         """
         s_gauss = s * self._a_QEq
         s2 = s_gauss**2
-        s_mat = torch.sqrt(s2[:, None] + s2[None, :])
+        s_mat = _torch.sqrt(s2[:, None] + s2[None, :])
 
         A = self._get_T0_gaussian(r_data["T01"], r_data["r_mat"], s_mat)
 
-        new_diag = torch.ones_like(
-            A.diagonal(), dtype=torch.float32, device=self._device
-        ) * (1.0 / (s_gauss * np.sqrt(np.pi)))
-        mask = torch.diag(
-            torch.ones_like(new_diag, dtype=torch.float32, device=self._device)
+        new_diag = _torch.ones_like(
+            A.diagonal(), dtype=_torch.float32, device=self._device
+        ) * (1.0 / (s_gauss * _np.sqrt(_np.pi)))
+        mask = _torch.diag(
+            _torch.ones_like(new_diag, dtype=_torch.float32, device=self._device)
         )
-        A = mask * torch.diag(new_diag) + (1.0 - mask) * A
+        A = mask * _torch.diag(new_diag) + (1.0 - mask) * A
 
         # Store the dimensions of A.
         x, y = A.shape
 
         # Create an tensor of ones with one more row and column than A.
-        B = torch.ones(x + 1, y + 1, dtype=torch.float32, device=self._device)
+        B = _torch.ones(x + 1, y + 1, dtype=_torch.float32, device=self._device)
 
         # Copy A into B.
         B[:x, :y] = A
@@ -1860,11 +2145,11 @@ class EMLECalculator:
 
         r = 1.0 / mesh_data["T0_mesh"]
         f1 = self._get_f1_slater(r, s[:, None] * 2.0)
-        fields = torch.sum(
+        fields = _torch.sum(
             mesh_data["T1_mesh"] * f1[:, :, None] * q[:, None], axis=1
         ).flatten()
 
-        mu_ind = torch.linalg.solve(A, fields)
+        mu_ind = _torch.linalg.solve(A, fields)
         E_ind = mu_ind @ fields * 0.5
         return mu_ind.reshape((-1, 3))
 
@@ -1899,17 +2184,17 @@ class EMLECalculator:
         alphap = alpha * self._a_Thole
         alphap_mat = alphap[:, None] * alphap[None, :]
 
-        au3 = r_data["r_mat"] ** 3 / torch.sqrt(alphap_mat)
+        au3 = r_data["r_mat"] ** 3 / _torch.sqrt(alphap_mat)
         au31 = au3.repeat_interleave(3, dim=1)
         au32 = au31.repeat_interleave(3, dim=0)
 
         A = -self._get_T2_thole(r_data["T21"], r_data["T22"], au32)
 
         new_diag = 1.0 / alpha.repeat_interleave(3)
-        mask = torch.diag(
-            torch.ones_like(new_diag, dtype=torch.float32, device=self._device)
+        mask = _torch.diag(
+            _torch.ones_like(new_diag, dtype=_torch.float32, device=self._device)
         )
-        A = mask * torch.diag(new_diag) + (1.0 - mask) * A
+        A = mask * _torch.diag(new_diag) + (1.0 - mask) * A
 
         return A
 
@@ -1931,7 +2216,7 @@ class EMLECalculator:
 
         result: numpy.array (N_ATOMS, N_ATOMS, 3)
         """
-        return np.einsum("ij,ijkl->ikl", df_dsoap, dsoap_dxyz)
+        return _np.einsum("ij,ijkl->ikl", df_dsoap, dsoap_dxyz)
 
     @staticmethod
     def _get_vpot_q(q, T0):
@@ -1953,7 +2238,7 @@ class EMLECalculator:
         result: torch.tensor (max_mm_atoms)
             Electrostatic potential over MM atoms.
         """
-        return torch.sum(T0 * q[:, None], axis=0)
+        return _torch.sum(T0 * q[:, None], axis=0)
 
     @staticmethod
     def _get_vpot_mu(mu, T1):
@@ -1976,7 +2261,7 @@ class EMLECalculator:
         result: torch.tensor (max_mm_atoms)
             Electrostatic potential over MM atoms.
         """
-        return -torch.tensordot(T1, mu, ((0, 2), (0, 1)))
+        return -_torch.tensordot(T1, mu, ((0, 2), (0, 1)))
 
     @classmethod
     def _get_r_data(cls, xyz, device):
@@ -2000,20 +2285,20 @@ class EMLECalculator:
         n_atoms = len(xyz)
 
         rr_mat = xyz[:, None, :] - xyz[None, :, :]
-        r_mat = torch.cdist(xyz, xyz)
-        r_inv = torch.where(r_mat == 0.0, 0.0, 1.0 / r_mat)
+        r_mat = _torch.cdist(xyz, xyz)
+        r_inv = _torch.where(r_mat == 0.0, 0.0, 1.0 / r_mat)
 
         r_inv1 = r_inv.repeat_interleave(3, dim=1)
         r_inv2 = r_inv1.repeat_interleave(3, dim=0)
 
         # Get a stacked matrix of outer products over the rr_mat tensors.
-        outer = torch.einsum("bik,bij->bjik", rr_mat, rr_mat).reshape(
+        outer = _torch.einsum("bik,bij->bjik", rr_mat, rr_mat).reshape(
             (n_atoms * 3, n_atoms * 3)
         )
 
-        id2 = torch.tile(
-            torch.tile(
-                torch.eye(3, dtype=torch.float32, device=device).T, (1, n_atoms)
+        id2 = _torch.tile(
+            _torch.tile(
+                _torch.eye(3, dtype=_torch.float32, device=device).T, (1, n_atoms)
             ).T,
             (1, n_atoms),
         )
@@ -2043,7 +2328,7 @@ class EMLECalculator:
             MBIS valence widths.
         """
         rr = xyz_mesh[None, :, :] - xyz[:, None, :]
-        r = torch.linalg.norm(rr, axis=2)
+        r = _torch.linalg.norm(rr, axis=2)
 
         return {
             "T0_mesh": 1.0 / r,
@@ -2072,7 +2357,7 @@ class EMLECalculator:
         """
         return (
             cls._get_T0_slater(r, s) * r
-            - torch.exp(-r / s) / s * (0.5 + r / (s * 2)) * r
+            - _torch.exp(-r / s) / s * (0.5 + r / (s * 2)) * r
         )
 
     @staticmethod
@@ -2094,7 +2379,7 @@ class EMLECalculator:
 
         results: torch.tensor (N_ATOMS, max_mm_atoms)
         """
-        return (1 - (1 + r / (s * 2)) * torch.exp(-r / s)) / r
+        return (1 - (1 + r / (s * 2)) * _torch.exp(-r / s)) / r
 
     @staticmethod
     def _get_T0_gaussian(t01, r, s_mat):
@@ -2118,7 +2403,7 @@ class EMLECalculator:
 
         results: torch.tensor (N_ATOMS, N_ATOMS)
         """
-        return t01 * torch.erf(r / (s_mat * np.sqrt(2)))
+        return t01 * _torch.erf(r / (s_mat * _np.sqrt(2)))
 
     @classmethod
     def _get_T2_thole(cls, tr21, tr22, au3):
@@ -2161,7 +2446,7 @@ class EMLECalculator:
 
         result: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
         """
-        return 1 - torch.exp(-au3)
+        return 1 - _torch.exp(-au3)
 
     @staticmethod
     def _lambda5(au3):
@@ -2180,7 +2465,7 @@ class EMLECalculator:
 
         result: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
         """
-        return 1 - (1 + au3) * torch.exp(-au3)
+        return 1 - (1 + au3) * _torch.exp(-au3)
 
     @staticmethod
     def parse_orca_input(orca_input):
@@ -2190,51 +2475,55 @@ class EMLECalculator:
         Parameters
         ----------
 
-        orca_input : str
+        orca_input: str
             The path to the ORCA input file.
 
         Returns
         -------
 
-        dirname : str
+        dirname: str
             The path to the directory containing the ORCA file.
 
-        charge : int
+        charge: int
             The charge on the QM region.
 
-        mult : int
+        mult: int
             The spin multiplicity of the QM region.
 
-        atoms : ase.atoms.Atoms
+        atoms: ase.Atoms
             The atoms in the QM region.
 
-        atomic_numbers : numpy.array
+        atomic_numbers: numpy.array
             The atomic numbers of the atoms in the QM region.
 
-        xyz_qm : numpy.array
+        xyz_qm: numpy.array
             The positions of the atoms in the QM region.
 
-        xyz_mm : numpy.array
+        xyz_mm: numpy.array
             The positions of the atoms in the MM region.
 
-        charges_mm : numpy.array
+        charges_mm: numpy.array
             The charges of the atoms in the MM region.
 
-        xyz_file_qm : str
+        xyz_file_qm: str
             The path to the QM xyz file.
 
-        atoms_mm : ase.atoms.Atoms
+        atoms_mm: ase.Atoms
             The atoms in the MM region.
         """
 
         if not isinstance(orca_input, str):
-            raise TypeError("'orca_input' must be of type 'str'")
-        if not os.path.isfile(orca_input):
-            raise IOError(f"Unable to locate the ORCA input file: {orca_input}")
+            msg = "'orca_input' must be of type 'str'"
+            _logger.error(msg)
+            raise TypeError(msg)
+        if not _os.path.isfile(orca_input):
+            msg = f"Unable to locate the ORCA input file: {orca_input}"
+            _logger.error(msg)
+            raise IOError(msg)
 
         # Store the directory name for the file. Files within the input file
         # should be relative to this.
-        dirname = os.path.dirname(orca_input)
+        dirname = _os.path.dirname(orca_input)
         if dirname:
             dirname += "/"
         else:
@@ -2260,34 +2549,46 @@ class EMLECalculator:
         # Validate that the information was found.
 
         if charge is None:
-            raise ValueError("Unable to determine QM charge from ORCA input.")
+            msg = "Unable to determine QM charge from ORCA input."
+            _logger.error(msg)
+            raise ValueError(msg)
 
         if mult is None:
-            raise ValueError(
-                "Unable to determine QM spin multiplicity from ORCA input."
-            )
+            msg = "Unable to determine QM spin multiplicity from ORCA input."
+            _logger.error(msg)
+            raise ValueError(msg)
 
         if xyz_file_qm is None:
-            raise ValueError("Unable to determine QM xyz file from ORCA input.")
+            msg = "Unable to determine QM xyz file from ORCA input."
+            _logger.error(msg)
+            raise ValueError(msg)
         else:
-            if not os.path.isfile(xyz_file_qm):
+            if not _os.path.isfile(xyz_file_qm):
                 xyz_file_qm = dirname + xyz_file_qm
-            if not os.path.isfile(xyz_file_qm):
-                raise ValueError(f"Unable to locate QM xyz file: {xyz_file_qm}")
+            if not _os.path.isfile(xyz_file_qm):
+                msg = f"Unable to locate QM xyz file: {xyz_file_qm}"
+                _logger.error(msg)
+                raise ValueError(msg)
 
         if xyz_file_mm is None:
-            raise ValueError("Unable to determine MM xyz file from ORCA input.")
+            msg = "Unable to determine MM xyz file from ORCA input."
+            _logger.error(msg)
+            raise ValueError(msg)
         else:
-            if not os.path.isfile(xyz_file_mm):
+            if not _os.path.isfile(xyz_file_mm):
                 xyz_file_mm = dirname + xyz_file_mm
-            if not os.path.isfile(xyz_file_mm):
-                raise ValueError(f"Unable to locate MM xyz file: {xyz_file_mm}")
+            if not _os.path.isfile(xyz_file_mm):
+                msg = f"Unable to locate MM xyz file: {xyz_file_mm}"
+                _logger.error(msg)
+                raise ValueError(msg)
 
         # Process the QM xyz file.
         try:
-            atoms = ase.io.read(xyz_file_qm)
+            atoms = _ase_io.read(xyz_file_qm)
         except:
-            raise IOError(f"Unable to read QM xyz file: {xyz_file_qm}")
+            msg = f"Unable to read QM xyz file: {xyz_file_qm}"
+            _logger.error(msg)
+            raise IOError(msg)
 
         charges_mm = []
         xyz_mm = []
@@ -2302,16 +2603,20 @@ class EMLECalculator:
                     try:
                         charges_mm.append(float(data[0]))
                     except:
-                        raise ValueError("Unable to parse MM charge.")
+                        msg = "Unable to parse MM charge."
+                        _logger.error(msg)
+                        raise ValueError(msg)
 
                     try:
                         xyz_mm.append([float(x) for x in data[1:]])
                     except:
-                        raise ValueError("Unable to parse MM coordinates.")
+                        msg = "Unable to parse MM coordinates."
+                        _logger.error(msg)
+                        raise ValueError(msg)
 
         # Convert to NumPy arrays.
-        charges_mm = np.array(charges_mm)
-        xyz_mm = np.array(xyz_mm)
+        charges_mm = _np.array(charges_mm)
+        xyz_mm = _np.array(xyz_mm)
 
         return (
             dirname,
@@ -2333,27 +2638,27 @@ class EMLECalculator:
         Parameters
         ----------
 
-        atoms : ase.atoms.Atoms
+        atoms: ase.Atoms
             The atoms in the QM region.
 
-        parm7 : str
+        parm7: str
             The path to the AMBER topology file.
 
-        bool : is_gas
+        bool: is_gas
             Whether this is a gas phase calculation.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The in vacuo MM energy in Eh.
 
-        gradients : numpy.array
+        gradients: numpy.array
             The in vacuo MM gradient in Eh/Bohr.
         """
 
-        if not isinstance(atoms, ase.Atoms):
-            raise TypeError("'atoms' must be of type 'ase.atoms.Atoms'")
+        if not isinstance(atoms, _ase.Atoms):
+            raise TypeError("'atoms' must be of type 'ase.Atoms'")
 
         if not isinstance(parm7, str):
             raise TypeError("'parm7' must be of type 'str'")
@@ -2361,7 +2666,7 @@ class EMLECalculator:
         if not isinstance(is_gas, bool):
             raise TypeError("'is_gas' must be of type 'bool'")
 
-        from .sander_calculator import SanderCalculator
+        from ._sander_calculator import SanderCalculator
 
         # Instantiate a SanderCalculator.
         sander_calculator = SanderCalculator(atoms, parm7, is_gas)
@@ -2383,49 +2688,49 @@ class EMLECalculator:
         Parameters
         ----------
 
-        xyz : numpy.array
+        xyz: numpy.array
             The coordinates of the QM region in Angstrom.
 
-        atomic_numbers : numpy.array
+        atomic_numbers: numpy.array
             The atomic numbers of the QM region.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The in vacuo ML energy in Eh.
 
-        gradients : numpy.array
+        gradients: numpy.array
             The in vacuo ML gradient in Eh/Bohr.
         """
 
-        if not isinstance(xyz, np.ndarray):
+        if not isinstance(xyz, _np.ndarray):
             raise TypeError("'xyz' must be of type 'numpy.ndarray'")
-        if xyz.dtype != np.float64:
+        if xyz.dtype != _np.float64:
             raise TypeError("'xyz' must have dtype 'float64'.")
 
-        if not isinstance(atomic_numbers, np.ndarray):
+        if not isinstance(atomic_numbers, _np.ndarray):
             raise TypeError("'atomic_numbers' must be of type 'numpy.ndarray'")
-        if atomic_numbers.dtype != np.int64:
+        if atomic_numbers.dtype != _np.int64:
             raise TypeError("'xyz' must have dtype 'int'.")
 
         # Convert the coordinates to a Torch tensor, casting to 32-bit floats.
         # Use a NumPy array, since converting a Python list to a Tensor is slow.
-        coords = torch.tensor(
-            np.float32(xyz.reshape(1, *xyz.shape)),
+        coords = _torch.tensor(
+            _np.float32(xyz.reshape(1, *xyz.shape)),
             requires_grad=True,
             device=self._device,
         )
 
         # Convert the atomic numbers to a Torch tensor.
-        atomic_numbers = torch.tensor(
+        atomic_numbers = _torch.tensor(
             atomic_numbers.reshape(1, *atomic_numbers.shape),
             device=self._device,
         )
 
         # Compute the energy and gradient.
         energy = self._torchani_model((atomic_numbers, coords)).energies
-        gradient = torch.autograd.grad(energy.sum(), coords)[0] * BOHR_TO_ANGSTROM
+        gradient = _torch.autograd.grad(energy.sum(), coords)[0] * _BOHR_TO_ANGSTROM
 
         return energy.detach().cpu().numpy()[0], gradient.cpu().numpy()[0]
 
@@ -2437,25 +2742,25 @@ class EMLECalculator:
         Parameters
         ----------
 
-        xyz : numpy.array
+        xyz: numpy.array
             The coordinates of the QM region in Angstrom.
 
-        elements : [str]
+        elements: [str]
             The list of elements.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The in vacuo ML energy in Eh.
 
-        gradients : numpy.array
+        gradients: numpy.array
             The in vacuo ML gradient in Eh/Bohr.
         """
 
-        if not isinstance(xyz, np.ndarray):
+        if not isinstance(xyz, _np.ndarray):
             raise TypeError("'xyz' must be of type 'numpy.ndarray'")
-        if xyz.dtype != np.float64:
+        if xyz.dtype != _np.float64:
             raise TypeError("'xyz' must have dtype 'float64'.")
 
         if not isinstance(elements, (list, tuple)):
@@ -2466,8 +2771,11 @@ class EMLECalculator:
         # Reshape to a frames x (natoms x 3) array.
         xyz = xyz.reshape([1, -1])
 
+        e_list = []
+        f_list = []
+
         # Run a calculation for each model and take the average.
-        for x, dp in enumerate(self._deepmd_potential):
+        for dp in self._deepmd_potential:
             # Work out the mapping between the elements and the type indices
             # used by the model.
             try:
@@ -2480,17 +2788,26 @@ class EMLECalculator:
             # Now determine the atom types based on the mapping.
             atom_types = [mapping[element] for element in elements]
 
-            if x == 0:
-                energy, force, _ = dp.eval(xyz, cells=None, atom_types=atom_types)
-            else:
-                e, f, _ = dp.eval(xyz, cells=None, atom_types=atom_types)
-                energy += e
-                force += f
+            e, f, _ = dp.eval(xyz, cells=None, atom_types=atom_types)
+            e_list.append(e)
+            f_list.append(f)
+
+        # Write the maximum DeePMD force deviation to file.
+        if self._deepmd_deviation:
+            from deepmd.infer.model_devi import calc_model_devi_f
+
+            max_f_std = calc_model_devi_f(_np.array(f_list))[0][0]
+            with open(self._deepmd_deviation, "a") as f:
+                f.write(f"{max_f_std:12.5f}\n")
+            # To be written to qm_xyz_file.
+            self._max_f_std = max_f_std
 
         # Take averages and return. (Gradient equals minus the force.)
+        e_mean = _np.mean(_np.array(e_list), axis=0)
+        grad_mean = -_np.mean(_np.array(f_list), axis=0)
         return (
-            (energy[0][0] * EV_TO_HARTREE) / (x + 1),
-            -(force[0] * EV_TO_HARTREE * BOHR_TO_ANGSTROM) / (x + 1),
+            e_mean[0][0] * _EV_TO_HARTREE,
+            grad_mean[0] * _EV_TO_HARTREE * _BOHR_TO_ANGSTROM,
         )
 
     def _run_orca(
@@ -2503,40 +2820,40 @@ class EMLECalculator:
         Parameters
         ----------
 
-        orca_input : str
+        orca_input: str
             The path to the ORCA input file.
 
-        xyz_file_qm : str
+        xyz_file_qm: str
             The path to the xyz coordinate file for the QM region.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The in vacuo QM energy in Eh.
 
-        gradients : numpy.array
+        gradients: numpy.array
             The in vacuo QM gradient in Eh/Bohr.
         """
 
         if orca_input is not None and not isinstance(orca_input, str):
             raise TypeError("'orca_input' must be of type 'str'.")
-        if orca_input is not None and not os.path.isfile(orca_input):
+        if orca_input is not None and not _os.path.isfile(orca_input):
             raise IOError(f"Unable to locate the ORCA input file: {orca_input}")
 
-        if xyz_qm_file is not None and not isinstance(xyz_file_qm, str):
+        if xyz_file_qm is not None and not isinstance(xyz_file_qm, str):
             raise TypeError("'xyz_file_qm' must be of type 'str'.")
-        if xyz_qm_file is not None and not os.path.isfile(xyz_file_qm):
+        if xyz_file_qm is not None and not _os.path.isfile(xyz_file_qm):
             raise IOError(f"Unable to locate the ORCA QM xyz file: {xyz_file_qm}")
 
-        if atomic_numbers is not None and not isinstance(atomic_numbers, np.ndarray):
+        if atomic_numbers is not None and not isinstance(atomic_numbers, _np.ndarray):
             raise TypeError("'atomic_numbers' must be of type 'numpy.ndarray'")
-        if atomic_numbers is not None and atomic_numbers.dtype != np.int64:
+        if atomic_numbers is not None and atomic_numbers.dtype != _np.int64:
             raise TypeError("'atomic_numbers' must have dtype 'int'.")
 
-        if xyz_qm is not None and not isinstance(xyz_qm, np.ndarray):
+        if xyz_qm is not None and not isinstance(xyz_qm, _np.ndarray):
             raise TypeError("'xyz_qm' must be of type 'numpy.ndarray'")
-        if xyz_qm is not None and xyz_qm.dtype != np.float64:
+        if xyz_qm is not None and xyz_qm.dtype != _np.float64:
             raise TypeError("'xyz_qm' must have dtype 'float64'.")
 
         # ORCA input files take precedence.
@@ -2552,19 +2869,19 @@ class EMLECalculator:
             if self._orca_template is None:
                 raise ValueError("No ORCA template file specified!")
 
-            fd_orca_input, orca_input = tempfile.mkstemp(
+            fd_orca_input, orca_input = _tempfile.mkstemp(
                 prefix="orc_job_", suffix=".inp", text=True
             )
-            fd_xyz_file_qm, xyz_file_qm = tempfile.mkstemp(
+            fd_xyz_file_qm, xyz_file_qm = _tempfile.mkstemp(
                 prefix="inpfile_", suffix=".xyz", text=True
             )
 
             # Copy the template file.
-            shutil.copyfile(self._orca_template, orca_input)
+            _shutil.copyfile(self._orca_template, orca_input)
 
             # Add the QM coordinate file path.
             with open(orca_input, "w") as f:
-                f.write(f'*xyzfile "{os.path.basename(xyz_file_qm)}"\n')
+                f.write(f'*xyzfile "{_os.path.basename(xyz_file_qm)}"\n')
 
             # Write the xyz input file.
             with open(xyz_file_qm, "w") as f:
@@ -2575,15 +2892,15 @@ class EMLECalculator:
                     )
 
         # Create a temporary working directory.
-        with tempfile.TemporaryDirectory() as tmp:
+        with _tempfile.TemporaryDirectory() as tmp:
             # Work out the name of the input files.
-            inp_name = f"{tmp}/{os.path.basename(orca_input)}"
-            xyz_name = f"{tmp}/{os.path.basename(xyz_file_qm)}"
+            inp_name = f"{tmp}/{_os.path.basename(orca_input)}"
+            xyz_name = f"{tmp}/{_os.path.basename(xyz_file_qm)}"
 
             # Copy the files to the working directory.
             if is_orca_input:
-                shutil.copyfile(orca_input, inp_name)
-                shutil.copyfile(xyz_file_qm, xyz_name)
+                _shutil.copyfile(orca_input, inp_name)
+                _shutil.copyfile(xyz_file_qm, xyz_name)
 
                 # Edit the input file to remove the point charges.
                 lines = []
@@ -2595,28 +2912,30 @@ class EMLECalculator:
                     for line in lines:
                         f.write(line)
             else:
-                shutil.move(orca_input, inp_name)
-                shutil.move(xyz_file_qm, xyz_name)
+                _shutil.move(orca_input, inp_name)
+                _shutil.move(xyz_file_qm, xyz_name)
 
             # Create the ORCA command.
-            command = f"{self._orca_exe} {inp_name}"
+            command = f"{self._orca_path} {inp_name}"
 
             # Run the command as a sub-process.
-            proc = subprocess.run(
-                shlex.split(command),
+            proc = _subprocess.run(
+                _shlex.split(command),
                 cwd=tmp,
                 shell=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=_subprocess.PIPE,
+                stderr=_subprocess.PIPE,
             )
 
             if proc.returncode != 0:
                 raise RuntimeError("ORCA job failed!")
 
             # Parse the output file for the energies and gradients.
-            engrad = f"{tmp}/{os.path.splitext(os.path.basename(orca_input))[0]}.engrad"
+            engrad = (
+                f"{tmp}/{_os.path.splitext(_os.path.basename(orca_input))[0]}.engrad"
+            )
 
-            if not os.path.isfile(engrad):
+            if not _os.path.isfile(engrad):
                 raise IOError(f"Unable to locate ORCA engrad file: {engrad}")
 
             with open(engrad, "r") as f:
@@ -2666,7 +2985,7 @@ class EMLECalculator:
         # Convert the gradient to a NumPy array and reshape. (Read as a single
         # column, convert to x, y, z components for each atom.)
         try:
-            gradient = np.array(gradient).reshape(int(len(gradient) / 3), 3)
+            gradient = _np.array(gradient).reshape(int(len(gradient) / 3), 3)
         except:
             raise IOError("Number of ORCA gradient records isn't a multiple of 3!")
 
@@ -2680,31 +2999,31 @@ class EMLECalculator:
         Parameters
         ----------
 
-        xyz : numpy.array
+        xyz: numpy.array
             The coordinates of the QM region in Angstrom.
 
-        atomic_numbers : numpy.array
+        atomic_numbers: numpy.array
             The atomic numbers of the atoms in the QM region.
 
-        qm_charge : int
+        qm_charge: int
             The charge on the QM region.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The in vacuo QM energy in Eh.
 
-        gradients : numpy.array
+        gradients: numpy.array
             The in vacuo QM gradient in Eh/Bohr.
         """
 
-        if not isinstance(xyz, np.ndarray):
+        if not isinstance(xyz, _np.ndarray):
             raise TypeError("'xyz' must be of type 'numpy.ndarray'")
-        if xyz.dtype != np.float64:
+        if xyz.dtype != _np.float64:
             raise TypeError("'xyz' must have dtype 'float64'.")
 
-        if not isinstance(atomic_numbers, np.ndarray):
+        if not isinstance(atomic_numbers, _np.ndarray):
             raise TypeError("'atomic_numbers' must be of type 'numpy.ndarray'")
 
         if not isinstance(qm_charge, int):
@@ -2714,7 +3033,7 @@ class EMLECalculator:
         num_qm = len(atomic_numbers)
 
         # Create a temporary working directory.
-        with tempfile.TemporaryDirectory() as tmp:
+        with _tempfile.TemporaryDirectory() as tmp:
             # Work out the name of the input files.
             inp_name = f"{tmp}/sqm.in"
             out_name = f"{tmp}/sqm.out"
@@ -2726,6 +3045,7 @@ class EMLECalculator:
                 f.write(" &qmmm\n")
                 f.write(f" qm_theory='{self._sqm_theory}',\n")
                 f.write(f" qmcharge={qm_charge},\n")
+                f.write(" maxcyc=0,\n")
                 f.write(" verbosity=4,\n")
                 f.write(f" /\n")
 
@@ -2738,17 +3058,17 @@ class EMLECalculator:
             command = f"sqm -i {inp_name} -o {out_name}"
 
             # Run the command as a sub-process.
-            proc = subprocess.run(
-                shlex.split(command),
+            proc = _subprocess.run(
+                _shlex.split(command),
                 shell=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=_subprocess.PIPE,
+                stderr=_subprocess.PIPE,
             )
 
             if proc.returncode != 0:
                 raise RuntimeError("SQM job failed!")
 
-            if not os.path.isfile(out_name):
+            if not _os.path.isfile(out_name):
                 raise IOError(f"Unable to locate SQM output file: {out_name}")
 
             with open(out_name, "r") as f:
@@ -2758,7 +3078,9 @@ class EMLECalculator:
                 forces = []
                 for line in f:
                     # Skip lines prior to convergence.
-                    if line.startswith("  ... geometry converged !"):
+                    if line.startswith(
+                        " QMMM SCC-DFTB: SCC-DFTB for step     0 converged"
+                    ):
                         is_converged = True
                         continue
 
@@ -2799,10 +3121,12 @@ class EMLECalculator:
             )
 
         # Convert units.
-        energy *= KCAL_MOL_TO_HARTREE
+        energy *= _KCAL_MOL_TO_HARTREE
 
-        # Convert the gradient to a NumPy array and reshape.
-        gradient = -np.array(forces) * KCAL_MOL_TO_HARTREE * BOHR_TO_ANGSTROM
+        # Convert the gradient to a NumPy array and reshape. Misleading comment
+        # in sqm output, the "forces" are actually gradients so no need to
+        # multiply by -1
+        gradient = _np.array(forces) * _KCAL_MOL_TO_HARTREE * _BOHR_TO_ANGSTROM
 
         return energy, gradient
 
@@ -2815,34 +3139,34 @@ class EMLECalculator:
         Parameters
         ----------
 
-        atoms : ase.atoms.Atoms
+        atoms: ase.Atoms
             The atoms in the QM region.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The in vacuo ML energy in Eh.
 
-        gradients : numpy.array
+        gradients: numpy.array
             The in vacuo gradient in Eh/Bohr.
         """
 
-        if not isinstance(atoms, ase.Atoms):
-            raise TypeError("'atoms' must be of type 'ase.atoms.Atoms'")
+        if not isinstance(atoms, _ase.Atoms):
+            raise TypeError("'atoms' must be of type 'ase.Atoms'")
 
-        from xtb.ase.calculator import XTB
+        from xtb.ase.calculator import XTB as _XTB
 
         # Create the calculator.
-        atoms.calc = XTB(method="GFN2-xTB")
+        atoms.calc = _XTB(method="GFN2-xTB")
 
         # Get the energy and forces in atomic units.
         energy = atoms.get_potential_energy()
         forces = atoms.get_forces()
 
         # Convert to Hartree and Eh/Bohr.
-        energy *= EV_TO_HARTREE
-        gradient = -forces * EV_TO_HARTREE * BOHR_TO_ANGSTROM
+        energy *= _EV_TO_HARTREE
+        gradient = -forces * _EV_TO_HARTREE * _BOHR_TO_ANGSTROM
 
         return energy, gradient
 
@@ -2896,35 +3220,35 @@ class EMLECalculator:
         Parameters
         ----------
 
-        atoms : ase.atoms.Atoms
+        atoms: ase.Atoms
             The atoms in the QM region.
 
         Returns
         -------
 
-        energy : float
+        energy: float
             The in vacuo MM energy in Eh.
 
-        gradients : numpy.array
+        gradients: numpy.array
             The in vacuo MM gradient in Eh/Bohr.
         """
 
-        if not isinstance(atoms, ase.Atoms):
-            raise TypeError("'atoms' must be of type 'ase.atoms.Atoms'")
+        if not isinstance(atoms, _ase.Atoms):
+            raise TypeError("'atoms' must be of type 'ase.Atoms'")
 
         # Rascal requires periodic box information so we translate the atoms so that
         # the lowest (x, y, z) position is zero, then set the cell to the maximum
         # position.
-        atoms.positions -= np.min(atoms.positions, axis=0)
-        atoms.cell = np.max(atoms.positions, axis=0)
+        atoms.positions -= _np.min(atoms.positions, axis=0)
+        atoms.cell = _np.max(atoms.positions, axis=0)
 
         # Run the calculation.
         self._rascal_calc.calculate(atoms)
 
         # Get the energy and force corrections.
-        energy = self._rascal_calc.results["energy"][0] * EV_TO_HARTREE
+        energy = self._rascal_calc.results["energy"][0] * _EV_TO_HARTREE
         gradient = (
-            -self._rascal_calc.results["forces"] * EV_TO_HARTREE * BOHR_TO_ANGSTROM
+            -self._rascal_calc.results["forces"] * _EV_TO_HARTREE * _BOHR_TO_ANGSTROM
         )
 
         return energy, gradient
