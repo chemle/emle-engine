@@ -168,7 +168,7 @@ This can be configured using the `EMLE_DEVICE` environment variable, or by
 using the `--device` argument when launching `emle-server`, e.g.:
 
 ```
-emle-server --backend cuda
+emle-server --device cuda
 ```
 
 When no device is specified, we will preferentially try to use `CUDA` if it is
@@ -177,7 +177,7 @@ to specify the index, e.g. when running on a multi-GPU setup, then you can use
 the following syntax:
 
 ```
-emle-server --backend cuda:1
+emle-server --device cuda:1
 ```
 
 This would tell `PyTorch` that we want to use device index `1`. The same formatting
