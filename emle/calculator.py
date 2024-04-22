@@ -418,7 +418,9 @@ class EMLECalculator:
                     region.
 
         backend: str
-            The backend to use to compute in vacuo energies and gradients.
+            The backend to use to compute in vacuo energies and gradients. If None,
+            then no backend will be used, allowing you to obtain the electrostatic
+            embedding energy and gradients only.
 
         external_backend: str
             The name of an external backend to use to compute in vacuo energies.
@@ -640,19 +642,17 @@ class EMLECalculator:
             _logger.error(msg)
             raise IOError(msg)
 
-        if backend is None:
-            backend = "torchani"
-
-        if not isinstance(backend, str):
-            msg = "'backend' must be of type 'str'"
-            _logger.error(msg)
-            raise TypeError(msg)
-        # Strip whitespace and convert to lower case.
-        backend = backend.lower().replace(" ", "")
-        if not backend in self._supported_backends:
-            msg = f"Unsupported backend '{backend}'. Options are: {', '.join(self._supported_backends)}"
-            _logger.error(msg)
-            raise ValueError(msg)
+        if backend is not None:
+            if not isinstance(backend, str):
+                msg = "'backend' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
+            # Strip whitespace and convert to lower case.
+            backend = backend.lower().replace(" ", "")
+            if not backend in self._supported_backends:
+                msg = f"Unsupported backend '{backend}'. Options are: {', '.join(self._supported_backends)}"
+                _logger.error(msg)
+                raise ValueError(msg)
         self._backend = backend
 
         if external_backend is not None:
@@ -1316,7 +1316,7 @@ class EMLECalculator:
                     raise RuntimeError(msg)
 
             # DeePMD.
-            if self._backend == "deepmd":
+            elif self._backend == "deepmd":
                 try:
                     E_vac, grad_vac = self._run_deepmd(xyz_qm, elements)
                 except Exception as e:
@@ -1368,6 +1368,10 @@ class EMLECalculator:
                     _logger.error(msg)
                     raise RuntimeError(msg)
 
+            # No backend.
+            else:
+                E_vac, grad_vac = 0.0, _np.zeros_like(xyz_qm)
+
         # External backend.
         else:
             try:
@@ -1380,7 +1384,7 @@ class EMLECalculator:
                 raise RuntimeError(msg)
 
         # Apply delta-learning corrections using Rascal.
-        if self._is_delta:
+        if self._is_delta and self._backend is not None:
             try:
                 delta_E, delta_grad = self._run_rascal(atoms)
             except Exception as e:
@@ -1700,7 +1704,7 @@ class EMLECalculator:
                     raise RuntimeError(msg)
 
             # DeePMD.
-            if self._backend == "deepmd":
+            elif self._backend == "deepmd":
                 try:
                     E_vac, grad_vac = self._run_deepmd(xyz_qm, elements)
                 except Exception as e:
@@ -1754,6 +1758,10 @@ class EMLECalculator:
                     _logger.error(msg)
                     raise RuntimeError(msg)
 
+            # No backend.
+            else:
+                E_vac, grad_vac = 0.0, _np.zeros_like(xyz_qm)
+
         # External backend.
         else:
             try:
@@ -1767,7 +1775,7 @@ class EMLECalculator:
                 raise RuntimeError(msg)
 
         # Apply delta-learning corrections using Rascal.
-        if self._is_delta:
+        if self._is_delta and self._backend is not None:
             try:
                 if atoms is None:
                     atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)

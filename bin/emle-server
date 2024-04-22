@@ -558,6 +558,10 @@ if args["log_file"] is None:
 if args["save_settings"] is None:
     args["save_settings"] = True
 
+# Use the default backend if no backend is specified.
+if args["backend"] is None:
+    args["backend"] = "torchani"
+
 # Use the default backend if no external backend is specified.
 if args["external_backend"] is None:
     if args["backend"] is None:
