@@ -377,6 +377,7 @@ class EMLECalculator:
         mm_charges=None,
         deepmd_model=None,
         deepmd_deviation=None,
+        deepmd_deviation_threshold=None,
         qm_xyz_file="qm.xyz",
         qm_xyz_frequency=0,
         rascal_model=None,
@@ -445,6 +446,9 @@ class EMLECalculator:
         deepmd_deviation: str
             Path to a file to write the max deviation between forces predicted
             with the DeePMD models.
+
+        deepmd_deviation_threshold: float
+            Stop the server when forces deviation is greater than the threshold
 
         qm_xyz_file: str
             Path to an output file for writing the xyz trajectory of the QM
@@ -766,6 +770,7 @@ class EMLECalculator:
                         raise TypeError(msg)
 
                     self._deepmd_deviation = deepmd_deviation
+                    self._deepmd_deviation_threshold = deepmd_deviation_threshold
 
                 # Store the list of model files, removing any duplicates.
                 self._deepmd_model = list(set(deepmd_model))
@@ -1199,6 +1204,7 @@ class EMLECalculator:
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),
             "deepmd_model": deepmd_model,
             "deepmd_deviation": deepmd_deviation,
+            "deepmd_deviation_threshold": deepmd_deviation_threshold,
             "qm_xyz_file": qm_xyz_file,
             "qm_xyz_frequency": qm_xyz_frequency,
             "rascal_model": rascal_model,
@@ -2769,6 +2775,11 @@ class EMLECalculator:
             from deepmd.infer.model_devi import calc_model_devi_f
 
             max_f_std = calc_model_devi_f(_np.array(f_list))[0][0]
+            if (self._deepmd_deviation_threshold and
+                max_f_std > self._deepmd_deviation_threshold):
+                msg = "Force deviation threshold reached!"
+                _logger.error(msg)
+                raise ValueError(msg)
             with open(self._deepmd_deviation, "a") as f:
                 f.write(f"{max_f_std:12.5f}\n")
             # To be written to qm_xyz_file.

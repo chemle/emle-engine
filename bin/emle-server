@@ -79,6 +79,7 @@ save_settings = os.getenv("EMLE_SAVE_SETTINGS")
 orca_template = os.getenv("EMLE_ORCA_TEMPLATE")
 deepmd_model = os.getenv("EMLE_DEEPMD_MODEL")
 deepmd_deviation = os.getenv("EMLE_DEEPMD_DEVIATION")
+deepmd_deviation_threshold = os.getenv("EMLE_DEEPMD_DEVIATION_THRESHOLD")
 qm_xyz_file = os.getenv("EMLE_QM_XYZ_FILE")
 try:
     qm_xyz_frequency = int(os.getenv("EMLE_QM_XYZ_FREQUENCY"))
@@ -132,6 +133,7 @@ env = {
     "device": device,
     "deepmd_model": deepmd_model,
     "deepmd_deviation": deepmd_deviation,
+    "deepmd_deviation_threshold": deepmd_deviation_threshold,
     "qm_xyz_file": qm_xyz_file,
     "qm_xyz_frequency": qm_xyz_frequency,
     "rascal_model": rascal_model,
