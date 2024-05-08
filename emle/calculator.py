@@ -448,7 +448,9 @@ class EMLECalculator:
             with the DeePMD models.
 
         deepmd_deviation_threshold: float
-            Stop the server when forces deviation is greater than the threshold
+            The threshold for the maximum deviation between forces predicted with
+            the DeePMD models. If the deviation exceeds this value, a ValueError
+            will be raised and the calculation will be terminated.
 
         qm_xyz_file: str
             Path to an output file for writing the xyz trajectory of the QM
@@ -770,6 +772,17 @@ class EMLECalculator:
                         raise TypeError(msg)
 
                     self._deepmd_deviation = deepmd_deviation
+
+                    if deepmd_deviation_threshold is not None:
+                        try:
+                            deepmd_deviation_threshold = float(
+                                deepmd_deviation_threshold
+                            )
+                        except:
+                            msg = "'deepmd_deviation_threshold' must be of type 'float'"
+                            _logger.error(msg)
+                            raise TypeError(msg)
+
                     self._deepmd_deviation_threshold = deepmd_deviation_threshold
 
                 # Store the list of model files, removing any duplicates.
