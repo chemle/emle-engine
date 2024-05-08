@@ -2775,8 +2775,10 @@ class EMLECalculator:
             from deepmd.infer.model_devi import calc_model_devi_f
 
             max_f_std = calc_model_devi_f(_np.array(f_list))[0][0]
-            if (self._deepmd_deviation_threshold and
-                max_f_std > self._deepmd_deviation_threshold):
+            if (
+                self._deepmd_deviation_threshold
+                and max_f_std > self._deepmd_deviation_threshold
+            ):
                 msg = "Force deviation threshold reached!"
                 _logger.error(msg)
                 raise ValueError(msg)
