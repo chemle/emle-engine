@@ -237,6 +237,12 @@ parser.add_argument(
     required=False,
 )
 parser.add_argument(
+    "--deepmd-deviation-threshold",
+    type=float,
+    help="the threshold for the max deviation between forces predicted with the DeePMD models",
+    required=False,
+)
+parser.add_argument(
     "--qm-xyz-file",
     type=str,
     help="path to a file to write the QM region coordinates",
