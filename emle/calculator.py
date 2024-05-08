@@ -1457,11 +1457,16 @@ class EMLECalculator:
         # Interpolate between the MM and ML/MM potential.
         if self._is_interpolate:
             # Compute the in vacuo MM energy and gradients for the QM region.
-            E_mm_qm_vac, grad_mm_qm_vac = self._run_pysander(
-                atoms=atoms,
-                parm7=self._parm7,
-                is_gas=True,
-            )
+            if self._backend != None:
+                E_mm_qm_vac, grad_mm_qm_vac = self._run_pysander(
+                    atoms=atoms,
+                    parm7=self._parm7,
+                    is_gas=True,
+                )
+
+            # If no backend is specified, then the MM energy and gradients are zero.
+            else:
+                E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm)
 
             # Swap the method to MM.
             method = self._method
@@ -1849,16 +1854,21 @@ class EMLECalculator:
 
         # Interpolate between the MM and ML/MM potential.
         if self._is_interpolate:
-            # Create the ASE atoms object if it wasn't already created by the backend.
-            if atoms is None:
-                atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
-
             # Compute the in vacuo MM energy and gradients for the QM region.
-            E_mm_qm_vac, grad_mm_qm_vac = self._run_pysander(
-                atoms=atoms,
-                parm7=self._parm7,
-                is_gas=True,
-            )
+            if self._backend != None:
+                # Create the ASE atoms object if it wasn't already created by the backend.
+                if atoms is None:
+                    atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+
+                E_mm_qm_vac, grad_mm_qm_vac = self._run_pysander(
+                    atoms=atoms,
+                    parm7=self._parm7,
+                    is_gas=True,
+                )
+
+            # If no backend is specified, then the MM energy and gradients are zero.
+            else:
+                E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm)
 
             # Swap the method to MM.
             method = self._method
