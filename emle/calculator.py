@@ -1813,6 +1813,14 @@ class EMLECalculator:
             E_vac += delta_E
             grad_vac += delta_grad
 
+        # If there are no point charges, then just return the in vacuo energy and forces.
+        if len(charges_mm) == 0:
+            return (
+                E_vac.item() * _HARTREE_TO_KJ_MOL,
+                (-grad_vac * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_BOHR).tolist(),
+                [],
+            )
+
         # Convert units.
         xyz_qm_bohr = xyz_qm * _ANGSTROM_TO_BOHR
         xyz_mm_bohr = xyz_mm * _ANGSTROM_TO_BOHR
