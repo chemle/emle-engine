@@ -7,7 +7,7 @@ import subprocess
 @pytest.fixture(autouse=True)
 def wrapper():
     """
-    A wrapper function stops the EMLE server after each test.
+    A wrapper function to stop the EMLE server after each test.
     """
 
     yield
