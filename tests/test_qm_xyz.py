@@ -17,9 +17,11 @@ def test_qm_xyz():
         shutil.copyfile("tests/input/adp.rst7", tmpdir + "/adp.rst7")
         shutil.copyfile("tests/input/emle_prod.in", tmpdir + "/emle_prod.in")
 
+        # Copy the current environment to a new dictionary.
+        env = os.environ.copy()
+
         # Set environment variables.
-        os.environ["EMLE_PORT"] = "12345"
-        os.environ["EMLE_QM_XYZ_FREQUENCY"] = "2"
+        env["EMLE_QM_XYZ_FREQUENCY"] = "2"
 
         # Create the sander command.
         command = "sander -O -i emle_prod.in -p adp.parm7 -c adp.rst7 -o emle.out"
@@ -29,6 +31,7 @@ def test_qm_xyz():
             cwd=tmpdir,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=env,
         )
 
         # Make sure that the process exited successfully.

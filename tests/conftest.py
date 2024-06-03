@@ -7,15 +7,8 @@ import subprocess
 @pytest.fixture(autouse=True)
 def wrapper():
     """
-    A wrapper function that clears the environment variables before each test
-    and stops the EMLE server after each test.
+    A wrapper function stops the EMLE server after each test.
     """
-
-    # Clear the environment.
-
-    for env in os.environ:
-        if env.startswith("EMLE_"):
-            del os.environ[env]
 
     yield
 
