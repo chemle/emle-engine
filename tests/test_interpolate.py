@@ -43,10 +43,10 @@ def test_interpolate():
 
         assert process.returncode == 0
 
-        # Calculate the MM reference energy..
+        # Calculate the MM reference energy.
         nrg_ref = parse_mdinfo("tests/output/mdinfo_mm")
 
-        # Calculate the pure MM energy..
+        # Calculate the pure MM energy.
         nrg_mm = parse_mdinfo(tmpdir + "/mdinfo")
 
         assert math.isclose(nrg_ref, nrg_mm, rel_tol=1e-5)
