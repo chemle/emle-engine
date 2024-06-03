@@ -1,5 +1,6 @@
 import os
 import pytest
+import psutil
 import shlex
 import subprocess
 
@@ -7,21 +8,17 @@ import subprocess
 @pytest.fixture(autouse=True)
 def wrapper():
     """
-    A wrapper function that clears the environment variables before each test
-    and stops the EMLE server after each test.
+    A wrapper function to stop the EMLE server after each test.
     """
-
-    # Clear the environment.
-
-    for env in os.environ:
-        if env.startswith("EMLE_"):
-            del os.environ[env]
 
     yield
 
-    # Stop the EMLE server.
-    process = subprocess.run(
-        shlex.split("emle-stop"),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    # Kill the EMLE server. We do this manually rather than using emle-stop
+    # because there is sometimes a delay in the termination of the server,
+    # which causes the next test # to fail. This only seems to happen when
+    # testing during CI.
+    for conn in psutil.net_connections(kind="inet"):
+        if conn.laddr.port == 10000:
+            process = psutil.Process(conn.pid)
+            process.terminate()
+            break

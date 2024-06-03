@@ -43,10 +43,10 @@ def test_interpolate():
 
         assert process.returncode == 0
 
-        # Calculate the MM reference energy..
+        # Calculate the MM reference energy.
         nrg_ref = parse_mdinfo("tests/output/mdinfo_mm")
 
-        # Calculate the pure MM energy..
+        # Calculate the pure MM energy.
         nrg_mm = parse_mdinfo(tmpdir + "/mdinfo")
 
         assert math.isclose(nrg_ref, nrg_mm, rel_tol=1e-5)
@@ -65,13 +65,15 @@ def test_interpolate():
         )
         shutil.copyfile("tests/input/emle_sp.in", tmpdir + "/emle_sp.in")
 
+        # Copy the current environment to a new dictionary.
+        env = os.environ.copy()
+
         # Set environment variables.
-        os.environ["EMLE_PORT"] = "12345"
-        os.environ["EMLE_MM_CHARGES"] = "adp_mm_charges.txt"
-        os.environ["EMLE_LAMBDA_INTERPOLATE"] = "0"
-        os.environ["EMLE_PARM7"] = "adp_qm.parm7"
-        os.environ["EMLE_QM_INDICES"] = "adp_qm_indices.txt"
-        os.environ["EMLE_ENERGY_FREQUENCY"] = "1"
+        env["EMLE_MM_CHARGES"] = "adp_mm_charges.txt"
+        env["EMLE_LAMBDA_INTERPOLATE"] = "0"
+        env["EMLE_PARM7"] = "adp_qm.parm7"
+        env["EMLE_QM_INDICES"] = "adp_qm_indices.txt"
+        env["EMLE_ENERGY_FREQUENCY"] = "1"
 
         # Create the sander command.
         command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
@@ -81,6 +83,7 @@ def test_interpolate():
             cwd=tmpdir,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=env,
         )
 
         assert process.returncode == 0
@@ -110,14 +113,16 @@ def test_interpolate_steps():
         )
         shutil.copyfile("tests/input/emle_prod.in", tmpdir + "/emle_prod.in")
 
+        # Copy the current environment to a new dictionary.
+        env = os.environ.copy()
+
         # Set environment variables.
-        os.environ["EMLE_PORT"] = "12345"
-        os.environ["EMLE_MM_CHARGES"] = "adp_mm_charges.txt"
-        os.environ["EMLE_LAMBDA_INTERPOLATE"] = "0,1"
-        os.environ["EMLE_INTERPOLATE_STEPS"] = "20"
-        os.environ["EMLE_PARM7"] = "adp_qm.parm7"
-        os.environ["EMLE_QM_INDICES"] = "adp_qm_indices.txt"
-        os.environ["EMLE_ENERGY_FREQUENCY"] = "1"
+        env["EMLE_MM_CHARGES"] = "adp_mm_charges.txt"
+        env["EMLE_LAMBDA_INTERPOLATE"] = "0,1"
+        env["EMLE_INTERPOLATE_STEPS"] = "20"
+        env["EMLE_PARM7"] = "adp_qm.parm7"
+        env["EMLE_QM_INDICES"] = "adp_qm_indices.txt"
+        env["EMLE_ENERGY_FREQUENCY"] = "1"
 
         # Create the sander command.
         command = "sander -O -i emle_prod.in -p adp.parm7 -c adp.rst7 -o emle.out"
@@ -127,6 +132,7 @@ def test_interpolate_steps():
             cwd=tmpdir,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=env,
         )
 
         assert process.returncode == 0
@@ -157,9 +163,11 @@ def test_interpolate_steps_config():
         shutil.copyfile("tests/input/emle_prod.in", tmpdir + "/emle_prod.in")
         shutil.copyfile("tests/input/config.yaml", tmpdir + "/config.yaml")
 
+        # Copy the current environment to a new dictionary.
+        env = os.environ.copy()
+
         # Set environment variables.
-        os.environ["EMLE_PORT"] = "12345"
-        os.environ["EMLE_CONFIG"] = "config.yaml"
+        env["EMLE_CONFIG"] = "config.yaml"
 
         # Create the sander command.
         command = "sander -O -i emle_prod.in -p adp.parm7 -c adp.rst7 -o emle.out"
@@ -169,6 +177,7 @@ def test_interpolate_steps_config():
             cwd=tmpdir,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=env,
         )
 
         assert process.returncode == 0

@@ -11,6 +11,7 @@ dependencies:
   - eigen
   - loguru
   - pip
+  - psutil
   - pybind11
   - pytorch
   - python < 3.11

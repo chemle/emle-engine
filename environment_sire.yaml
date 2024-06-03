@@ -13,6 +13,7 @@ dependencies:
   - loguru
   - openmm >= 8.1
   - pip
+  - psutil
   - pybind11
   - pytorch
   - python < 3.11

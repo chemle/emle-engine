@@ -72,7 +72,7 @@ try:
     energy_frequency = int(os.getenv("EMLE_ENERGY_FREQUENCY"))
 except:
     energy_frequency = 0
-energy_file = os.getenv("EMLE_energy_file")
+energy_file = os.getenv("EMLE_ENERGY_FILE")
 log_level = os.getenv("EMLE_LOG_LEVEL")
 log_file = os.getenv("EMLE_LOG_FILE")
 save_settings = os.getenv("EMLE_SAVE_SETTINGS")

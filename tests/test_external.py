@@ -19,10 +19,12 @@ def test_external_local_directory():
         shutil.copyfile("tests/input/emle_sp.in", tmpdir + "/emle_sp.in")
         shutil.copyfile("tests/input/external.py", tmpdir + "/external.py")
 
+        # Copy the current environment to a new dictionary.
+        env = os.environ.copy()
+
         # Set environment variables.
-        os.environ["EMLE_PORT"] = "12345"
-        os.environ["EMLE_EXTERNAL_BACKEND"] = "external.run_external"
-        os.environ["EMLE_ENERGY_FREQUENCY"] = "1"
+        env["EMLE_EXTERNAL_BACKEND"] = "external.run_external"
+        env["EMLE_ENERGY_FREQUENCY"] = "1"
 
         # Create the sander command.
         command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
@@ -32,6 +34,7 @@ def test_external_local_directory():
             cwd=tmpdir,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=env,
         )
 
         # Make sure that the process exited successfully.
@@ -53,11 +56,13 @@ def test_external_plugin_directory():
         shutil.copyfile("tests/input/adp.rst7", tmpdir + "/adp.rst7")
         shutil.copyfile("tests/input/emle_sp.in", tmpdir + "/emle_sp.in")
 
+        # Copy the current environment to a new dictionary.
+        env = os.environ.copy()
+
         # Set environment variables.
-        os.environ["EMLE_PORT"] = "12345"
-        os.environ["EMLE_EXTERNAL_BACKEND"] = "external.run_external"
-        os.environ["EMLE_PLUGIN_PATH"] = os.getcwd() + "/tests/input"
-        os.environ["EMLE_ENERGY_FREQUENCY"] = "1"
+        env["EMLE_EXTERNAL_BACKEND"] = "external.run_external"
+        env["EMLE_PLUGIN_PATH"] = os.getcwd() + "/tests/input"
+        env["EMLE_ENERGY_FREQUENCY"] = "1"
 
         # Create the sander command.
         command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
@@ -67,6 +72,7 @@ def test_external_plugin_directory():
             cwd=tmpdir,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=env,
         )
 
         # Make sure that the process exited successfully.
