@@ -1,5 +1,6 @@
 import os
 import pytest
+import psutil
 import shlex
 import subprocess
 
@@ -12,9 +13,12 @@ def wrapper():
 
     yield
 
-    # Stop the EMLE server.
-    process = subprocess.run(
-        shlex.split("emle-stop"),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    # Kill the EMLE server. We do this manually rather than using emle-stop
+    # because there is sometimes a delay in the termination of the server,
+    # which causes the next test # to fail. This only seems to happen when
+    # testing during CI.
+    for conn in psutil.net_connections(kind="inet"):
+        if conn.laddr.port == 10000:
+            process = psutil.Process(conn.pid)
+            process.terminate()
+            break
