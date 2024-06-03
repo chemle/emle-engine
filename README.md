@@ -12,7 +12,9 @@ in the near future.
 
 Further details can be found in our paper, available [here](https://pubs.acs.org/doi/10.1021/acs.jctc.4c00248). Please
 cite this work if you use `emle-engine` in your research. Supplementary
-information and data can be found [here](https://github.com/chemle/emle-engine-paper).
+information and data can be found [here](https://github.com/chemle/emle-engine-paper). For
+the original theory behind EMLE, please refer to [this](https://pubs.acs.org/doi/10.1021/acs.jctc.2c00914)
+publication.
 
 ## Installation
 
