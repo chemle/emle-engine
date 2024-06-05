@@ -503,7 +503,24 @@ class EMLECalculator:
 
         orca_template: str
             The path to a template ORCA input file. This is required when using
-            the ORCA backend when using emle-engine with Sire.
+            the ORCA backend when using emle-engine with Sire. This should be a
+            full template, including the charge and multiplicity of the QM region,
+            along with a placeholder name for the xyz file that will be replaced
+            with the file generated at runtime, e.g.:
+
+                %pal nprocs 4 end
+                !BLYP 6-31G* verytightscf
+                %method
+                grid 4
+                finalgrid 6
+                end
+                %scf
+                maxiter 100
+                end
+                %MaxCore 1024
+                ! ENGRAD
+                ! Angs NoUseSym
+                *xyzfile 0 1 inpfile.xyz
 
         energy_frequency: int
             The frequency of logging energies to file. If 0, then no energies are
@@ -1095,7 +1112,7 @@ class EMLECalculator:
             self._save_settings = save_settings
 
         if orca_template is not None:
-            if not isinstance(template, str):
+            if not isinstance(orca_template, str):
                 msg = "'orca_template' must be of type 'str'"
                 _logger.error(msg)
                 raise TypeError(msg)
@@ -1739,7 +1756,7 @@ class EMLECalculator:
             # ORCA.
             elif self._backend == "orca":
                 try:
-                    E_vac, grad_vac = self._run_orca(orca_input, xyz_file_qm)
+                    E_vac, grad_vac = self._run_orca(elements=elements, xyz_qm=xyz_qm)
                 except Exception as e:
                     msg = (
                         f"Failed to calculate in vacuo energies using ORCA backend: {e}"
@@ -2826,9 +2843,7 @@ class EMLECalculator:
             grad_mean[0] * _EV_TO_HARTREE * _BOHR_TO_ANGSTROM,
         )
 
-    def _run_orca(
-        self, orca_input=None, xyz_file_qm=None, atomic_numbers=None, xyz_qm=None
-    ):
+    def _run_orca(self, orca_input=None, xyz_file_qm=None, elements=None, xyz_qm=None):
         """
         Internal function to compute in vacuo energies and gradients using
         ORCA.
@@ -2837,10 +2852,18 @@ class EMLECalculator:
         ----------
 
         orca_input: str
-            The path to the ORCA input file.
+            The path to the ORCA input file. (Used with the sander interface.)
 
         xyz_file_qm: str
-            The path to the xyz coordinate file for the QM region.
+            The path to the xyz coordinate file for the QM region. (Used with the
+            sander interface.)
+
+        elements: [str]
+            The list of elements. (Used with the Sire interface.)
+
+        xyz_qm: numpy.array
+            The coordinates of the QM region in Angstrom. (Used with the Sire
+            interface.)
 
         Returns
         -------
@@ -2862,10 +2885,12 @@ class EMLECalculator:
         if xyz_file_qm is not None and not _os.path.isfile(xyz_file_qm):
             raise IOError(f"Unable to locate the ORCA QM xyz file: {xyz_file_qm}")
 
-        if atomic_numbers is not None and not isinstance(atomic_numbers, _np.ndarray):
-            raise TypeError("'atomic_numbers' must be of type 'numpy.ndarray'")
-        if atomic_numbers is not None and atomic_numbers.dtype != _np.int64:
-            raise TypeError("'atomic_numbers' must have dtype 'int'.")
+        if elements is not None and not isinstance(elements, (list, tuple)):
+            raise TypeError("'elements' must be of type 'list' or 'tuple'.")
+        if elements is not None and not all(
+            isinstance(element, str) for element in elements
+        ):
+            raise TypeError("'elements' must be a 'list' of 'str' types.")
 
         if xyz_qm is not None and not isinstance(xyz_qm, _np.ndarray):
             raise TypeError("'xyz_qm' must be of type 'numpy.ndarray'")
@@ -2875,15 +2900,17 @@ class EMLECalculator:
         # ORCA input files take precedence.
         is_orca_input = True
         if orca_input is None or xyz_file_qm is None:
-            if atomic_numbers is None:
-                raise ValueError("No atomic numbers specified!")
+            if elements is None:
+                raise ValueError("No elements specified!")
             if xyz_qm is None:
                 raise ValueError("No QM coordinates specified!")
 
             is_orca_input = False
 
             if self._orca_template is None:
-                raise ValueError("No ORCA template file specified!")
+                raise ValueError(
+                    "No ORCA template file specified. Use the 'orca_template' keyword."
+                )
 
             fd_orca_input, orca_input = _tempfile.mkstemp(
                 prefix="orc_job_", suffix=".inp", text=True
@@ -2892,19 +2919,44 @@ class EMLECalculator:
                 prefix="inpfile_", suffix=".xyz", text=True
             )
 
-            # Copy the template file.
-            _shutil.copyfile(self._orca_template, orca_input)
+            # Parse the ORCA template file. Here we exclude the *xyzfile line,
+            # which will be replaced later using the correct path to the QM
+            # coordinate file that is written.
+            is_xyzfile = False
+            lines = []
+            with open(self._orca_template, "r") as f:
+                for line in f:
+                    if "*xyzfile" in line:
+                        is_xyzfile = True
+                    else:
+                        lines.append(line)
+
+            if not is_xyzfile:
+                raise ValueError("ORCA template file doesn't contain *xyzfile line!")
+
+            # Try to extract the charge and spin multiplicity from the line.
+            try:
+                _, charge, mult, _ = line.split()
+            except:
+                raise ValueError(
+                    "Unable to parse charge and spin multiplicity from ORCA template file!"
+                )
+
+            # Write the ORCA input file.
+            with open(orca_input, "w") as f:
+                for line in lines:
+                    f.write(line)
 
             # Add the QM coordinate file path.
-            with open(orca_input, "w") as f:
-                f.write(f'*xyzfile "{_os.path.basename(xyz_file_qm)}"\n')
+            with open(orca_input, "a") as f:
+                f.write(f"*xyzfile {charge} {mult} {_os.path.basename(xyz_file_qm)}\n")
 
             # Write the xyz input file.
             with open(xyz_file_qm, "w") as f:
-                f.write(f"{len(atomic_numbers):5d}\n\n")
-                for num, xyz in zip(atomic_numbers, xyz_qm):
+                f.write(f"{len(elements):5d}\n\n")
+                for elem, xyz in zip(elements, xyz_qm):
                     f.write(
-                        f"{num:3d} {xyz[0]:21.17f} {xyz[1]:21.17f} {xyz[2]:21.17f}\n"
+                        f"{elem:<3s} {xyz[0]:20.16f} {xyz[1]:20.16f} {xyz[2]:20.16f}\n"
                     )
 
         # Create a temporary working directory.
