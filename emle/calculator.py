@@ -605,12 +605,6 @@ class EMLECalculator:
         else:
             self._model = self._default_model
 
-        if emle_features not in ['soap', 'aev']:
-            msg = "'emle_features' must be either 'soap' or 'aev'"
-            _logger.error(msg)
-            raise TypeError(msg)
-        self._emle_features = emle_features
-
         if method is None:
             method = "electrostatic"
 
@@ -1080,6 +1074,19 @@ class EMLECalculator:
             self._device = _torch.device(
                 "cuda" if _torch.cuda.is_available() else "cpu"
             )
+
+        if emle_features not in ['soap', 'aev']:
+            msg = "'emle_features' must be either 'soap' or 'aev'"
+            _logger.error(msg)
+            raise TypeError(msg)
+        self._emle_features = emle_features
+
+        if self._emle_features == 'aev':
+            import torchani as _torchani
+
+            # Create the TorchANI model.
+            ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(self._device)
+            self._aev_computer = ani2x.aev_computer
 
         if energy_frequency is None:
             energy_frequency = 0
