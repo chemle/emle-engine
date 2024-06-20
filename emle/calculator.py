@@ -370,6 +370,7 @@ class EMLECalculator:
     def __init__(
         self,
         model=None,
+        emle_features='aev',
         method="electrostatic",
         backend="torchani",
         external_backend=None,
@@ -402,6 +403,9 @@ class EMLECalculator:
         model: str
             Path to the EMLE embedding model parameter file. If None, then a
             default model will be used.
+
+        emle_features: 'aev' or 'soap'
+            Type of features used to train the EMLE model
 
         method: str
             The desired embedding method. Options are:
@@ -600,6 +604,12 @@ class EMLECalculator:
             self._model = abs_model
         else:
             self._model = self._default_model
+
+        if emle_features not in ['soap', 'aev']:
+            msg = "'emle_features' must be either 'soap' or 'aev'"
+            _logger.error(msg)
+            raise TypeError(msg)
+        self._emle_features = emle_features
 
         if method is None:
             method = "electrostatic"
