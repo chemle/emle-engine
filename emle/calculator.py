@@ -453,7 +453,7 @@ class EMLECalculator:
     def __init__(
         self,
         model=None,
-        emle_features='aev',
+        emle_features='soap',
         method="electrostatic",
         backend="torchani",
         external_backend=None,
