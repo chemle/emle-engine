@@ -1332,6 +1332,7 @@ class EMLECalculator:
         # Store the settings as a dictionary.
         self._settings = {
             "model": None if model is None else self._model,
+            "emle_features": self._emle_features,
             "method": self._method,
             "backend": self._backend,
             "external_backend": None if external_backend is None else external_backend,
