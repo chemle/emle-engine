@@ -201,6 +201,89 @@ class _GPRCalculator:
         return _np.linalg.inv(K + sigma**2 * _np.eye(n, dtype=_np.float32))
 
 
+class _AEVCalculator:
+    """
+    Calculates AEV feature vectors for a given system
+    """
+
+
+    def __init__(self, aev_computer, device):
+        """
+        Constructor
+
+        Parameters
+        ----------
+
+        aev_computer: torchani.aev.AEVComputer
+            Computer for AEV features
+
+        device: torch device
+        """
+        self._aev_computer = aev_computer
+        self._device = device
+
+        z = (1, 6, 7, 8, 16)
+        zid_map = _np.zeros(max(z) + 1, dtype=int)
+        for i, z_i in enumerate(z):
+            zid_map[z_i] = i
+        zid_map[0] = -1
+        self.zid_map = zid_map
+
+
+    def __call__(self, z, xyz, gradient=False):
+        """
+        Calculates the AEV feature vectors and their gradients for a
+        given molecule.
+
+        Parameters
+        ----------
+
+        z: numpy.array (N_ATOMS)
+            Chemical species (element) for each atom.
+
+        xyz: numpy.array (N_ATOMS, 3)
+            Atomic positions.
+
+        gradient: bool
+            Whether the gradient should be calculated.
+
+        Returns
+        -------
+
+        aev: numpy.array (N_ATOMS, N_AEV)
+            AEV feature vectors for each atom.
+
+        gradient: numpy.array (N_ATOMS, N_AEV, N_ATOMS, 3)
+            gradients of the AEV feature vectors w.r.t. atomic positions
+        """
+        coords = _torch.tensor(
+            _np.float32(xyz.reshape(1, *xyz.shape)),
+            requires_grad=True,
+            device=self._device,
+        )
+
+        # Convert the atomic numbers to a Torch tensor.
+        zid = self.zid_map[z]
+        atomic_numbers = _torch.tensor(
+            zid.reshape(1, *zid.shape),
+            device=self._device,
+        )
+        # _logger.error(f'{atomic_numbers}')
+
+        def get_aev(coords):
+            aev = self._aev_computer.forward((atomic_numbers, coords))[1][0]
+            return aev / _torch.linalg.norm(aev, axis=1, keepdims=True)
+
+        aev = get_aev(coords).cpu().detach().numpy()
+
+        if not gradient:
+            return aev
+
+        from torch.autograd.functional import jacobian
+        grad = jacobian(get_aev, coords, vectorize=True, strategy="forward-mode")
+        grad = grad.reshape((*aev.shape, -1, 3)).cpu().detach().numpy()
+        return aev, grad
+
 class _SOAPCalculatorSpinv:
     """
     Calculates Smooth Overlap of Atomic Positions (SOAP) feature vectors for
@@ -370,6 +453,7 @@ class EMLECalculator:
     def __init__(
         self,
         model=None,
+        emle_features='soap',
         method="electrostatic",
         backend="torchani",
         external_backend=None,
@@ -402,6 +486,9 @@ class EMLECalculator:
         model: str
             Path to the EMLE embedding model parameter file. If None, then a
             default model will be used.
+
+        emle_features: 'aev' or 'soap'
+            Type of features used to train the EMLE model
 
         method: str
             The desired embedding method. Options are:
@@ -1071,6 +1158,19 @@ class EMLECalculator:
                 "cuda" if _torch.cuda.is_available() else "cpu"
             )
 
+        if emle_features not in ['soap', 'aev']:
+            msg = "'emle_features' must be either 'soap' or 'aev'"
+            _logger.error(msg)
+            raise TypeError(msg)
+        self._emle_features = emle_features
+
+        if self._emle_features == 'aev':
+            import torchani as _torchani
+
+            # Create the TorchANI model.
+            ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(self._device)
+            self._aev_computer = ani2x.aev_computer
+
         if energy_frequency is None:
             energy_frequency = 0
 
@@ -1150,7 +1250,11 @@ class EMLECalculator:
         for id in self._hypers["global_species"]:
             self._supported_elements.append(_ase.Atom(id).symbol)
 
-        self._get_soap = _SOAPCalculatorSpinv(self._hypers)
+        if self._emle_features == 'soap':
+            self._get_soap = _SOAPCalculatorSpinv(self._hypers)
+        else:
+            self._get_soap = _AEVCalculator(self._aev_computer, self._device)
+
         self._q_core = _torch.tensor(
             self._params["q_core"], dtype=_torch.float32, device=self._device
         )
@@ -1228,6 +1332,7 @@ class EMLECalculator:
         # Store the settings as a dictionary.
         self._settings = {
             "model": None if model is None else self._model,
+            "emle_features": self._emle_features,
             "method": self._method,
             "backend": self._backend,
             "external_backend": None if external_backend is None else external_backend,
