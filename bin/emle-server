@@ -58,6 +58,7 @@ try:
 except:
     port = None
 model = os.getenv("EMLE_MODEL")
+features = os.getenv("EMLE_FEATURES")
 method = os.getenv("EMLE_METHOD")
 mm_charges = os.getenv("EMLE_MM_CHARGES")
 try:
@@ -124,6 +125,7 @@ env = {
     "host": host,
     "port": port,
     "model": model,
+    "features": features,
     "method": method,
     "mm_charges": mm_charges,
     "num_clients": num_clients,
@@ -176,6 +178,12 @@ parser.add_argument("--host", type=str, help="the hostname", required=False)
 parser.add_argument("--port", type=str, help="the port number", required=False)
 parser.add_argument(
     "--model", type=str, help="path to an EMLE model file", required=False
+)
+parser.add_argument(
+    "--features",
+    type=str,
+    help="the type of feature used by the model ('soap' or 'aev')",
+    required=False,
 )
 parser.add_argument(
     "--method",
