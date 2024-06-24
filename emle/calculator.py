@@ -255,6 +255,7 @@ class _AEVCalculator:
         gradient: numpy.array (N_ATOMS, N_AEV, N_ATOMS, 3)
             gradients of the AEV feature vectors w.r.t. atomic positions
         """
+        # Convert the coordinates to a Torch tensor.
         coords = _torch.tensor(
             _np.float32(xyz.reshape(1, *xyz.shape)),
             requires_grad=True,
@@ -272,6 +273,7 @@ class _AEVCalculator:
             aev = self._aev_computer.forward((atomic_numbers, coords))[1][0]
             return aev / _torch.linalg.norm(aev, axis=1, keepdims=True)
 
+        # Store the AEV feature vectors.
         aev = get_aev(coords).cpu().detach().numpy()
 
         if not gradient:
