@@ -183,6 +183,7 @@ parser.add_argument(
     "--features",
     type=str,
     help="the type of feature used by the model ('soap' or 'aev')",
+    choices=["soap", "aev"],
     required=False,
 )
 parser.add_argument(

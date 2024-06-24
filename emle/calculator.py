@@ -1158,6 +1158,8 @@ class EMLECalculator:
                 "cuda" if _torch.cuda.is_available() else "cpu"
             )
 
+        if features is None:
+            features = "soap"
         if not isinstance(features, str):
             msg = "'features' must be of type 'str'"
             _logger.error(msg)
