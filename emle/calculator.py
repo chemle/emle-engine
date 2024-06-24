@@ -1167,22 +1167,6 @@ class EMLECalculator:
             _logger.error(msg)
             raise TypeError(msg)
 
-        # Strip whitespace and convert to lower case.
-        features = features.lower().replace(" ", "")
-
-        if features not in ["soap", "aev"]:
-            msg = "'features' must be either 'soap' or 'aev'"
-            _logger.error(msg)
-            raise TypeError(msg)
-        self._features = features
-
-        if self._features == "aev":
-            import torchani as _torchani
-
-            # Create the TorchANI model.
-            ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(self._device)
-            self._aev_computer = ani2x.aev_computer
-
         if energy_frequency is None:
             energy_frequency = 0
 
@@ -1262,6 +1246,67 @@ class EMLECalculator:
         for id in self._hypers["global_species"]:
             self._supported_elements.append(_ase.Atom(id).symbol)
 
+        # Initialise TorchANI backend attributes.
+        if self._backend == "torchani":
+            import torchani as _torchani
+
+            # Create the TorchANI model.
+            self._torchani_model = _torchani.models.ANI2x(periodic_table_index=True).to(
+                self._device
+            )
+
+            try:
+                import NNPOps as _NNPOps
+
+                self._has_nnpops = True
+                self._nnpops_active = False
+            except:
+                self._has_nnpops = False
+
+        # If the backend is ORCA, then try to find the executable.
+        elif self._backend == "orca":
+            if orca_path is None:
+                msg = "'orca_path' must be specified when using the ORCA backend"
+                _logger.error(msg)
+                raise ValueError(msg)
+
+            if not isinstance(orca_path, str):
+                msg = "'orca_path' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
+
+            # Convert to an absolute path.
+            abs_orca_path = _os.path.abspath(orca_path)
+
+            if not _os.path.isfile(abs_orca_path):
+                msg = f"Unable to locate ORCA executable: '{orca_path}'"
+                _logger.error(msg)
+                raise IOError(msg)
+
+            self._orca_path = abs_orca_path
+
+        # Strip whitespace and convert to lower case.
+        features = features.lower().replace(" ", "")
+
+        if features not in ["soap", "aev"]:
+            msg = "'features' must be either 'soap' or 'aev'"
+            _logger.error(msg)
+            raise TypeError(msg)
+        self._features = features
+
+        if self._features == "aev":
+            # Re-use the existing AEV computer from TorchANI.
+            if self._backend == "torchani":
+                self._aev_computer = self._torchani_model.aev_computer
+            # Create a new AEV computer.
+            else:
+                import torchani as _torchani
+
+                ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(
+                    self._device
+                )
+                self._aev_computer = ani2x.aev_computer
+
         if self._features == "soap":
             self._get_soap = _SOAPCalculatorSpinv(self._hypers)
         else:
@@ -1297,37 +1342,6 @@ class EMLECalculator:
             1e-3,
         )
         self._get_E_with_grad = _grad_and_value(self._get_E, argnums=(1, 2, 3, 4))
-
-        # Initialise TorchANI backend attributes.
-        if self._backend == "torchani":
-            import torchani as _torchani
-
-            # Create the TorchANI model.
-            self._torchani_model = _torchani.models.ANI2x(periodic_table_index=True).to(
-                self._device
-            )
-
-        # If the backend is ORCA, then try to find the executable.
-        elif self._backend == "orca":
-            if orca_path is None:
-                msg = "'orca_path' must be specified when using the ORCA backend"
-                _logger.error(msg)
-                raise ValueError(msg)
-
-            if not isinstance(orca_path, str):
-                msg = "'orca_path' must be of type 'str'"
-                _logger.error(msg)
-                raise TypeError(msg)
-
-            # Convert to an absolute path.
-            abs_orca_path = _os.path.abspath(orca_path)
-
-            if not _os.path.isfile(abs_orca_path):
-                msg = f"Unable to locate ORCA executable: '{orca_path}'"
-                _logger.error(msg)
-                raise IOError(msg)
-
-            self._orca_path = abs_orca_path
 
         # Initialise the maximum number of MM atom that have been seen.
         self._max_mm_atoms = 0
@@ -2870,6 +2884,22 @@ class EMLECalculator:
             atomic_numbers.reshape(1, *atomic_numbers.shape),
             device=self._device,
         )
+
+        # Check for NNPOps and optimise the model.
+        if self._has_nnpops and not self._nnpops_active:
+            from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
+
+            # Optimise the TorchANI model.
+            self._torchani_model = _OptimizedTorchANI(
+                self._torchani_model, atomic_numbers
+            ).to(self._device)
+
+            # Flag that NNPOps is active.
+            self._nnpops_active = True
+
+            # Applyt the optimised AEV symmetry functions.
+            if self._features == "aev":
+                self._aev_computer = self._torchani_model.aev_computer
 
         # Compute the energy and gradient.
         energy = self._torchani_model((atomic_numbers, coords)).energies
