@@ -214,9 +214,10 @@ class _AEVCalculator:
         ----------
 
         aev_computer: torchani.aev.AEVComputer
-            Computer for AEV features
+            Computer for AEV features.
 
         device: torch device
+            The PyTorch device to use for calculations.
         """
         self._aev_computer = aev_computer
         self._device = device
@@ -266,7 +267,6 @@ class _AEVCalculator:
             zid.reshape(1, *zid.shape),
             device=self._device,
         )
-        # _logger.error(f'{atomic_numbers}')
 
         def get_aev(coords):
             aev = self._aev_computer.forward((atomic_numbers, coords))[1][0]
@@ -453,7 +453,7 @@ class EMLECalculator:
     def __init__(
         self,
         model=None,
-        emle_features="soap",
+        features="soap",
         method="electrostatic",
         backend="torchani",
         external_backend=None,
@@ -487,8 +487,8 @@ class EMLECalculator:
             Path to the EMLE embedding model parameter file. If None, then a
             default model will be used.
 
-        emle_features: 'aev' or 'soap'
-            Type of features used to train the EMLE model
+        features: 'aev' or 'soap'
+            Type of features used to train the EMLE model.
 
         method: str
             The desired embedding method. Options are:
@@ -1158,13 +1158,21 @@ class EMLECalculator:
                 "cuda" if _torch.cuda.is_available() else "cpu"
             )
 
-        if emle_features not in ["soap", "aev"]:
+        if not isinstance(features, str):
+            msg = "'emle_features' must be of type 'str'"
+            _logger.error(msg)
+            raise TypeError(msg)
+
+        # Strip whitespace and convert to lower case.
+        features = features.lower().replace(" ", "")
+
+        if features not in ["soap", "aev"]:
             msg = "'emle_features' must be either 'soap' or 'aev'"
             _logger.error(msg)
             raise TypeError(msg)
-        self._emle_features = emle_features
+        self._features = features
 
-        if self._emle_features == "aev":
+        if self._features == "aev":
             import torchani as _torchani
 
             # Create the TorchANI model.
@@ -1250,7 +1258,7 @@ class EMLECalculator:
         for id in self._hypers["global_species"]:
             self._supported_elements.append(_ase.Atom(id).symbol)
 
-        if self._emle_features == "soap":
+        if self._features == "soap":
             self._get_soap = _SOAPCalculatorSpinv(self._hypers)
         else:
             self._get_soap = _AEVCalculator(self._aev_computer, self._device)
@@ -1332,7 +1340,7 @@ class EMLECalculator:
         # Store the settings as a dictionary.
         self._settings = {
             "model": None if model is None else self._model,
-            "emle_features": self._emle_features,
+            "features": self._features,
             "method": self._method,
             "backend": self._backend,
             "external_backend": None if external_backend is None else external_backend,
