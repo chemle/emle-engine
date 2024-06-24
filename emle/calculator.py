@@ -1159,7 +1159,7 @@ class EMLECalculator:
             )
 
         if not isinstance(features, str):
-            msg = "'emle_features' must be of type 'str'"
+            msg = "'features' must be of type 'str'"
             _logger.error(msg)
             raise TypeError(msg)
 
@@ -1167,7 +1167,7 @@ class EMLECalculator:
         features = features.lower().replace(" ", "")
 
         if features not in ["soap", "aev"]:
-            msg = "'emle_features' must be either 'soap' or 'aev'"
+            msg = "'features' must be either 'soap' or 'aev'"
             _logger.error(msg)
             raise TypeError(msg)
         self._features = features
