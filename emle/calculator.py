@@ -206,7 +206,6 @@ class _AEVCalculator:
     Calculates AEV feature vectors for a given system
     """
 
-
     def __init__(self, aev_computer, device):
         """
         Constructor
@@ -228,7 +227,6 @@ class _AEVCalculator:
             zid_map[z_i] = i
         zid_map[0] = -1
         self.zid_map = zid_map
-
 
     def __call__(self, z, xyz, gradient=False):
         """
@@ -280,9 +278,11 @@ class _AEVCalculator:
             return aev
 
         from torch.autograd.functional import jacobian
+
         grad = jacobian(get_aev, coords, vectorize=True, strategy="forward-mode")
         grad = grad.reshape((*aev.shape, -1, 3)).cpu().detach().numpy()
         return aev, grad
+
 
 class _SOAPCalculatorSpinv:
     """
@@ -453,7 +453,7 @@ class EMLECalculator:
     def __init__(
         self,
         model=None,
-        emle_features='soap',
+        emle_features="soap",
         method="electrostatic",
         backend="torchani",
         external_backend=None,
@@ -1158,13 +1158,13 @@ class EMLECalculator:
                 "cuda" if _torch.cuda.is_available() else "cpu"
             )
 
-        if emle_features not in ['soap', 'aev']:
+        if emle_features not in ["soap", "aev"]:
             msg = "'emle_features' must be either 'soap' or 'aev'"
             _logger.error(msg)
             raise TypeError(msg)
         self._emle_features = emle_features
 
-        if self._emle_features == 'aev':
+        if self._emle_features == "aev":
             import torchani as _torchani
 
             # Create the TorchANI model.
@@ -1250,7 +1250,7 @@ class EMLECalculator:
         for id in self._hypers["global_species"]:
             self._supported_elements.append(_ase.Atom(id).symbol)
 
-        if self._emle_features == 'soap':
+        if self._emle_features == "soap":
             self._get_soap = _SOAPCalculatorSpinv(self._hypers)
         else:
             self._get_soap = _AEVCalculator(self._aev_computer, self._device)
