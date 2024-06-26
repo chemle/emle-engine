@@ -1593,7 +1593,7 @@ class EMLECalculator:
             dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
                 E, (xyz_qm_bohr, xyz_mm_bohr)
             )
-            dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
+            dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
         else:
             grads = _torch.autograd.grad(E, (xyz_qm_bohr, xyz_mm_bohr, s, chi))
             dE_dxyz_qm_bohr_part, dE_dxyz_mm_bohr, dE_ds, dE_dchi = grads
@@ -2008,7 +2008,7 @@ class EMLECalculator:
             dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
                 E, (xyz_qm_bohr, xyz_mm_bohr)
             )
-            dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
+            dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
         else:
             grads = _torch.autograd.grad(E, (xyz_qm_bohr, xyz_mm_bohr, s, chi))
             dE_dxyz_qm_bohr_part, dE_dxyz_mm_bohr, dE_ds, dE_dchi = grads
