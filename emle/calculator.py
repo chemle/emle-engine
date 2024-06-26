@@ -72,7 +72,7 @@ _SPHERICAL_EXPANSION_HYPERS_COMMON = {
 class _GPRCalculator:
     """Predicts an atomic property for a molecule with Gaussian Process Regression (GPR)."""
 
-    def __init__(self, ref_values, ref_soap, n_ref, sigma):
+    def __init__(self, ref_values, ref_feat, n_ref, sigma):
         """
         Constructor
 
@@ -82,7 +82,7 @@ class _GPRCalculator:
         ref_values: numpy.array (N_Z, N_REF)
             The property values corresponding to the basis vectors for each species.
 
-        ref_soap: numpy.array (N_Z, N_REF, N_SOAP)
+        ref_feat: numpy.array (N_Z, N_REF, N_FEAT)
             The basis feature vectors for each species.
 
         n_ref: (N_Z,)
@@ -91,21 +91,21 @@ class _GPRCalculator:
         sigma: float
             The uncertainty of the observations (regularizer).
         """
-        self.ref_soap = ref_soap
-        Kinv = self.get_Kinv(ref_soap, sigma)
+        self.ref_feat = ref_feat
+        Kinv = self.get_Kinv(ref_feat, sigma)
         self.n_ref = n_ref
         self.n_z = len(n_ref)
         self.ref_mean = _np.sum(ref_values, axis=1) / n_ref
         ref_shifted = ref_values - self.ref_mean[:, None]
         self.c = (Kinv @ ref_shifted[:, :, None]).squeeze()
 
-    def __call__(self, mol_soap, zid, gradient=False):
+    def __call__(self, mol_feat, zid, gradient=False):
         """
 
         Parameters
         ----------
 
-        mol_soap: numpy.array (N_ATOMS, N_SOAP)
+        mol_feat: numpy.array (N_ATOMS, N_FEAT)
             The feature vectors for each atom.
 
         zid: numpy.array (N_ATOMS,)
@@ -118,34 +118,34 @@ class _GPRCalculator:
         -------
 
         result: numpy.array (N_ATOMS)
-            The values of the predicted property for each atom
+            The values of the predicted property for each atom.
 
-        gradient: numpy.array (N_ATOMS, N_SOAP)
-            The gradients of the property w.r.t. the SOAP features
+        gradient: numpy.array (N_ATOMS, N_FEAT)
+            The gradients of the property w.r.t. the features.
         """
 
         result = _np.zeros(len(zid), dtype=_np.float32)
         for i in range(self.n_z):
             n_ref = self.n_ref[i]
-            ref_soap_z = self.ref_soap[i, :n_ref]
-            mol_soap_z = mol_soap[zid == i, :, None]
+            ref_feat_z = self.ref_feat[i, :n_ref]
+            mol_feat_z = mol_feat[zid == i, :, None]
 
-            K_mol_ref2 = (ref_soap_z @ mol_soap_z) ** 2
+            K_mol_ref2 = (ref_feat_z @ mol_feat_z) ** 2
             K_mol_ref2 = K_mol_ref2.reshape(K_mol_ref2.shape[:-1])
             result[zid == i] = K_mol_ref2 @ self.c[i, :n_ref] + self.ref_mean[i]
         if not gradient:
             return result
-        return result, self.get_gradient(mol_soap, zid)
+        return result, self.get_gradient(mol_feat, zid)
 
-    def get_gradient(self, mol_soap, zid):
+    def get_gradient(self, mol_feat, zid):
         """
         Returns the gradient of the predicted property with respect to
-        SOAP features.
+        the features.
 
         Parameters
         ----------
 
-        mol_soap: numpy.array (N_ATOMS, N_SOAP)
+        mol_feat: numpy.array (N_ATOMS, N_FEAT)
             The feature vectors for each atom.
 
         zid: numpy.array (N_ATOMS,)
@@ -154,31 +154,31 @@ class _GPRCalculator:
         Returns
         -------
 
-        result: numpy.array (N_ATOMS, N_SOAP)
+        result: numpy.array (N_ATOMS, N_FEAT)
             The gradients of the property with respect to
             the soap features.
         """
-        n_at, n_soap = mol_soap.shape
-        df_dsoap = _np.zeros((n_at, n_soap), dtype=_np.float32)
+        n_at, n_feat = mol_feat.shape
+        df_dfeat = _np.zeros((n_at, n_feat), dtype=_np.float32)
         for i in range(self.n_z):
             n_ref = self.n_ref[i]
-            ref_soap_z = self.ref_soap[i, :n_ref]
-            mol_soap_z = mol_soap[zid == i, :, None]
-            K_mol_ref = ref_soap_z @ mol_soap_z
+            ref_feat_z = self.ref_feat[i, :n_ref]
+            mol_feat_z = mol_feat[zid == i, :, None]
+            K_mol_ref = ref_feat_z @ mol_feat_z
             K_mol_ref = K_mol_ref.reshape(K_mol_ref.shape[:-1])
             c = self.c[i, :n_ref]
-            df_dsoap[zid == i] = (K_mol_ref[:, None, :] * ref_soap_z.T) @ c * 2
-        return df_dsoap
+            df_dfeat[zid == i] = (K_mol_ref[:, None, :] * ref_feat_z.T) @ c * 2
+        return df_dfeat
 
     @classmethod
-    def get_Kinv(cls, ref_soap, sigma):
+    def get_Kinv(cls, ref_feat, sigma):
         """
         Internal function to compute the inverse of the K matrix for GPR.
 
         Parameters
         ----------
 
-        ref_soap: numpy.array (N_Z, MAX_N_REF, N_SOAP)
+        ref_feat: numpy.array (N_Z, MAX_N_REF, N_FEAT)
             The basis feature vectors for each species.
 
         sigma: float
@@ -190,8 +190,8 @@ class _GPRCalculator:
         result: numpy.array (MAX_N_REF, MAX_N_REF)
             The inverse of the K matrix.
         """
-        n = ref_soap.shape[1]
-        K = (ref_soap @ ref_soap.swapaxes(1, 2)) ** 2
+        n = ref_feat.shape[1]
+        K = (ref_feat @ ref_feat.swapaxes(1, 2)) ** 2
         return _np.linalg.inv(K + sigma**2 * _np.eye(n, dtype=_np.float32))
 
 
@@ -319,10 +319,10 @@ class _SOAPCalculatorSpinv:
         Returns
         -------
 
-        soap: numpy.array (N_ATOMS, N_SOAP)
+        soap: numpy.array (N_ATOMS, N_FEAT)
             SOAP feature vectors for each atom.
 
-        gradient: numpy.array (N_ATOMS, N_SOAP, N_ATOMS, 3)
+        gradient: numpy.array (N_ATOMS, N_FEAT, N_ATOMS, 3)
             gradients of the soap feature vectors w.r.t. atomic positions
         """
         mol = self.get_mol(z, xyz)
@@ -371,10 +371,10 @@ class _SOAPCalculatorSpinv:
         Returns
         -------
 
-        soap: numpy.array (N_ATOMS, N_SOAP)
+        soap: numpy.array (N_ATOMS, N_FEAT)
             SOAP feature vectors for each atom.
 
-        gradient: numpy.array (N_ATOMS, N_SOAP, N_ATOMS, 3)
+        gradient: numpy.array (N_ATOMS, N_FEAT, N_ATOMS, 3)
             Gradients of the SOAP feature vectors with respect to atomic positions.
         """
         managers = spinv.transform(atoms)
@@ -1302,9 +1302,9 @@ class EMLECalculator:
                 self._aev_computer = ani2x.aev_computer
 
         if self._features == "soap":
-            self._get_soap = _SOAPCalculatorSpinv(self._hypers)
+            self._get_features = _SOAPCalculatorSpinv(self._hypers)
         else:
-            self._get_soap = _AEVCalculator(self._aev_computer, self._device)
+            self._get_features = _AEVCalculator(self._aev_computer, self._device)
 
         self._q_core = _torch.tensor(
             self._params["q_core"], dtype=_torch.float32, device=self._device
@@ -1560,13 +1560,15 @@ class EMLECalculator:
         xyz_qm_bohr = xyz_qm * _ANGSTROM_TO_BOHR
         xyz_mm_bohr = xyz_mm * _ANGSTROM_TO_BOHR
 
-        mol_soap, dsoap_dxyz = self._get_soap(atomic_numbers, xyz_qm, gradient=True)
-        dsoap_dxyz_qm_bohr = dsoap_dxyz * _BOHR_TO_ANGSTROM
+        # Get the features and their gradients.
+        mol_feat, dfeat_dxyz = self._get_features(atomic_numbers, xyz_qm, gradient=True)
+        dfeat_dxyz_qm_bohr = dfeat_dxyz * _BOHR_TO_ANGSTROM
 
-        s, ds_dsoap = self._get_s(mol_soap, self._species_id, gradient=True)
-        chi, dchi_dsoap = self._get_chi(mol_soap, self._species_id, gradient=True)
-        ds_dxyz_qm_bohr = self._get_df_dxyz(ds_dsoap, dsoap_dxyz_qm_bohr)
-        dchi_dxyz_qm_bohr = self._get_df_dxyz(dchi_dsoap, dsoap_dxyz_qm_bohr)
+        # Compute the s and chi values and their gradients.
+        s, ds_dfeat = self._get_s(mol_feat, self._species_id, gradient=True)
+        chi, dchi_dfeat = self._get_chi(mol_feat, self._species_id, gradient=True)
+        ds_dxyz_qm_bohr = self._get_df_dxyz(ds_dfeat, dfeat_dxyz_qm_bohr)
+        dchi_dxyz_qm_bohr = self._get_df_dxyz(dchi_dfeat, dfeat_dxyz_qm_bohr)
 
         # Convert inputs to Torch tensors.
         xyz_qm_bohr = _torch.tensor(
@@ -1973,13 +1975,15 @@ class EMLECalculator:
         xyz_qm_bohr = xyz_qm * _ANGSTROM_TO_BOHR
         xyz_mm_bohr = xyz_mm * _ANGSTROM_TO_BOHR
 
-        mol_soap, dsoap_dxyz = self._get_soap(atomic_numbers, xyz_qm, gradient=True)
-        dsoap_dxyz_qm_bohr = dsoap_dxyz * _BOHR_TO_ANGSTROM
+        # Get the features and their gradients.
+        mol_feat, dfeat_dxyz = self._get_features(atomic_numbers, xyz_qm, gradient=True)
+        dfeat_dxyz_qm_bohr = dfeat_dxyz * _BOHR_TO_ANGSTROM
 
-        s, ds_dsoap = self._get_s(mol_soap, self._species_id, gradient=True)
-        chi, dchi_dsoap = self._get_chi(mol_soap, self._species_id, gradient=True)
-        ds_dxyz_qm_bohr = self._get_df_dxyz(ds_dsoap, dsoap_dxyz_qm_bohr)
-        dchi_dxyz_qm_bohr = self._get_df_dxyz(dchi_dsoap, dsoap_dxyz_qm_bohr)
+        # Compute the s and chi values and their gradients.
+        s, ds_dfeat = self._get_s(mol_feat, self._species_id, gradient=True)
+        chi, dchi_dfeat = self._get_chi(mol_feat, self._species_id, gradient=True)
+        ds_dxyz_qm_bohr = self._get_df_dxyz(ds_dfeat, dfeat_dxyz_qm_bohr)
+        dchi_dxyz_qm_bohr = self._get_df_dxyz(dchi_dfeat, dfeat_dxyz_qm_bohr)
 
         # Convert inputs to Torch tensors.
         xyz_qm_bohr = _torch.tensor(
@@ -2363,24 +2367,24 @@ class EMLECalculator:
         return A
 
     @staticmethod
-    def _get_df_dxyz(df_dsoap, dsoap_dxyz):
+    def _get_df_dxyz(df_dfeat, dfeat_dxyz):
         """
         Internal method to calculate the gradient of some property with respect to
-        xyz coordinates based on gradient with respect to SOAP and SOAP gradients.
+        xyz coordinates based on gradient with respect to feature and feature gradients.
 
         Parameters
         ----------
 
-        df_dsoap: numpy.array (N_ATOMS, N_SOAP)
+        df_dfeat: numpy.array (N_ATOMS, N_FEAT)
 
-        dsoap_dxyz: numpy.array (N_ATOMS, N_SOAP, N_ATOMS, 3)
+        dfeat_dxyz: numpy.array (N_ATOMS, N_FEAT, N_ATOMS, 3)
 
         Returns
         -------
 
         result: numpy.array (N_ATOMS, N_ATOMS, 3)
         """
-        return _np.einsum("ij,ijkl->ikl", df_dsoap, dsoap_dxyz)
+        return _np.einsum("ij,ijkl->ikl", df_dfeat, dfeat_dxyz)
 
     @staticmethod
     def _get_vpot_q(q, T0):
