@@ -1154,13 +1154,6 @@ class EMLECalculator:
                 "cuda" if _torch.cuda.is_available() else "cpu"
             )
 
-        if features is None:
-            features = "soap"
-        if not isinstance(features, str):
-            msg = "'features' must be of type 'str'"
-            _logger.error(msg)
-            raise TypeError(msg)
-
         if energy_frequency is None:
             energy_frequency = 0
 
@@ -1278,6 +1271,13 @@ class EMLECalculator:
                 raise IOError(msg)
 
             self._orca_path = abs_orca_path
+
+        if features is None:
+            features = "soap"
+        if not isinstance(features, str):
+            msg = "'features' must be of type 'str'"
+            _logger.error(msg)
+            raise TypeError(msg)
 
         # Strip whitespace and convert to lower case.
         features = features.lower().replace(" ", "")
