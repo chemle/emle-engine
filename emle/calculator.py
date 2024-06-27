@@ -264,7 +264,7 @@ class _AEVCalculator:
         )
 
         def get_aev(coords):
-            aev = self._aev_computer.forward((atomic_numbers, coords))[1][0]
+            aev = self._aev_computer.forward((atomic_numbers, coords)).aevs[0]
             return aev / _torch.linalg.norm(aev, axis=1, keepdims=True)
 
         # Store the AEV feature vectors.
