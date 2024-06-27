@@ -155,8 +155,7 @@ class _GPRCalculator:
         -------
 
         result: numpy.array (N_ATOMS, N_FEAT)
-            The gradients of the property with respect to
-            the soap features.
+            The gradients of the property with respect to the features.
         """
         n_at, n_feat = mol_feat.shape
         df_dfeat = _np.zeros((n_at, n_feat), dtype=_np.float32)
