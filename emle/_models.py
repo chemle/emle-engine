@@ -245,6 +245,9 @@ class EMLE(_torch.nn.Module):
             The PyTorch device to use for calculations.
         """
 
+        # Call the base class constructor.
+        super().__init__()
+
         if not isinstance(device, _torch.device):
             raise TypeError("'device' must be of type 'torch.device'")
         self._device = device
