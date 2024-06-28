@@ -1878,14 +1878,13 @@ class EMLECalculator:
         ----------
 
         charges_mm: torch.tensor (max_mm_atoms,)
-            MM point charges, padded to max_mm_atoms with zeros.
+            MM point charges in atomic units, padded to max_mm_atoms with zeros.
 
         xyz_qm_bohr: torch.tensor (N_ATOMS, 3)
-            Positions of QM atoms (in bohr units).
+            Positions of QM atoms (in Bohr).
 
         xyz_mm_bohr: torch.tensor (max_mm_atoms, 3)
-            Positions of MM atoms (in bohr units),
-            padded to max_mm_atoms with zeros.
+            Positions of MM atoms (in Bohr), padded to max_mm_atoms with zeros.
 
         Returns
         -------
@@ -1903,14 +1902,13 @@ class EMLECalculator:
         ----------
 
         charges_mm: torch.tensor (max_mm_atoms,)
-            MM point charges, padded to max_mm_atoms with zeros.
+            MM point charges in atomic units, padded to max_mm_atoms with zeros.
 
         xyz_qm_bohr: torch.tensor (N_ATOMS, 3)
-            Positions of QM atoms (in bohr units).
+            Positions of QM atoms (in Bohr).
 
         xyz_mm_bohr: torch.tensor (max_mm_atoms, 3)
-            Positions of MM atoms (in bohr units),
-            padded to max_mm_atoms with zeros
+            Positions of MM atoms (in Bohr), padded to max_mm_atoms with zeros.
 
         Returns
         -------
