@@ -25,7 +25,7 @@
 __author__ = "Lester Hedges"
 __email__ = "lester.hedges@gmail.com"
 
-__all__ = ["EMLE"]
+__all__ = ["EMLE", "ANI2xEMLE"]
 
 import ase as _ase
 import numpy as _np
@@ -234,7 +234,7 @@ class EMLE(_torch.nn.Module):
         **_SPHERICAL_EXPANSION_HYPERS_COMMON,
     }
 
-    def __init__(self, device):
+    def __init__(self, device, create_aev_calculator=True):
         """
         Constructor
 
@@ -243,6 +243,9 @@ class EMLE(_torch.nn.Module):
 
         device: torch device
             The PyTorch device to use for calculations.
+
+        create_aev_calculator: bool
+            Whether to create an AEV calculator instance.
         """
 
         # Call the base class constructor.
@@ -252,8 +255,12 @@ class EMLE(_torch.nn.Module):
             raise TypeError("'device' must be of type 'torch.device'")
         self._device = device
 
+        if not isinstance(create_aev_calculator, bool):
+            raise TypeError("'create_aev_calculator' must be of type 'bool'")
+
         # Create an AEV calculator to perform the feature calculations.
-        self._get_features = _AEVCalculator(self._device)
+        if create_aev_calculator:
+            self._get_features = _AEVCalculator(self._device)
 
         # Load the model parameters.
         try:
@@ -350,6 +357,7 @@ class EMLE(_torch.nn.Module):
         # Compute the electronegativities.
         chi = self._get_chi(mol_features, species_id)
 
+        # Compute the static energy.
         q_core = self._q_core[species_id]
         k_Z = self._k_Z[species_id]
         r_data = self._get_r_data(xyz_qm_bohr, self._device)
@@ -362,6 +370,7 @@ class EMLE(_torch.nn.Module):
         vpot_static = vpot_q_core + vpot_q_val
         E_static = _torch.sum(vpot_static @ charges_mm)
 
+        # Compute the induced energy.
         vpot_ind = self._get_vpot_mu(mu_ind, mesh_data["T1_mesh"])
         E_ind = _torch.sum(vpot_ind @ charges_mm) * 0.5
 
@@ -774,3 +783,103 @@ class EMLE(_torch.nn.Module):
         result: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
         """
         return 1 - (1 + au3) * _torch.exp(-au3)
+
+
+class ANI2xEMLE(EMLE):
+    def __init__(self, device):
+        """
+        Constructor
+
+        Parameters
+        ----------
+
+        device: torch device
+            The PyTorch device to use for calculations.
+        """
+        super().__init__(device, create_aev_calculator=False)
+
+        # Create the ANI2x model.
+        self._ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(self._device)
+
+        # Hook the forward pass of the ANI2x model to get the AEV features.
+        def hook_wrapper():
+            def hook(module, input, output):
+                self._aevs = output.aevs[0]
+
+            return hook
+
+        # Register the hook.
+        self._aev_hook = self._ani2x.aev_computer.register_forward_hook(hook_wrapper())
+
+    def forward(self, atomic_numbers, charges_mm, xyz_qm_bohr, xyz_mm_bohr):
+        """
+        Computes the static and induced EMLE energy components.
+
+        Parameters
+        ----------
+
+        atomic_numbers: torch.tensor (N_QM_ATOMS,)
+            Atomic numbers of QM atoms.
+
+        charges_mm: torch.tensor (max_mm_atoms,)
+            MM point charges in atomic units.
+
+        xyz_qm_bohr: torch.tensor (N_QM_ATOMS, 3)
+            Positions of QM atoms in Bohr.
+
+        xyz_mm_bohr: torch.tensor (N_MM_ATOMS, 3)
+            Positions of MM atoms in Bohr.
+
+        Returns
+        -------
+
+        result: torch.tensor (2,)
+            Values of static and induced EMLE energy components.
+        """
+
+        # Convert the QM atomic numbers to elements and species IDs.
+        species_id = []
+        for id in atomic_numbers:
+            try:
+                species_id.append(self._hypers["global_species"].index(id))
+            except:
+                msg = f"Unsupported element index '{id}'."
+                raise ValueError(msg)
+        species_id = _torch.tensor(_np.array(species_id), device=self._device)
+
+        # Reshape the atomic numbers.
+        atomic_numbers = atomic_numbers.reshape(1, *atomic_numbers.shape)
+
+        # Convert coordinates to Angstrom and reshape.
+        xyz_qm = xyz_qm_bohr.reshape(1, *xyz_qm_bohr.shape) * _BOHR_TO_ANGSTROM
+
+        # Get the in vacuo energy.
+        E_vac = self._ani2x((atomic_numbers, xyz_qm)).energies[0]
+
+        # Normalise the AEVs.
+        self._aevs = self._aevs / _torch.linalg.norm(self._aevs, axis=1, keepdims=True)
+
+        # Compute the MBIS valence shell widths.
+        s = self._get_s(self._aevs, species_id)
+
+        # Compute the electronegativities.
+        chi = self._get_chi(self._aevs, species_id)
+
+        # Compute the static energy.
+        q_core = self._q_core[species_id]
+        k_Z = self._k_Z[species_id]
+        r_data = self._get_r_data(xyz_qm_bohr, self._device)
+        mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
+        q = self._get_q(r_data, s, chi)
+        q_val = q - q_core
+        mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k_Z)
+        vpot_q_core = self._get_vpot_q(q_core, mesh_data["T0_mesh"])
+        vpot_q_val = self._get_vpot_q(q_val, mesh_data["T0_mesh_slater"])
+        vpot_static = vpot_q_core + vpot_q_val
+        E_static = _torch.sum(vpot_static @ charges_mm)
+
+        # Compute the induced energy.
+        vpot_ind = self._get_vpot_mu(mu_ind, mesh_data["T1_mesh"])
+        E_ind = _torch.sum(vpot_ind @ charges_mm) * 0.5
+
+        return _torch.stack([E_vac, E_static, E_ind])
