@@ -72,7 +72,7 @@ class _AEVCalculator:
     Calculates AEV feature vectors for a given system
     """
 
-    def __init__(self, aev_computer, device):
+    def __init__(self, aev_computer):
         """
         Constructor
 
@@ -86,7 +86,6 @@ class _AEVCalculator:
             The PyTorch device to use for calculations.
         """
         self._aev_computer = aev_computer
-        self._device = device
 
     def __call__(self, zid, xyz):
         """
@@ -1109,7 +1108,7 @@ class EMLECalculator:
             ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(self._device)
             self._aev_computer = ani2x.aev_computer
 
-        self._get_features = _AEVCalculator(self._aev_computer, self._device)
+        self._get_features = _AEVCalculator(self._aev_computer)
 
         self._q_core = _torch.tensor(
             self._params["q_core"], dtype=_torch.float32, device=self._device
