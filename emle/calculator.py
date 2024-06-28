@@ -56,7 +56,6 @@ _HARTREE_TO_KJ_MOL = _ase.units.Hartree / _ase.units.kJ * _ase.units.mol
 # Settings for the default model. For system specific models, these will be
 # overwritten by values in the model file.
 _SPECIES = (1, 6, 7, 8, 16)
-_SIGMA = 1e-3
 _SPHERICAL_EXPANSION_HYPERS_COMMON = {
     "gaussian_sigma_constant": 0.5,
     "gaussian_sigma_type": "Constant",
