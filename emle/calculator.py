@@ -1069,8 +1069,6 @@ class EMLECalculator:
             try:
                 import NNPOps as _NNPOps
 
-                # Note that NNPOps sometimes leaves a dangling pt_main_thread
-                # process which keeps the emle-server alive.
                 self._has_nnpops = True
                 self._nnpops_active = False
             except:
