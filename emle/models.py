@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with EMLE-Engine If not, see <http://www.gnu.org/licenses/>.
+# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
 #####################################################################
 
 """EMLE model implementation."""
@@ -34,12 +34,11 @@ import scipy.io as _scipy_io
 import torch as _torch
 import torchani as _torchani
 
-_BOHR_TO_ANGSTROM = _ase.units.Bohr
+_ANGSTROM_TO_BOHR = 1.0 / _ase.units.Bohr
 
 # Settings for the default model. For system specific models, these will be
 # overwritten by values in the model file.
 _SPECIES = (1, 6, 7, 8, 16)
-_SIGMA = 1e-3
 _SPHERICAL_EXPANSION_HYPERS_COMMON = {
     "gaussian_sigma_constant": 0.5,
     "gaussian_sigma_type": "Constant",
@@ -82,7 +81,7 @@ class _AEVCalculator:
             Chemical species indices for each atom.
 
         xyz: torch.tensor (N_ATOMS, 3)
-            Atomic positions in Bohr.
+            Atomic positions in Angstrom.
 
         Returns
         -------
@@ -94,8 +93,8 @@ class _AEVCalculator:
         # Reshape the species indices.
         zid = zid.reshape(1, *zid.shape)
 
-        # Reshape the atomic positions and convert to Angstrom.
-        xyz = xyz.reshape(1, *xyz.shape) * _BOHR_TO_ANGSTROM
+        # Reshape the atomic positions.
+        xyz = xyz.reshape(1, *xyz.shape)
 
         # Compute the AEVs.
         aev = self._aev_computer((zid, xyz)).aevs[0]
@@ -311,7 +310,7 @@ class EMLE(_torch.nn.Module):
                 except:
                     self._hypers[key] = self._params[key]
 
-    def forward(self, atomic_numbers, charges_mm, xyz_qm_bohr, xyz_mm_bohr):
+    def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
         """
         Computes the static and induced EMLE energy components.
 
@@ -324,21 +323,21 @@ class EMLE(_torch.nn.Module):
         charges_mm: torch.tensor (max_mm_atoms,)
             MM point charges in atomic units.
 
-        xyz_qm_bohr: torch.tensor (N_QM_ATOMS, 3)
-            Positions of QM atoms in Bohr.
+        xyz_qm: torch.tensor (N_QM_ATOMS, 3)
+            Positions of QM atoms in Angstrom.
 
-        xyz_mm_bohr: torch.tensor (N_MM_ATOMS, 3)
-            Positions of MM atoms in Bohr.
+        xyz_mm: torch.tensor (N_MM_ATOMS, 3)
+            Positions of MM atoms in Angstrom.
 
         Returns
         -------
 
         result: torch.tensor (2,)
-            Values of static and induced EMLE energy components.
+            The static and induced EMLE energy components in Hartree.
         """
 
         # If there are no point charges, return zeros.
-        if len(xyz_mm_bohr) == 0:
+        if len(xyz_mm) == 0:
             return _torch.zeros(2, dtype=_torch.float32, device=self._device)
 
         # Convert the QM atomic numbers to elements and species IDs.
@@ -352,13 +351,17 @@ class EMLE(_torch.nn.Module):
         species_id = _torch.tensor(_np.array(species_id), device=self._device)
 
         # Get the features.
-        mol_features = self._get_features(species_id, xyz_qm_bohr)
+        mol_features = self._get_features(species_id, xyz_qm)
 
         # Compute the MBIS valence shell widths.
         s = self._get_s(mol_features, species_id)
 
         # Compute the electronegativities.
         chi = self._get_chi(mol_features, species_id)
+
+        # Convert coordinates to Bohr.
+        xyz_qm_bohr = xyz_qm * _ANGSTROM_TO_BOHR
+        xyz_mm_bohr = xyz_mm * _ANGSTROM_TO_BOHR
 
         # Compute the static energy.
         q_core = self._q_core[species_id]
@@ -814,7 +817,7 @@ class ANI2xEMLE(EMLE):
         # Register the hook.
         self._aev_hook = self._ani2x.aev_computer.register_forward_hook(hook_wrapper())
 
-    def forward(self, atomic_numbers, charges_mm, xyz_qm_bohr, xyz_mm_bohr):
+    def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
         """
         Computes the static and induced EMLE energy components.
 
@@ -827,17 +830,17 @@ class ANI2xEMLE(EMLE):
         charges_mm: torch.tensor (max_mm_atoms,)
             MM point charges in atomic units.
 
-        xyz_qm_bohr: torch.tensor (N_QM_ATOMS, 3)
-            Positions of QM atoms in Bohr.
+        xyz_qm: torch.tensor (N_QM_ATOMS, 3)
+            Positions of QM atoms in Angstrom.
 
-        xyz_mm_bohr: torch.tensor (N_MM_ATOMS, 3)
-            Positions of MM atoms in Bohr.
+        xyz_mm: torch.tensor (N_MM_ATOMS, 3)
+            Positions of MM atoms in Angstrom.
 
         Returns
         -------
 
-        result: torch.tensor (2,)
-            Values of static and induced EMLE energy components.
+        result: torch.tensor (3,)
+            The ANI2x and static and induced EMLE energy components in Hartree.
         """
 
         # Convert the QM atomic numbers to elements and species IDs.
@@ -853,15 +856,15 @@ class ANI2xEMLE(EMLE):
         # Reshape the atomic numbers.
         atomic_numbers = atomic_numbers.reshape(1, *atomic_numbers.shape)
 
-        # Convert coordinates to Angstrom and reshape.
-        xyz_qm = xyz_qm_bohr.reshape(1, *xyz_qm_bohr.shape) * _BOHR_TO_ANGSTROM
+        # Reshape the coordinates,
+        xyz = xyz_qm.reshape(1, *xyz_qm.shape)
 
         # Get the in vacuo energy.
-        E_vac = self._ani2x((atomic_numbers, xyz_qm)).energies[0]
+        E_vac = self._ani2x((atomic_numbers, xyz)).energies[0]
 
         # If there are no point charges, return the in vacuo energy and zeros
         # for the static and induced terms.
-        if len(xyz_mm_bohr) == 0:
+        if len(xyz_mm) == 0:
             zero = _torch.tensor(0.0, dtype=_torch.float32, device=self._device)
             return _torch.stack([E_vac, zero, zero])
 
@@ -873,6 +876,10 @@ class ANI2xEMLE(EMLE):
 
         # Compute the electronegativities.
         chi = self._get_chi(self._aevs, species_id)
+
+        # Convert coordinates to Bohr.
+        xyz_qm_bohr = xyz_qm * _ANGSTROM_TO_BOHR
+        xyz_mm_bohr = xyz_mm * _ANGSTROM_TO_BOHR
 
         # Compute the static energy.
         q_core = self._q_core[species_id]
