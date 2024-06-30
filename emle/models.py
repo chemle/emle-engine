@@ -792,7 +792,7 @@ class EMLE(_torch.nn.Module):
 
 
 class ANI2xEMLE(EMLE):
-    def __init__(self, device):
+    def __init__(self, device, atomic_numbers=None):
         """
         Constructor
 
@@ -801,16 +801,31 @@ class ANI2xEMLE(EMLE):
 
         device: torch device
             The PyTorch device to use for calculations.
+
+        atomic_numbers: list
+            List of atomic numbers to use in the ANI2x model. If specified,
+            and NNPOps is available, then an optimised version of ANI2x will
+            be used.
         """
         super().__init__(device, create_aev_calculator=False)
 
         # Create the ANI2x model.
         self._ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(self._device)
 
+        # Optmised the ANI2x model if atomic_numbers is specified.
+        if atomic_numbers is not None:
+            try:
+                from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
+
+                species = atomic_numbers.reshape(1, *atomic_numbers.shape)
+                self._ani2x = _OptimizedTorchANI(self._ani2x, species).to(self._device)
+            except:
+                raise
+
         # Hook the forward pass of the ANI2x model to get the AEV features.
         def hook_wrapper():
             def hook(module, input, output):
-                self._aevs = output.aevs[0]
+                self._aevs = output[1][0]
 
             return hook
 

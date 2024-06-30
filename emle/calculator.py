@@ -1924,7 +1924,7 @@ class EMLECalculator:
         if self._ani2x_emle is None:
             from .models import ANI2xEMLE as _ANI2xEMLE
 
-            self._ani2x_emle = _ANI2xEMLE(self._device)
+            self._ani2x_emle = _ANI2xEMLE(self._device, atomic_numbers=atomic_numbers)
 
         # Compute the energy and gradients.
         E = self._ani2x_emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
