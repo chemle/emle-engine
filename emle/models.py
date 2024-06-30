@@ -34,7 +34,6 @@ import scipy.io as _scipy_io
 import torch as _torch
 import torchani as _torchani
 
-_ANGSTROM_TO_BOHR = 1.0 / _ase.units.Bohr
 _BOHR_TO_ANGSTROM = _ase.units.Bohr
 
 # Settings for the default model. For system specific models, these will be
@@ -337,6 +336,10 @@ class EMLE(_torch.nn.Module):
         result: torch.tensor (2,)
             Values of static and induced EMLE energy components.
         """
+
+        # If there are no point charges, return zeros.
+        if len(xyz_mm_bohr) == 0:
+            return _torch.zeros(2, dtype=_torch.float32, device=self._device)
 
         # Convert the QM atomic numbers to elements and species IDs.
         species_id = []
@@ -855,6 +858,12 @@ class ANI2xEMLE(EMLE):
 
         # Get the in vacuo energy.
         E_vac = self._ani2x((atomic_numbers, xyz_qm)).energies[0]
+
+        # If there are no point charges, return the in vacuo energy and zeros
+        # for the static and induced terms.
+        if len(xyz_mm_bohr) == 0:
+            zero = _torch.tensor(0.0, dtype=_torch.float32, device=self._device)
+            return _torch.stack([E_vac, zero, zero])
 
         # Normalise the AEVs.
         self._aevs = self._aevs / _torch.linalg.norm(self._aevs, axis=1, keepdims=True)
