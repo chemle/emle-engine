@@ -1185,6 +1185,9 @@ class EMLECalculator:
             with open("emle_settings.yaml", "w") as f:
                 _yaml.dump(self._settings, f)
 
+        # Initialise a NULL internal model calculator.
+        self._ani2x_emle = None
+
     def run(self, path=None):
         """
         Calculate the energy and gradients.
@@ -1222,7 +1225,7 @@ class EMLECalculator:
             xyz_file_qm,
         ) = self.parse_orca_input(orca_input)
 
-        # Make sure that the number of QM atoms matches the number of MM atoms
+        # Make sure that the number of QM atoms matches the number of MM charges
         # when using mm embedding.
         if self._method == "mm":
             if len(xyz_qm) != len(self._mm_charges):
@@ -1600,7 +1603,7 @@ class EMLECalculator:
         # Initialise a null ASE atoms object.
         atoms = None
 
-        # Make sure that the number of QM atoms matches the number of MM atoms
+        # Make sure that the number of QM atoms matches the number of MM charges
         # when using mm embedding.
         if self._method == "mm":
             if len(xyz_qm) != len(self._mm_charges):
