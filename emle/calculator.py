@@ -52,6 +52,7 @@ _BOHR_TO_ANGSTROM = _ase.units.Bohr
 _EV_TO_HARTREE = 1.0 / _ase.units.Hartree
 _KCAL_MOL_TO_HARTREE = 1.0 / _ase.units.Hartree * _ase.units.kcal / _ase.units.mol
 _HARTREE_TO_KJ_MOL = _ase.units.Hartree / _ase.units.kJ * _ase.units.mol
+_NANOMETER_TO_ANGSTROM = 10.0
 
 # Settings for the default model. For system specific models, these will be
 # overwritten by values in the model file.
@@ -1872,6 +1873,73 @@ class EMLECalculator:
                 -grad_mm[:num_mm_atoms] * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_BOHR
             ).tolist(),
         )
+
+    def _sire_callback_optimised(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+        """
+        A callback function to be used with Sire.
+
+        Parameters
+        ----------
+
+        atomic_numbers: [float]
+            A list of atomic numbers for the QM region.
+
+        charges_mm: [float]
+            The charges on the MM atoms.
+
+        xyz_qm: [[float, float, float]]
+            The coordinates of the QM atoms in Angstrom.
+
+        xyz_mm: [[float, float, float]]
+            The coordinates of the MM atoms in Angstrom.
+
+        Returns
+        -------
+
+        energy: float
+            The energy in kJ/mol.
+
+        force_qm: [[float, float, float]]
+            The forces on the QM atoms in kJ/mol/nanometer.
+
+        force_mm: [[float, float, float]]
+            The forces on the MM atoms in kJ/mol/nanometer.
+        """
+
+        # For performance, we assume that the input is already validated.
+
+        # Convert to numpy arrays then Torch tensors.
+        atomic_numbers = _torch.tensor(atomic_numbers, device=self._device)
+        charges_mm = _torch.tensor(
+            charges_mm, dtype=_torch.float32, device=self._device
+        )
+        xyz_qm = _torch.tensor(
+            xyz_qm, dtype=_torch.float32, device=self._device, requires_grad=True
+        )
+        xyz_mm = _torch.tensor(
+            xyz_mm, dtype=_torch.float32, device=self._device, requires_grad=True
+        )
+
+        # Create an internal ANI2xEMLE model if one doesn't already exist.
+        if self._ani2x_emle is None:
+            from .models import ANI2xEMLE as _ANI2xEMLE
+
+            self._ani2x_emle = _ANI2xEMLE(self._device)
+
+        # Compute the energy and gradients.
+        E = self._ani2x_emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+        dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
+
+        # Convert the energy and gradients to numpy arrays.
+        E = E.sum().item() * _HARTREE_TO_KJ_MOL
+        force_qm = (
+            -dE_dxyz_qm.cpu().numpy() * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_ANGSTROM
+        ).tolist()
+        force_mm = (
+            -dE_dxyz_mm.cpu().numpy() * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_ANGSTROM
+        ).tolist()
+
+        return E, force_qm, force_mm
 
     def _get_E(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr):
         """
