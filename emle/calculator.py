@@ -54,18 +54,6 @@ _KCAL_MOL_TO_HARTREE = 1.0 / _ase.units.Hartree * _ase.units.kcal / _ase.units.m
 _HARTREE_TO_KJ_MOL = _ase.units.Hartree / _ase.units.kJ * _ase.units.mol
 _NANOMETER_TO_ANGSTROM = 10.0
 
-# Settings for the default model. For system specific models, these will be
-# overwritten by values in the model file.
-_SPECIES = (1, 6, 7, 8, 16)
-_SPHERICAL_EXPANSION_HYPERS_COMMON = {
-    "gaussian_sigma_constant": 0.5,
-    "gaussian_sigma_type": "Constant",
-    "cutoff_smooth_width": 0.5,
-    "radial_basis": "GTO",
-    "expansion_by_species_method": "user defined",
-    "global_species": _SPECIES,
-}
-
 
 class _AEVCalculator:
     """
@@ -239,17 +227,8 @@ class EMLECalculator:
     # Create the name of the default model file.
     _default_model = _os.path.join(_module_dir, "emle_qm7_aev.mat")
 
-    # Default ML model parameters. These will be overwritten by values in the
-    # embedding model file.
-
-    # Model hyper-parameters.
-    _hypers = {
-        "interaction_cutoff": 3.0,
-        "max_radial": 4,
-        "max_angular": 4,
-        "compute_gradients": True,
-        **_SPHERICAL_EXPANSION_HYPERS_COMMON,
-    }
+    # Store the list of supported species.
+    _species = [1, 6, 7, 8, 16]
 
     # List of supported backends.
     _supported_backends = [
@@ -1037,26 +1016,6 @@ class EMLECalculator:
         # Initialise a null SanderCalculator object.
         self._sander_calculator = None
 
-        # Initialise EMLE embedding model attributes.
-        hypers_keys = (
-            "gaussian_sigma_constant",
-            "global_species",
-            "interaction_cutoff",
-            "max_radial",
-            "max_angular",
-        )
-        for key in hypers_keys:
-            if key in self._params:
-                try:
-                    self._hypers[key] = tuple(self._params[key].tolist())
-                except:
-                    self._hypers[key] = self._params[key]
-
-        # Work out the supported elements.
-        self._supported_elements = []
-        for id in self._hypers["global_species"]:
-            self._supported_elements.append(_ase.Atom(id).symbol)
-
         # Initialise TorchANI backend attributes.
         if self._backend == "torchani":
             import torchani as _torchani
@@ -1256,7 +1215,7 @@ class EMLECalculator:
         elements = []
         for id in atomic_numbers:
             try:
-                species_id.append(self._hypers["global_species"].index(id))
+                species_id.append(self._species.index(id))
                 elements.append(_ase.Atom(id).symbol)
             except:
                 msg = (
@@ -1634,7 +1593,7 @@ class EMLECalculator:
         elements = []
         for id in atomic_numbers:
             try:
-                species_id.append(self._hypers["global_species"].index(id))
+                species_id.append(self._species.index(id))
                 elements.append(_ase.Atom(id).symbol)
             except:
                 msg = (

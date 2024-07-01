@@ -34,206 +34,8 @@ import scipy.io as _scipy_io
 import torch as _torch
 import torchani as _torchani
 
-_ANGSTROM_TO_BOHR = 1.0 / _ase.units.Bohr
-
-# Settings for the default model. For system specific models, these will be
-# overwritten by values in the model file.
-_SPECIES = (1, 6, 7, 8, 16)
-_SPHERICAL_EXPANSION_HYPERS_COMMON = {
-    "gaussian_sigma_constant": 0.5,
-    "gaussian_sigma_type": "Constant",
-    "cutoff_smooth_width": 0.5,
-    "radial_basis": "GTO",
-    "expansion_by_species_method": "user defined",
-    "global_species": _SPECIES,
-}
-
-
-class _AEVCalculator:
-    """
-    Calculates AEV feature vectors for a given system
-    """
-
-    def __init__(self, device=None):
-        """
-        Constructor
-
-        device: torch.device
-            The device on which to run the model.
-        """
-
-        if device is not None:
-            if not isinstance(device, _torch.device):
-                raise TypeError("'device' must be of type 'torch.device'")
-        else:
-            device = _torch.get_default_device()
-
-        # Create the AEV computer.
-        ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(device)
-        self._aev_computer = ani2x.aev_computer
-
-    def __call__(self, zid, xyz):
-        """
-        Calculates the AEV feature vectors for a given molecule.
-
-        Parameters
-        ----------
-
-        zid: numpy.array (N_ATOMS)
-            Chemical species indices for each atom.
-
-        xyz: torch.tensor (N_ATOMS, 3)
-            Atomic positions in Angstrom.
-
-        Returns
-        -------
-
-        aev: torch.tensor (N_ATOMS, N_AEV)
-            AEV feature vectors for each atom.
-        """
-
-        # Reshape the species indices.
-        zid = zid.reshape(1, *zid.shape)
-
-        # Reshape the atomic positions.
-        xyz = xyz.reshape(1, *xyz.shape)
-
-        # Compute the AEVs.
-        aev = self._aev_computer((zid, xyz))[1][0]
-        return aev / _torch.linalg.norm(aev, axis=1, keepdims=True)
-
-    def to(self, device):
-        """
-        Move the AEV calculator to a new device.
-        """
-        if not isinstance(device, _torch.device):
-            raise TypeError("'device' must be of type 'torch.device'")
-        self._aev_computer = self._aev_computer.to(device)
-        return self
-
-
-class _GPRCalculator:
-    """Predicts an atomic property for a molecule with Gaussian Process Regression (GPR)."""
-
-    def __init__(self, ref_values, ref_features, n_ref, sigma, device=None):
-        """
-        Constructor
-
-        Parameters
-        ----------
-
-        ref_values: numpy.array (N_Z, N_REF)
-            The property values corresponding to the basis vectors for each species.
-
-        ref_features: numpy.array (N_Z, N_REF, N_FEAT)
-            The basis feature vectors for each species.
-
-        n_ref: (N_Z,)
-            Number of supported species.
-
-        sigma: float
-            The uncertainty of the observations (regularizer).
-
-        device: torch.device
-            The device on which to run the model.
-        """
-
-        if device is not None:
-            if not isinstance(device, _torch.device):
-                raise TypeError("'device' must be of type 'torch.device'")
-        else:
-            device = _torch.get_default_device()
-
-        # Store the reference features.
-        self._ref_features = ref_features
-
-        # Compute the inverse of the K matrix.
-        Kinv = _torch.tensor(
-            self._get_Kinv(ref_features, sigma),
-            dtype=_torch.float32,
-            device=device,
-        )
-
-        # Store additional attributes for the GPR model.
-        self._n_ref = n_ref
-        self._n_z = len(n_ref)
-        self._ref_mean = _np.sum(ref_values, axis=1) / n_ref
-        ref_shifted = _torch.tensor(
-            ref_values - self._ref_mean[:, None],
-            dtype=_torch.float32,
-            device=device,
-        )
-        self._c = (Kinv @ ref_shifted[:, :, None]).squeeze()
-
-    def __call__(self, mol_features, zid):
-        """
-
-        Parameters
-        ----------
-
-        mol_features: numpy.array (N_ATOMS, N_FEAT)
-            The feature vectors for each atom.
-
-        zid: torch.tensor (N_ATOMS,)
-            The species identity value of each atom.
-
-        Returns
-        -------
-
-        result: torch.tensor, numpy.array (N_ATOMS)
-            The values of the predicted property for each atom.
-        """
-
-        result = _torch.zeros(
-            len(zid), dtype=_torch.float32, device=mol_features.device
-        )
-        for i in range(self._n_z):
-            n_ref = self._n_ref[i]
-            ref_features_z = _torch.tensor(
-                self._ref_features[i, :n_ref],
-                dtype=_torch.float32,
-                device=mol_features.device,
-            )
-            mol_features_z = mol_features[zid == i, :, None]
-
-            K_mol_ref2 = (ref_features_z @ mol_features_z) ** 2
-            K_mol_ref2 = K_mol_ref2.reshape(K_mol_ref2.shape[:-1])
-            result[zid == i] = K_mol_ref2 @ self._c[i, :n_ref] + self._ref_mean[i]
-
-        return result
-
-    @classmethod
-    def _get_Kinv(cls, ref_features, sigma):
-        """
-        Internal function to compute the inverse of the K matrix for GPR.
-
-        Parameters
-        ----------
-
-        ref_features: numpy.array (N_Z, MAX_N_REF, N_FEAT)
-            The basis feature vectors for each species.
-
-        sigma: float
-            The uncertainty of the observations (regularizer).
-
-        Returns
-        -------
-
-        result: numpy.array (MAX_N_REF, MAX_N_REF)
-            The inverse of the K matrix.
-        """
-        n = ref_features.shape[1]
-        K = (ref_features @ ref_features.swapaxes(1, 2)) ** 2
-        return _np.linalg.inv(K + sigma**2 * _np.eye(n, dtype=_np.float32))
-
-    def to(self, device):
-        """
-        Move the GPR calculator to a new device.
-        """
-        if not isinstance(device, _torch.device):
-            raise TypeError("'device' must be of type 'torch.device'")
-        self._c = self._c.to(device)
-        return self
+from torch import Tensor
+from typing import Optional, Tuple
 
 
 class EMLE(_torch.nn.Module):
@@ -241,26 +43,6 @@ class EMLE(_torch.nn.Module):
     Predicts EMLE energies and gradients allowing QM/MM with ML electrostatic
     embedding.
     """
-
-    # Class attributes.
-
-    # Get the directory of this module file.
-    _module_dir = _os.path.dirname(_os.path.abspath(__file__))
-
-    # Create the name of the default model file.
-    _model = _os.path.join(_module_dir, "emle_qm7_aev.mat")
-
-    # Default ML model parameters. These will be overwritten by values in the
-    # embedding model file.
-
-    # Model hyper-parameters.
-    _hypers = {
-        "interaction_cutoff": 3.0,
-        "max_radial": 4,
-        "max_angular": 4,
-        "compute_gradients": True,
-        **_SPHERICAL_EXPANSION_HYPERS_COMMON,
-    }
 
     def __init__(self, device=None, create_aev_calculator=True):
         """
@@ -272,6 +54,14 @@ class EMLE(_torch.nn.Module):
         create_aev_calculator: bool
             Whether to create an AEV calculator instance.
         """
+
+        # Class attributes.
+
+        # Get the directory of this module file.
+        self._module_dir = _os.path.dirname(_os.path.abspath(__file__))
+
+        # Create the name of the default model file.
+        self._model = _os.path.join(self._module_dir, "emle_qm7_aev.mat")
 
         # Call the base class constructor.
         super().__init__()
@@ -287,15 +77,19 @@ class EMLE(_torch.nn.Module):
 
         # Create an AEV calculator to perform the feature calculations.
         if create_aev_calculator:
-            self._get_features = _AEVCalculator(device=device)
+            ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(device)
+            self._aev_computer = ani2x.aev_computer
         else:
-            self._get_features = None
+            self._aev_computer = None
 
         # Load the model parameters.
         try:
             self._params = _scipy_io.loadmat(self._model, squeeze_me=True)
         except:
             raise IOError(f"Unable to load model parameters from: '{self._model}'")
+
+        # Set the supported species.
+        self._species = [1, 6, 7, 8, 16]
 
         # Store model parameters as tensors.
         self._q_core = _torch.tensor(
@@ -309,35 +103,38 @@ class EMLE(_torch.nn.Module):
         self._q_total = _torch.tensor(
             self._params.get("total_charge", 0), dtype=_torch.float32, device=device
         )
-        self._get_s = _GPRCalculator(
-            self._params["s_ref"],
-            self._params["ref_soap"],
-            self._params["n_ref"],
-            1e-3,
-            device=device,
-        )
-        self._get_chi = _GPRCalculator(
-            self._params["chi_ref"],
-            self._params["ref_soap"],
-            self._params["n_ref"],
-            1e-3,
-            device=device,
+
+        # Extract the reference features.
+        self._ref_features = _torch.tensor(
+            self._params["ref_soap"], dtype=_torch.float32, device=device
         )
 
-        # Initialise EMLE embedding model attributes.
-        hypers_keys = (
-            "gaussian_sigma_constant",
-            "global_species",
-            "interaction_cutoff",
-            "max_radial",
-            "max_angular",
+        # Extract the reference values for the MBIS valence shell widths.
+        self._ref_values_s = _torch.tensor(
+            self._params["s_ref"], dtype=_torch.float32, device=device
         )
-        for key in hypers_keys:
-            if key in self._params:
-                try:
-                    self._hypers[key] = tuple(self._params[key].tolist())
-                except:
-                    self._hypers[key] = self._params[key]
+
+        # Compute the inverse of the K matrix.
+        Kinv = self._get_Kinv(self._ref_features, 1e-3)
+
+        # Store additional attributes for the MBIS GPR model.
+        self._n_ref = _torch.tensor(
+            self._params["n_ref"], dtype=_torch.int64, device=device
+        )
+        self._n_z = len(self._n_ref)
+        self._ref_mean_s = _torch.sum(self._ref_values_s, dim=1) / self._n_ref
+        ref_shifted = self._ref_values_s - self._ref_mean_s[:, None]
+        self._c_s = (Kinv @ ref_shifted[:, :, None]).squeeze()
+
+        # Exctract the reference values for the electronegativities.
+        self._ref_values_chi = _torch.tensor(
+            self._params["chi_ref"], dtype=_torch.float32, device=device
+        )
+
+        # Store additional attributes for the electronegativity GPR model.
+        self._ref_mean_chi = _torch.sum(self._ref_values_chi, dim=1) / self._n_ref
+        ref_shifted = self._ref_values_chi - self._ref_mean_chi[:, None]
+        self._c_chi = (Kinv @ ref_shifted[:, :, None]).squeeze()
 
     def to(self, device):
         """
@@ -345,13 +142,19 @@ class EMLE(_torch.nn.Module):
         """
         if not isinstance(device, _torch.device):
             raise TypeError("'device' must be of type 'torch.device'")
-        if self._get_features is not None:
-            self._get_features = self._get_features.to(device)
+        if self._aev_computer is not None:
+            self._aev_computer = self._aev_computer.to(device)
         self._q_core = self._q_core.to(device)
         self._k_Z = self._k_Z.to(device)
         self._q_total = self._q_total.to(device)
-        self._get_s = self._get_s.to(device)
-        self._get_chi = self._get_chi.to(device)
+        self._ref_features = self._ref_features.to(device)
+        self._n_ref = self._n_ref.to(device)
+        self._ref_values_s = self._ref_values_s.to(device)
+        self._ref_values_chi = self._ref_values_chi.to(device)
+        self._ref_mean_s = self._ref_mean_s.to(device)
+        self._ref_mean_chi = self._ref_mean_chi.to(device)
+        self._c_s = self._c_s.to(device)
+        self._c_chi = self._c_chi.to(device)
         return self
 
     def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
@@ -385,27 +188,35 @@ class EMLE(_torch.nn.Module):
             return _torch.zeros(2, dtype=_torch.float32, device=xyz_qm.device)
 
         # Convert the QM atomic numbers to elements and species IDs.
-        species_id = []
+        species_id = _torch.tensor([], dtype=_torch.int64, device=xyz_qm.device)
         for id in atomic_numbers:
-            try:
-                species_id.append(self._hypers["global_species"].index(id))
-            except:
-                msg = f"Unsupported element index '{id}'."
-                raise ValueError(msg)
-        species_id = _torch.tensor(_np.array(species_id), device=xyz_qm.device)
+            species_id = _torch.cat(
+                (
+                    species_id,
+                    _torch.tensor([self._species.index(id)], device=species_id.device),
+                ),
+            )
 
-        # Get the features.
-        mol_features = self._get_features(species_id, xyz_qm)
+        # Reshape the atomic numbers.
+        zid = species_id.unsqueeze(0)
+
+        # Reshape the atomic positions.
+        xyz = xyz_qm.unsqueeze(0)
+
+        # Compute the AEVs.
+        aev = self._aev_computer((zid, xyz))[1][0]
+        aev = aev / _torch.linalg.norm(aev, ord=2, dim=1, keepdim=True)
 
         # Compute the MBIS valence shell widths.
-        s = self._get_s(mol_features, species_id)
+        s = self._gpr(aev, self._ref_mean_s, self._c_s, species_id)
 
         # Compute the electronegativities.
-        chi = self._get_chi(mol_features, species_id)
+        chi = self._gpr(aev, self._ref_mean_chi, self._c_chi, species_id)
 
         # Convert coordinates to Bohr.
-        xyz_qm_bohr = xyz_qm * _ANGSTROM_TO_BOHR
-        xyz_mm_bohr = xyz_mm * _ANGSTROM_TO_BOHR
+        ANGSTROM_TO_BOHR = 1.8897261258369282
+        xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
+        xyz_mm_bohr = xyz_mm * ANGSTROM_TO_BOHR
 
         # Compute the static energy.
         q_core = self._q_core[species_id]
@@ -415,18 +226,84 @@ class EMLE(_torch.nn.Module):
         q = self._get_q(r_data, s, chi)
         q_val = q - q_core
         mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k_Z)
-        vpot_q_core = self._get_vpot_q(q_core, mesh_data["T0_mesh"])
-        vpot_q_val = self._get_vpot_q(q_val, mesh_data["T0_mesh_slater"])
+        vpot_q_core = self._get_vpot_q(q_core, mesh_data[0])
+        vpot_q_val = self._get_vpot_q(q_val, mesh_data[1])
         vpot_static = vpot_q_core + vpot_q_val
         E_static = _torch.sum(vpot_static @ charges_mm)
 
         # Compute the induced energy.
-        vpot_ind = self._get_vpot_mu(mu_ind, mesh_data["T1_mesh"])
+        vpot_ind = self._get_vpot_mu(mu_ind, mesh_data[2])
         E_ind = _torch.sum(vpot_ind @ charges_mm) * 0.5
 
         return _torch.stack([E_static, E_ind])
 
-    def _get_q(self, r_data, s, chi):
+    @classmethod
+    def _get_Kinv(cls, ref_features, sigma):
+        """
+        Internal function to compute the inverse of the K matrix for GPR.
+
+        Parameters
+        ----------
+
+        ref_features: numpy.array (N_Z, MAX_N_REF, N_FEAT)
+            The basis feature vectors for each species.
+
+        sigma: float
+            The uncertainty of the observations (regularizer).
+
+        Returns
+        -------
+
+        result: numpy.array (MAX_N_REF, MAX_N_REF)
+            The inverse of the K matrix.
+        """
+        n = ref_features.shape[1]
+        K = (ref_features @ ref_features.swapaxes(1, 2)) ** 2
+        return _torch.linalg.inv(
+            K + sigma**2 * _torch.eye(n, dtype=_torch.float32, device=K.device)
+        )
+
+    def _gpr(self, mol_features, ref_mean, c, zid):
+        """
+        Internal method to predict a property using Gaussian Process Regression.
+
+        Parameters
+        ----------
+
+        mol_features: torch.Tensor (N_ATOMS, N_FEAT)
+            The feature vectors for each atom.
+
+        ref_mean: torch.Tensor (N_Z,)
+            The mean of the reference values for each species.
+
+        c: torch.Tensor (N_Z, MAX_N_REF)
+            The coefficients of the GPR model.
+
+        zid: torch.tensor (N_ATOMS,)
+            The species identity value of each atom.
+
+        Returns
+        -------
+
+        result: torch.tensor, numpy.array (N_ATOMS)
+            The values of the predicted property for each atom.
+        """
+
+        result = _torch.zeros(
+            len(zid), dtype=_torch.float32, device=mol_features.device
+        )
+        for i in range(self._n_z):
+            n_ref = self._n_ref[i]
+            ref_features_z = self._ref_features[i, :n_ref]
+            mol_features_z = mol_features[zid == i, :, None]
+
+            K_mol_ref2 = (ref_features_z @ mol_features_z) ** 2
+            K_mol_ref2 = K_mol_ref2.reshape(K_mol_ref2.shape[:-1])
+            result[zid == i] = K_mol_ref2 @ c[i, :n_ref] + ref_mean[i]
+
+        return result
+
+    def _get_q(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, chi):
         """
         Internal method that predicts MBIS charges
         (Eq. 16 in 10.1021/acs.jctc.2c00914)
@@ -452,7 +329,7 @@ class EMLE(_torch.nn.Module):
         b = _torch.hstack([-chi, self._q_total])
         return _torch.linalg.solve(A, b)[:-1]
 
-    def _get_A_QEq(self, r_data, s):
+    def _get_A_QEq(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s):
         """
         Internal method, generates A matrix for charge prediction
         (Eq. 16 in 10.1021/acs.jctc.2c00914)
@@ -474,13 +351,21 @@ class EMLE(_torch.nn.Module):
         s2 = s_gauss**2
         s_mat = _torch.sqrt(s2[:, None] + s2[None, :])
 
-        device = r_data["r_mat"].device
+        device = r_data[0].device
 
-        A = self._get_T0_gaussian(r_data["T01"], r_data["r_mat"], s_mat)
+        A = self._get_T0_gaussian(r_data[1], r_data[0], s_mat)
 
         new_diag = _torch.ones_like(
             A.diagonal(), dtype=_torch.float32, device=device
-        ) * (1.0 / (s_gauss * _np.sqrt(_np.pi)))
+        ) * (
+            1.0
+            / (
+                s_gauss
+                * _torch.sqrt(
+                    _torch.tensor([_torch.pi], dtype=_torch.float32, device=device)
+                )
+            )
+        )
         mask = _torch.diag(
             _torch.ones_like(new_diag, dtype=_torch.float32, device=device)
         )
@@ -500,7 +385,15 @@ class EMLE(_torch.nn.Module):
 
         return B
 
-    def _get_mu_ind(self, r_data, mesh_data, q, s, q_val, k_Z):
+    def _get_mu_ind(
+        self,
+        r_data: Tuple[Tensor, Tensor, Tensor, Tensor],
+        mesh_data: Tuple[Tensor, Tensor, Tensor],
+        q,
+        s,
+        q_val,
+        k_Z,
+    ):
         """
         Internal method, calculates induced atomic dipoles
         (Eq. 20 in 10.1021/acs.jctc.2c00914)
@@ -532,17 +425,17 @@ class EMLE(_torch.nn.Module):
         """
         A = self._get_A_thole(r_data, s, q_val, k_Z)
 
-        r = 1.0 / mesh_data["T0_mesh"]
+        r = 1.0 / mesh_data[0]
         f1 = self._get_f1_slater(r, s[:, None] * 2.0)
-        fields = _torch.sum(
-            mesh_data["T1_mesh"] * f1[:, :, None] * q[:, None], axis=1
-        ).flatten()
+        fields = _torch.sum(mesh_data[2] * f1[:, :, None] * q[:, None], dim=1).flatten()
 
         mu_ind = _torch.linalg.solve(A, fields)
         E_ind = mu_ind @ fields * 0.5
         return mu_ind.reshape((-1, 3))
 
-    def _get_A_thole(self, r_data, s, q_val, k_Z):
+    def _get_A_thole(
+        self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, q_val, k_Z
+    ):
         """
         Internal method, generates A matrix for induced dipoles prediction
         (Eq. 20 in 10.1021/acs.jctc.2c00914)
@@ -573,11 +466,11 @@ class EMLE(_torch.nn.Module):
         alphap = alpha * self._a_Thole
         alphap_mat = alphap[:, None] * alphap[None, :]
 
-        au3 = r_data["r_mat"] ** 3 / _torch.sqrt(alphap_mat)
+        au3 = r_data[0] ** 3 / _torch.sqrt(alphap_mat)
         au31 = au3.repeat_interleave(3, dim=1)
         au32 = au31.repeat_interleave(3, dim=0)
 
-        A = -self._get_T2_thole(r_data["T21"], r_data["T22"], au32)
+        A = -self._get_T2_thole(r_data[2], r_data[3], au32)
 
         new_diag = 1.0 / alpha.repeat_interleave(3)
         mask = _torch.diag(
@@ -607,7 +500,7 @@ class EMLE(_torch.nn.Module):
         result: torch.tensor (max_mm_atoms)
             Electrostatic potential over MM atoms.
         """
-        return _torch.sum(T0 * q[:, None], axis=0)
+        return _torch.sum(T0 * q[:, None], dim=0)
 
     @staticmethod
     def _get_vpot_mu(mu, T1):
@@ -670,11 +563,10 @@ class EMLE(_torch.nn.Module):
         )
 
         t01 = r_inv
-        t11 = -rr_mat.reshape(n_atoms, n_atoms * 3) * r_inv1**3
         t21 = -id2 * r_inv2**3
         t22 = 3 * outer * r_inv2**5
 
-        return {"r_mat": r_mat, "T01": t01, "T11": t11, "T21": t21, "T22": t22}
+        return (r_mat, t01, t21, t22)
 
     @classmethod
     def _get_mesh_data(cls, xyz, xyz_mesh, s):
@@ -694,13 +586,9 @@ class EMLE(_torch.nn.Module):
             MBIS valence widths.
         """
         rr = xyz_mesh[None, :, :] - xyz[:, None, :]
-        r = _torch.linalg.norm(rr, axis=2)
+        r = _torch.linalg.norm(rr, ord=2, dim=2)
 
-        return {
-            "T0_mesh": 1.0 / r,
-            "T0_mesh_slater": cls._get_T0_slater(r, s[:, None]),
-            "T1_mesh": -rr / r[:, :, None] ** 3,
-        }
+        return (1.0 / r, cls._get_T0_slater(r, s[:, None]), -rr / r[:, :, None] ** 3)
 
     @classmethod
     def _get_f1_slater(cls, r, s):
@@ -769,7 +657,15 @@ class EMLE(_torch.nn.Module):
 
         results: torch.tensor (N_ATOMS, N_ATOMS)
         """
-        return t01 * _torch.erf(r / (s_mat * _np.sqrt(2)))
+        return t01 * _torch.erf(
+            r
+            / (
+                s_mat
+                * _torch.sqrt(
+                    _torch.tensor([2.0], dtype=_torch.float32, device=r.device)
+                )
+            )
+        )
 
     @classmethod
     def _get_T2_thole(cls, tr21, tr22, au3):
@@ -780,10 +676,10 @@ class EMLE(_torch.nn.Module):
         ----------
 
         tr21: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
-            r_data["T21"]
+            r_data[2]
 
         tr21: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
-            r_data["T22"]
+            r_data[3]
 
         au3: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
             Scaled distance matrix (see _get_A_thole).
@@ -918,8 +814,12 @@ class ANI2xEMLE(EMLE):
 
         # Hook the forward pass of the ANI2x model to get the AEV features.
         def hook_wrapper():
-            def hook(module, input, output):
-                self._aevs = output[1][0]
+            def hook(
+                module,
+                input: Tuple[Tuple[Tensor, Tensor], Optional[Tensor], Optional[Tensor]],
+                output: _torchani.aev.SpeciesAEV,
+            ):
+                self._aev = output[1][0]
 
             return hook
 
@@ -965,18 +865,14 @@ class ANI2xEMLE(EMLE):
         # Convert the QM atomic numbers to elements and species IDs.
         species_id = []
         for id in atomic_numbers:
-            try:
-                species_id.append(self._hypers["global_species"].index(id))
-            except:
-                msg = f"Unsupported element index '{id}'."
-                raise ValueError(msg)
+            species_id.append(self._species.index(id))
         species_id = _torch.tensor(_np.array(species_id), device=xyz_qm.device)
 
         # Reshape the atomic numbers.
-        atomic_numbers = atomic_numbers.reshape(1, *atomic_numbers.shape)
+        atomic_numbers = atomic_numbers.unsqueeze(0)
 
         # Reshape the coordinates,
-        xyz = xyz_qm.reshape(1, *xyz_qm.shape)
+        xyz = xyz_qm.unsqueeze(0)
 
         # Get the in vacuo energy.
         E_vac = self._ani2x((atomic_numbers, xyz)).energies[0]
@@ -988,17 +884,20 @@ class ANI2xEMLE(EMLE):
             return _torch.stack([E_vac, zero, zero])
 
         # Normalise the AEVs.
-        self._aevs = self._aevs / _torch.linalg.norm(self._aevs, axis=1, keepdims=True)
+        self._aev = self._aev / _torch.linalg.norm(
+            self._aev, ord=2, dim=1, keepdim=True
+        )
 
         # Compute the MBIS valence shell widths.
-        s = self._get_s(self._aevs, species_id)
+        s = self._gpr(self._aev, self._ref_mean_s, self._c_s, species_id)
 
         # Compute the electronegativities.
-        chi = self._get_chi(self._aevs, species_id)
+        chi = self._gpr(self._aev, self._ref_mean_chi, self._c_chi, species_id)
 
         # Convert coordinates to Bohr.
-        xyz_qm_bohr = xyz_qm * _ANGSTROM_TO_BOHR
-        xyz_mm_bohr = xyz_mm * _ANGSTROM_TO_BOHR
+        ANGSTROM_TO_BOHR = 1.8897261258369282
+        xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
+        xyz_mm_bohr = xyz_mm * ANGSTROM_TO_BOHR
 
         # Compute the static energy.
         q_core = self._q_core[species_id]
@@ -1008,13 +907,13 @@ class ANI2xEMLE(EMLE):
         q = self._get_q(r_data, s, chi)
         q_val = q - q_core
         mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k_Z)
-        vpot_q_core = self._get_vpot_q(q_core, mesh_data["T0_mesh"])
-        vpot_q_val = self._get_vpot_q(q_val, mesh_data["T0_mesh_slater"])
+        vpot_q_core = self._get_vpot_q(q_core, mesh_data[0])
+        vpot_q_val = self._get_vpot_q(q_val, mesh_data[1])
         vpot_static = vpot_q_core + vpot_q_val
         E_static = _torch.sum(vpot_static @ charges_mm)
 
         # Compute the induced energy.
-        vpot_ind = self._get_vpot_mu(mu_ind, mesh_data["T1_mesh"])
+        vpot_ind = self._get_vpot_mu(mu_ind, mesh_data[2])
         E_ind = _torch.sum(vpot_ind @ charges_mm) * 0.5
 
         return _torch.stack([E_vac, E_static, E_ind])
