@@ -1922,9 +1922,21 @@ class EMLECalculator:
 
         # Create an internal ANI2xEMLE model if one doesn't already exist.
         if self._ani2x_emle is None:
+            from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
             from .models import ANI2xEMLE as _ANI2xEMLE
 
-            self._ani2x_emle = _ANI2xEMLE(self._device, atomic_numbers=atomic_numbers)
+            # Optimise the TorchANI model.
+            self._torchani_model = _OptimizedTorchANI(
+                self._torchani_model, atomic_numbers.reshape(-1, *atomic_numbers.shape)
+            ).to(self._device)
+
+            # Flag that NNPOps is active.
+            self._nnpops_active = True
+
+            # Create the model.
+            self._ani2x_emle = _ANI2xEMLE(
+                ani2x_model=self._torchani_model, device=self._device
+            )
 
         # Compute the energy and gradients.
         E = self._ani2x_emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)

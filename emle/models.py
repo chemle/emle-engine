@@ -54,20 +54,22 @@ class _AEVCalculator:
     Calculates AEV feature vectors for a given system
     """
 
-    def __init__(self, device):
+    def __init__(self, device=None):
         """
         Constructor
 
-        Parameters
-        ----------
-
-        device: torch device
-            The PyTorch device to use for calculations.
+        device: torch.device
+            The device on which to run the model.
         """
-        self._device = device
+
+        if device is not None:
+            if not isinstance(device, _torch.device):
+                raise TypeError("'device' must be of type 'torch.device'")
+        else:
+            device = _torch.get_default_device()
 
         # Create the AEV computer.
-        ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(self._device)
+        ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(device)
         self._aev_computer = ani2x.aev_computer
 
     def __call__(self, zid, xyz):
@@ -100,11 +102,20 @@ class _AEVCalculator:
         aev = self._aev_computer((zid, xyz)).aevs[0]
         return aev / _torch.linalg.norm(aev, axis=1, keepdims=True)
 
+    def to(self, device):
+        """
+        Move the AEV calculator to a new device.
+        """
+        if not isinstance(device, _torch.device):
+            raise TypeError("'device' must be of type 'torch.device'")
+        self._aev_computer = self._aev_computer.to(device)
+        return self
+
 
 class _GPRCalculator:
     """Predicts an atomic property for a molecule with Gaussian Process Regression (GPR)."""
 
-    def __init__(self, ref_values, ref_features, n_ref, sigma, device):
+    def __init__(self, ref_values, ref_features, n_ref, sigma, device=None):
         """
         Constructor
 
@@ -123,18 +134,24 @@ class _GPRCalculator:
         sigma: float
             The uncertainty of the observations (regularizer).
 
-        device: torch device
-            The PyTorch device to use for calculations.
+        device: torch.device
+            The device on which to run the model.
         """
-        # Store the device and reference features.
-        self._device = device
+
+        if device is not None:
+            if not isinstance(device, _torch.device):
+                raise TypeError("'device' must be of type 'torch.device'")
+        else:
+            device = _torch.get_default_device()
+
+        # Store the reference features.
         self._ref_features = ref_features
 
         # Compute the inverse of the K matrix.
         Kinv = _torch.tensor(
             self._get_Kinv(ref_features, sigma),
             dtype=_torch.float32,
-            device=self._device,
+            device=device,
         )
 
         # Store additional attributes for the GPR model.
@@ -144,7 +161,7 @@ class _GPRCalculator:
         ref_shifted = _torch.tensor(
             ref_values - self._ref_mean[:, None],
             dtype=_torch.float32,
-            device=self._device,
+            device=device,
         )
         self._c = (Kinv @ ref_shifted[:, :, None]).squeeze()
 
@@ -167,11 +184,15 @@ class _GPRCalculator:
             The values of the predicted property for each atom.
         """
 
-        result = _torch.zeros(len(zid), dtype=_torch.float32, device=self._device)
+        result = _torch.zeros(
+            len(zid), dtype=_torch.float32, device=mol_features.device
+        )
         for i in range(self._n_z):
             n_ref = self._n_ref[i]
             ref_features_z = _torch.tensor(
-                self._ref_features[i, :n_ref], dtype=_torch.float32, device=self._device
+                self._ref_features[i, :n_ref],
+                dtype=_torch.float32,
+                device=mol_features.device,
             )
             mol_features_z = mol_features[zid == i, :, None]
 
@@ -205,6 +226,15 @@ class _GPRCalculator:
         K = (ref_features @ ref_features.swapaxes(1, 2)) ** 2
         return _np.linalg.inv(K + sigma**2 * _np.eye(n, dtype=_np.float32))
 
+    def to(self, device):
+        """
+        Move the GPR calculator to a new device.
+        """
+        if not isinstance(device, _torch.device):
+            raise TypeError("'device' must be of type 'torch.device'")
+        self._c = self._c.to(device)
+        return self
+
 
 class EMLE(_torch.nn.Module):
     """
@@ -232,15 +262,12 @@ class EMLE(_torch.nn.Module):
         **_SPHERICAL_EXPANSION_HYPERS_COMMON,
     }
 
-    def __init__(self, device, create_aev_calculator=True):
+    def __init__(self, device=None, create_aev_calculator=True):
         """
         Constructor
 
         Parameters
         ----------
-
-        device: torch device
-            The PyTorch device to use for calculations.
 
         create_aev_calculator: bool
             Whether to create an AEV calculator instance.
@@ -249,16 +276,20 @@ class EMLE(_torch.nn.Module):
         # Call the base class constructor.
         super().__init__()
 
-        if not isinstance(device, _torch.device):
-            raise TypeError("'device' must be of type 'torch.device'")
-        self._device = device
+        if device is not None:
+            if not isinstance(device, _torch.device):
+                raise TypeError("'device' must be of type 'torch.device'")
+        else:
+            device = _torch.get_default_device()
 
         if not isinstance(create_aev_calculator, bool):
             raise TypeError("'create_aev_calculator' must be of type 'bool'")
 
         # Create an AEV calculator to perform the feature calculations.
         if create_aev_calculator:
-            self._get_features = _AEVCalculator(self._device)
+            self._get_features = _AEVCalculator(device=device)
+        else:
+            self._get_features = None
 
         # Load the model parameters.
         try:
@@ -268,31 +299,29 @@ class EMLE(_torch.nn.Module):
 
         # Store model parameters as tensors.
         self._q_core = _torch.tensor(
-            self._params["q_core"], dtype=_torch.float32, device=self._device
+            self._params["q_core"], dtype=_torch.float32, device=device
         )
         self._a_QEq = self._params["a_QEq"]
         self._a_Thole = self._params["a_Thole"]
         self._k_Z = _torch.tensor(
-            self._params["k_Z"], dtype=_torch.float32, device=self._device
+            self._params["k_Z"], dtype=_torch.float32, device=device
         )
         self._q_total = _torch.tensor(
-            self._params.get("total_charge", 0),
-            dtype=_torch.float32,
-            device=self._device,
+            self._params.get("total_charge", 0), dtype=_torch.float32, device=device
         )
         self._get_s = _GPRCalculator(
             self._params["s_ref"],
             self._params["ref_soap"],
             self._params["n_ref"],
             1e-3,
-            self._device,
+            device=device,
         )
         self._get_chi = _GPRCalculator(
             self._params["chi_ref"],
             self._params["ref_soap"],
             self._params["n_ref"],
             1e-3,
-            self._device,
+            device=device,
         )
 
         # Initialise EMLE embedding model attributes.
@@ -309,6 +338,21 @@ class EMLE(_torch.nn.Module):
                     self._hypers[key] = tuple(self._params[key].tolist())
                 except:
                     self._hypers[key] = self._params[key]
+
+    def to(self, device):
+        """
+        Move the model to a new device.
+        """
+        if not isinstance(device, _torch.device):
+            raise TypeError("'device' must be of type 'torch.device'")
+        if self._get_features is not None:
+            self._get_features = self._get_features.to(device)
+        self._q_core = self._q_core.to(device)
+        self._k_Z = self._k_Z.to(device)
+        self._q_total = self._q_total.to(device)
+        self._get_s = self._get_s.to(device)
+        self._get_chi = self._get_chi.to(device)
+        return self
 
     def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
         """
@@ -338,7 +382,7 @@ class EMLE(_torch.nn.Module):
 
         # If there are no point charges, return zeros.
         if len(xyz_mm) == 0:
-            return _torch.zeros(2, dtype=_torch.float32, device=self._device)
+            return _torch.zeros(2, dtype=_torch.float32, device=xyz_qm.device)
 
         # Convert the QM atomic numbers to elements and species IDs.
         species_id = []
@@ -348,7 +392,7 @@ class EMLE(_torch.nn.Module):
             except:
                 msg = f"Unsupported element index '{id}'."
                 raise ValueError(msg)
-        species_id = _torch.tensor(_np.array(species_id), device=self._device)
+        species_id = _torch.tensor(_np.array(species_id), device=xyz_qm.device)
 
         # Get the features.
         mol_features = self._get_features(species_id, xyz_qm)
@@ -366,7 +410,7 @@ class EMLE(_torch.nn.Module):
         # Compute the static energy.
         q_core = self._q_core[species_id]
         k_Z = self._k_Z[species_id]
-        r_data = self._get_r_data(xyz_qm_bohr, self._device)
+        r_data = self._get_r_data(xyz_qm_bohr)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
         q = self._get_q(r_data, s, chi)
         q_val = q - q_core
@@ -430,13 +474,15 @@ class EMLE(_torch.nn.Module):
         s2 = s_gauss**2
         s_mat = _torch.sqrt(s2[:, None] + s2[None, :])
 
+        device = r_data["r_mat"].device
+
         A = self._get_T0_gaussian(r_data["T01"], r_data["r_mat"], s_mat)
 
         new_diag = _torch.ones_like(
-            A.diagonal(), dtype=_torch.float32, device=self._device
+            A.diagonal(), dtype=_torch.float32, device=device
         ) * (1.0 / (s_gauss * _np.sqrt(_np.pi)))
         mask = _torch.diag(
-            _torch.ones_like(new_diag, dtype=_torch.float32, device=self._device)
+            _torch.ones_like(new_diag, dtype=_torch.float32, device=device)
         )
         A = mask * _torch.diag(new_diag) + (1.0 - mask) * A
 
@@ -444,7 +490,7 @@ class EMLE(_torch.nn.Module):
         x, y = A.shape
 
         # Create an tensor of ones with one more row and column than A.
-        B = _torch.ones(x + 1, y + 1, dtype=_torch.float32, device=self._device)
+        B = _torch.ones(x + 1, y + 1, dtype=_torch.float32, device=device)
 
         # Copy A into B.
         B[:x, :y] = A
@@ -535,7 +581,7 @@ class EMLE(_torch.nn.Module):
 
         new_diag = 1.0 / alpha.repeat_interleave(3)
         mask = _torch.diag(
-            _torch.ones_like(new_diag, dtype=_torch.float32, device=self._device)
+            _torch.ones_like(new_diag, dtype=_torch.float32, device=A.device)
         )
         A = mask * _torch.diag(new_diag) + (1.0 - mask) * A
 
@@ -587,7 +633,7 @@ class EMLE(_torch.nn.Module):
         return -_torch.tensordot(T1, mu, ((0, 2), (0, 1)))
 
     @classmethod
-    def _get_r_data(cls, xyz, device):
+    def _get_r_data(cls, xyz):
         """
         Internal method to calculate r_data object.
 
@@ -596,9 +642,6 @@ class EMLE(_torch.nn.Module):
 
         xyz: torch.tensor (N_ATOMS, 3)
             Atomic positions.
-
-        device: torch.device
-            The PyTorch device to use.
 
         Returns
         -------
@@ -621,7 +664,7 @@ class EMLE(_torch.nn.Module):
 
         id2 = _torch.tile(
             _torch.tile(
-                _torch.eye(3, dtype=_torch.float32, device=device).T, (1, n_atoms)
+                _torch.eye(3, dtype=_torch.float32, device=xyz.device).T, (1, n_atoms)
             ).T,
             (1, n_atoms),
         )
@@ -792,35 +835,86 @@ class EMLE(_torch.nn.Module):
 
 
 class ANI2xEMLE(EMLE):
-    def __init__(self, device, atomic_numbers=None):
+    def __init__(self, ani2x_model=None, atomic_numbers=None, device=None):
         """
         Constructor
 
         Parameters
         ----------
 
-        device: torch device
-            The PyTorch device to use for calculations.
+        ani2x_model: torchani.models.ANI2x, NNPOPS.OptimizedTorchANI
+            An existing ANI2x model to use. If None, a new ANI2x model will be
+            created. If using an OptimizedTorchANI model, please ensure that
+            the ANI2x model from which it derived was created using
+            periodic_table_index=True.
 
-        atomic_numbers: list
+        atomic_numbers: torch.tensor (N_ATOMS,)
             List of atomic numbers to use in the ANI2x model. If specified,
             and NNPOps is available, then an optimised version of ANI2x will
             be used.
+
+        device: torch.device
+            The device on which to run the model.
         """
-        super().__init__(device, create_aev_calculator=False)
+        if device is not None:
+            if not isinstance(device, _torch.device):
+                raise TypeError("'device' must be of type 'torch.device'")
+        else:
+            device = _torch.get_default_device()
 
-        # Create the ANI2x model.
-        self._ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(self._device)
-
-        # Optmised the ANI2x model if atomic_numbers is specified.
         if atomic_numbers is not None:
-            try:
-                from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
+            if not isinstance(atomic_numbers, _torch.Tensor):
+                raise TypeError("'atomic_numbers' must be of type 'torch.Tensor'")
+            # Check that they are integers.
+            if atomic_numbers.dtype != _torch.int64:
+                raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
 
-                species = atomic_numbers.reshape(1, *atomic_numbers.shape)
-                self._ani2x = _OptimizedTorchANI(self._ani2x, species).to(self._device)
+        # Call the base class constructor.
+        super().__init__(device=device, create_aev_calculator=False)
+
+        if ani2x_model is not None:
+            # Add the base ANI2x model and ensemble.
+            allowed_types = [
+                _torchani.models.BuiltinModel,
+                _torchani.models.BuiltinEnsemble,
+            ]
+
+            # Add the optimised model if NNPOps is available.
+            try:
+                import NNPOps as _NNPOps
+
+                allowed_types.append(_NNPOps.OptimizedTorchANI)
             except:
-                raise
+                pass
+
+            if not isinstance(ani2x_model, tuple(allowed_types)):
+                raise TypeError(f"'ani2x_model' must be of type {allowed_types}")
+
+            if (
+                isinstance(
+                    ani2x_model,
+                    (_torchani.models.BuiltinModel, _torchani.models.BuiltinEnsemble),
+                )
+                and not ani2x_model.periodic_table_index
+            ):
+                raise ValueError(
+                    "The ANI2x model must be created with 'periodic_table_index=True'"
+                )
+
+            self._ani2x = ani2x_model.to(device)
+        else:
+            # Create the ANI2x model.
+            self._ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(device)
+
+            # Optmised the ANI2x model if atomic_numbers is specified.
+            if atomic_numbers is not None:
+                try:
+                    from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
+
+                    species = atomic_numbers.reshape(1, *atomic_numbers.shape)
+                    self._ani2x = _OptimizedTorchANI(self._ani2x, species)
+                except:
+                    pass
 
         # Hook the forward pass of the ANI2x model to get the AEV features.
         def hook_wrapper():
@@ -831,6 +925,16 @@ class ANI2xEMLE(EMLE):
 
         # Register the hook.
         self._aev_hook = self._ani2x.aev_computer.register_forward_hook(hook_wrapper())
+
+    def to(self, device):
+        """
+        Move the model to a new device.
+        """
+        if not isinstance(device, _torch.device):
+            raise TypeError("'device' must be of type 'torch.device'")
+        module = super(ANI2xEMLE, self).to(device)
+        module._ani2x = module._ani2x.to(device)
+        return module
 
     def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
         """
@@ -866,7 +970,7 @@ class ANI2xEMLE(EMLE):
             except:
                 msg = f"Unsupported element index '{id}'."
                 raise ValueError(msg)
-        species_id = _torch.tensor(_np.array(species_id), device=self._device)
+        species_id = _torch.tensor(_np.array(species_id), device=xyz_qm.device)
 
         # Reshape the atomic numbers.
         atomic_numbers = atomic_numbers.reshape(1, *atomic_numbers.shape)
@@ -880,7 +984,7 @@ class ANI2xEMLE(EMLE):
         # If there are no point charges, return the in vacuo energy and zeros
         # for the static and induced terms.
         if len(xyz_mm) == 0:
-            zero = _torch.tensor(0.0, dtype=_torch.float32, device=self._device)
+            zero = _torch.tensor(0.0, dtype=_torch.float32, device=xyz_qm.device)
             return _torch.stack([E_vac, zero, zero])
 
         # Normalise the AEVs.
@@ -899,7 +1003,7 @@ class ANI2xEMLE(EMLE):
         # Compute the static energy.
         q_core = self._q_core[species_id]
         k_Z = self._k_Z[species_id]
-        r_data = self._get_r_data(xyz_qm_bohr, self._device)
+        r_data = self._get_r_data(xyz_qm_bohr)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
         q = self._get_q(r_data, s, chi)
         q_val = q - q_core
