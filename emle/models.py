@@ -192,7 +192,7 @@ class EMLE(_torch.nn.Module):
             return _torch.zeros(2, dtype=_torch.float32, device=xyz_qm.device)
 
         # Convert the QM atomic numbers to elements and species IDs.
-        species_id = _torch.tensor([], dtype=_torch.int64, device=xyz_qm.device)
+        species_id = _torch.empty(0, dtype=_torch.int64, device=xyz_qm.device)
         for id in atomic_numbers:
             species_id = _torch.cat(
                 (
