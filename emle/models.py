@@ -61,7 +61,7 @@ class EMLE(_torch.nn.Module):
         self._module_dir = _os.path.dirname(_os.path.abspath(__file__))
 
         # Create the name of the default model file.
-        self._model = _os.path.join(self._module_dir, "emle_qm7_aev.mat")
+        self._model = _os.path.join(self._module_dir, "emle_qm7_aev_masked.mat")
 
         # Call the base class constructor.
         super().__init__()
@@ -94,6 +94,9 @@ class EMLE(_torch.nn.Module):
         # Store model parameters as tensors.
         self._q_core = _torch.tensor(
             self._params["q_core"], dtype=_torch.float32, device=device
+        )
+        self._aev_mask = _torch.tensor(
+            self._params["aev_mask"], dtype=_torch.bool, device=device
         )
         self._a_QEq = self._params["a_QEq"]
         self._a_Thole = self._params["a_Thole"]
@@ -148,6 +151,7 @@ class EMLE(_torch.nn.Module):
         self._k_Z = self._k_Z.to(device)
         self._q_total = self._q_total.to(device)
         self._ref_features = self._ref_features.to(device)
+        self._ae_mask = self._aev_mask.to(device)
         self._n_ref = self._n_ref.to(device)
         self._ref_values_s = self._ref_values_s.to(device)
         self._ref_values_chi = self._ref_values_chi.to(device)
@@ -204,7 +208,7 @@ class EMLE(_torch.nn.Module):
         xyz = xyz_qm.unsqueeze(0)
 
         # Compute the AEVs.
-        aev = self._aev_computer((zid, xyz))[1][0]
+        aev = self._aev_computer((zid, xyz))[1][0][:, self._aev_mask]
         aev = aev / _torch.linalg.norm(aev, ord=2, dim=1, keepdim=True)
 
         # Compute the MBIS valence shell widths.
@@ -819,7 +823,7 @@ class ANI2xEMLE(EMLE):
                 input: Tuple[Tuple[Tensor, Tensor], Optional[Tensor], Optional[Tensor]],
                 output: _torchani.aev.SpeciesAEV,
             ):
-                self._aev = output[1][0]
+                self._aev = output[1][0][:, self._aev_mask]
 
             return hook
 

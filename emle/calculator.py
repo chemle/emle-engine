@@ -1893,9 +1893,15 @@ class EMLECalculator:
             self._nnpops_active = True
 
             # Create the model.
-            self._ani2x_emle = _ANI2xEMLE(
+            ani2x_emle = _ANI2xEMLE(
                 ani2x_model=self._torchani_model, device=self._device
             )
+
+            # Compile the model.
+            # This needs additional triton and cuda-nvcc dependencies. Will
+            # test when recreating the conda environment.
+            # self._ani2x_emle = _torch.compile(ani2x_emle)
+            self._ani2x_emle = ani2x_emle
 
         # Compute the energy and gradients.
         E = self._ani2x_emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
