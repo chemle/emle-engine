@@ -1881,16 +1881,22 @@ class EMLECalculator:
 
         # Create an internal ANI2xEMLE model if one doesn't already exist.
         if self._ani2x_emle is None:
-            from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
+            # Apply NNPOps optimisations if available.
+            try:
+                from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
+
+                # Optimise the TorchANI model.
+                self._torchani_model = _OptimizedTorchANI(
+                    self._torchani_model,
+                    atomic_numbers.reshape(-1, *atomic_numbers.shape),
+                ).to(self._device)
+
+                # Flag that NNPOps is active.
+                self._nnpops_active = True
+            except:
+                pass
+
             from .models import ANI2xEMLE as _ANI2xEMLE
-
-            # Optimise the TorchANI model.
-            self._torchani_model = _OptimizedTorchANI(
-                self._torchani_model, atomic_numbers.reshape(-1, *atomic_numbers.shape)
-            ).to(self._device)
-
-            # Flag that NNPOps is active.
-            self._nnpops_active = True
 
             # Create the model.
             ani2x_emle = _ANI2xEMLE(
