@@ -114,7 +114,7 @@ class _AEVCalculator:
         xyz = xyz.reshape(1, *xyz.shape) * _BOHR_TO_ANGSTROM
 
         # Compute the AEVs.
-        aev = self._aev_computer((zid, xyz)).aevs[0]
+        aev = self._aev_computer((zid, xyz))[1][0]
         return aev / _torch.linalg.norm(aev, axis=1, keepdims=True)
 
 
