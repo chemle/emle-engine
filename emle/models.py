@@ -103,6 +103,16 @@ class EMLE(_torch.nn.Module):
         # Set the supported species.
         self._species = [1, 6, 7, 8, 16]
 
+        # Create a map between species and their indices.
+        self._species_map = _np.zeros(max(self._species) + 1, dtype=_np.int64)
+        for i, s in enumerate(self._species):
+            self._species_map[s] = i
+
+        # Convert to a tensor.
+        self._species_map = _torch.tensor(
+            self._species_map, dtype=_torch.int64, device=device
+        )
+
         # Store model parameters as tensors.
         self._q_core = _torch.tensor(self._params["q_core"], dtype=dtype, device=device)
         self._aev_mask = _torch.tensor(
@@ -153,6 +163,7 @@ class EMLE(_torch.nn.Module):
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.to(*args, **kwargs)
+        self._species_map = self._species_map.to(*args, **kwargs)
         self._q_core = self._q_core.to(*args, **kwargs)
         self._k_Z = self._k_Z.to(*args, **kwargs)
         self._q_total = self._q_total.to(*args, **kwargs)
@@ -167,12 +178,34 @@ class EMLE(_torch.nn.Module):
         self._c_chi = self._c_chi.to(*args, **kwargs)
         return self
 
+    def cuda(self, **kwargs):
+        """
+        Returns a copy of this model in CUDA memory.
+        """
+        if self._aev_computer is not None:
+            self._aev_computer = self._aev_computer.cuda(**kwargs)
+        self._species_map = self._species_map.cuda(**kwargs)
+        self._q_core = self._q_core.cuda(**kwargs)
+        self._k_Z = self._k_Z.cuda(**kwargs)
+        self._q_total = self._q_total.cuda(**kwargs)
+        self._ref_features = self._ref_features.cuda(**kwargs)
+        self._aev_mask = self._aev_mask.cuda(**kwargs)
+        self._n_ref = self._n_ref.cuda(**kwargs)
+        self._ref_values_s = self._ref_values_s.cuda(**kwargs)
+        self._ref_values_chi = self._ref_values_chi.cuda(**kwargs)
+        self._ref_mean_s = self._ref_mean_s.cuda(**kwargs)
+        self._ref_mean_chi = self._ref_mean_chi.cuda(**kwargs)
+        self._c_s = self._c_s.cuda(**kwargs)
+        self._c_chi = self._c_chi.cuda(**kwargs)
+        return self
+
     def cpu(self, **kwargs):
         """
         Returns a copy of this model in CPU memory.
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.cpu(**kwargs)
+        self._species_map = self._species_map.cpu(**kwargs)
         self._q_core = self._q_core.cpu(**kwargs)
         self._k_Z = self._k_Z.cpu(**kwargs)
         self._q_total = self._q_total.cpu(**kwargs)
@@ -223,26 +256,6 @@ class EMLE(_torch.nn.Module):
         self._c_chi = self._c_chi.float()
         return self
 
-    def cuda(self, **kwargs):
-        """
-        Returns a copy of this model in CUDA memory.
-        """
-        if self._aev_computer is not None:
-            self._aev_computer = self._aev_computer.cuda(**kwargs)
-        self._q_core = self._q_core.cuda(**kwargs)
-        self._k_Z = self._k_Z.cuda(**kwargs)
-        self._q_total = self._q_total.cuda(**kwargs)
-        self._ref_features = self._ref_features.cuda(**kwargs)
-        self._aev_mask = self._aev_mask.cuda(**kwargs)
-        self._n_ref = self._n_ref.cuda(**kwargs)
-        self._ref_values_s = self._ref_values_s.cuda(**kwargs)
-        self._ref_values_chi = self._ref_values_chi.cuda(**kwargs)
-        self._ref_mean_s = self._ref_mean_s.cuda(**kwargs)
-        self._ref_mean_chi = self._ref_mean_chi.cuda(**kwargs)
-        self._c_s = self._c_s.cuda(**kwargs)
-        self._c_chi = self._c_chi.cuda(**kwargs)
-        return self
-
     def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
         """
         Computes the static and induced EMLE energy components.
@@ -273,17 +286,10 @@ class EMLE(_torch.nn.Module):
         if len(xyz_mm) == 0:
             return _torch.zeros(2, dtype=xyz_qm.dtype, device=xyz_qm.device)
 
-        # Convert the QM atomic numbers to elements and species IDs.
-        species_id = _torch.empty(0, dtype=_torch.int64, device=xyz_qm.device)
-        for id in atomic_numbers:
-            species_id = _torch.cat(
-                (
-                    species_id,
-                    _torch.tensor([self._species.index(id)], device=species_id.device),
-                ),
-            )
+        # Convert the atomic numbers to species IDs.
+        species_id = self._species_map[atomic_numbers]
 
-        # Reshape the atomic numbers.
+        # Reshape the IDs.
         zid = species_id.unsqueeze(0)
 
         # Reshape the atomic positions.
