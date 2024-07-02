@@ -96,7 +96,7 @@ class EMLE(_torch.nn.Module):
 
         # Load the model parameters.
         try:
-            self._params = _scipy_io.loadmat(self._model, squeeze_me=True)
+            params = _scipy_io.loadmat(self._model, squeeze_me=True)
         except:
             raise IOError(f"Unable to load model parameters from: '{self._model}'")
 
@@ -115,35 +115,29 @@ class EMLE(_torch.nn.Module):
 
         # Store model parameters as tensors.
         self._aev_mask = _torch.tensor(
-            self._params["aev_mask"], dtype=_torch.bool, device=device
+            params["aev_mask"], dtype=_torch.bool, device=device
         )
-        self._q_core = _torch.tensor(self._params["q_core"], dtype=dtype, device=device)
-        self._a_QEq = _torch.tensor(self._params["a_QEq"], dtype=dtype, device=device)
-        self._a_Thole = _torch.tensor(
-            self._params["a_Thole"], dtype=dtype, device=device
-        )
-        self._k_Z = _torch.tensor(self._params["k_Z"], dtype=dtype, device=device)
+        self._q_core = _torch.tensor(params["q_core"], dtype=dtype, device=device)
+        self._a_QEq = _torch.tensor(params["a_QEq"], dtype=dtype, device=device)
+        self._a_Thole = _torch.tensor(params["a_Thole"], dtype=dtype, device=device)
+        self._k_Z = _torch.tensor(params["k_Z"], dtype=dtype, device=device)
         self._q_total = _torch.tensor(
-            self._params.get("total_charge", 0), dtype=dtype, device=device
+            params.get("total_charge", 0), dtype=dtype, device=device
         )
 
         # Extract the reference features.
         self._ref_features = _torch.tensor(
-            self._params["ref_soap"], dtype=dtype, device=device
+            params["ref_soap"], dtype=dtype, device=device
         )
 
         # Extract the reference values for the MBIS valence shell widths.
-        self._ref_values_s = _torch.tensor(
-            self._params["s_ref"], dtype=dtype, device=device
-        )
+        self._ref_values_s = _torch.tensor(params["s_ref"], dtype=dtype, device=device)
 
         # Compute the inverse of the K matrix.
         Kinv = self._get_Kinv(self._ref_features, 1e-3)
 
         # Store additional attributes for the MBIS GPR model.
-        self._n_ref = _torch.tensor(
-            self._params["n_ref"], dtype=_torch.int64, device=device
-        )
+        self._n_ref = _torch.tensor(params["n_ref"], dtype=_torch.int64, device=device)
         self._n_z = len(self._n_ref)
         self._ref_mean_s = _torch.sum(self._ref_values_s, dim=1) / self._n_ref
         ref_shifted = self._ref_values_s - self._ref_mean_s[:, None]
@@ -151,7 +145,7 @@ class EMLE(_torch.nn.Module):
 
         # Exctract the reference values for the electronegativities.
         self._ref_values_chi = _torch.tensor(
-            self._params["chi_ref"], dtype=dtype, device=device
+            params["chi_ref"], dtype=dtype, device=device
         )
 
         # Store additional attributes for the electronegativity GPR model.
