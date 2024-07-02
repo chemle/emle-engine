@@ -987,11 +987,11 @@ class ANI2xEMLE(EMLE):
             The ANI2x and static and induced EMLE energy components in Hartree.
         """
 
-        # Convert the QM atomic numbers to elements and species IDs.
-        species_id = []
-        for id in atomic_numbers:
-            species_id.append(self._species.index(id))
-        species_id = _torch.tensor(_np.array(species_id), device=xyz_qm.device)
+        # Convert the atomic numbers to species IDs.
+        species_id = self._species_map[atomic_numbers]
+
+        # Reshape the IDs.
+        zid = species_id.unsqueeze(0)
 
         # Reshape the atomic numbers.
         atomic_numbers = atomic_numbers.unsqueeze(0)
