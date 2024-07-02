@@ -44,12 +44,18 @@ class EMLE(_torch.nn.Module):
     embedding.
     """
 
-    def __init__(self, device=None, create_aev_calculator=True):
+    def __init__(self, device=None, dtype=None, create_aev_calculator=True):
         """
         Constructor
 
         Parameters
         ----------
+
+        device: torch.device
+            The device on which to run the model.
+
+        dtype: torch.dtype
+            The data type to use for the models floating point tensors.
 
         create_aev_calculator: bool
             Whether to create an AEV calculator instance.
@@ -72,6 +78,12 @@ class EMLE(_torch.nn.Module):
         else:
             device = _torch.get_default_device()
 
+        if dtype is not None:
+            if not isinstance(dtype, _torch.dtype):
+                raise TypeError("'dtype' must be of type 'torch.dtype'")
+        else:
+            dtype = _torch.get_default_dtype()
+
         if not isinstance(create_aev_calculator, bool):
             raise TypeError("'create_aev_calculator' must be of type 'bool'")
 
@@ -92,29 +104,25 @@ class EMLE(_torch.nn.Module):
         self._species = [1, 6, 7, 8, 16]
 
         # Store model parameters as tensors.
-        self._q_core = _torch.tensor(
-            self._params["q_core"], dtype=_torch.float32, device=device
-        )
+        self._q_core = _torch.tensor(self._params["q_core"], dtype=dtype, device=device)
         self._aev_mask = _torch.tensor(
             self._params["aev_mask"], dtype=_torch.bool, device=device
         )
         self._a_QEq = self._params["a_QEq"]
         self._a_Thole = self._params["a_Thole"]
-        self._k_Z = _torch.tensor(
-            self._params["k_Z"], dtype=_torch.float32, device=device
-        )
+        self._k_Z = _torch.tensor(self._params["k_Z"], dtype=dtype, device=device)
         self._q_total = _torch.tensor(
-            self._params.get("total_charge", 0), dtype=_torch.float32, device=device
+            self._params.get("total_charge", 0), dtype=dtype, device=device
         )
 
         # Extract the reference features.
         self._ref_features = _torch.tensor(
-            self._params["ref_soap"], dtype=_torch.float32, device=device
+            self._params["ref_soap"], dtype=dtype, device=device
         )
 
         # Extract the reference values for the MBIS valence shell widths.
         self._ref_values_s = _torch.tensor(
-            self._params["s_ref"], dtype=_torch.float32, device=device
+            self._params["s_ref"], dtype=dtype, device=device
         )
 
         # Compute the inverse of the K matrix.
@@ -131,7 +139,7 @@ class EMLE(_torch.nn.Module):
 
         # Exctract the reference values for the electronegativities.
         self._ref_values_chi = _torch.tensor(
-            self._params["chi_ref"], dtype=_torch.float32, device=device
+            self._params["chi_ref"], dtype=dtype, device=device
         )
 
         # Store additional attributes for the electronegativity GPR model.
@@ -139,26 +147,100 @@ class EMLE(_torch.nn.Module):
         ref_shifted = self._ref_values_chi - self._ref_mean_chi[:, None]
         self._c_chi = (Kinv @ ref_shifted[:, :, None]).squeeze()
 
-    def to(self, device):
+    def to(self, *args, **kwargs):
         """
-        Move the model to a new device.
+        Performs Tensor dtype and/or device conversion on the model.
         """
-        if not isinstance(device, _torch.device):
-            raise TypeError("'device' must be of type 'torch.device'")
         if self._aev_computer is not None:
-            self._aev_computer = self._aev_computer.to(device)
-        self._q_core = self._q_core.to(device)
-        self._k_Z = self._k_Z.to(device)
-        self._q_total = self._q_total.to(device)
-        self._ref_features = self._ref_features.to(device)
-        self._ae_mask = self._aev_mask.to(device)
-        self._n_ref = self._n_ref.to(device)
-        self._ref_values_s = self._ref_values_s.to(device)
-        self._ref_values_chi = self._ref_values_chi.to(device)
-        self._ref_mean_s = self._ref_mean_s.to(device)
-        self._ref_mean_chi = self._ref_mean_chi.to(device)
-        self._c_s = self._c_s.to(device)
-        self._c_chi = self._c_chi.to(device)
+            self._aev_computer = self._aev_computer.to(*args, **kwargs)
+        self._q_core = self._q_core.to(*args, **kwargs)
+        self._k_Z = self._k_Z.to(*args, **kwargs)
+        self._q_total = self._q_total.to(*args, **kwargs)
+        self._ref_features = self._ref_features.to(*args, **kwargs)
+        self._ae_mask = self._aev_mask.to(*args, **kwargs)
+        self._n_ref = self._n_ref.to(*args, **kwargs)
+        self._ref_values_s = self._ref_values_s.to(*args, **kwargs)
+        self._ref_values_chi = self._ref_values_chi.to(*args, **kwargs)
+        self._ref_mean_s = self._ref_mean_s.to(*args, **kwargs)
+        self._ref_mean_chi = self._ref_mean_chi.to(*args, **kwargs)
+        self._c_s = self._c_s.to(*args, **kwargs)
+        self._c_chi = self._c_chi.to(*args, **kwargs)
+        return self
+
+    def cpu(self, **kwargs):
+        """
+        Returns a copy of this model in CPU memory.
+        """
+        if self._aev_computer is not None:
+            self._aev_computer = self._aev_computer.cpu(**kwargs)
+        self._q_core = self._q_core.cpu(**kwargs)
+        self._k_Z = self._k_Z.cpu(**kwargs)
+        self._q_total = self._q_total.cpu(**kwargs)
+        self._ref_features = self._ref_features.cpu(**kwargs)
+        self._ae_mask = self._aev_mask.cpu(**kwargs)
+        self._n_ref = self._n_ref.cpu(**kwargs)
+        self._ref_values_s = self._ref_values_s.cpu(**kwargs)
+        self._ref_values_chi = self._ref_values_chi.cpu(**kwargs)
+        self._ref_mean_s = self._ref_mean_s.cpu(**kwargs)
+        self._ref_mean_chi = self._ref_mean_chi.cpu(**kwargs)
+        self._c_s = self._c_s.cpu(**kwargs)
+        self._c_chi = self._c_chi.cpu(**kwargs)
+        return self
+
+    def double(self):
+        """
+        Returns a copy of this model in float64 precision.
+        """
+        if self._aev_computer is not None:
+            self._aev_computer = self._aev_computer.double()
+        self._q_core = self._q_core.double()
+        self._k_Z = self._k_Z.double()
+        self._q_total = self._q_total.double()
+        self._ref_features = self._ref_features.double()
+        self._ref_values_s = self._ref_values_s.double()
+        self._ref_values_chi = self._ref_values_chi.double()
+        self._ref_mean_s = self._ref_mean_s.double()
+        self._ref_mean_chi = self._ref_mean_chi.double()
+        self._c_s = self._c_s.double()
+        self._c_chi = self._c_chi.double()
+        return self
+
+    def float(self):
+        """
+        Returns a copy of this model in float32 precision.
+        """
+        if self._aev_computer is not None:
+            self._aev_computer = self._aev_computer.float()
+        self._q_core = self._q_core.float()
+        self._k_Z = self._k_Z.float()
+        self._q_total = self._q_total.float()
+        self._ref_features = self._ref_features.float()
+        self._ref_values_s = self._ref_values_s.float()
+        self._ref_values_chi = self._ref_values_chi.float()
+        self._ref_mean_s = self._ref_mean_s.float()
+        self._ref_mean_chi = self._ref_mean_chi.float()
+        self._c_s = self._c_s.float()
+        self._c_chi = self._c_chi.float()
+        return self
+
+    def cuda(self, **kwargs):
+        """
+        Returns a copy of this model in CUDA memory.
+        """
+        if self._aev_computer is not None:
+            self._aev_computer = self._aev_computer.cuda(**kwargs)
+        self._q_core = self._q_core.cuda(**kwargs)
+        self._k_Z = self._k_Z.cuda(**kwargs)
+        self._q_total = self._q_total.cuda(**kwargs)
+        self._ref_features = self._ref_features.cuda(**kwargs)
+        self._ae_mask = self._aev_mask.cuda(**kwargs)
+        self._n_ref = self._n_ref.cuda(**kwargs)
+        self._ref_values_s = self._ref_values_s.cuda(**kwargs)
+        self._ref_values_chi = self._ref_values_chi.cuda(**kwargs)
+        self._ref_mean_s = self._ref_mean_s.cuda(**kwargs)
+        self._ref_mean_chi = self._ref_mean_chi.cuda(**kwargs)
+        self._c_s = self._c_s.cuda(**kwargs)
+        self._c_chi = self._c_chi.cuda(**kwargs)
         return self
 
     def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
@@ -189,7 +271,7 @@ class EMLE(_torch.nn.Module):
 
         # If there are no point charges, return zeros.
         if len(xyz_mm) == 0:
-            return _torch.zeros(2, dtype=_torch.float32, device=xyz_qm.device)
+            return _torch.zeros(2, dtype=xyz_qm.dtype, device=xyz_qm.device)
 
         # Convert the QM atomic numbers to elements and species IDs.
         species_id = _torch.empty(0, dtype=_torch.int64, device=xyz_qm.device)
@@ -264,7 +346,7 @@ class EMLE(_torch.nn.Module):
         n = ref_features.shape[1]
         K = (ref_features @ ref_features.swapaxes(1, 2)) ** 2
         return _torch.linalg.inv(
-            K + sigma**2 * _torch.eye(n, dtype=_torch.float32, device=K.device)
+            K + sigma**2 * _torch.eye(n, dtype=ref_features.dtype, device=K.device)
         )
 
     def _gpr(self, mol_features, ref_mean, c, zid):
@@ -294,7 +376,7 @@ class EMLE(_torch.nn.Module):
         """
 
         result = _torch.zeros(
-            len(zid), dtype=_torch.float32, device=mol_features.device
+            len(zid), dtype=mol_features.dtype, device=mol_features.device
         )
         for i in range(self._n_z):
             n_ref = self._n_ref[i]
@@ -356,30 +438,25 @@ class EMLE(_torch.nn.Module):
         s_mat = _torch.sqrt(s2[:, None] + s2[None, :])
 
         device = r_data[0].device
+        dtype = r_data[0].dtype
 
         A = self._get_T0_gaussian(r_data[1], r_data[0], s_mat)
 
-        new_diag = _torch.ones_like(
-            A.diagonal(), dtype=_torch.float32, device=device
-        ) * (
+        new_diag = _torch.ones_like(A.diagonal(), dtype=dtype, device=device) * (
             1.0
             / (
                 s_gauss
-                * _torch.sqrt(
-                    _torch.tensor([_torch.pi], dtype=_torch.float32, device=device)
-                )
+                * _torch.sqrt(_torch.tensor([_torch.pi], dtype=dtype, device=device))
             )
         )
-        mask = _torch.diag(
-            _torch.ones_like(new_diag, dtype=_torch.float32, device=device)
-        )
+        mask = _torch.diag(_torch.ones_like(new_diag, dtype=dtype, device=device))
         A = mask * _torch.diag(new_diag) + (1.0 - mask) * A
 
         # Store the dimensions of A.
         x, y = A.shape
 
         # Create an tensor of ones with one more row and column than A.
-        B = _torch.ones(x + 1, y + 1, dtype=_torch.float32, device=device)
+        B = _torch.ones(x + 1, y + 1, dtype=dtype, device=device)
 
         # Copy A into B.
         B[:x, :y] = A
@@ -477,9 +554,7 @@ class EMLE(_torch.nn.Module):
         A = -self._get_T2_thole(r_data[2], r_data[3], au32)
 
         new_diag = 1.0 / alpha.repeat_interleave(3)
-        mask = _torch.diag(
-            _torch.ones_like(new_diag, dtype=_torch.float32, device=A.device)
-        )
+        mask = _torch.diag(_torch.ones_like(new_diag, dtype=A.dtype, device=A.device))
         A = mask * _torch.diag(new_diag) + (1.0 - mask) * A
 
         return A
@@ -561,7 +636,7 @@ class EMLE(_torch.nn.Module):
 
         id2 = _torch.tile(
             _torch.tile(
-                _torch.eye(3, dtype=_torch.float32, device=xyz.device).T, (1, n_atoms)
+                _torch.eye(3, dtype=xyz.dtype, device=xyz.device).T, (1, n_atoms)
             ).T,
             (1, n_atoms),
         )
@@ -665,9 +740,7 @@ class EMLE(_torch.nn.Module):
             r
             / (
                 s_mat
-                * _torch.sqrt(
-                    _torch.tensor([2.0], dtype=_torch.float32, device=r.device)
-                )
+                * _torch.sqrt(_torch.tensor([2.0], dtype=r.dtype, device=r.device))
             )
         )
 
@@ -735,7 +808,7 @@ class EMLE(_torch.nn.Module):
 
 
 class ANI2xEMLE(EMLE):
-    def __init__(self, ani2x_model=None, atomic_numbers=None, device=None):
+    def __init__(self, ani2x_model=None, atomic_numbers=None, device=None, dtype=None):
         """
         Constructor
 
@@ -755,12 +828,21 @@ class ANI2xEMLE(EMLE):
 
         device: torch.device
             The device on which to run the model.
+
+        dtype: torch.dtype
+            The data type to use for the models floating point tensors.
         """
         if device is not None:
             if not isinstance(device, _torch.device):
                 raise TypeError("'device' must be of type 'torch.device'")
         else:
             device = _torch.get_default_device()
+
+        if dtype is not None:
+            if not isinstance(dtype, _torch.dtype):
+                raise TypeError("'dtype' must be of type 'torch.dtype'")
+        else:
+            dtype = _torch.get_default_dtype()
 
         if atomic_numbers is not None:
             if not isinstance(atomic_numbers, _torch.Tensor):
@@ -770,7 +852,7 @@ class ANI2xEMLE(EMLE):
                 raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
 
         # Call the base class constructor.
-        super().__init__(device=device, create_aev_calculator=False)
+        super().__init__(device=device, dtype=dtype, create_aev_calculator=False)
 
         if ani2x_model is not None:
             # Add the base ANI2x model and ensemble.
@@ -830,14 +912,44 @@ class ANI2xEMLE(EMLE):
         # Register the hook.
         self._aev_hook = self._ani2x.aev_computer.register_forward_hook(hook_wrapper())
 
-    def to(self, device):
+    def to(self, *args, **kwargs):
         """
-        Move the model to a new device.
+        Performs Tensor dtype and/or device conversion on the model.
         """
-        if not isinstance(device, _torch.device):
-            raise TypeError("'device' must be of type 'torch.device'")
-        module = super(ANI2xEMLE, self).to(device)
-        module._ani2x = module._ani2x.to(device)
+        module = super(ANI2xEMLE, self).to(*args, **kwargs)
+        module._ani2x = module._ani2x.to(*args, **kwargs)
+        return module
+
+    def cpu(self, **kwargs):
+        """
+        Returns a copy of this model in CPU memory.
+        """
+        module = super(ANI2xEMLE, self).cpu(**kwargs)
+        module._ani2x = module._ani2x.cpu(**kwargs)
+        return module
+
+    def cuda(self, **kwargs):
+        """
+        Returns a copy of this model in CUDA memory.
+        """
+        module = super(ANI2xEMLE, self).cuda(**kwargs)
+        module._ani2x = module._ani2x.cuda(**kwargs)
+        return module
+
+    def double(self):
+        """
+        Returns a copy of this model in float64 precision.
+        """
+        module = super(ANI2xEMLE, self).double()
+        module._ani2x = module._ani2x.double()
+        return module
+
+    def float(self):
+        """
+        Returns a copy of this model in float32 precision.
+        """
+        module = super(ANI2xEMLE, self).float()
+        module._ani2x = module._ani2x.float()
         return module
 
     def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
@@ -884,7 +996,7 @@ class ANI2xEMLE(EMLE):
         # If there are no point charges, return the in vacuo energy and zeros
         # for the static and induced terms.
         if len(xyz_mm) == 0:
-            zero = _torch.tensor(0.0, dtype=_torch.float32, device=xyz_qm.device)
+            zero = _torch.tensor(0.0, dtype=xyz_qm.dtype, device=xyz_qm.device)
             return _torch.stack([E_vac, zero, zero])
 
         # Normalise the AEVs.
