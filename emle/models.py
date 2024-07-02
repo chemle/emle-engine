@@ -114,12 +114,14 @@ class EMLE(_torch.nn.Module):
         )
 
         # Store model parameters as tensors.
-        self._q_core = _torch.tensor(self._params["q_core"], dtype=dtype, device=device)
         self._aev_mask = _torch.tensor(
             self._params["aev_mask"], dtype=_torch.bool, device=device
         )
-        self._a_QEq = self._params["a_QEq"]
-        self._a_Thole = self._params["a_Thole"]
+        self._q_core = _torch.tensor(self._params["q_core"], dtype=dtype, device=device)
+        self._a_QEq = _torch.tensor(self._params["a_QEq"], dtype=dtype, device=device)
+        self._a_Thole = _torch.tensor(
+            self._params["a_Thole"], dtype=dtype, device=device
+        )
         self._k_Z = _torch.tensor(self._params["k_Z"], dtype=dtype, device=device)
         self._q_total = _torch.tensor(
             self._params.get("total_charge", 0), dtype=dtype, device=device
@@ -164,11 +166,13 @@ class EMLE(_torch.nn.Module):
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.to(*args, **kwargs)
         self._species_map = self._species_map.to(*args, **kwargs)
+        self._aev_mask = self._aev_mask.to(*args, **kwargs)
         self._q_core = self._q_core.to(*args, **kwargs)
+        self._a_QEq = self._a_QEq.to(*args, **kwargs)
+        self._a_Thole = self._a_Thole.to(*args, **kwargs)
         self._k_Z = self._k_Z.to(*args, **kwargs)
         self._q_total = self._q_total.to(*args, **kwargs)
         self._ref_features = self._ref_features.to(*args, **kwargs)
-        self._aev_mask = self._aev_mask.to(*args, **kwargs)
         self._n_ref = self._n_ref.to(*args, **kwargs)
         self._ref_values_s = self._ref_values_s.to(*args, **kwargs)
         self._ref_values_chi = self._ref_values_chi.to(*args, **kwargs)
@@ -185,11 +189,13 @@ class EMLE(_torch.nn.Module):
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.cuda(**kwargs)
         self._species_map = self._species_map.cuda(**kwargs)
+        self._aev_mask = self._aev_mask.cuda(**kwargs)
         self._q_core = self._q_core.cuda(**kwargs)
+        self._a_QEq = self._a_QEq.cuda(**kwargs)
+        self._a_Thole = self._a_Thole.cuda(**kwargs)
         self._k_Z = self._k_Z.cuda(**kwargs)
         self._q_total = self._q_total.cuda(**kwargs)
         self._ref_features = self._ref_features.cuda(**kwargs)
-        self._aev_mask = self._aev_mask.cuda(**kwargs)
         self._n_ref = self._n_ref.cuda(**kwargs)
         self._ref_values_s = self._ref_values_s.cuda(**kwargs)
         self._ref_values_chi = self._ref_values_chi.cuda(**kwargs)
@@ -206,11 +212,13 @@ class EMLE(_torch.nn.Module):
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.cpu(**kwargs)
         self._species_map = self._species_map.cpu(**kwargs)
+        self._aev_mask = self._aev_mask.cpu(**kwargs)
         self._q_core = self._q_core.cpu(**kwargs)
+        self._a_QEq = self._a_QEq.cpu(**kwargs)
+        self._a_Thole = self._a_Thole.cpu(**kwargs)
         self._k_Z = self._k_Z.cpu(**kwargs)
         self._q_total = self._q_total.cpu(**kwargs)
         self._ref_features = self._ref_features.cpu(**kwargs)
-        self._aev_mask = self._aev_mask.cpu(**kwargs)
         self._n_ref = self._n_ref.cpu(**kwargs)
         self._ref_values_s = self._ref_values_s.cpu(**kwargs)
         self._ref_values_chi = self._ref_values_chi.cpu(**kwargs)
@@ -227,6 +235,8 @@ class EMLE(_torch.nn.Module):
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.double()
         self._q_core = self._q_core.double()
+        self._a_QEq = self._a_QEq.double()
+        self._a_Thole = self._a_Thole.double()
         self._k_Z = self._k_Z.double()
         self._q_total = self._q_total.double()
         self._ref_features = self._ref_features.double()
@@ -245,6 +255,8 @@ class EMLE(_torch.nn.Module):
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.float()
         self._q_core = self._q_core.float()
+        self._a_QEq = self._a_QEq.float()
+        self._a_Thole = self._a_Thole.float()
         self._k_Z = self._k_Z.float()
         self._q_total = self._q_total.float()
         self._ref_features = self._ref_features.float()
