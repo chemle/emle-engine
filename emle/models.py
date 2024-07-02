@@ -154,6 +154,7 @@ class EMLE(_torch.nn.Module):
         """
         Performs Tensor dtype and/or device conversion on the model.
         """
+        super().to(*args, **kwargs)
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.to(*args, **kwargs)
         self._species_map = self._species_map.to(*args, **kwargs)
@@ -177,6 +178,7 @@ class EMLE(_torch.nn.Module):
         """
         Returns a copy of this model in CUDA memory.
         """
+        super().cuda(**kwargs)
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.cuda(**kwargs)
         self._species_map = self._species_map.cuda(**kwargs)
@@ -200,6 +202,7 @@ class EMLE(_torch.nn.Module):
         """
         Returns a copy of this model in CPU memory.
         """
+        super().cpu(**kwargs)
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.cpu(**kwargs)
         self._species_map = self._species_map.cpu(**kwargs)
@@ -223,6 +226,7 @@ class EMLE(_torch.nn.Module):
         """
         Returns a copy of this model in float64 precision.
         """
+        super().double()
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.double()
         self._q_core = self._q_core.double()
@@ -243,6 +247,7 @@ class EMLE(_torch.nn.Module):
         """
         Returns a copy of this model in float32 precision.
         """
+        super().float()
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.float()
         self._q_core = self._q_core.float()
