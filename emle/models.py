@@ -61,16 +61,14 @@ class EMLE(_torch.nn.Module):
             Whether to create an AEV calculator instance.
         """
 
-        # Class attributes.
-
-        # Get the directory of this module file.
-        self._module_dir = _os.path.dirname(_os.path.abspath(__file__))
-
-        # Create the name of the default model file.
-        self._model = _os.path.join(self._module_dir, "emle_qm7_aev_masked.mat")
-
         # Call the base class constructor.
         super().__init__()
+
+        # Get the directory of this module file.
+        module_dir = _os.path.dirname(_os.path.abspath(__file__))
+
+        # Create the name of the default model file.
+        model = _os.path.join(module_dir, "emle_qm7_aev_masked.mat")
 
         if device is not None:
             if not isinstance(device, _torch.device):
@@ -96,16 +94,16 @@ class EMLE(_torch.nn.Module):
 
         # Load the model parameters.
         try:
-            params = _scipy_io.loadmat(self._model, squeeze_me=True)
+            params = _scipy_io.loadmat(model, squeeze_me=True)
         except:
             raise IOError(f"Unable to load model parameters from: '{self._model}'")
 
         # Set the supported species.
-        self._species = [1, 6, 7, 8, 16]
+        species = [1, 6, 7, 8, 16]
 
         # Create a map between species and their indices.
-        self._species_map = _np.zeros(max(self._species) + 1, dtype=_np.int64)
-        for i, s in enumerate(self._species):
+        self._species_map = _np.zeros(max(species) + 1, dtype=_np.int64)
+        for i, s in enumerate(species):
             self._species_map[s] = i
 
         # Convert to a tensor.
