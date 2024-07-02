@@ -96,7 +96,7 @@ class EMLE(_torch.nn.Module):
         try:
             params = _scipy_io.loadmat(model, squeeze_me=True)
         except:
-            raise IOError(f"Unable to load model parameters from: '{self._model}'")
+            raise IOError(f"Unable to load model parameters from: '{model}'")
 
         # Set the supported species.
         species = [1, 6, 7, 8, 16]
