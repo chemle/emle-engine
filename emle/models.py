@@ -136,7 +136,6 @@ class EMLE(_torch.nn.Module):
 
         # Store additional attributes for the MBIS GPR model.
         self._n_ref = _torch.tensor(params["n_ref"], dtype=_torch.int64, device=device)
-        self._n_z = len(self._n_ref)
         self._ref_mean_s = _torch.sum(self._ref_values_s, dim=1) / self._n_ref
         ref_shifted = self._ref_values_s - self._ref_mean_s[:, None]
         self._c_s = (Kinv @ ref_shifted[:, :, None]).squeeze()
@@ -166,7 +165,6 @@ class EMLE(_torch.nn.Module):
         self._q_total = self._q_total.to(*args, **kwargs)
         self._ref_features = self._ref_features.to(*args, **kwargs)
         self._n_ref = self._n_ref.to(*args, **kwargs)
-        self._n_z = self._n_z.to(*args, **kwargs)
         self._ref_values_s = self._ref_values_s.to(*args, **kwargs)
         self._ref_values_chi = self._ref_values_chi.to(*args, **kwargs)
         self._ref_mean_s = self._ref_mean_s.to(*args, **kwargs)
@@ -190,7 +188,6 @@ class EMLE(_torch.nn.Module):
         self._q_total = self._q_total.cuda(**kwargs)
         self._ref_features = self._ref_features.cuda(**kwargs)
         self._n_ref = self._n_ref.cuda(**kwargs)
-        self._n_z = self._n_z.cuda(**kwargs)
         self._ref_values_s = self._ref_values_s.cuda(**kwargs)
         self._ref_values_chi = self._ref_values_chi.cuda(**kwargs)
         self._ref_mean_s = self._ref_mean_s.cuda(**kwargs)
@@ -214,7 +211,6 @@ class EMLE(_torch.nn.Module):
         self._q_total = self._q_total.cpu(**kwargs)
         self._ref_features = self._ref_features.cpu(**kwargs)
         self._n_ref = self._n_ref.cpu(**kwargs)
-        self._n_z = self._n_z.cpu(**kwargs)
         self._ref_values_s = self._ref_values_s.cpu(**kwargs)
         self._ref_values_chi = self._ref_values_chi.cpu(**kwargs)
         self._ref_mean_s = self._ref_mean_s.cpu(**kwargs)
@@ -391,7 +387,7 @@ class EMLE(_torch.nn.Module):
         result = _torch.zeros(
             len(zid), dtype=mol_features.dtype, device=mol_features.device
         )
-        for i in range(self._n_z):
+        for i in range(len(self._n_ref)):
             n_ref = self._n_ref[i]
             ref_features_z = self._ref_features[i, :n_ref]
             mol_features_z = mol_features[zid == i, :, None]
