@@ -150,11 +150,13 @@ class EMLE(_torch.nn.Module):
         ref_shifted = self._ref_values_chi - self._ref_mean_chi[:, None]
         self._c_chi = (Kinv @ ref_shifted[:, :, None]).squeeze()
 
+        # Store the current device.
+        self._device = device
+
     def to(self, *args, **kwargs):
         """
         Performs Tensor dtype and/or device conversion on the model.
         """
-        super().to(*args, **kwargs)
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.to(*args, **kwargs)
         self._species_map = self._species_map.to(*args, **kwargs)
@@ -172,13 +174,19 @@ class EMLE(_torch.nn.Module):
         self._ref_mean_chi = self._ref_mean_chi.to(*args, **kwargs)
         self._c_s = self._c_s.to(*args, **kwargs)
         self._c_chi = self._c_chi.to(*args, **kwargs)
+
+        # Check for a device type in args and update the device attribute.
+        for arg in args:
+            if isinstance(arg, _torch.device):
+                self._device = arg
+                break
+
         return self
 
     def cuda(self, **kwargs):
         """
         Returns a copy of this model in CUDA memory.
         """
-        super().cuda(**kwargs)
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.cuda(**kwargs)
         self._species_map = self._species_map.cuda(**kwargs)
@@ -196,13 +204,16 @@ class EMLE(_torch.nn.Module):
         self._ref_mean_chi = self._ref_mean_chi.cuda(**kwargs)
         self._c_s = self._c_s.cuda(**kwargs)
         self._c_chi = self._c_chi.cuda(**kwargs)
+
+        # Update the device attribute.
+        self._device = self._species_map.device
+
         return self
 
     def cpu(self, **kwargs):
         """
         Returns a copy of this model in CPU memory.
         """
-        super().cpu(**kwargs)
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.cpu(**kwargs)
         self._species_map = self._species_map.cpu(**kwargs)
@@ -220,13 +231,16 @@ class EMLE(_torch.nn.Module):
         self._ref_mean_chi = self._ref_mean_chi.cpu(**kwargs)
         self._c_s = self._c_s.cpu(**kwargs)
         self._c_chi = self._c_chi.cpu(**kwargs)
+
+        # Update the device attribute.
+        self._device = self._species_map.device
+
         return self
 
     def double(self):
         """
         Returns a copy of this model in float64 precision.
         """
-        super().double()
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.double()
         self._q_core = self._q_core.double()
@@ -247,7 +261,6 @@ class EMLE(_torch.nn.Module):
         """
         Returns a copy of this model in float32 precision.
         """
-        super().float()
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.float()
         self._q_core = self._q_core.float()
@@ -864,6 +877,9 @@ class ANI2xEMLE(EMLE):
             # Check that they are integers.
             if atomic_numbers.dtype != _torch.int64:
                 raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
+            self._atomic_numbers = atomic_numbers.to(device)
+        else:
+            self._atomic_numbers = None
 
         # Call the base class constructor.
         super().__init__(device=device, dtype=dtype, create_aev_calculator=False)
@@ -898,11 +914,15 @@ class ANI2xEMLE(EMLE):
                 )
 
             self._ani2x = ani2x_model.to(device)
+            if dtype == _torch.float64:
+                self._ani2x = self._ani2x.double()
         else:
             # Create the ANI2x model.
             self._ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(device)
+            if dtype == _torch.float64:
+                self._ani2x = self._ani2x.double()
 
-            # Optmised the ANI2x model if atomic_numbers is specified.
+            # Optimise the ANI2x model if atomic_numbers are specified.
             if atomic_numbers is not None:
                 try:
                     from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
@@ -940,6 +960,8 @@ class ANI2xEMLE(EMLE):
         """
         module = super(ANI2xEMLE, self).cpu(**kwargs)
         module._ani2x = module._ani2x.cpu(**kwargs)
+        if self._atomic_numbers is not None:
+            module._atomic_numbers = module._atomic_numbers.cpu(**kwargs)
         return module
 
     def cuda(self, **kwargs):
@@ -948,6 +970,8 @@ class ANI2xEMLE(EMLE):
         """
         module = super(ANI2xEMLE, self).cuda(**kwargs)
         module._ani2x = module._ani2x.cuda(**kwargs)
+        if self._atomic_numbers is not None:
+            module._atomic_numbers = module._atomic_numbers.cuda(**kwargs)
         return module
 
     def double(self):
@@ -963,7 +987,20 @@ class ANI2xEMLE(EMLE):
         Returns a copy of this model in float32 precision.
         """
         module = super(ANI2xEMLE, self).float()
-        module._ani2x = module._ani2x.float()
+        # Using .float() or .to(torch.float32) is broken for ANI2x models.
+        module._ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(
+            self._device
+        )
+        # Optimise the ANI2x model if atomic_numbers were specified.
+        if self._atomic_numbers is not None:
+            try:
+                from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
+
+                species = self._atomic_numbers.reshape(1, *atomic_numbers.shape)
+                self._ani2x = _OptimizedTorchANI(self._ani2x, species)
+            except:
+                pass
+
         return module
 
     def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
