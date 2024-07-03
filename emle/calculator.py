@@ -1867,6 +1867,19 @@ class EMLECalculator:
 
         # For performance, we assume that the input is already validated.
 
+        # Update the maximum number of MM atoms if this is the largest seen.
+        num_mm_atoms = len(charges_mm)
+        if num_mm_atoms > self._max_mm_atoms:
+            self._max_mm_atoms = num_mm_atoms
+
+        # Pad the MM coordinates and charges arrays to avoid re-jitting.
+        if self._max_mm_atoms > num_mm_atoms:
+            num_pad = self._max_mm_atoms - num_mm_atoms
+            xyz_mm_pad = num_pad * [[0.0, 0.0, 0.0]]
+            charges_mm_pad = num_pad * [0.0]
+            xyz_mm = _np.append(xyz_mm, xyz_mm_pad, axis=0)
+            charges_mm = _np.append(charges_mm, charges_mm_pad)
+
         # Convert to numpy arrays then Torch tensors.
         atomic_numbers = _torch.tensor(atomic_numbers, device=self._device)
         charges_mm = _torch.tensor(
@@ -1903,15 +1916,13 @@ class EMLECalculator:
                 ani2x_model=self._torchani_model, device=self._device
             )
 
-            # Compile the model.
-            # This needs additional triton and cuda-nvcc dependencies. Will
-            # test when recreating the conda environment.
-            # self._ani2x_emle = _torch.compile(ani2x_emle)
-            self._ani2x_emle = ani2x_emle
+            # Convert to TorchScript.
+            self._ani2x_emle = _torch.jit.script(ani2x_emle).eval()
 
         # Compute the energy and gradients.
-        E = self._ani2x_emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-        dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
+        with _torch.jit.optimized_execution(False):
+            E = self._ani2x_emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
 
         # Convert the energy and gradients to numpy arrays.
         E = E.sum().item() * _HARTREE_TO_KJ_MOL
@@ -1920,7 +1931,7 @@ class EMLECalculator:
         ).tolist()
         force_mm = (
             -dE_dxyz_mm.cpu().numpy() * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_ANGSTROM
-        ).tolist()
+        ).tolist()[:num_mm_atoms]
 
         return E, force_qm, force_mm
 
