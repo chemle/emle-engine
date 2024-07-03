@@ -944,7 +944,11 @@ class ANI2xEMLE(EMLE):
             return hook
 
         # Register the hook.
-        self._aev_hook = self._ani2x.aev_computer.register_forward_hook(hook_wrapper())
+        # TODO: This currently doesn't work with TorchSript since there's no
+        # way to access or assign attributes on another module from within a
+        # forward hook, i.e. ANI2x.aev_computer can't set attributes on this
+        # module. (This works in PyTorch, but not in TorchScript.)
+        # self._aev_hook = self._ani2x.aev_computer.register_forward_hook(hook_wrapper())
 
     def to(self, *args, **kwargs):
         """
@@ -1050,16 +1054,18 @@ class ANI2xEMLE(EMLE):
             zero = _torch.tensor(0.0, dtype=xyz_qm.dtype, device=xyz_qm.device)
             return _torch.stack([E_vac, zero, zero])
 
-        # Normalise the AEVs.
-        self._aev = self._aev / _torch.linalg.norm(
-            self._aev, ord=2, dim=1, keepdim=True
-        )
+        # TODO: This is a temporary fix to get the AEVs. The hook doesn't work
+        # with TorchScript, so we have to compute the AEVs again here.
+
+        # Compute the AEVs.
+        aev = self._ani2x.aev_computer((zid, xyz))[1][0][:, self._aev_mask]
+        aev = aev / _torch.linalg.norm(aev, ord=2, dim=1, keepdim=True)
 
         # Compute the MBIS valence shell widths.
-        s = self._gpr(self._aev, self._ref_mean_s, self._c_s, species_id)
+        s = self._gpr(aev, self._ref_mean_s, self._c_s, species_id)
 
         # Compute the electronegativities.
-        chi = self._gpr(self._aev, self._ref_mean_chi, self._c_chi, species_id)
+        chi = self._gpr(aev, self._ref_mean_chi, self._c_chi, species_id)
 
         # Convert coordinates to Bohr.
         ANGSTROM_TO_BOHR = 1.8897261258369282
