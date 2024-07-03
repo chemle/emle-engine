@@ -1919,7 +1919,8 @@ class EMLECalculator:
             # Convert to TorchScript.
             self._ani2x_emle = _torch.jit.script(ani2x_emle).eval()
 
-        # Compute the energy and gradients.
+        # Compute the energy and gradients. Don't use optimised execution to
+        # avoid warmup costs.
         with _torch.jit.optimized_execution(False):
             E = self._ani2x_emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
             dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
