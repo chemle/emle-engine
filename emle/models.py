@@ -271,22 +271,22 @@ class EMLE(_torch.nn.Module):
         Parameters
         ----------
 
-        atomic_numbers: torch.tensor (N_QM_ATOMS,)
+        atomic_numbers: torch.Tensor (N_QM_ATOMS,)
             Atomic numbers of QM atoms.
 
-        charges_mm: torch.tensor (max_mm_atoms,)
+        charges_mm: torch.Tensor (max_mm_atoms,)
             MM point charges in atomic units.
 
-        xyz_qm: torch.tensor (N_QM_ATOMS, 3)
+        xyz_qm: torch.Tensor (N_QM_ATOMS, 3)
             Positions of QM atoms in Angstrom.
 
-        xyz_mm: torch.tensor (N_MM_ATOMS, 3)
+        xyz_mm: torch.Tensor (N_MM_ATOMS, 3)
             Positions of MM atoms in Angstrom.
 
         Returns
         -------
 
-        result: torch.tensor (2,)
+        result: torch.Tensor (2,)
             The static and induced EMLE energy components in Hartree.
         """
 
@@ -345,7 +345,7 @@ class EMLE(_torch.nn.Module):
         Parameters
         ----------
 
-        ref_features: numpy.array (N_Z, MAX_N_REF, N_FEAT)
+        ref_features: torch.Tensor (N_Z, MAX_N_REF, N_FEAT)
             The basis feature vectors for each species.
 
         sigma: float
@@ -354,7 +354,7 @@ class EMLE(_torch.nn.Module):
         Returns
         -------
 
-        result: numpy.array (MAX_N_REF, MAX_N_REF)
+        result: torch.Tensor (MAX_N_REF, MAX_N_REF)
             The inverse of the K matrix.
         """
         n = ref_features.shape[1]
@@ -379,13 +379,13 @@ class EMLE(_torch.nn.Module):
         c: torch.Tensor (N_Z, MAX_N_REF)
             The coefficients of the GPR model.
 
-        zid: torch.tensor (N_ATOMS,)
+        zid: torch.Tensor (N_ATOMS,)
             The species identity value of each atom.
 
         Returns
         -------
 
-        result: torch.tensor, numpy.array (N_ATOMS)
+        result: torch.Tensor (N_ATOMS)
             The values of the predicted property for each atom.
         """
 
@@ -413,16 +413,16 @@ class EMLE(_torch.nn.Module):
 
         r_data: r_data object (output of self._get_r_data)
 
-        s: torch.tensor (N_ATOMS,)
+        s: torch.Tensor (N_ATOMS,)
             MBIS valence shell widths.
 
-        chi: torch.tensor (N_ATOMS,)
+        chi: torch.Tensor (N_ATOMS,)
             Electronegativities.
 
         Returns
         -------
 
-        result: torch.tensor (N_ATOMS,)
+        result: torch.Tensor (N_ATOMS,)
             Predicted MBIS charges.
         """
         A = self._get_A_QEq(r_data, s)
@@ -439,13 +439,13 @@ class EMLE(_torch.nn.Module):
 
         r_data: r_data object (output of self._get_r_data)
 
-        s: torch.tensor (N_ATOMS,)
+        s: torch.Tensor (N_ATOMS,)
             MBIS valence shell widths.
 
         Returns
         -------
 
-        result: torch.tensor (N_ATOMS + 1, N_ATOMS + 1)
+        result: torch.Tensor (N_ATOMS + 1, N_ATOMS + 1)
         """
         s_gauss = s * self._a_QEq
         s2 = s_gauss**2
@@ -500,22 +500,22 @@ class EMLE(_torch.nn.Module):
 
         mesh_data: mesh_data object (output of self._get_mesh_data)
 
-        q: torch.tensor (N_MM_ATOMS,)
+        q: torch.Tensor (N_MM_ATOMS,)
             MM point charges.
 
-        s: torch.tensor (N_QM_ATOMS,)
+        s: torch.Tensor (N_QM_ATOMS,)
             MBIS valence shell widths.
 
-        q_val: torch.tensor (N_QM_ATOMS,)
+        q_val: torch.Tensor (N_QM_ATOMS,)
             MBIS valence charges.
 
-        k_Z: torch.tensor (N_Z)
+        k_Z: torch.Tensor (N_Z)
             Scaling factors for polarizabilities.
 
         Returns
         -------
 
-        result: torch.tensor (N_ATOMS, 3)
+        result: torch.Tensor (N_ATOMS, 3)
             Array of induced dipoles
         """
         A = self._get_A_thole(r_data, s, q_val, k_Z)
@@ -540,19 +540,19 @@ class EMLE(_torch.nn.Module):
 
         r_data: r_data object (output of self._get_r_data)
 
-        s: torch.tensor (N_ATOMS,)
+        s: torch.Tensor (N_ATOMS,)
             MBIS valence shell widths.
 
-        q_val: torch.tensor (N_ATOMS,)
+        q_val: torch.Tensor (N_ATOMS,)
             MBIS charges.
 
-        k_Z: torch.tensor (N_Z)
+        k_Z: torch.Tensor (N_Z)
             Scaling factors for polarizabilities.
 
         Returns
         -------
 
-        result: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
+        result: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
             The A matrix for induced dipoles prediction.
         """
         v = -60 * q_val * s**3
@@ -581,16 +581,16 @@ class EMLE(_torch.nn.Module):
         Parameters
         ----------
 
-        q: torch.tensor (N_MM_ATOMS,)
+        q: torch.Tensor (N_MM_ATOMS,)
             MM point charges.
 
-        T0: torch.tensor (N_QM_ATOMS, max_mm_atoms)
+        T0: torch.Tensor (N_QM_ATOMS, max_mm_atoms)
             T0 tensor for QM atoms over MM atom positions.
 
         Returns
         -------
 
-        result: torch.tensor (max_mm_atoms)
+        result: torch.Tensor (max_mm_atoms)
             Electrostatic potential over MM atoms.
         """
         return _torch.sum(T0 * q[:, None], dim=0)
@@ -604,16 +604,16 @@ class EMLE(_torch.nn.Module):
         Parameters
         ----------
 
-        mu: torch.tensor (N_ATOMS, 3)
+        mu: torch.Tensor (N_ATOMS, 3)
             Atomic dipoles.
 
-        T1: torch.tensor (N_ATOMS, max_mm_atoms, 3)
+        T1: torch.Tensor (N_ATOMS, max_mm_atoms, 3)
             T1 tensor for QM atoms over MM atom positions.
 
         Returns
         -------
 
-        result: torch.tensor (max_mm_atoms)
+        result: torch.Tensor (max_mm_atoms)
             Electrostatic potential over MM atoms.
         """
         return -_torch.tensordot(T1, mu, ((0, 2), (0, 1)))
@@ -626,7 +626,7 @@ class EMLE(_torch.nn.Module):
         Parameters
         ----------
 
-        xyz: torch.tensor (N_ATOMS, 3)
+        xyz: torch.Tensor (N_ATOMS, 3)
             Atomic positions.
 
         Returns
@@ -669,13 +669,13 @@ class EMLE(_torch.nn.Module):
         Parameters
         ----------
 
-        xyz: torch.tensor (N_ATOMS, 3)
+        xyz: torch.Tensor (N_ATOMS, 3)
             Atomic positions.
 
-        xyz_mesh: torch.tensor (max_mm_atoms, 3)
+        xyz_mesh: torch.Tensor (max_mm_atoms, 3)
             MM positions.
 
-        s: torch.tensor (N_ATOMS,)
+        s: torch.Tensor (N_ATOMS,)
             MBIS valence widths.
         """
         rr = xyz_mesh[None, :, :] - xyz[:, None, :]
@@ -691,16 +691,16 @@ class EMLE(_torch.nn.Module):
         Parameters
         ----------
 
-        r: torch.tensor (N_ATOMS, max_mm_atoms)
+        r: torch.Tensor (N_ATOMS, max_mm_atoms)
             Distances from QM to MM atoms.
 
-        s: torch.tensor (N_ATOMS,)
+        s: torch.Tensor (N_ATOMS,)
             MBIS valence widths.
 
         Returns
         -------
 
-        result: torch.tensor (N_ATOMS, max_mm_atoms)
+        result: torch.Tensor (N_ATOMS, max_mm_atoms)
         """
         return (
             cls._get_T0_slater(r, s) * r
@@ -715,16 +715,16 @@ class EMLE(_torch.nn.Module):
         Parameters
         ----------
 
-        r: torch.tensor (N_ATOMS, max_mm_atoms)
+        r: torch.Tensor (N_ATOMS, max_mm_atoms)
             Distances from QM to MM atoms.
 
-        s: torch.tensor (N_ATOMS,)
+        s: torch.Tensor (N_ATOMS,)
             MBIS valence widths.
 
         Returns
         -------
 
-        results: torch.tensor (N_ATOMS, max_mm_atoms)
+        results: torch.Tensor (N_ATOMS, max_mm_atoms)
         """
         return (1 - (1 + r / (s * 2)) * _torch.exp(-r / s)) / r
 
@@ -736,19 +736,19 @@ class EMLE(_torch.nn.Module):
         Parameters
         ----------
 
-        t01: torch.tensor (N_ATOMS, N_ATOMS)
+        t01: torch.Tensor (N_ATOMS, N_ATOMS)
             T0 tensor for QM atoms.
 
-        r: torch.tensor (N_ATOMS, N_ATOMS)
+        r: torch.Tensor (N_ATOMS, N_ATOMS)
             Distance matrix for QM atoms.
 
-        s_mat: torch.tensor (N_ATOMS, N_ATOMS)
+        s_mat: torch.Tensor (N_ATOMS, N_ATOMS)
             Matrix of Gaussian sigmas for QM atoms.
 
         Returns
         -------
 
-        results: torch.tensor (N_ATOMS, N_ATOMS)
+        results: torch.Tensor (N_ATOMS, N_ATOMS)
         """
         return t01 * _torch.erf(
             r
@@ -766,19 +766,19 @@ class EMLE(_torch.nn.Module):
         Parameters
         ----------
 
-        tr21: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
+        tr21: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
             r_data[2]
 
-        tr21: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
+        tr21: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
             r_data[3]
 
-        au3: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
+        au3: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
             Scaled distance matrix (see _get_A_thole).
 
         Returns
         -------
 
-        result: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
+        result: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
         """
         return cls._lambda3(au3) * tr21 + cls._lambda5(au3) * tr22
 
@@ -791,13 +791,13 @@ class EMLE(_torch.nn.Module):
         Parameters
         ----------
 
-        au3: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
+        au3: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
             Scaled distance matrix (see _get_A_thole).
 
         Returns
         -------
 
-        result: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
+        result: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
         """
         return 1 - _torch.exp(-au3)
 
@@ -810,13 +810,13 @@ class EMLE(_torch.nn.Module):
         Parameters
         ----------
 
-        au3: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
+        au3: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
             Scaled distance matrix (see _get_A_thole).
 
         Returns
         -------
 
-        result: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
+        result: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
         """
         return 1 - (1 + au3) * _torch.exp(-au3)
 
@@ -835,7 +835,7 @@ class ANI2xEMLE(EMLE):
             the ANI2x model from which it derived was created using
             periodic_table_index=True.
 
-        atomic_numbers: torch.tensor (N_ATOMS,)
+        atomic_numbers: torch.Tensor (N_ATOMS,)
             List of atomic numbers to use in the ANI2x model. If specified,
             and NNPOps is available, then an optimised version of ANI2x will
             be used.
@@ -973,22 +973,22 @@ class ANI2xEMLE(EMLE):
         Parameters
         ----------
 
-        atomic_numbers: torch.tensor (N_QM_ATOMS,)
+        atomic_numbers: torch.Tensor (N_QM_ATOMS,)
             Atomic numbers of QM atoms.
 
-        charges_mm: torch.tensor (max_mm_atoms,)
+        charges_mm: torch.Tensor (max_mm_atoms,)
             MM point charges in atomic units.
 
-        xyz_qm: torch.tensor (N_QM_ATOMS, 3)
+        xyz_qm: torch.Tensor (N_QM_ATOMS, 3)
             Positions of QM atoms in Angstrom.
 
-        xyz_mm: torch.tensor (N_MM_ATOMS, 3)
+        xyz_mm: torch.Tensor (N_MM_ATOMS, 3)
             Positions of MM atoms in Angstrom.
 
         Returns
         -------
 
-        result: torch.tensor (3,)
+        result: torch.Tensor (3,)
             The ANI2x and static and induced EMLE energy components in Hartree.
         """
 
