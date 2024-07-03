@@ -102,7 +102,7 @@ class EMLE(_torch.nn.Module):
         species = [1, 6, 7, 8, 16]
 
         # Create a map between species and their indices.
-        self._species_map = _np.zeros(max(species) + 1, dtype=_np.int64)
+        self._species_map = _np.full(max(species) + 1, fill_value=-1, dtype=_np.int64)
         for i, s in enumerate(species):
             self._species_map[s] = i
 
