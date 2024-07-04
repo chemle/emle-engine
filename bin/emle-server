@@ -85,6 +85,10 @@ try:
     qm_xyz_frequency = int(os.getenv("EMLE_QM_XYZ_FREQUENCY"))
 except:
     qm_xyz_frequency = 0
+try:
+    ani2x_model_index = int(os.getenv("EMLE_ANI2X_MODEL_INDEX"))
+except:
+    ani2x_model_index = None
 rascal_model = os.getenv("EMLE_RASCAL_MODEL")
 parm7 = os.getenv("EMLE_PARM7")
 try:
@@ -136,6 +140,7 @@ env = {
     "deepmd_deviation_threshold": deepmd_deviation_threshold,
     "qm_xyz_file": qm_xyz_file,
     "qm_xyz_frequency": qm_xyz_frequency,
+    "ani2x_model_index": ani2x_model_index,
     "rascal_model": rascal_model,
     "lambda_interpolate": lambda_interpolate,
     "interpolate_steps": interpolate_steps,

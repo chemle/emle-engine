@@ -835,12 +835,23 @@ class EMLE(_torch.nn.Module):
 
 
 class ANI2xEMLE(EMLE):
-    def __init__(self, ani2x_model=None, atomic_numbers=None, device=None, dtype=None):
+    def __init__(
+        self,
+        model_index=None,
+        ani2x_model=None,
+        atomic_numbers=None,
+        device=None,
+        dtype=None,
+    ):
         """
         Constructor
 
         Parameters
         ----------
+
+        model_index: int
+            The index of the model to use. If None, then the full 8 model
+            ensemble will be used.
 
         ani2x_model: torchani.models.ANI2x, NNPOPS.OptimizedTorchANI
             An existing ANI2x model to use. If None, a new ANI2x model will be
@@ -859,6 +870,13 @@ class ANI2xEMLE(EMLE):
         dtype: torch.dtype
             The data type to use for the models floating point tensors.
         """
+        if model_index is not None:
+            if not isinstance(model_index, int):
+                raise TypeError("'model_index' must be of type 'int'")
+            if model_index < 0 or model_index > 7:
+                raise ValueError("'model_index' must be in the range [0, 7]")
+        self._model_index = model_index
+
         if device is not None:
             if not isinstance(device, _torch.device):
                 raise TypeError("'device' must be of type 'torch.device'")
@@ -918,7 +936,9 @@ class ANI2xEMLE(EMLE):
                 self._ani2x = self._ani2x.double()
         else:
             # Create the ANI2x model.
-            self._ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(device)
+            self._ani2x = _torchani.models.ANI2x(
+                periodic_table_index=True, model_index=model_index
+            ).to(device)
             if dtype == _torch.float64:
                 self._ani2x = self._ani2x.double()
 
@@ -994,9 +1014,9 @@ class ANI2xEMLE(EMLE):
         """
         module = super(ANI2xEMLE, self).float()
         # Using .float() or .to(torch.float32) is broken for ANI2x models.
-        module._ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(
-            self._device
-        )
+        module._ani2x = _torchani.models.ANI2x(
+            periodic_table_index=True, model_index=self._model_index
+        ).to(self._device)
         # Optimise the ANI2x model if atomic_numbers were specified.
         if self._atomic_numbers is not None:
             try:

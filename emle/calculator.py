@@ -266,6 +266,7 @@ class EMLECalculator:
         deepmd_deviation_threshold=None,
         qm_xyz_file="qm.xyz",
         qm_xyz_frequency=0,
+        ani2x_model_index=None,
         rascal_model=None,
         parm7=None,
         qm_indices=None,
@@ -345,6 +346,10 @@ class EMLECalculator:
         qm_xyz_frequency: int
             How often to write the xyz trajectory of the QM region. Zero turns
             off writing.
+
+        ani2x_model_index: int
+            The index of the ANI model to use when using the TorchANI backend.
+            If None, then the full 8 model ensemble is used.
 
         rascal_model: str
             Path to the Rascal model file used to apply delta-learning corrections
@@ -1020,10 +1025,25 @@ class EMLECalculator:
         if self._backend == "torchani":
             import torchani as _torchani
 
+            if ani2x_model_index is not None:
+                try:
+                    ani2x_model_index = int(ani2x_model_index)
+                except:
+                    msg = "'ani2x_model_index' must be of type 'int'"
+                    _logger.error(msg)
+                    raise TypeError(msg)
+
+                if ani2x_model_index < 0 or ani2x_model_index > 7:
+                    msg = "'ani2x_model_index' must be between 0 and 7"
+                    _logger.error(msg)
+                    raise ValueError(msg)
+
+            self._ani2x_model_index = ani2x_model_index
+
             # Create the TorchANI model.
-            self._torchani_model = _torchani.models.ANI2x(periodic_table_index=True).to(
-                self._device
-            )
+            self._torchani_model = _torchani.models.ANI2x(
+                periodic_table_index=True, model_index=ani2x_model_index
+            ).to(self._device)
 
             try:
                 import NNPOps as _NNPOps
@@ -1123,6 +1143,7 @@ class EMLECalculator:
             "deepmd_deviation_threshold": deepmd_deviation_threshold,
             "qm_xyz_file": qm_xyz_file,
             "qm_xyz_frequency": qm_xyz_frequency,
+            "ani2x_model_index": ani2x_model_index,
             "rascal_model": rascal_model,
             "parm7": parm7,
             "qm_indices": None if qm_indices is None else self._qm_indices,
