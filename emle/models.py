@@ -932,6 +932,10 @@ class ANI2xEMLE(EMLE):
                 except:
                     pass
 
+        # Assign a tensor attribute that can be used for assigning the AEVs.
+        # TODO: Only required when forward hook works with TorchANI.
+        # self._ani2x.aev_computer._aev = _torch.empty(0, device=device)
+
         # Hook the forward pass of the ANI2x model to get the AEV features.
         def hook_wrapper():
             def hook(
@@ -939,15 +943,13 @@ class ANI2xEMLE(EMLE):
                 input: Tuple[Tuple[Tensor, Tensor], Optional[Tensor], Optional[Tensor]],
                 output: _torchani.aev.SpeciesAEV,
             ):
-                self._aev = output[1][0][:, self._aev_mask]
+                module._aev = output[1][0]
 
             return hook
 
         # Register the hook.
-        # TODO: This currently doesn't work with TorchSript since there's no
-        # way to access or assign attributes on another module from within a
-        # forward hook, i.e. ANI2x.aev_computer can't set attributes on this
-        # module. (This works in PyTorch, but not in TorchScript.)
+        # TODO: This currently doesn't work with TorchANI since some args are
+        # passed to the AEVComputer's forward method as kwargs.
         # self._aev_hook = self._ani2x.aev_computer.register_forward_hook(hook_wrapper())
 
     def to(self, *args, **kwargs):
@@ -1056,6 +1058,8 @@ class ANI2xEMLE(EMLE):
 
         # TODO: This is a temporary fix to get the AEVs. The hook doesn't work
         # with TorchScript, so we have to compute the AEVs again here.
+        # aev = self._ani2x.aev_computer._aev[:, self._aev_mask]
+        # aev = aev / _torch.linalg.norm(aev, ord=2, dim=1, keepdim=True)
 
         # Compute the AEVs.
         aev = self._ani2x.aev_computer((zid, xyz))[1][0][:, self._aev_mask]
