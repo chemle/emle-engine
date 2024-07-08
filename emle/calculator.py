@@ -1025,6 +1025,14 @@ class EMLECalculator:
         if self._backend == "torchani":
             import torchani as _torchani
 
+            from . import _torchani_patch
+
+            # Monkey-patch the TorchANI BuiltInModel and BuiltinEnsemble classes so that
+            # they call self.aev_computer using args only to allow forward hooks to work
+            # with TorchScript.
+            _torchani.models.BuiltinModel = _torchani_patch.BuiltinModel
+            _torchani.models.BuiltinEnsemble = _torchani_patch.BuiltinEnsemble
+
             if ani2x_model_index is not None:
                 try:
                     ani2x_model_index = int(ani2x_model_index)

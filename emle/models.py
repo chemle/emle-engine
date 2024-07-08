@@ -37,6 +37,14 @@ import torchani as _torchani
 from torch import Tensor
 from typing import Optional, Tuple
 
+from . import _torchani_patch
+
+# Monkey-patch the TorchANI BuiltInModel and BuiltinEnsemble classes so that
+# they call self.aev_computer using args only to allow forward hooks to work
+# with TorchScript.
+_torchani.models.BuiltinModel = _torchani_patch.BuiltinModel
+_torchani.models.BuiltinEnsemble = _torchani_patch.BuiltinEnsemble
+
 
 class EMLE(_torch.nn.Module):
     """
@@ -953,8 +961,7 @@ class ANI2xEMLE(EMLE):
                     pass
 
         # Assign a tensor attribute that can be used for assigning the AEVs.
-        # TODO: Only required when forward hook works with TorchANI.
-        # self._ani2x.aev_computer._aev = _torch.empty(0, device=device)
+        self._ani2x.aev_computer._aev = _torch.empty(0, device=device)
 
         # Hook the forward pass of the ANI2x model to get the AEV features.
         def hook_wrapper():
@@ -967,10 +974,9 @@ class ANI2xEMLE(EMLE):
 
             return hook
 
-        # Register the hook.
-        # TODO: This currently doesn't work with TorchANI since some args are
-        # passed to the AEVComputer's forward method as kwargs.
-        # self._aev_hook = self._ani2x.aev_computer.register_forward_hook(hook_wrapper())
+        # Register the hook. Note that this currently requires a patched version of
+        # torchani.models.BuiltinModel and torchani.models.BuiltinEnsemble to work.
+        self._aev_hook = self._ani2x.aev_computer.register_forward_hook(hook_wrapper())
 
     def to(self, *args, **kwargs):
         """
@@ -1076,13 +1082,8 @@ class ANI2xEMLE(EMLE):
             zero = _torch.tensor(0.0, dtype=xyz_qm.dtype, device=xyz_qm.device)
             return _torch.stack([E_vac, zero, zero])
 
-        # TODO: This is a temporary fix to get the AEVs. The hook doesn't work
-        # with TorchScript, so we have to compute the AEVs again here.
-        # aev = self._ani2x.aev_computer._aev[:, self._aev_mask]
-        # aev = aev / _torch.linalg.norm(aev, ord=2, dim=1, keepdim=True)
-
-        # Compute the AEVs.
-        aev = self._ani2x.aev_computer((zid, xyz))[1][0][:, self._aev_mask]
+        # Get the AEVs computer by the forward hook and normalise.
+        aev = self._ani2x.aev_computer._aev[:, self._aev_mask]
         aev = aev / _torch.linalg.norm(aev, ord=2, dim=1, keepdim=True)
 
         # Compute the MBIS valence shell widths.
