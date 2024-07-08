@@ -1925,10 +1925,14 @@ class EMLECalculator:
         if self._ani2x_emle is None:
             # Apply NNPOps optimisations if available.
             try:
-                from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
+                import NNPOps as _NNPOps
+
+                from ._torchani_patch import OptimizedTorchANI as _OptimizedTorchANI
+
+                _NNPOps.OptimizedTorchANI = _OptimizedTorchANI
 
                 # Optimise the TorchANI model.
-                self._torchani_model = _OptimizedTorchANI(
+                self._torchani_model = _NNPOps.OptimizedTorchANI(
                     self._torchani_model,
                     atomic_numbers.reshape(-1, *atomic_numbers.shape),
                 ).to(self._device)

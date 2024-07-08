@@ -45,6 +45,13 @@ from . import _torchani_patch
 _torchani.models.BuiltinModel = _torchani_patch.BuiltinModel
 _torchani.models.BuiltinEnsemble = _torchani_patch.BuiltinEnsemble
 
+try:
+    import NNPOps as _NNPOps
+
+    _NNPOps.OptimizedTorchANI = _torchani_patch.OptimizedTorchANI
+except:
+    pass
+
 
 class EMLE(_torch.nn.Module):
     """
@@ -919,8 +926,6 @@ class ANI2xEMLE(EMLE):
 
             # Add the optimised model if NNPOps is available.
             try:
-                import NNPOps as _NNPOps
-
                 allowed_types.append(_NNPOps.OptimizedTorchANI)
             except:
                 pass
@@ -953,10 +958,8 @@ class ANI2xEMLE(EMLE):
             # Optimise the ANI2x model if atomic_numbers are specified.
             if atomic_numbers is not None:
                 try:
-                    from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
-
                     species = atomic_numbers.reshape(1, *atomic_numbers.shape)
-                    self._ani2x = _OptimizedTorchANI(self._ani2x, species)
+                    self._ani2x = _NNPOps.OptimizedTorchANI(self._ani2x, species)
                 except:
                     pass
 
@@ -964,7 +967,18 @@ class ANI2xEMLE(EMLE):
         self._ani2x.aev_computer._aev = _torch.empty(0, device=device)
 
         # Hook the forward pass of the ANI2x model to get the AEV features.
-        def hook_wrapper():
+        # Note that this currently requires a patched versions of TorchANI and NNPOps.
+        if isinstance(self._ani2x, _NNPOps.OptimizedTorchANI):
+
+            def hook(
+                module,
+                input: Tuple[Tuple[Tensor, Tensor], Optional[Tensor], Optional[Tensor]],
+                output: Tuple[Tensor, Tensor],
+            ):
+                module._aev = output[1][0]
+
+        else:
+
             def hook(
                 module,
                 input: Tuple[Tuple[Tensor, Tensor], Optional[Tensor], Optional[Tensor]],
@@ -972,11 +986,8 @@ class ANI2xEMLE(EMLE):
             ):
                 module._aev = output[1][0]
 
-            return hook
-
-        # Register the hook. Note that this currently requires a patched version of
-        # torchani.models.BuiltinModel and torchani.models.BuiltinEnsemble to work.
-        self._aev_hook = self._ani2x.aev_computer.register_forward_hook(hook_wrapper())
+        # Register the hook.
+        self._aev_hook = self._ani2x.aev_computer.register_forward_hook(hook)
 
     def to(self, *args, **kwargs):
         """
