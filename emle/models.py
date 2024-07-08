@@ -959,7 +959,9 @@ class ANI2xEMLE(EMLE):
             if atomic_numbers is not None:
                 try:
                     species = atomic_numbers.reshape(1, *atomic_numbers.shape)
-                    self._ani2x = _NNPOps.OptimizedTorchANI(self._ani2x, species)
+                    self._ani2x = _NNPOps.OptimizedTorchANI(self._ani2x, species).to(
+                        device
+                    )
                 except:
                     pass
 
@@ -1040,7 +1042,7 @@ class ANI2xEMLE(EMLE):
                 from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
 
                 species = self._atomic_numbers.reshape(1, *atomic_numbers.shape)
-                self._ani2x = _OptimizedTorchANI(self._ani2x, species)
+                self._ani2x = _OptimizedTorchANI(self._ani2x, species).to(self._device)
             except:
                 pass
 
