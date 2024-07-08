@@ -37,18 +37,18 @@ import torchani as _torchani
 from torch import Tensor
 from typing import Optional, Tuple
 
-from . import _torchani_patch
+from . import _torchani_patches
 
 # Monkey-patch the TorchANI BuiltInModel and BuiltinEnsemble classes so that
 # they call self.aev_computer using args only to allow forward hooks to work
 # with TorchScript.
-_torchani.models.BuiltinModel = _torchani_patch.BuiltinModel
-_torchani.models.BuiltinEnsemble = _torchani_patch.BuiltinEnsemble
+_torchani.models.BuiltinModel = _torchani_patches.BuiltinModel
+_torchani.models.BuiltinEnsemble = _torchani_patches.BuiltinEnsemble
 
 try:
     import NNPOps as _NNPOps
 
-    _NNPOps.OptimizedTorchANI = _torchani_patch.OptimizedTorchANI
+    _NNPOps.OptimizedTorchANI = _torchani_patches.OptimizedTorchANI
 except:
     pass
 
