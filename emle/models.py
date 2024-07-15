@@ -117,56 +117,65 @@ class EMLE(_torch.nn.Module):
         species = [1, 6, 7, 8, 16]
 
         # Create a map between species and their indices.
-        self._species_map = _np.full(max(species) + 1, fill_value=-1, dtype=_np.int64)
+        species_map = _np.full(max(species) + 1, fill_value=-1, dtype=_np.int64)
         for i, s in enumerate(species):
-            self._species_map[s] = i
+            species_map[s] = i
 
         # Convert to a tensor.
-        self._species_map = _torch.tensor(
-            self._species_map, dtype=_torch.int64, device=device
-        )
+        species_map = _torch.tensor(species_map, dtype=_torch.int64, device=device)
 
         # Store model parameters as tensors.
-        self._aev_mask = _torch.tensor(
-            params["aev_mask"], dtype=_torch.bool, device=device
-        )
-        self._q_core = _torch.tensor(params["q_core"], dtype=dtype, device=device)
-        self._a_QEq = _torch.tensor(params["a_QEq"], dtype=dtype, device=device)
-        self._a_Thole = _torch.tensor(params["a_Thole"], dtype=dtype, device=device)
-        self._k_Z = _torch.tensor(params["k_Z"], dtype=dtype, device=device)
-        self._q_total = _torch.tensor(
+        aev_mask = _torch.tensor(params["aev_mask"], dtype=_torch.bool, device=device)
+        q_core = _torch.tensor(params["q_core"], dtype=dtype, device=device)
+        a_QEq = _torch.tensor(params["a_QEq"], dtype=dtype, device=device)
+        a_Thole = _torch.tensor(params["a_Thole"], dtype=dtype, device=device)
+        k_Z = _torch.tensor(params["k_Z"], dtype=dtype, device=device)
+        q_total = _torch.tensor(
             params.get("total_charge", 0), dtype=dtype, device=device
         )
 
         # Extract the reference features.
-        self._ref_features = _torch.tensor(
-            params["ref_soap"], dtype=dtype, device=device
-        )
+        ref_features = _torch.tensor(params["ref_soap"], dtype=dtype, device=device)
 
         # Extract the reference values for the MBIS valence shell widths.
-        self._ref_values_s = _torch.tensor(params["s_ref"], dtype=dtype, device=device)
+        ref_values_s = _torch.tensor(params["s_ref"], dtype=dtype, device=device)
 
         # Compute the inverse of the K matrix.
-        Kinv = self._get_Kinv(self._ref_features, 1e-3)
+        Kinv = self._get_Kinv(ref_features, 1e-3)
 
         # Store additional attributes for the MBIS GPR model.
-        self._n_ref = _torch.tensor(params["n_ref"], dtype=_torch.int64, device=device)
-        self._ref_mean_s = _torch.sum(self._ref_values_s, dim=1) / self._n_ref
-        ref_shifted = self._ref_values_s - self._ref_mean_s[:, None]
-        self._c_s = (Kinv @ ref_shifted[:, :, None]).squeeze()
+        n_ref = _torch.tensor(params["n_ref"], dtype=_torch.int64, device=device)
+        ref_mean_s = _torch.sum(ref_values_s, dim=1) / n_ref
+        ref_shifted = ref_values_s - ref_mean_s[:, None]
+        c_s = (Kinv @ ref_shifted[:, :, None]).squeeze()
 
         # Exctract the reference values for the electronegativities.
-        self._ref_values_chi = _torch.tensor(
-            params["chi_ref"], dtype=dtype, device=device
-        )
+        ref_values_chi = _torch.tensor(params["chi_ref"], dtype=dtype, device=device)
 
         # Store additional attributes for the electronegativity GPR model.
-        self._ref_mean_chi = _torch.sum(self._ref_values_chi, dim=1) / self._n_ref
-        ref_shifted = self._ref_values_chi - self._ref_mean_chi[:, None]
-        self._c_chi = (Kinv @ ref_shifted[:, :, None]).squeeze()
+        ref_mean_chi = _torch.sum(ref_values_chi, dim=1) / n_ref
+        ref_shifted = ref_values_chi - ref_mean_chi[:, None]
+        c_chi = (Kinv @ ref_shifted[:, :, None]).squeeze()
 
         # Store the current device.
         self._device = device
+
+        # Register constants as buffers.
+        self.register_buffer("_species_map", species_map)
+        self.register_buffer("_aev_mask", aev_mask)
+        self.register_buffer("_q_core", q_core)
+        self.register_buffer("_a_QEq", a_QEq)
+        self.register_buffer("_a_Thole", a_Thole)
+        self.register_buffer("_k_Z", k_Z)
+        self.register_buffer("_q_total", q_total)
+        self.register_buffer("_ref_features", ref_features)
+        self.register_buffer("_n_ref", n_ref)
+        self.register_buffer("_ref_values_s", ref_values_s)
+        self.register_buffer("_ref_values_chi", ref_values_chi)
+        self.register_buffer("_ref_mean_s", ref_mean_s)
+        self.register_buffer("_ref_mean_chi", ref_mean_chi)
+        self.register_buffer("_c_s", c_s)
+        self.register_buffer("_c_chi", c_chi)
 
     def to(self, *args, **kwargs):
         """
