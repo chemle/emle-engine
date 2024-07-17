@@ -49,7 +49,10 @@ try:
     import NNPOps as _NNPOps
 
     _NNPOps.OptimizedTorchANI = _torchani_patches.OptimizedTorchANI
+
+    _has_nnpops = True
 except:
+    _has_nnpops = False
     pass
 
 
@@ -979,7 +982,7 @@ class ANI2xEMLE(EMLE):
 
         # Hook the forward pass of the ANI2x model to get the AEV features.
         # Note that this currently requires a patched versions of TorchANI and NNPOps.
-        if isinstance(self._ani2x, _NNPOps.OptimizedTorchANI):
+        if _has_nnpops and isinstance(self._ani2x, _NNPOps.OptimizedTorchANI):
 
             def hook(
                 module,
