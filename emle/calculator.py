@@ -1324,7 +1324,7 @@ class EMLECalculator:
 
             # No backend.
             else:
-                E_vac, grad_vac = 0.0, _np.zeros_like(xyz_qm)
+                E_vac, grad_vac = _np.zeros(1), _np.zeros_like(xyz_qm)
 
         # External backend.
         else:
@@ -1704,7 +1704,7 @@ class EMLECalculator:
 
             # No backend.
             else:
-                E_vac, grad_vac = 0.0, _np.zeros_like(xyz_qm)
+                E_vac, grad_vac = _np.zeros(1), _np.zeros_like(xyz_qm)
 
         # External backend.
         else:
