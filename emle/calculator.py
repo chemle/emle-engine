@@ -1114,14 +1114,14 @@ class EMLECalculator:
         )
         self._get_s = _GPRCalculator(
             self._params["s_ref"],
-            self._params["ref_soap"],
+            self._params["ref_aev"],
             self._params["n_ref"],
             1e-3,
             self._device,
         )
         self._get_chi = _GPRCalculator(
             self._params["chi_ref"],
-            self._params["ref_soap"],
+            self._params["ref_aev"],
             self._params["n_ref"],
             1e-3,
             self._device,
