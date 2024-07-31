@@ -1134,7 +1134,9 @@ class EMLECalculator:
             self._aev_computer = ani2x.aev_computer
 
         # Create the AEVCaclulator.
-        aev_mask = _torch.tensor(self._params["aev_mask"], dtype=_torch.bool, device=self._device)
+        aev_mask = _torch.tensor(
+            self._params["aev_mask"], dtype=_torch.bool, device=self._device
+        )
         self._get_features = _AEVCalculator(self._aev_computer, aev_mask)
 
         self._q_core = _torch.tensor(
