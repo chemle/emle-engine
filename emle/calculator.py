@@ -2011,20 +2011,28 @@ class EMLECalculator:
             # Convert to TorchScript.
             self._ani2x_emle = _torch.jit.script(ani2x_emle).eval()
 
+        # Are there any MM atoms?
+        allow_unused = len(charges_mm) == 0
+
         # Compute the energy and gradients. Don't use optimised execution to
         # avoid warmup costs.
         with _torch.jit.optimized_execution(False):
             E = self._ani2x_emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
+            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
+                E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
+            )
 
         # Convert the energy and gradients to numpy arrays.
         E = E.sum().item() * _HARTREE_TO_KJ_MOL
         force_qm = (
             -dE_dxyz_qm.cpu().numpy() * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_ANGSTROM
         ).tolist()
-        force_mm = (
-            -dE_dxyz_mm.cpu().numpy() * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_ANGSTROM
-        ).tolist()[:num_mm_atoms]
+        if not allow_unused:
+            force_mm = (
+                -dE_dxyz_mm.cpu().numpy() * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_ANGSTROM
+            ).tolist()[:num_mm_atoms]
+        else:
+            force_mm = []
 
         return E, force_qm, force_mm
 
