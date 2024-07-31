@@ -224,8 +224,11 @@ class EMLECalculator:
     # Get the directory of this module file.
     _module_dir = _os.path.dirname(_os.path.abspath(__file__))
 
-    # Create the name of the default model file.
-    _default_model = _os.path.join(_module_dir, "emle_qm7_aev.mat")
+    # Create the name of the default model file for each alpha mode.
+    _default_models = {
+        "species": _os.path.join(_module_dir, "/resources/emle_qm7_aev.mat"),
+        "reference": _os.path.join(_module_dir, "/resources/emle_qm7_aev_alphagpr.mat"),
+    }
 
     # Store the list of supported species.
     _species = [1, 6, 7, 8, 16]
@@ -484,6 +487,22 @@ class EMLECalculator:
         _logger.remove()
         _logger.add(self._log_file, level=self._log_level)
 
+        # Validate the alpha mode first so that we can choose an appropriate
+        # default model.
+        if not isinstance(alpha_mode, str):
+            msg = "'alpha_mode' must be of type 'str'"
+            _logger.error(msg)
+            raise TypeError(msg)
+
+        # Convert to lower case and strip whitespace.
+        alpha_mode = alpha_mode.lower().replace(" ", "")
+
+        if alpha_mode not in ["species", "reference"]:
+            msg = "'alpha_mode' must be either 'species' or 'reference'"
+            _logger.error(msg)
+            raise ValueError(msg)
+        self._alpha_mode = alpha_mode
+
         if model is not None:
             if not isinstance(model, str):
                 msg = "'model' must be of type 'str'"
@@ -499,7 +518,8 @@ class EMLECalculator:
                 raise IOError(msg)
             self._model = abs_model
         else:
-            self._model = self._default_model
+            # Choose the default model based on the alpha mode.
+            self._model = self._default_models[self._alpha_mode]
 
         if method is None:
             method = "electrostatic"
@@ -564,21 +584,6 @@ class EMLECalculator:
             msg = f"Unable to load model parameters from: '{self._model}'"
             _logger.error(msg)
             raise IOError(msg)
-
-        # Validate the alpha mode.
-        if not isinstance(alpha_mode, str):
-            msg = "'alpha_mode' must be of type 'str'"
-            _logger.error(msg)
-            raise TypeError(msg)
-
-        # Convert to lower case and strip whitespace.
-        alpha_mode = alpha_mode.lower().replace(" ", "")
-
-        if alpha_mode not in ["species", "reference"]:
-            msg = "'alpha_mode' must be either 'species' or 'reference'"
-            _logger.error(msg)
-            raise ValueError(msg)
-        self._alpha_mode = alpha_mode
 
         if backend is not None:
             if not isinstance(backend, str):
