@@ -6,17 +6,13 @@ channels:
 dependencies:
   - ambertools
   - ase
-  - compilers
   - deepmd-kit
-  - eigen
   - loguru
   - pip
   - psutil
-  - pybind11
+  - pygit2
   - pytorch
-  - python < 3.11
+  - python
   - pyyaml
   - torchani
   - xtb-python
-  - pip:
-    - git+https://github.com/lab-cosmo/librascal.git
