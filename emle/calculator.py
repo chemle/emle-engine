@@ -1156,7 +1156,7 @@ class EMLECalculator:
             1e-3,
             self._device,
         )
-        if self._alpha_mode == 'reference':
+        if self._alpha_mode == "reference":
             self._get_sqrtk = _GPRCalculator(
                 self._params["sqrtk_ref"],
                 self._params["ref_aev"],
@@ -2069,7 +2069,7 @@ class EMLECalculator:
         else:
             q_core = self._q_core_mm
 
-        if self._alpha_mode == 'species':
+        if self._alpha_mode == "species":
             k = self._k_Z[self._species_id]
         else:
             k = self._get_sqrtk(mol_features, self._species_id) ** 2
