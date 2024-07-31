@@ -59,6 +59,7 @@ except:
     port = None
 model = os.getenv("EMLE_MODEL")
 method = os.getenv("EMLE_METHOD")
+alpha_mode = os.getenv("EMLE_ALPHA_MODE")
 mm_charges = os.getenv("EMLE_MM_CHARGES")
 try:
     num_clients = int(os.getenv("EMLE_NUM_CLIENTS"))
@@ -129,6 +130,7 @@ env = {
     "port": port,
     "model": model,
     "method": method,
+    "alpha_mode": alpha_mode,
     "mm_charges": mm_charges,
     "num_clients": num_clients,
     "backend": backend,
@@ -187,6 +189,13 @@ parser.add_argument(
     type=str,
     help="the embedding method to use",
     choices=["electrostatic", "mechanical", "nonpol", "mm"],
+    required=False,
+)
+parser.add_argument(
+    "--alpha-mode",
+    type=str,
+    help="the alpha mode to use for the embedding method",
+    choices=["species", "reference"],
     required=False,
 )
 parser.add_argument(
