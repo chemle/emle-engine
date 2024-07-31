@@ -2051,13 +2051,13 @@ class EMLECalculator:
             q_val = _torch.zeros_like(q_core, dtype=_torch.float32, device=self._device)
         else:
             q_val = _torch.zeros_like(q_core, dtype=_torch.float32, device=self._device)
-        mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k_Z)
         vpot_q_core = self._get_vpot_q(q_core, mesh_data["T0_mesh"])
         vpot_q_val = self._get_vpot_q(q_val, mesh_data["T0_mesh_slater"])
         vpot_static = vpot_q_core + vpot_q_val
         E_static = _torch.sum(vpot_static @ charges_mm)
 
         if self._method == "electrostatic":
+            mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k_Z)
             vpot_ind = self._get_vpot_mu(mu_ind, mesh_data["T1_mesh"])
             E_ind = _torch.sum(vpot_ind @ charges_mm) * 0.5
         else:
