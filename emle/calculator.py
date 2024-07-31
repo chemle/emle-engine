@@ -2176,7 +2176,6 @@ class EMLECalculator:
         ).flatten()
 
         mu_ind = _torch.linalg.solve(A, fields)
-        E_ind = mu_ind @ fields * 0.5
         return mu_ind.reshape((-1, 3))
 
     def _get_A_thole(self, r_data, s, q_val, k_Z):
