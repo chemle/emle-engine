@@ -257,6 +257,7 @@ class EMLECalculator:
         self,
         model=None,
         method="electrostatic",
+        alpha_mode="species",
         backend="torchani",
         external_backend=None,
         plugin_path=".",
@@ -309,6 +310,14 @@ class EMLECalculator:
             The backend to use to compute in vacuo energies and gradients. If None,
             then no backend will be used, allowing you to obtain the electrostatic
             embedding energy and gradients only.
+
+        alpha_mode: str
+            How atomic polarizabilities are calculated.
+                "species":
+                    one volume scaling factor is used for each species
+                "reference":
+                    scaling factors are obtained with GPR using the values learned
+                    for each reference environment
 
         external_backend: str
             The name of an external backend to use to compute in vacuo energies.
@@ -555,6 +564,12 @@ class EMLECalculator:
             msg = f"Unable to load model parameters from: '{self._model}'"
             _logger.error(msg)
             raise IOError(msg)
+
+        if alpha_mode not in ["species", "reference"]:
+            msg = "'alpha_mode' must be either 'species' or 'reference'"
+            _logger.error(msg)
+            raise ValueError(msg)
+        self._alpha_mode = alpha_mode
 
         if backend is not None:
             if not isinstance(backend, str):
@@ -1104,9 +1119,15 @@ class EMLECalculator:
             )
         self._a_QEq = self._params["a_QEq"]
         self._a_Thole = self._params["a_Thole"]
-        self._k_Z = _torch.tensor(
-            self._params["k_Z"], dtype=_torch.float32, device=self._device
-        )
+        if self._alpha_mode == "species":
+            self._k_Z = _torch.tensor(
+                self._params["k_Z"], dtype=_torch.float32, device=self._device
+            )
+        else:
+            self.sqrtk_ref = _torch.tensor(
+                self._params["sqrtk_ref"], dtype=_torch.float32, device=self._device
+            )
+
         self._q_total = _torch.tensor(
             self._params.get("total_charge", 0),
             dtype=_torch.float32,
@@ -1114,18 +1135,26 @@ class EMLECalculator:
         )
         self._get_s = _GPRCalculator(
             self._params["s_ref"],
-            self._params["ref_soap"],
+            self._params["ref_aev"],
             self._params["n_ref"],
             1e-3,
             self._device,
         )
         self._get_chi = _GPRCalculator(
             self._params["chi_ref"],
-            self._params["ref_soap"],
+            self._params["ref_aev"],
             self._params["n_ref"],
             1e-3,
             self._device,
         )
+        if self._alpha_mode == 'reference':
+            self._get_sqrtk = _GPRCalculator(
+                self._params["sqrtk_ref"],
+                self._params["ref_aev"],
+                self._params["n_ref"],
+                1e-3,
+                self._device,
+            )
 
         # Initialise the maximum number of MM atom that have been seen.
         self._max_mm_atoms = 0
@@ -1143,6 +1172,7 @@ class EMLECalculator:
         self._settings = {
             "model": None if model is None else self._model,
             "method": self._method,
+            "alpha_mode": self._alpha_mode,
             "backend": self._backend,
             "external_backend": None if external_backend is None else external_backend,
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),
@@ -2029,7 +2059,12 @@ class EMLECalculator:
             q_core = self._q_core[self._species_id]
         else:
             q_core = self._q_core_mm
-        k_Z = self._k_Z[self._species_id]
+
+        if self._alpha_mode == 'species':
+            k = self._k_Z[self._species_id]
+        else:
+            k = self._get_sqrtk(mol_features, self._species_id) ** 2
+
         r_data = self._get_r_data(xyz_qm_bohr, self._device)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
         if self._method in ["electrostatic", "nonpol"]:
@@ -2040,7 +2075,7 @@ class EMLECalculator:
             q_val = _torch.zeros_like(q_core, dtype=_torch.float32, device=self._device)
         else:
             q_val = _torch.zeros_like(q_core, dtype=_torch.float32, device=self._device)
-        mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k_Z)
+        mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k)
         vpot_q_core = self._get_vpot_q(q_core, mesh_data["T0_mesh"])
         vpot_q_val = self._get_vpot_q(q_val, mesh_data["T0_mesh_slater"])
         vpot_static = vpot_q_core + vpot_q_val
@@ -2126,7 +2161,7 @@ class EMLECalculator:
 
         return B
 
-    def _get_mu_ind(self, r_data, mesh_data, q, s, q_val, k_Z):
+    def _get_mu_ind(self, r_data, mesh_data, q, s, q_val, k):
         """
         Internal method, calculates induced atomic dipoles
         (Eq. 20 in 10.1021/acs.jctc.2c00914)
@@ -2147,7 +2182,7 @@ class EMLECalculator:
         q_val: torch.tensor (N_ATOMS,)
             MBIS valence charges.
 
-        k_Z: torch.tensor (N_Z)
+        k: torch.tensor (N_Z)
             Scaling factors for polarizabilities.
 
         Returns
@@ -2156,7 +2191,7 @@ class EMLECalculator:
         result: torch.tensor (N_ATOMS, 3)
             Array of induced dipoles
         """
-        A = self._get_A_thole(r_data, s, q_val, k_Z)
+        A = self._get_A_thole(r_data, s, q_val, k)
 
         r = 1.0 / mesh_data["T0_mesh"]
         f1 = self._get_f1_slater(r, s[:, None] * 2.0)
@@ -2168,7 +2203,7 @@ class EMLECalculator:
         E_ind = mu_ind @ fields * 0.5
         return mu_ind.reshape((-1, 3))
 
-    def _get_A_thole(self, r_data, s, q_val, k_Z):
+    def _get_A_thole(self, r_data, s, q_val, k):
         """
         Internal method, generates A matrix for induced dipoles prediction
         (Eq. 20 in 10.1021/acs.jctc.2c00914)
@@ -2184,7 +2219,7 @@ class EMLECalculator:
         q_val: torch.tensor (N_ATOMS,)
             MBIS charges.
 
-        k_Z: torch.tensor (N_Z)
+        k: torch.tensor (N_Z)
             Scaling factors for polarizabilities.
 
         Returns
@@ -2194,7 +2229,7 @@ class EMLECalculator:
             The A matrix for induced dipoles prediction.
         """
         v = -60 * q_val * s**3
-        alpha = v * k_Z
+        alpha = v * k
 
         alphap = alpha * self._a_Thole
         alphap_mat = alphap[:, None] * alphap[None, :]
