@@ -1149,13 +1149,29 @@ class EMLECalculator:
         self._a_QEq = self._params["a_QEq"]
         self._a_Thole = self._params["a_Thole"]
         if self._alpha_mode == "species":
-            self._k_Z = _torch.tensor(
-                self._params["k_Z"], dtype=_torch.float32, device=self._device
-            )
+            try:
+                self._k_Z = _torch.tensor(
+                    self._params["k_Z"], dtype=_torch.float32, device=self._device
+                )
+            except:
+                msg = (
+                    "Missing 'k_Z' key in model. This is required when "
+                    "using 'species' alpha mode."
+                )
+                _logger.error(msg)
+                raise ValueError(msg)
         else:
-            self.sqrtk_ref = _torch.tensor(
-                self._params["sqrtk_ref"], dtype=_torch.float32, device=self._device
-            )
+            try:
+                self.sqrtk_ref = _torch.tensor(
+                    self._params["sqrtk_ref"], dtype=_torch.float32, device=self._device
+                )
+            except:
+                msg = (
+                    "Missing 'sqrtk_ref' key in model. This is required when "
+                    "using 'reference' alpha mode."
+                )
+                _logger.error(msg)
+                raise ValueError(msg)
 
         self._q_total = _torch.tensor(
             self._params.get("total_charge", 0),
