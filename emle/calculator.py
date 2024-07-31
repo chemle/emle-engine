@@ -221,13 +221,15 @@ class EMLECalculator:
 
     # Class attributes.
 
-    # Get the directory of this module file.
-    _module_dir = _os.path.dirname(_os.path.abspath(__file__))
+    # Store the expected path to the resources directory.
+    _resource_dir = _os.path.join(
+        _os.path.dirname(_os.path.abspath(__file__)), "resources"
+    )
 
     # Create the name of the default model file for each alpha mode.
     _default_models = {
-        "species": _os.path.join(_module_dir, "/resources/emle_qm7_aev.mat"),
-        "reference": _os.path.join(_module_dir, "/resources/emle_qm7_aev_alphagpr.mat"),
+        "species": _os.path.join(_resource_dir, "emle_qm7_aev.mat"),
+        "reference": _os.path.join(_resource_dir, "emle_qm7_aev_alphagpr.mat"),
     }
 
     # Store the list of supported species.
@@ -444,6 +446,11 @@ class EMLECalculator:
             the calculator.
         """
 
+        from ._utils import _fetch_resources
+
+        # Fetch or update the resources.
+        _fetch_resources()
+
         # Validate input.
 
         # First handle the logger.
@@ -489,10 +496,13 @@ class EMLECalculator:
 
         # Validate the alpha mode first so that we can choose an appropriate
         # default model.
-        if not isinstance(alpha_mode, str):
-            msg = "'alpha_mode' must be of type 'str'"
-            _logger.error(msg)
-            raise TypeError(msg)
+        if alpha_mode is not None:
+            if not isinstance(alpha_mode, str):
+                msg = "'alpha_mode' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
+        else:
+            alpha_mode = "species"
 
         # Convert to lower case and strip whitespace.
         alpha_mode = alpha_mode.lower().replace(" ", "")

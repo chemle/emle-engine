@@ -62,12 +62,22 @@ class EMLE(_torch.nn.Module):
     embedding.
     """
 
-    def __init__(self, device=None, dtype=None, create_aev_calculator=True):
+    def __init__(
+        self, alpha_mode="species", device=None, dtype=None, create_aev_calculator=True
+    ):
         """
         Constructor
 
         Parameters
         ----------
+
+        alpha_mode: str
+            How atomic polarizabilities are calculated.
+                "species":
+                    one volume scaling factor is used for each species
+                "reference":
+                    scaling factors are obtained with GPR using the values learned
+                    for each reference environment
 
         device: torch.device
             The device on which to run the model.
@@ -82,11 +92,27 @@ class EMLE(_torch.nn.Module):
         # Call the base class constructor.
         super().__init__()
 
-        # Get the directory of this module file.
-        module_dir = _os.path.dirname(_os.path.abspath(__file__))
+        from ._utils import _fetch_resources
 
-        # Create the name of the default model file.
-        model = _os.path.join(module_dir, "emle_qm7_aev_masked.mat")
+        # Fetch or update the resources.
+        _fetch_resources()
+
+        # Store the expected path to the resources directory.
+        resource_dir = _os.path.join(
+            _os.path.dirname(_os.path.abspath(__file__)), "resources"
+        )
+
+        if not isinstance(alpha_mode, str):
+            raise TypeError("'alpha_mode' must be of type 'str'")
+        if alpha_mode not in ["species", "reference"]:
+            raise ValueError("'alpha_mode' must be 'species' or 'reference'")
+        self._alpha_mode = alpha_mode
+
+        # Choose the model based on the alpha_mode.
+        if alpha_mode == "species":
+            model = _os.path.join(resource_dir, "emle_qm7_aev.mat")
+        else:
+            model = _os.path.join(resource_dir, "emle_qm7_aev_alphagpr.mat")
 
         if device is not None:
             if not isinstance(device, _torch.device):
@@ -132,13 +158,16 @@ class EMLE(_torch.nn.Module):
         q_core = _torch.tensor(params["q_core"], dtype=dtype, device=device)
         a_QEq = _torch.tensor(params["a_QEq"], dtype=dtype, device=device)
         a_Thole = _torch.tensor(params["a_Thole"], dtype=dtype, device=device)
-        k_Z = _torch.tensor(params["k_Z"], dtype=dtype, device=device)
+        if self._alpha_mode == "species":
+            k = _torch.tensor(params["k_Z"], dtype=dtype, device=device)
+        else:
+            k = _torch.tensor(params["sqrtk_ref"], dtype=dtype, device=device)
         q_total = _torch.tensor(
             params.get("total_charge", 0), dtype=dtype, device=device
         )
 
         # Extract the reference features.
-        ref_features = _torch.tensor(params["ref_soap"], dtype=dtype, device=device)
+        ref_features = _torch.tensor(params["ref_aev"], dtype=dtype, device=device)
 
         # Extract the reference values for the MBIS valence shell widths.
         ref_values_s = _torch.tensor(params["s_ref"], dtype=dtype, device=device)
@@ -152,13 +181,22 @@ class EMLE(_torch.nn.Module):
         ref_shifted = ref_values_s - ref_mean_s[:, None]
         c_s = (Kinv @ ref_shifted[:, :, None]).squeeze()
 
-        # Exctract the reference values for the electronegativities.
+        # Extract the reference values for the electronegativities.
         ref_values_chi = _torch.tensor(params["chi_ref"], dtype=dtype, device=device)
 
         # Store additional attributes for the electronegativity GPR model.
         ref_mean_chi = _torch.sum(ref_values_chi, dim=1) / n_ref
         ref_shifted = ref_values_chi - ref_mean_chi[:, None]
         c_chi = (Kinv @ ref_shifted[:, :, None]).squeeze()
+
+        # Extract the reference values for the polarizabilities.
+        if self._alpha_mode == "reference":
+            ref_mean_k = _torch.sum(k, dim=1) / n_ref
+            ref_shifted = k - ref_mean_k[:, None]
+            c_k = (Kinv @ ref_shifted[:, :, None]).squeeze()
+        else:
+            ref_mean_k = _torch.empty(0, dtype=dtype, device=device)
+            c_k = _torch.empty(0, dtype=dtype, device=device)
 
         # Store the current device.
         self._device = device
@@ -169,7 +207,7 @@ class EMLE(_torch.nn.Module):
         self.register_buffer("_q_core", q_core)
         self.register_buffer("_a_QEq", a_QEq)
         self.register_buffer("_a_Thole", a_Thole)
-        self.register_buffer("_k_Z", k_Z)
+        self.register_buffer("_k", k)
         self.register_buffer("_q_total", q_total)
         self.register_buffer("_ref_features", ref_features)
         self.register_buffer("_n_ref", n_ref)
@@ -179,6 +217,8 @@ class EMLE(_torch.nn.Module):
         self.register_buffer("_ref_mean_chi", ref_mean_chi)
         self.register_buffer("_c_s", c_s)
         self.register_buffer("_c_chi", c_chi)
+        self.register_buffer("_ref_mean_k", ref_mean_k)
+        self.register_buffer("_c_k", c_k)
 
     def to(self, *args, **kwargs):
         """
@@ -191,7 +231,7 @@ class EMLE(_torch.nn.Module):
         self._q_core = self._q_core.to(*args, **kwargs)
         self._a_QEq = self._a_QEq.to(*args, **kwargs)
         self._a_Thole = self._a_Thole.to(*args, **kwargs)
-        self._k_Z = self._k_Z.to(*args, **kwargs)
+        self._k = self._k.to(*args, **kwargs)
         self._q_total = self._q_total.to(*args, **kwargs)
         self._ref_features = self._ref_features.to(*args, **kwargs)
         self._n_ref = self._n_ref.to(*args, **kwargs)
@@ -201,6 +241,8 @@ class EMLE(_torch.nn.Module):
         self._ref_mean_chi = self._ref_mean_chi.to(*args, **kwargs)
         self._c_s = self._c_s.to(*args, **kwargs)
         self._c_chi = self._c_chi.to(*args, **kwargs)
+        self._ref_mean_k = self._ref_mean_k.to(*args, **kwargs)
+        self._c_k = self._c_k.to(*args, **kwargs)
 
         # Check for a device type in args and update the device attribute.
         for arg in args:
@@ -221,7 +263,7 @@ class EMLE(_torch.nn.Module):
         self._q_core = self._q_core.cuda(**kwargs)
         self._a_QEq = self._a_QEq.cuda(**kwargs)
         self._a_Thole = self._a_Thole.cuda(**kwargs)
-        self._k_Z = self._k_Z.cuda(**kwargs)
+        self._k = self._k.cuda(**kwargs)
         self._q_total = self._q_total.cuda(**kwargs)
         self._ref_features = self._ref_features.cuda(**kwargs)
         self._n_ref = self._n_ref.cuda(**kwargs)
@@ -231,6 +273,8 @@ class EMLE(_torch.nn.Module):
         self._ref_mean_chi = self._ref_mean_chi.cuda(**kwargs)
         self._c_s = self._c_s.cuda(**kwargs)
         self._c_chi = self._c_chi.cuda(**kwargs)
+        self._ref_mean_k = self._ref_mean_k.cuda(**kwargs)
+        self._c_k = self._c_k.cuda(**kwargs)
 
         # Update the device attribute.
         self._device = self._species_map.device
@@ -248,7 +292,7 @@ class EMLE(_torch.nn.Module):
         self._q_core = self._q_core.cpu(**kwargs)
         self._a_QEq = self._a_QEq.cpu(**kwargs)
         self._a_Thole = self._a_Thole.cpu(**kwargs)
-        self._k_Z = self._k_Z.cpu(**kwargs)
+        self._k = self._k.cpu(**kwargs)
         self._q_total = self._q_total.cpu(**kwargs)
         self._ref_features = self._ref_features.cpu(**kwargs)
         self._n_ref = self._n_ref.cpu(**kwargs)
@@ -258,6 +302,8 @@ class EMLE(_torch.nn.Module):
         self._ref_mean_chi = self._ref_mean_chi.cpu(**kwargs)
         self._c_s = self._c_s.cpu(**kwargs)
         self._c_chi = self._c_chi.cpu(**kwargs)
+        self._ref_mean_k = self._ref_mean_k.cpu(**kwargs)
+        self._c_k = self._c_k.cpu(**kwargs)
 
         # Update the device attribute.
         self._device = self._species_map.device
@@ -273,7 +319,7 @@ class EMLE(_torch.nn.Module):
         self._q_core = self._q_core.double()
         self._a_QEq = self._a_QEq.double()
         self._a_Thole = self._a_Thole.double()
-        self._k_Z = self._k_Z.double()
+        self._k = self._k.double()
         self._q_total = self._q_total.double()
         self._ref_features = self._ref_features.double()
         self._ref_values_s = self._ref_values_s.double()
@@ -282,6 +328,8 @@ class EMLE(_torch.nn.Module):
         self._ref_mean_chi = self._ref_mean_chi.double()
         self._c_s = self._c_s.double()
         self._c_chi = self._c_chi.double()
+        self._ref_mean_k = self._ref_mean_k.double()
+        self._c_k = self._c_k.double()
         return self
 
     def float(self):
@@ -293,7 +341,7 @@ class EMLE(_torch.nn.Module):
         self._q_core = self._q_core.float()
         self._a_QEq = self._a_QEq.float()
         self._a_Thole = self._a_Thole.float()
-        self._k_Z = self._k_Z.float()
+        self._k = self._k.float()
         self._q_total = self._q_total.float()
         self._ref_features = self._ref_features.float()
         self._ref_values_s = self._ref_values_s.float()
@@ -302,6 +350,8 @@ class EMLE(_torch.nn.Module):
         self._ref_mean_chi = self._ref_mean_chi.float()
         self._c_s = self._c_s.float()
         self._c_chi = self._c_chi.float()
+        self._ref_mean_k = self._ref_mean_k.float()
+        self._c_k = self._c_k.float()
         return self
 
     def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
@@ -360,12 +410,15 @@ class EMLE(_torch.nn.Module):
 
         # Compute the static energy.
         q_core = self._q_core[species_id]
-        k_Z = self._k_Z[species_id]
+        if self._alpha_mode == "species":
+            k = self._k[species_id]
+        else:
+            k = self._gpr(aev, self._ref_mean_k, self._c_k, species_id)
         r_data = self._get_r_data(xyz_qm_bohr)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
         q = self._get_q(r_data, s, chi)
         q_val = q - q_core
-        mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k_Z)
+        mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k)
         vpot_q_core = self._get_vpot_q(q_core, mesh_data[0])
         vpot_q_val = self._get_vpot_q(q_val, mesh_data[1])
         vpot_static = vpot_q_core + vpot_q_val
@@ -527,7 +580,7 @@ class EMLE(_torch.nn.Module):
         q,
         s,
         q_val,
-        k_Z,
+        k,
     ):
         """
         Internal method, calculates induced atomic dipoles
@@ -549,7 +602,7 @@ class EMLE(_torch.nn.Module):
         q_val: torch.Tensor (N_QM_ATOMS,)
             MBIS valence charges.
 
-        k_Z: torch.Tensor (N_Z)
+        k: torch.Tensor (N_Z)
             Scaling factors for polarizabilities.
 
         Returns
@@ -558,7 +611,7 @@ class EMLE(_torch.nn.Module):
         result: torch.Tensor (N_ATOMS, 3)
             Array of induced dipoles
         """
-        A = self._get_A_thole(r_data, s, q_val, k_Z)
+        A = self._get_A_thole(r_data, s, q_val, k)
 
         r = 1.0 / mesh_data[0]
         f1 = self._get_f1_slater(r, s[:, None] * 2.0)
@@ -568,9 +621,7 @@ class EMLE(_torch.nn.Module):
         E_ind = mu_ind @ fields * 0.5
         return mu_ind.reshape((-1, 3))
 
-    def _get_A_thole(
-        self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, q_val, k_Z
-    ):
+    def _get_A_thole(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, q_val, k):
         """
         Internal method, generates A matrix for induced dipoles prediction
         (Eq. 20 in 10.1021/acs.jctc.2c00914)
@@ -586,7 +637,7 @@ class EMLE(_torch.nn.Module):
         q_val: torch.Tensor (N_ATOMS,)
             MBIS charges.
 
-        k_Z: torch.Tensor (N_Z)
+        k: torch.Tensor (N_Z)
             Scaling factors for polarizabilities.
 
         Returns
@@ -596,7 +647,7 @@ class EMLE(_torch.nn.Module):
             The A matrix for induced dipoles prediction.
         """
         v = -60 * q_val * s**3
-        alpha = v * k_Z
+        alpha = v * k
 
         alphap = alpha * self._a_Thole
         alphap_mat = alphap[:, None] * alphap[None, :]
@@ -864,6 +915,7 @@ class EMLE(_torch.nn.Module):
 class ANI2xEMLE(EMLE):
     def __init__(
         self,
+        alpha_mode="species",
         model_index=None,
         ani2x_model=None,
         atomic_numbers=None,
@@ -875,6 +927,14 @@ class ANI2xEMLE(EMLE):
 
         Parameters
         ----------
+
+        alpha_mode: str
+            How atomic polarizabilities are calculated.
+                "species":
+                    one volume scaling factor is used for each species
+                "reference":
+                    scaling factors are obtained with GPR using the values learned
+                    for each reference environment
 
         model_index: int
             The index of the model to use. If None, then the full 8 model
@@ -927,7 +987,12 @@ class ANI2xEMLE(EMLE):
             self._atomic_numbers = None
 
         # Call the base class constructor.
-        super().__init__(device=device, dtype=dtype, create_aev_calculator=False)
+        super().__init__(
+            alpha_mode=alpha_mode,
+            device=device,
+            dtype=dtype,
+            create_aev_calculator=False,
+        )
 
         if ani2x_model is not None:
             # Add the base ANI2x model and ensemble.
@@ -1124,12 +1189,15 @@ class ANI2xEMLE(EMLE):
 
         # Compute the static energy.
         q_core = self._q_core[species_id]
-        k_Z = self._k_Z[species_id]
+        if self._alpha_mode == "species":
+            k = self._k[species_id]
+        else:
+            k = self._gpr(aev, self._ref_mean_k, self._c_k, species_id)
         r_data = self._get_r_data(xyz_qm_bohr)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
         q = self._get_q(r_data, s, chi)
         q_val = q - q_core
-        mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k_Z)
+        mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k)
         vpot_q_core = self._get_vpot_q(q_core, mesh_data[0])
         vpot_q_val = self._get_vpot_q(q_val, mesh_data[1])
         vpot_static = vpot_q_core + vpot_q_val
