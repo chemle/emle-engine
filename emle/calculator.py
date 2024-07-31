@@ -565,6 +565,15 @@ class EMLECalculator:
             _logger.error(msg)
             raise IOError(msg)
 
+        # Validate the alpha mode.
+        if not isinstance(alpha_mode, str):
+            msg = "'alpha_mode' must be of type 'str'"
+            _logger.error(msg)
+            raise TypeError(msg)
+
+        # Convert to lower case and strip whitespace.
+        alpha_mode = alpha_mode.lower().replace(" ", "")
+
         if alpha_mode not in ["species", "reference"]:
             msg = "'alpha_mode' must be either 'species' or 'reference'"
             _logger.error(msg)
