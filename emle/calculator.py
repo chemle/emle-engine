@@ -1467,7 +1467,7 @@ class EMLECalculator:
         )
 
         # Compute the total energy and gradients.
-        E_tot = E_vac + E.cpu().numpy()
+        E_tot = E_vac + E.detach().cpu().numpy()
         grad_qm = dE_dxyz_qm_bohr + grad_vac
         grad_mm = dE_dxyz_mm_bohr.cpu().numpy()
 
@@ -1505,7 +1505,7 @@ class EMLECalculator:
             self._method = method
 
             # Store the the MM and EMLE energies. The MM energy is an approximation.
-            E_mm = E_mm_qm_vac + E.cpu().numpy()
+            E_mm = E_mm_qm_vac + E.detach().cpu().numpy()
             E_emle = E_tot
 
             # Work out the current value of lambda.
@@ -1873,7 +1873,7 @@ class EMLECalculator:
         )
 
         # Compute the total energy and gradients.
-        E_tot = E_vac + E.cpu().numpy()
+        E_tot = E_vac + E.detach().cpu().numpy()
         grad_qm = dE_dxyz_qm_bohr + grad_vac
         grad_mm = dE_dxyz_mm_bohr.cpu().numpy()
 
@@ -1915,7 +1915,7 @@ class EMLECalculator:
             self._method = method
 
             # Store the the MM and EMLE energies. The MM energy is an approximation.
-            E_mm = E_mm_qm_vac + E.cpu().numpy()
+            E_mm = E_mm_qm_vac + E.detach().cpu().numpy()
             E_emle = E_tot
 
             # Work out the current value of lambda.
