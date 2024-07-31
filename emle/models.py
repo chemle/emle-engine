@@ -618,7 +618,6 @@ class EMLE(_torch.nn.Module):
         fields = _torch.sum(mesh_data[2] * f1[:, :, None] * q[:, None], dim=1).flatten()
 
         mu_ind = _torch.linalg.solve(A, fields)
-        E_ind = mu_ind @ fields * 0.5
         return mu_ind.reshape((-1, 3))
 
     def _get_A_thole(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, q_val, k):
