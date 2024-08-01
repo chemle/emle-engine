@@ -156,7 +156,18 @@ regardless of where it is launched.
 
 We also support the use [Rascal](https://github.com/lab-cosmo/librascal)
 for the calculation of delta-learning corrections to the in vacuo energies and
-gradients. To use, you will need to specify a model file using the `--rascal-model`
+gradients. To use, you will first need to create an environment with the additional
+dependencies:
+
+```sh
+conda env create -f environment_rascal.yaml
+conda activate emle-rascal
+```
+
+(These are not included in the default environment as they limit the supported
+Python versions.)
+
+Then, specify a model file using the `--rascal-model`
 command-line argument, or via the `EMLE_RASCAL_MODEL` environment variable.
 
 Note that the chosen [backend](#backends) _must_ match the one used to train the model. At
