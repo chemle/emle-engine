@@ -221,6 +221,15 @@ the environment variable) or a path to a file. When using a file, this should
 be formatted as a single column, with one line per QM atom. The units
 are electron charge.
 
+## Alpha mode
+
+We support two methods for the calculation of atomic polarisabilities. The
+default, `species`, uses a single volume scaling factor for each species.
+Alternatively, `reference`, calculates the scaling factors using Gaussian
+Process Regression (GPR) using the values learned for each reference environment.
+The alpha mode can be specified using the `--alpha-mode` command-line argument,
+or via the `EMLE_ALPHA_MODE` environment variable.
+
 ## Logging
 
 Energies can be written to a file using the `--energy-file` command-line argument
