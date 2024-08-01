@@ -38,13 +38,13 @@ environment that is compatible with your CUDA driver.)
 Finally, install `emle-engine`:
 
 ```sh
-python setup.py install
+pip install .
 ```
 
 If you are developing and want an editable install, use:
 
 ```sh
-python setup.py develop
+pip install -e .
 ```
 
 ## Usage
@@ -341,7 +341,7 @@ conda activate emle-sire
 Next install `emle-engine` into the environment:
 
 ```sh
-python setup.py install
+pip install .
 ```
 
 For instructions on how to use the `emle-sire` interface, see the tutorial
