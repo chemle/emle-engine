@@ -33,7 +33,9 @@ def _fetch_resources():
     import pygit2 as _pygit2
 
     # Create the name for the expected resources directory.
-    resource_dir = _os.path.dirname(_os.path.abspath(__file__)) + "/resources"
+    resource_dir = _os.path.join(
+        _os.path.dirname(_os.path.abspath(__file__)), "resources"
+    )
 
     # Check if the resources directory exists.
     if not _os.path.exists(resource_dir):
