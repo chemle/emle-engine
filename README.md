@@ -351,9 +351,8 @@ energies.
 
 We provide an interface between `emle-engine` and [OpenMM](https://openmm.org) via the
 [Sire](https://sire.openbiosim.org/) molecular simulation framework. This allows QM/MM simulations
-to be run with OpenMM using EMLE for the embedding model. This provides improved
-performance and flexibility in comparison to the `sander` interface, although
-the implementation should currently be treated as being _experimental_.
+to be run with OpenMM using EMLE for the embedding model. This provides greatly
+improved performance and flexibility in comparison to the `sander` interface.
 
 To use, first create an `emle-sire` conda environment:
 
