@@ -5,7 +5,7 @@
 
 ![Emily Engine](emily_engine.jpg)
 
-(Mascot courtesy [Nictrain123](https://www.deviantart.com/nictrain123) ![CC BY 3.0](https://licensebuttons.net/l/by/3.0/80x15.png).)
+(Mascot courtesy [Nictrain123](https://www.deviantart.com/nictrain123/art/Simply-Emily-774815887) ![CC BY 3.0](https://licensebuttons.net/l/by/3.0/80x15.png).)
 
 A simple interface to allow electrostatic embedding of machine learning
 potentials using an [ORCA](https://orcaforum.kofo.mpg.de/i-nde-x.php-)-like interface. Based on [code](https://github.com/emedio/embedding) by Kirill Zinovjev. An example [sander](htps://ambermd.org/AmberTools.h) implementation is provided. This
