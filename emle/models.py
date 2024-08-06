@@ -86,7 +86,10 @@ class EMLE(_torch.nn.Module):
             The data type to use for the models floating point tensors.
 
         create_aev_calculator: bool
-            Whether to create an AEV calculator instance.
+            Whether to create an AEV calculator instance. This can be set
+            to False for derived classes that already have an AEV calculator,
+            e.g. ANI2xEMLE. In that case, it's possible to hook the AEV
+            calculator to avoid duplicating the computation.
         """
 
         # Call the base class constructor.
