@@ -416,7 +416,7 @@ class EMLE(_torch.nn.Module):
         if self._alpha_mode == "species":
             k = self._k[species_id]
         else:
-            k = self._gpr(aev, self._ref_mean_k, self._c_k, species_id)
+            k = self._gpr(aev, self._ref_mean_k, self._c_k, species_id) ** 2
         r_data = self._get_r_data(xyz_qm_bohr)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
         q = self._get_q(r_data, s, chi)
