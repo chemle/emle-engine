@@ -1299,6 +1299,7 @@ class MACExEMLE(EMLE):
             create_aev_calculator=True,
         )
 
+        # Load the MACE model.
         if mace_model is not None:
             if mace_model.startswith("mace-off23"):
                 size = mace_model.split("-")[-1]
@@ -1320,7 +1321,7 @@ class MACExEMLE(EMLE):
         self._mace = _e3nn_jit.compile(self._mace).to(self._dtype)
 
         # Create the z_table of the MACE model.
-        self._z_table =[int(z.item()) for z in self._mace.atomic_numbers]
+        self._z_table = [int(z.item()) for z in self._mace.atomic_numbers]
 
         if self._atomic_numbers is not None:
             # Get the node attributes.
