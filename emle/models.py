@@ -1301,10 +1301,10 @@ class MACExEMLE(EMLE):
 
         if mace_model is not None:
             if mace_model.startswith("mace-off23"):
-                size = self.name.split("-")[-1]
+                size = mace_model.split("-")[-1]
                 assert (
                     size in ["small", "medium", "large"]
-                ), f"Unsupported MACE model: '{self.name}'. Available MACE-OFF23 models are 'mace-off23-small', 'mace-off23-medium', 'mace-off23-large'"
+                ), f"Unsupported MACE model: '{mace_model}'. Available MACE-OFF23 models are 'mace-off23-small', 'mace-off23-medium', 'mace-off23-large'"
                 self._mace = _mace_off(model=size, device=device, return_raw_model=True)
             else:
                 # Assuming that the model is a local model.
