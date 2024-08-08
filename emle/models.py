@@ -35,7 +35,7 @@ import torch as _torch
 import torchani as _torchani
 
 from torch import Tensor
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 from . import _torchani_patches
 
@@ -1289,7 +1289,7 @@ class MACExEMLE(EMLE):
                 raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
             self._atomic_numbers = atomic_numbers.to(device)
         else:
-            raise ValueError("Atomic numbers must be provided for the MACExEMLE model.")
+            self._atomic_numbers = None
 
         # Call the base class constructor.
         super().__init__(
@@ -1318,39 +1318,72 @@ class MACExEMLE(EMLE):
 
         # Compile the model.
         self._mace = _e3nn_jit.compile(self._mace).to(self._dtype)
- 
+
+        # Create the z_table of the MACE model.
+        self._z_table =[int(z.item()) for z in self._mace.atomic_numbers]
+
         if self._atomic_numbers is not None:
             # Get the node attributes.
             node_attrs = self._get_node_attrs(self._atomic_numbers)
-            self.register_buffer(
-                "ptr",
-                _torch.tensor(
-                    [0, node_attrs.shape[0]], dtype=_torch.long, requires_grad=False
-                ),
-            )
+            self.register_buffer("ptr", _torch.tensor([0, node_attrs.shape[0]], dtype=_torch.long, requires_grad=False),)
             self.register_buffer("node_attrs", node_attrs.to(self._dtype))
-            self.register_buffer(
-                "batch",
-                _torch.zeros(
-                    node_attrs.shape[0], dtype=_torch.long, requires_grad=False
-                ),
-            )
+            self.register_buffer("batch",_torch.zeros(node_attrs.shape[0], dtype=_torch.long, requires_grad=False),)
 
-            # No PBCs for now.
-            self.register_buffer(
-                "pbc",
-                _torch.tensor(
-                    [False, False, False], dtype=_torch.bool, requires_grad=False
-                ),
-            )
-            self.register_buffer(
-                "cell", _torch.zeros((3, 3), dtype=self._dtype, requires_grad=False)
-            )
+            print("Node attributes:", node_attrs.shape)
+            print("Batch:", self.batch.shape)
+            print("Ptr:", self.ptr.shape)
+            print(node_attrs)
+
+        # No PBCs for now.
+        self.register_buffer("pbc",_torch.tensor([False, False, False], dtype=_torch.bool, requires_grad=False),)
+        self.register_buffer("cell", _torch.zeros((3, 3), dtype=self._dtype, requires_grad=False))
 
         # Assign a tensor attribute that can be used for assigning the AEVs.
         self._aev_computer._aev = _torch.empty(0, device=device)
+    
+    @staticmethod
+    def _to_one_hot(indices: _torch.Tensor, num_classes: int) -> _torch.Tensor:
+        """
+        Convert a tensor of indices to one-hot encoding.
 
-    def _get_node_attrs(self, atomic_numbers):
+        Parameters
+        ----------
+        indices: torch.Tensor
+            Tensor of indices.
+        num_classes: int
+            Number of classes of atomic numbers.
+        
+        Returns
+        -------
+        oh: torch.Tensor
+            One-hot encoding of the indices.
+        """
+        shape = indices.shape[:-1] + (num_classes,)
+        oh = _torch.zeros(shape, device=indices.device).view(shape)
+        return oh.scatter_(dim=-1, index=indices, value=1)
+
+    @staticmethod
+    def _atomic_numbers_to_indices(atomic_numbers: _torch.Tensor, z_table: List[int]) -> _torch.Tensor:
+        """
+        Get the indices of the atomic numbers in the z_table.
+
+        Parameters
+        ----------
+        atomic_numbers: torch.Tensor (N_ATOMS,)
+            Atomic numbers of QM atoms.
+        z_table: List[int]
+            List of atomic numbers in the MACE model.
+
+        Returns
+        -------
+        indices: torch.Tensor (N_ATOMS, 1)
+            Indices of the atomic numbers in the z_table.
+        """
+        return _torch.tensor(
+            [z_table.index(z) for z in atomic_numbers], dtype=_torch.long
+        ).unsqueeze(-1)
+
+    def _get_node_attrs(self, atomic_numbers: _torch.Tensor) -> _torch.Tensor:
         """
         Internal method to get the node attributes for the MACE model.
 
@@ -1363,21 +1396,11 @@ class MACExEMLE(EMLE):
         -------
         node_attrs: torch.Tensor (N_ATOMS, N_FEATURES)
             Node attributes for the MACE model.
-        """
-        z_table = _mace_tools.AtomicNumberTable(
-            [int(z) for z in self._mace.atomic_numbers]
-        )
-        return _mace_tools.to_one_hot(
-            _torch.tensor(
-                _mace_tools.atomic_numbers_to_indices(atomic_numbers, z_table=z_table),
-                dtype=_torch.long,
-            ).unsqueeze(-1),
-            num_classes=len(z_table),
-        )
-
-    def _get_neighbor_pairs(
-        self, positions: _torch.Tensor, cell: Optional[_torch.Tensor]
-    ) -> Tuple[_torch.Tensor, _torch.Tensor]:
+        """        
+        ids = self._atomic_numbers_to_indices(atomic_numbers, z_table=self._z_table)
+        return self._to_one_hot(ids, num_classes=len(self._z_table))
+    
+    def _get_neighbor_pairs(self, positions: _torch.Tensor, cell: Optional[_torch.Tensor]) -> Tuple[_torch.Tensor, _torch.Tensor]:
         """
         Get the shifts and edge indices.
 
@@ -1499,29 +1522,46 @@ class MACExEMLE(EMLE):
         # Reshape the IDs.
         zid = species_id.unsqueeze(0)
 
-        # Reshape the atomic numbers.
-        atomic_numbers = atomic_numbers.unsqueeze(0)
-
         # Reshape the coordinates,
         xyz = xyz_qm.unsqueeze(0)
 
         # Get the edge index and shifts for this configuration.
         edge_index, shifts = self._get_neighbor_pairs(xyz_qm, None)
 
-        # Create the input dictionary passed to the MACE model.
-        input_dict = {
-            "ptr": self.ptr,
-            "node_attrs": self.node_attrs,
-            "batch": self.batch,
-            "pbc": self.pbc,
-            "positions": xyz_qm.to(self._dtype),
-            "edge_index": edge_index,
-            "shifts": shifts,
-            "cell": self.cell,
-        }
+        # Get the device.
+        device = xyz_qm.device
+
+        if self._atomic_numbers is None:
+            # Create the input dictionary passed to the MACE model using the passed atomic numbers.
+            node_attrs = self._get_node_attrs(atomic_numbers).to(self._dtype).to(device)
+            ptr = _torch.tensor([0, node_attrs.shape[0]], dtype=_torch.long, requires_grad=False).to(device)
+            batch = _torch.zeros(node_attrs.shape[0], dtype=_torch.long).to(device)
+
+            input_dict = {
+                "ptr": ptr,
+                "node_attrs": node_attrs,
+                "batch": batch,
+                "pbc": self.pbc,
+                "positions": xyz_qm.to(self._dtype),
+                "edge_index": edge_index,
+                "shifts": shifts,
+                "cell": self.cell,
+            }
+        else:
+            # Create the input dictionary passed to the MACE model with the precomputed node attributes.
+            input_dict = {
+                "ptr": self.ptr,
+                "node_attrs": self.node_attrs,
+                "batch": self.batch,
+                "pbc": self.pbc,
+                "positions": xyz_qm.to(self._dtype),
+                "edge_index": edge_index,
+                "shifts": shifts,
+                "cell": self.cell,
+            }
 
         # Get the in vacuo energy.
-        EV_TO_HARTREE = 0.03674930495120813
+        EV_TO_HARTREE = 0.0367492929
         E_vac = self._mace(input_dict, compute_force=False)["interaction_energy"]
 
         assert (
@@ -1533,7 +1573,7 @@ class MACExEMLE(EMLE):
         # If there are no point charges, return the in vacuo energy and zeros
         # for the static and induced terms.
         if len(xyz_mm) == 0:
-            zero = _torch.tensor(0.0, dtype=xyz_qm.dtype, device=xyz_qm.device)
+            zero = _torch.tensor(0.0, dtype=xyz_qm.dtype, device=device)
             return _torch.stack([E_vac, zero, zero])
 
         # Get the AEVs computer by the forward hook and normalise.
