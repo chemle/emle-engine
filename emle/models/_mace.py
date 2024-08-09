@@ -213,13 +213,16 @@ class MACEEMLE(_EMLE):
 
         Parameters
         ----------
+
         indices: torch.Tensor
             Tensor of indices.
+
         num_classes: int
             Number of classes of atomic numbers.
 
         Returns
         -------
+
         oh: torch.Tensor
             One-hot encoding of the indices.
         """
@@ -236,13 +239,16 @@ class MACEEMLE(_EMLE):
 
         Parameters
         ----------
+
         atomic_numbers: torch.Tensor (N_ATOMS,)
             Atomic numbers of QM atoms.
+
         z_table: List[int]
             List of atomic numbers in the MACE model.
 
         Returns
         -------
+
         indices: torch.Tensor (N_ATOMS, 1)
             Indices of the atomic numbers in the z_table.
         """
@@ -256,11 +262,13 @@ class MACEEMLE(_EMLE):
 
         Parameters
         ----------
+
         atomic_numbers: torch.Tensor (N_ATOMS,)
             Atomic numbers of QM atoms.
 
         Returns
         -------
+
         node_attrs: torch.Tensor (N_ATOMS, N_FEATURES)
             Node attributes for the MACE model.
         """
