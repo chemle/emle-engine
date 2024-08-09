@@ -25,7 +25,7 @@
 __author__ = "Lester Hedges"
 __email__ = "lester.hedges@gmail.com"
 
-__all__ = ["EMLE", "ANI2xEMLE", "MACExEMLE"]
+__all__ = ["EMLE", "ANI2xEMLE", "MACEEMLE"]
 
 import ase as _ase
 import numpy as _np
@@ -51,7 +51,7 @@ try:
     _NNPOps.OptimizedTorchANI = _torchani_patches.OptimizedTorchANI
 
     _has_nnpops = True
-except ImportError:
+except:
     _has_nnpops = False
     
 try:
@@ -59,13 +59,13 @@ try:
     from mace.calculators.foundations_models import mace_off as _mace_off
 
     _has_mace = True
-except ImportError:
+except:
     _has_mace = False
     
 try:
     from e3nn.util import jit as _e3nn_jit
     _has_e3nn = True
-except ImportError:
+except:
     _has_e3nn = False
 
 
@@ -1225,7 +1225,7 @@ class ANI2xEMLE(EMLE):
         return _torch.stack([E_vac, E_static, E_ind])
 
 
-class MACExEMLE(EMLE):
+class MACEEMLE(EMLE):
     def __init__(
         self,
         alpha_mode="species",
@@ -1235,7 +1235,7 @@ class MACExEMLE(EMLE):
         dtype=None,
     ):
         """
-        Constructor for the MACExEMLE model.
+        Constructor for the MACEEMLE model.
 
         Parameters
         ----------
@@ -1263,11 +1263,11 @@ class MACExEMLE(EMLE):
             The data type to use for the models floating point tensors.
         """
         if not _has_mace:
-            raise ImportError('MACE is required to use the MACExEMLE model. Install it with "pip install mace"')
+            raise ImportError('mace is required to use the MACEEMLE model. Install it with "pip install mace-torch"')
         if not _has_e3nn:
-            raise ImportError('E3NN is required to compile the MACEmodel. Install it with "pip install e3nn"')
+            raise ImportError('e3nn is required to compile the MACEmodel.')
         if not _has_nnpops:
-            raise ImportError('NNPOps is required to use the MACExEMLE model.')
+            raise ImportError('NNPOps is required to use the MACEEMLE model.')
 
         if device is not None:
             if not isinstance(device, _torch.device):
@@ -1281,16 +1281,6 @@ class MACExEMLE(EMLE):
         else:
             self._dtype = _torch.get_default_dtype()
 
-        if atomic_numbers is not None:
-            if not isinstance(atomic_numbers, _torch.Tensor):
-                raise TypeError("'atomic_numbers' must be of type 'torch.Tensor'")
-            # Check that they are integers.
-            if atomic_numbers.dtype is not _torch.int64:
-                raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
-            self._atomic_numbers = atomic_numbers.to(device)
-        else:
-            self._atomic_numbers = None
-
         # Call the base class constructor.
         super().__init__(
             alpha_mode=alpha_mode,
@@ -1298,6 +1288,16 @@ class MACExEMLE(EMLE):
             dtype=dtype,
             create_aev_calculator=True,
         )
+
+        if atomic_numbers is not None:
+            if not isinstance(atomic_numbers, _torch.Tensor):
+                raise TypeError("'atomic_numbers' must be of type 'torch.Tensor'")
+            # Check that they are integers.
+            if atomic_numbers.dtype is not _torch.int64:
+                raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
+            self.register_buffer("_atomic_numbers", atomic_numbers)
+        else:
+            self.register_buffer("_atomic_numbers", _torch.tensor([], dtype=_torch.int64, requires_grad=False))
 
         # Load the MACE model.
         if mace_model is not None:
@@ -1323,24 +1323,21 @@ class MACExEMLE(EMLE):
         # Create the z_table of the MACE model.
         self._z_table = [int(z.item()) for z in self._mace.atomic_numbers]
 
-        if self._atomic_numbers is not None:
+        if len(self._atomic_numbers) > 0:
             # Get the node attributes.
             node_attrs = self._get_node_attrs(self._atomic_numbers)
-            self.register_buffer("ptr", _torch.tensor([0, node_attrs.shape[0]], dtype=_torch.long, requires_grad=False),)
-            self.register_buffer("node_attrs", node_attrs.to(self._dtype))
-            self.register_buffer("batch",_torch.zeros(node_attrs.shape[0], dtype=_torch.long, requires_grad=False),)
-
-            print("Node attributes:", node_attrs.shape)
-            print("Batch:", self.batch.shape)
-            print("Ptr:", self.ptr.shape)
-            print(node_attrs)
+            self.register_buffer("_node_attrs", node_attrs.to(self._dtype))
+            self.register_buffer("_ptr", _torch.tensor([0, node_attrs.shape[0]], dtype=_torch.long, requires_grad=False),)
+            self.register_buffer("_batch",_torch.zeros(node_attrs.shape[0], dtype=_torch.long, requires_grad=False),)
+        else:
+            # Initialise the node attributes.
+            self.register_buffer("_node_attrs", _torch.tensor([], dtype=self._dtype))
+            self.register_buffer("_ptr", _torch.tensor([], dtype=_torch.long, requires_grad=False))
+            self.register_buffer("_batch", _torch.tensor([], dtype=_torch.long, requires_grad=False))
 
         # No PBCs for now.
-        self.register_buffer("pbc",_torch.tensor([False, False, False], dtype=_torch.bool, requires_grad=False),)
-        self.register_buffer("cell", _torch.zeros((3, 3), dtype=self._dtype, requires_grad=False))
-
-        # Assign a tensor attribute that can be used for assigning the AEVs.
-        self._aev_computer._aev = _torch.empty(0, device=device)
+        self.register_buffer("_pbc",_torch.tensor([False, False, False], dtype=_torch.bool, requires_grad=False),)
+        self.register_buffer("_cell", _torch.zeros((3, 3), dtype=self._dtype, requires_grad=False))
     
     @staticmethod
     def _to_one_hot(indices: _torch.Tensor, num_classes: int) -> _torch.Tensor:
@@ -1401,7 +1398,13 @@ class MACExEMLE(EMLE):
         ids = self._atomic_numbers_to_indices(atomic_numbers, z_table=self._z_table)
         return self._to_one_hot(ids, num_classes=len(self._z_table))
     
-    def _get_neighbor_pairs(self, positions: _torch.Tensor, cell: Optional[_torch.Tensor]) -> Tuple[_torch.Tensor, _torch.Tensor]:
+    def _get_neighbor_pairs(
+        self, positions: _torch.Tensor, 
+        cell: Optional[_torch.Tensor],
+        cutoff: float,
+        dtype: _torch.dtype, 
+        device: _torch.device
+    ) -> Tuple[_torch.Tensor, _torch.Tensor]:
         """
         Get the shifts and edge indices.
 
@@ -1418,6 +1421,12 @@ class MACExEMLE(EMLE):
             The positions of the atoms.
         cell : _torch.Tensor
             The cell vectors.
+        cutoff : float
+            The cutoff distance.
+        dtype : _torch.dtype
+            The data type.
+        device : _torch.device
+            The device.
 
         Returns
         -------
@@ -1428,7 +1437,7 @@ class MACExEMLE(EMLE):
         """
         # Get the neighbor pairs, shifts and edge indices.
         neighbors, wrapped_deltas, _, _ = _getNeighborPairs(
-            positions, self._mace.r_max, -1, cell
+            positions, cutoff, -1, cell
         )
         mask = neighbors >= 0
         neighbors = neighbors[mask].view(2, -1)
@@ -1442,7 +1451,7 @@ class MACExEMLE(EMLE):
             shifts = _torch.mm(shifts_idx, cell)
         else:
             shifts = _torch.zeros(
-                (edge_index.shape[1], 3), dtype=self._dtype, device=positions.device
+                (edge_index.shape[1], 3), dtype=dtype, device=device
             )
 
         return edge_index, shifts
@@ -1451,7 +1460,7 @@ class MACExEMLE(EMLE):
         """
         Performs Tensor dtype and/or device conversion on the model.
         """
-        module = super(MACExEMLE, self).to(*args, **kwargs)
+        module = super(MACEEMLE, self).to(*args, **kwargs)
         module._mace = module._mace.to(*args, **kwargs)
         return module
 
@@ -1459,7 +1468,7 @@ class MACExEMLE(EMLE):
         """
         Returns a copy of this model in CPU memory.
         """
-        module = super(MACExEMLE, self).cpu(**kwargs)
+        module = super(MACEEMLE, self).cpu(**kwargs)
         module._mace = module._mace.cpu(**kwargs)
         if self._atomic_numbers is not None:
             module._atomic_numbers = module._atomic_numbers.cpu(**kwargs)
@@ -1469,7 +1478,7 @@ class MACExEMLE(EMLE):
         """
         Returns a copy of this model in CUDA memory.
         """
-        module = super(MACExEMLE, self).cuda(**kwargs)
+        module = super(MACEEMLE, self).cuda(**kwargs)
         module._mace = module._mace.cuda(**kwargs)
         if self._atomic_numbers is not None:
             module._atomic_numbers = module._atomic_numbers.cuda(**kwargs)
@@ -1479,7 +1488,7 @@ class MACExEMLE(EMLE):
         """
         Returns a copy of this model in float64 precision.
         """
-        module = super(MACExEMLE, self).double()
+        module = super(MACEEMLE, self).double()
         module._mace = module._mace.double()
         return module
 
@@ -1487,7 +1496,7 @@ class MACExEMLE(EMLE):
         """
         Returns a copy of this model in float32 precision.
         """
-        module = super(MACExEMLE, self).float()
+        module = super(MACEEMLE, self).float()
         module._mace = module._mace.float()
 
         return module
@@ -1526,40 +1535,30 @@ class MACExEMLE(EMLE):
         # Reshape the coordinates,
         xyz = xyz_qm.unsqueeze(0)
 
-        # Get the edge index and shifts for this configuration.
-        edge_index, shifts = self._get_neighbor_pairs(xyz_qm, None)
-
         # Get the device.
         device = xyz_qm.device
 
-        if self._atomic_numbers is None:
-            # Create the input dictionary passed to the MACE model using the passed atomic numbers.
-            node_attrs = self._get_node_attrs(atomic_numbers).to(self._dtype).to(device)
-            ptr = _torch.tensor([0, node_attrs.shape[0]], dtype=_torch.long, requires_grad=False).to(device)
-            batch = _torch.zeros(node_attrs.shape[0], dtype=_torch.long).to(device)
+        # Get the edge index and shifts for this configuration.
+        edge_index, shifts = self._get_neighbor_pairs(xyz_qm, None, self._mace.r_max, self._dtype, device)
 
-            input_dict = {
-                "ptr": ptr,
-                "node_attrs": node_attrs,
-                "batch": batch,
-                "pbc": self.pbc,
-                "positions": xyz_qm.to(self._dtype),
-                "edge_index": edge_index,
-                "shifts": shifts,
-                "cell": self.cell,
-            }
-        else:
-            # Create the input dictionary passed to the MACE model with the precomputed node attributes.
-            input_dict = {
-                "ptr": self.ptr,
-                "node_attrs": self.node_attrs,
-                "batch": self.batch,
-                "pbc": self.pbc,
-                "positions": xyz_qm.to(self._dtype),
-                "edge_index": edge_index,
-                "shifts": shifts,
-                "cell": self.cell,
-            }
+        if not _torch.equal(atomic_numbers, self._atomic_numbers):
+            # Update the node attributes if the atomic numbers have changed.
+            self._node_attrs = self._get_node_attrs(atomic_numbers).to(self._dtype).to(device)
+            self._ptr = _torch.tensor([0, self._node_attrs.shape[0]], dtype=_torch.long, requires_grad=False).to(device)
+            self._batch = _torch.zeros(self._node_attrs.shape[0], dtype=_torch.long).to(device)
+            self._atomic_numbers = atomic_numbers
+
+        # Create the input dictionary
+        input_dict = {
+            "ptr": self._ptr,
+            "node_attrs": self._node_attrs,
+            "batch": self._batch,
+            "pbc": self._pbc,
+            "positions": xyz_qm.to(self._dtype),
+            "edge_index": edge_index,
+            "shifts": shifts,
+            "cell": self._cell,
+        }
 
         # Get the in vacuo energy.
         EV_TO_HARTREE = 0.0367492929
