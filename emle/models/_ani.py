@@ -271,7 +271,7 @@ class ANI2xEMLE(_EMLE):
 
     def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
         """
-        Computes the static and induced EMLE energy components.
+        Compute the the ANI2x and static and induced EMLE energy components.
 
         Parameters
         ----------

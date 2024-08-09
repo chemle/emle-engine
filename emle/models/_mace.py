@@ -322,7 +322,7 @@ class MACEEMLE(_EMLE):
 
     def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
         """
-        Computes the static and induced EMLE energy components.
+        Compute the the MACE and static and induced EMLE energy components.
 
         Parameters
         ----------
