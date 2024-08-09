@@ -1065,7 +1065,7 @@ class EMLECalculator:
         if self._backend == "torchani":
             import torchani as _torchani
 
-            from . import _torchani_patches
+            from .models import _torchani_patches
 
             # Monkey-patch the TorchANI BuiltInModel and BuiltinEnsemble classes so that
             # they call self.aev_computer using args only to allow forward hooks to work
@@ -2002,7 +2002,9 @@ class EMLECalculator:
             try:
                 import NNPOps as _NNPOps
 
-                from ._torchani_patches import OptimizedTorchANI as _OptimizedTorchANI
+                from .models._torchani_patches import (
+                    OptimizedTorchANI as _OptimizedTorchANI,
+                )
 
                 _NNPOps.OptimizedTorchANI = _OptimizedTorchANI
 
