@@ -33,8 +33,6 @@ import torchani as _torchani
 from torch import Tensor
 from typing import Optional, Tuple
 
-from . import _torchani_patches
-
 from ._emle import EMLE as _EMLE
 
 try:
