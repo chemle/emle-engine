@@ -47,6 +47,8 @@ except:
 class ANI2xEMLE(_EMLE):
     def __init__(
         self,
+        emle_model=None,
+        emle_species=None,
         alpha_mode="species",
         model_index=None,
         ani2x_model=None,
@@ -60,6 +62,14 @@ class ANI2xEMLE(_EMLE):
         Parameters
         ----------
 
+        emle_model: str
+            Path to a custom EMLE model parameter file. If None, then the
+            default model for the specified 'alpha_mode' will be used.
+
+        emle_species: List[int]
+            List of species (atomic numbers) supported by the EMLE model. If
+            None, then the default species list will be used.
+
         alpha_mode: str
             How atomic polarizabilities are calculated.
                 "species":
@@ -69,7 +79,7 @@ class ANI2xEMLE(_EMLE):
                     for each reference environment
 
         model_index: int
-            The index of the model to use. If None, then the full 8 model
+            The index of the ANI2x model to use. If None, then the full 8 model
             ensemble will be used.
 
         ani2x_model: torchani.models.ANI2x, NNPOPS.OptimizedTorchANI
@@ -120,6 +130,8 @@ class ANI2xEMLE(_EMLE):
 
         # Call the base class constructor.
         super().__init__(
+            model=emle_model,
+            species=emle_species,
             alpha_mode=alpha_mode,
             device=device,
             dtype=dtype,

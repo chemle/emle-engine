@@ -54,6 +54,8 @@ except:
 class MACEEMLE(_EMLE):
     def __init__(
         self,
+        emle_model=None,
+        emle_species=None,
         alpha_mode="species",
         mace_model=None,
         atomic_numbers=None,
@@ -65,6 +67,15 @@ class MACEEMLE(_EMLE):
 
         Parameters
         ----------
+
+        emle_model: str
+            Path to a custom EMLE model parameter file. If None, then the
+            default model for the specified 'alpha_mode' will be used.
+
+        emle_species: List[int]
+            List of species (atomic numbers) supported by the EMLE model. If
+            None, then the default species list will be used.
+
         alpha_mode: str
             How atomic polarizabilities are calculated.
                 "species":
@@ -111,6 +122,8 @@ class MACEEMLE(_EMLE):
 
         # Call the base class constructor.
         super().__init__(
+            model=emle_model,
+            species=emle_species,
             alpha_mode=alpha_mode,
             device=device,
             dtype=dtype,
