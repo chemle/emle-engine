@@ -58,6 +58,10 @@ try:
 except:
     port = None
 model = os.getenv("EMLE_MODEL")
+try:
+    species = [int(x) for x in os.getenv("EMLE_SPECIES").split(",")]
+except:
+    species = None
 method = os.getenv("EMLE_METHOD")
 alpha_mode = os.getenv("EMLE_ALPHA_MODE")
 mm_charges = os.getenv("EMLE_MM_CHARGES")
@@ -129,6 +133,7 @@ env = {
     "host": host,
     "port": port,
     "model": model,
+    "species": species,
     "method": method,
     "alpha_mode": alpha_mode,
     "mm_charges": mm_charges,
@@ -183,6 +188,13 @@ parser.add_argument("--host", type=str, help="the hostname", required=False)
 parser.add_argument("--port", type=str, help="the port number", required=False)
 parser.add_argument(
     "--model", type=str, help="path to an EMLE model file", required=False
+)
+parser.add_argument(
+    "--species",
+    type=str,
+    nargs="*",
+    help="the species supported by the model",
+    required=False,
 )
 parser.add_argument(
     "--method",

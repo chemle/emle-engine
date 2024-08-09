@@ -262,6 +262,7 @@ class EMLECalculator:
     def __init__(
         self,
         model=None,
+        species=None,
         method="electrostatic",
         alpha_mode="species",
         backend="torchani",
@@ -296,6 +297,9 @@ class EMLECalculator:
         model: str
             Path to the EMLE embedding model parameter file. If None, then a
             default model will be used.
+
+        species: List[int]
+            List of species (atomic numbers) supported by the EMLE model. If
 
         method: str
             The desired embedding method. Options are:
@@ -528,6 +532,18 @@ class EMLECalculator:
                 _logger.error(msg)
                 raise IOError(msg)
             self._model = abs_model
+
+            # Validate the species for the custom model.
+            if species is not None:
+                if not isinstance(species, list):
+                    raise TypeError("'species' must be of type 'list'")
+                if not all(isinstance(s, int) for s in species):
+                    raise TypeError("All elements of 'species' must be of type 'int'")
+                if not all(s > 0 for s in species):
+                    raise ValueError(
+                        "All elements of 'species' must be greater than zero"
+                    )
+                self._species = species
         else:
             # Choose the default model based on the alpha mode.
             self._model = self._default_models[self._alpha_mode]
@@ -1216,6 +1232,7 @@ class EMLECalculator:
         # Store the settings as a dictionary.
         self._settings = {
             "model": None if model is None else self._model,
+            "species": None if species is None else self._species,
             "method": self._method,
             "alpha_mode": self._alpha_mode,
             "backend": self._backend,
