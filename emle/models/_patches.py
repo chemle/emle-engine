@@ -181,9 +181,9 @@ class BuiltinModel(torch.nn.Module):
         atomic_energies = self.neural_networks._atomic_energies((species, aevs))
         self_energies = self.energy_shifter.self_energies.clone().to(species.device)
         self_energies = self_energies[species]
-        self_energies[
-            species == torch.tensor(-1, device=species.device)
-        ] = torch.tensor(0, device=species.device, dtype=torch.double)
+        self_energies[species == torch.tensor(-1, device=species.device)] = (
+            torch.tensor(0, device=species.device, dtype=torch.double)
+        )
         # shift all atomic energies individually
         assert self_energies.shape == atomic_energies.shape
         atomic_energies += self_energies
@@ -312,9 +312,9 @@ class BuiltinEnsemble(BuiltinModel):
 
         self_energies = self.energy_shifter.self_energies.clone().to(species.device)
         self_energies = self_energies[species]
-        self_energies[
-            species == torch.tensor(-1, device=species.device)
-        ] = torch.tensor(0, device=species.device, dtype=torch.double)
+        self_energies[species == torch.tensor(-1, device=species.device)] = (
+            torch.tensor(0, device=species.device, dtype=torch.double)
+        )
         # shift all atomic energies individually
         assert self_energies.shape == member_atomic_energies.shape[1:]
         member_atomic_energies += self_energies
