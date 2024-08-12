@@ -318,7 +318,8 @@ class ANI2xEMLE(_torch.nn.Module):
             zero = _torch.tensor(0.0, dtype=xyz_qm.dtype, device=xyz_qm.device)
             return _torch.stack([E_vac, zero, zero])
 
-        # Set the AEVs as an attribute of the EMLE model.
+        # Set the AEVs captured by the forward hook as an attribute of the
+        # EMLE model.
         self._emle._aev = self._ani2x.aev_computer._aev
 
         # Get the EMLE energy components.
