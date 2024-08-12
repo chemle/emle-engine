@@ -474,6 +474,7 @@ class EMLE(_torch.nn.Module):
         # Compute the AEVs.
         if self._aev_computer is not None:
             aev = self._aev_computer((zid, xyz))[1][0][:, self._aev_mask]
+        # The AEVs have been pre-computed by a derived class.
         else:
             aev = self._aev[:, self._aev_mask]
         aev = aev / _torch.linalg.norm(aev, ord=2, dim=1, keepdim=True)
