@@ -63,6 +63,11 @@ class EMLE(_torch.nn.Module):
 
     # Class attributes.
 
+    # A flag for type inference. TorchScript doesn't support inheritance, so
+    # we need to check for an object of type torch.nn.Module, and that it has
+    # the required _is_emle attribute.
+    _is_emle = True
+
     # Store the expected path to the resources directory.
     _resource_dir = _os.path.join(
         _os.path.dirname(_os.path.abspath(__file__)), "..", "resources"
@@ -290,6 +295,9 @@ class EMLE(_torch.nn.Module):
         self.register_buffer("_ref_mean_k", ref_mean_k)
         self.register_buffer("_c_k", c_k)
 
+        # Initalise an empty AEV tensor to use to store the AEVs in derived classes.
+        self._aev = _torch.empty(0, dtype=dtype, device=device)
+
     def to(self, *args, **kwargs):
         """
         Performs Tensor dtype and/or device conversion on the model.
@@ -324,7 +332,7 @@ class EMLE(_torch.nn.Module):
 
     def cuda(self, **kwargs):
         """
-        Returns a copy of this model in CUDA memory.
+        Move all model parameters and buffers to CUDA memory.
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.cuda(**kwargs)
@@ -353,7 +361,7 @@ class EMLE(_torch.nn.Module):
 
     def cpu(self, **kwargs):
         """
-        Returns a copy of this model in CPU memory.
+        Move all model parameters and buffers to CPU memory.
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.cpu(**kwargs)
@@ -382,7 +390,7 @@ class EMLE(_torch.nn.Module):
 
     def double(self):
         """
-        Returns a copy of this model in float64 precision.
+        Casts all floating point model parameters and buffers to float64 precision.
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.double()
@@ -404,7 +412,7 @@ class EMLE(_torch.nn.Module):
 
     def float(self):
         """
-        Returns a copy of this model in float32 precision.
+        Casts all floating point model parameters and buffers to float32 precision.
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.float()
@@ -464,7 +472,10 @@ class EMLE(_torch.nn.Module):
         xyz = xyz_qm.unsqueeze(0)
 
         # Compute the AEVs.
-        aev = self._aev_computer((zid, xyz))[1][0][:, self._aev_mask]
+        if self._aev_computer is not None:
+            aev = self._aev_computer((zid, xyz))[1][0][:, self._aev_mask]
+        else:
+            aev = self._aev[:, self._aev_mask]
         aev = aev / _torch.linalg.norm(aev, ord=2, dim=1, keepdim=True)
 
         # Compute the MBIS valence shell widths.

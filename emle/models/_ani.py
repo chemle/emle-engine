@@ -44,7 +44,15 @@ except:
     pass
 
 
-class ANI2xEMLE(_EMLE):
+class ANI2xEMLE(_torch.nn.Module):
+
+    # Class attributes.
+
+    # A flag for type inference. TorchScript doesn't support inheritance, so
+    # we need to check for an object of type torch.nn.Module, and that it has
+    # the required _is_emle attribute.
+    _is_emle = True
+
     def __init__(
         self,
         emle_model=None,
@@ -99,6 +107,10 @@ class ANI2xEMLE(_EMLE):
         dtype: torch.dtype
             The data type to use for the models floating point tensors.
         """
+
+        # Call the base class constructor.
+        super().__init__()
+
         if model_index is not None:
             if not isinstance(model_index, int):
                 raise TypeError("'model_index' must be of type 'int'")
@@ -128,8 +140,8 @@ class ANI2xEMLE(_EMLE):
         else:
             self._atomic_numbers = None
 
-        # Call the base class constructor.
-        super().__init__(
+        # Create an instance of the EMLE model.
+        self._emle = _EMLE(
             model=emle_model,
             species=emle_species,
             alpha_mode=alpha_mode,
@@ -216,45 +228,41 @@ class ANI2xEMLE(_EMLE):
         """
         Performs Tensor dtype and/or device conversion on the model.
         """
-        module = super(ANI2xEMLE, self).to(*args, **kwargs)
-        module._ani2x = module._ani2x.to(*args, **kwargs)
-        return module
+        self._emle = self._emle.to(*args, **kwargs)
+        self._ani2x = self._ani2x.to(*args, **kwargs)
+        return self
 
     def cpu(self, **kwargs):
         """
-        Returns a copy of this model in CPU memory.
+        Move all model parameters and buffers to CPU memory.
         """
-        module = super(ANI2xEMLE, self).cpu(**kwargs)
-        module._ani2x = module._ani2x.cpu(**kwargs)
-        if self._atomic_numbers is not None:
-            module._atomic_numbers = module._atomic_numbers.cpu(**kwargs)
-        return module
+        self._emle = self._emle.cpu(**kwargs)
+        self._ani2x = self._ani2x.cpu(**kwargs)
+        return self
 
     def cuda(self, **kwargs):
         """
-        Returns a copy of this model in CUDA memory.
+        Move all model parameters and buffers to CUDA memory.
         """
-        module = super(ANI2xEMLE, self).cuda(**kwargs)
-        module._ani2x = module._ani2x.cuda(**kwargs)
-        if self._atomic_numbers is not None:
-            module._atomic_numbers = module._atomic_numbers.cuda(**kwargs)
-        return module
+        self._emle = self._emle.cuda(**kwargs)
+        self._ani2x = self._ani2x.cuda(**kwargs)
+        return self
 
     def double(self):
         """
-        Returns a copy of this model in float64 precision.
+        Casts all model parameters and buffers to float64 precision.
         """
-        module = super(ANI2xEMLE, self).double()
-        module._ani2x = module._ani2x.double()
-        return module
+        self._emle = self._emle.double()
+        self._ani2x = self._ani2x.double()
+        return self
 
     def float(self):
         """
-        Returns a copy of this model in float32 precision.
+        Casts all model parameters and buffers to float32 precision.
         """
-        module = super(ANI2xEMLE, self).float()
+        self._emle = self._emle.float()
         # Using .float() or .to(torch.float32) is broken for ANI2x models.
-        module._ani2x = _torchani.models.ANI2x(
+        self._ani2x = _torchani.models.ANI2x(
             periodic_table_index=True, model_index=self._model_index
         ).to(self._device)
         # Optimise the ANI2x model if atomic_numbers were specified.
@@ -267,7 +275,7 @@ class ANI2xEMLE(_EMLE):
             except:
                 pass
 
-        return module
+        return self
 
     def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
         """
@@ -295,20 +303,14 @@ class ANI2xEMLE(_EMLE):
             The ANI2x and static and induced EMLE energy components in Hartree.
         """
 
-        # Convert the atomic numbers to species IDs.
-        species_id = self._species_map[atomic_numbers]
-
-        # Reshape the IDs.
-        zid = species_id.unsqueeze(0)
-
         # Reshape the atomic numbers.
-        atomic_numbers = atomic_numbers.unsqueeze(0)
+        atomic_numbers_ani = atomic_numbers.unsqueeze(0)
 
         # Reshape the coordinates,
         xyz = xyz_qm.unsqueeze(0)
 
         # Get the in vacuo energy.
-        E_vac = self._ani2x((atomic_numbers, xyz)).energies[0]
+        E_vac = self._ani2x((atomic_numbers_ani, xyz)).energies[0]
 
         # If there are no point charges, return the in vacuo energy and zeros
         # for the static and induced terms.
@@ -316,39 +318,11 @@ class ANI2xEMLE(_EMLE):
             zero = _torch.tensor(0.0, dtype=xyz_qm.dtype, device=xyz_qm.device)
             return _torch.stack([E_vac, zero, zero])
 
-        # Get the AEVs computer by the forward hook and normalise.
-        aev = self._ani2x.aev_computer._aev[:, self._aev_mask]
-        aev = aev / _torch.linalg.norm(aev, ord=2, dim=1, keepdim=True)
+        # Set the AEVs as an attribute of the EMLE model.
+        self._emle._aev = self._ani2x.aev_computer._aev
 
-        # Compute the MBIS valence shell widths.
-        s = self._gpr(aev, self._ref_mean_s, self._c_s, species_id)
+        # Get the EMLE energy components.
+        E_emle = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
 
-        # Compute the electronegativities.
-        chi = self._gpr(aev, self._ref_mean_chi, self._c_chi, species_id)
-
-        # Convert coordinates to Bohr.
-        ANGSTROM_TO_BOHR = 1.8897261258369282
-        xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
-        xyz_mm_bohr = xyz_mm * ANGSTROM_TO_BOHR
-
-        # Compute the static energy.
-        q_core = self._q_core[species_id]
-        if self._alpha_mode == "species":
-            k = self._k[species_id]
-        else:
-            k = self._gpr(aev, self._ref_mean_k, self._c_k, species_id) ** 2
-        r_data = self._get_r_data(xyz_qm_bohr)
-        mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
-        q = self._get_q(r_data, s, chi)
-        q_val = q - q_core
-        mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k)
-        vpot_q_core = self._get_vpot_q(q_core, mesh_data[0])
-        vpot_q_val = self._get_vpot_q(q_val, mesh_data[1])
-        vpot_static = vpot_q_core + vpot_q_val
-        E_static = _torch.sum(vpot_static @ charges_mm)
-
-        # Compute the induced energy.
-        vpot_ind = self._get_vpot_mu(mu_ind, mesh_data[2])
-        E_ind = _torch.sum(vpot_ind @ charges_mm) * 0.5
-
-        return _torch.stack([E_vac, E_static, E_ind])
+        # Return the ANI2x and EMLE energy components.
+        return _torch.stack([E_vac, E_emle[0], E_emle[1]])

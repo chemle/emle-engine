@@ -51,7 +51,15 @@ except:
     _has_e3nn = False
 
 
-class MACEEMLE(_EMLE):
+class MACEEMLE(_torch.nn.Module):
+
+    # Class attributes.
+
+    # A flag for type inference. TorchScript doesn't support inheritance, so
+    # we need to check for an object of type torch.nn.Module, and that it has
+    # the required _is_emle attribute.
+    _is_emle = True
+
     def __init__(
         self,
         emle_model=None,
@@ -99,6 +107,10 @@ class MACEEMLE(_EMLE):
         dtype: torch.dtype
             The data type to use for the models floating point tensors.
         """
+
+        # Call the base class constructor.
+        super().__init__()
+
         if not _has_mace:
             raise ImportError(
                 'mace is required to use the MACEEMLE model. Install it with "pip install mace-torch"'
@@ -120,8 +132,8 @@ class MACEEMLE(_EMLE):
         else:
             self._dtype = _torch.get_default_dtype()
 
-        # Call the base class constructor.
-        super().__init__(
+        # Create an instance of the EMLE model.
+        self._emle = _EMLE(
             model=emle_model,
             species=emle_species,
             alpha_mode=alpha_mode,
@@ -279,46 +291,45 @@ class MACEEMLE(_EMLE):
         """
         Performs Tensor dtype and/or device conversion on the model.
         """
-        module = super(MACEEMLE, self).to(*args, **kwargs)
-        module._mace = module._mace.to(*args, **kwargs)
-        return module
+        self._emle = self._emle.to(*args, **kwargs)
+        self._mace = self._mace.to(*args, **kwargs)
+        return self
 
     def cpu(self, **kwargs):
         """
-        Returns a copy of this model in CPU memory.
+        Move all model parameters and buffers to CPU memory.
         """
-        module = super(MACEEMLE, self).cpu(**kwargs)
-        module._mace = module._mace.cpu(**kwargs)
+        self._emle = self._emle.cpu(**kwargs)
+        self._mace = self._mace.cpu(**kwargs)
         if self._atomic_numbers is not None:
-            module._atomic_numbers = module._atomic_numbers.cpu(**kwargs)
-        return module
+            self._atomic_numbers = self._atomic_numbers.cpu(**kwargs)
+        return self
 
     def cuda(self, **kwargs):
         """
-        Returns a copy of this model in CUDA memory.
+        Move all model parameters and buffers to CUDA memory.
         """
-        module = super(MACEEMLE, self).cuda(**kwargs)
-        module._mace = module._mace.cuda(**kwargs)
+        self._emle = self._emle.cuda(**kwargs)
+        self._mace = self._mace.cuda(**kwargs)
         if self._atomic_numbers is not None:
-            module._atomic_numbers = module._atomic_numbers.cuda(**kwargs)
-        return module
+            self._atomic_numbers = self._atomic_numbers.cuda(**kwargs)
+        return self
 
     def double(self):
         """
-        Returns a copy of this model in float64 precision.
+        Cast all floating point model parameters and buffers to float64 precision.
         """
-        module = super(MACEEMLE, self).double()
-        module._mace = module._mace.double()
-        return module
+        self._emle = self._emle.double()
+        self._mace = self._mace.double()
+        return self
 
     def float(self):
         """
-        Returns a copy of this model in float32 precision.
+        Cast all floating point model parameters and buffers to float32 precision.
         """
-        module = super(MACEEMLE, self).float()
-        module._mace = module._mace.float()
-
-        return module
+        self._emle = self._emle.float()
+        self._mace = self._mace.float()
+        return self
 
     def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
         """
@@ -345,15 +356,6 @@ class MACEEMLE(_EMLE):
         result: torch.Tensor (3,)
             The ANI2x and static and induced EMLE energy components in Hartree.
         """
-        # Convert the atomic numbers to species IDs.
-        species_id = self._species_map[atomic_numbers]
-
-        # Reshape the IDs.
-        zid = species_id.unsqueeze(0)
-
-        # Reshape the coordinates,
-        xyz = xyz_qm.unsqueeze(0)
-
         # Get the device.
         device = xyz_qm.device
 
@@ -403,39 +405,8 @@ class MACEEMLE(_EMLE):
             zero = _torch.tensor(0.0, dtype=xyz_qm.dtype, device=device)
             return _torch.stack([E_vac, zero, zero])
 
-        # Get the AEVs computer by the forward hook and normalise.
-        aev = self._aev_computer((zid, xyz))[1][0][:, self._aev_mask]
-        aev = aev / _torch.linalg.norm(aev, ord=2, dim=1, keepdim=True)
+        # Get the EMLE energy components.
+        E_emle = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
 
-        # Compute the MBIS valence shell widths.
-        s = self._gpr(aev, self._ref_mean_s, self._c_s, species_id)
-
-        # Compute the electronegativities.
-        chi = self._gpr(aev, self._ref_mean_chi, self._c_chi, species_id)
-
-        # Convert coordinates to Bohr.
-        ANGSTROM_TO_BOHR = 1.8897261258369282
-        xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
-        xyz_mm_bohr = xyz_mm * ANGSTROM_TO_BOHR
-
-        # Compute the static energy.
-        q_core = self._q_core[species_id]
-        if self._alpha_mode == "species":
-            k = self._k[species_id]
-        else:
-            k = self._gpr(aev, self._ref_mean_k, self._c_k, species_id) ** 2
-        r_data = self._get_r_data(xyz_qm_bohr)
-        mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
-        q = self._get_q(r_data, s, chi)
-        q_val = q - q_core
-        mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k)
-        vpot_q_core = self._get_vpot_q(q_core, mesh_data[0])
-        vpot_q_val = self._get_vpot_q(q_val, mesh_data[1])
-        vpot_static = vpot_q_core + vpot_q_val
-        E_static = _torch.sum(vpot_static @ charges_mm)
-
-        # Compute the induced energy.
-        vpot_ind = self._get_vpot_mu(mu_ind, mesh_data[2])
-        E_ind = _torch.sum(vpot_ind @ charges_mm) * 0.5
-
-        return _torch.stack([E_vac, E_static, E_ind])
+        # Return the MACE and EMLE energy components.
+        return _torch.stack([E_vac, E_emle[0], E_emle[1]])
