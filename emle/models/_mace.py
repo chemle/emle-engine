@@ -169,7 +169,7 @@ class MACEEMLE(_torch.nn.Module):
             else:
                 # Assuming that the model is a local model.
                 if _os.path.exists(mace_model):
-                    self._mace = _torch.load(mace_model, map_location="device")
+                    self._mace = _torch.load(mace_model, map_location=device)
                 else:
                     raise FileNotFoundError(f"MACE model file not found: {mace_model}")
         else:
