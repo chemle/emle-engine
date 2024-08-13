@@ -46,7 +46,6 @@ _torchani.models.BuiltinEnsemble = _patches.BuiltinEnsemble
 
 try:
     import NNPOps as _NNPOps
-    import NNPOps.neighbors.getNeighborPairs as _getNeighborPairs
 
     _NNPOps.OptimizedTorchANI = _patches.OptimizedTorchANI
 
@@ -991,58 +990,3 @@ class EMLE(_torch.nn.Module):
         result: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
         """
         return 1 - (1 + au3) * _torch.exp(-au3)
-
-    @staticmethod
-    def _get_neighbor_pairs(
-        positions: _torch.Tensor,
-        cell: Optional[_torch.Tensor],
-        cutoff: float,
-        dtype: _torch.dtype,
-        device: _torch.device,
-    ) -> Tuple[_torch.Tensor, _torch.Tensor]:
-        """
-        Get the shifts and edge indices.
-
-        Notes
-        -----
-        This method calculates the shifts and edge indices by determining neighbor pairs (``neighbors``)
-        and respective wrapped distances (``wrappedDeltas``) using ``NNPOps.neighbors.getNeighborPairs``.
-        After obtaining the ``neighbors`` and ``wrappedDeltas``, the pairs with negative indices (r>cutoff)
-        are filtered out, and the edge indices and shifts are finally calculated.
-
-        Parameters
-        ----------
-        positions : _torch.Tensor
-            The positions of the atoms.
-        cell : _torch.Tensor
-            The cell vectors.
-        cutoff : float
-            The cutoff distance.
-        dtype : _torch.dtype
-            The data type.
-        device : _torch.device
-            The device.
-
-        Returns
-        -------
-        edgeIndex : _torch.Tensor
-            The edge indices.
-        shifts : _torch.Tensor
-            The shifts.
-        """
-        # Get the neighbor pairs, shifts and edge indices.
-        neighbors, wrapped_deltas, _, _ = _getNeighborPairs(positions, cutoff, -1, cell)
-        mask = neighbors >= 0
-        neighbors = neighbors[mask].view(2, -1)
-        wrapped_deltas = wrapped_deltas[mask[0], :]
-
-        edge_index = _torch.hstack((neighbors, neighbors.flip(0))).to(_torch.int64)
-        if cell is not None:
-            deltas = positions[edge_index[0]] - positions[edge_index[1]]
-            wrapped_deltas = _torch.vstack((wrapped_deltas, -wrapped_deltas))
-            shifts_idx = _torch.mm(deltas - wrapped_deltas, _torch.linalg.inv(cell))
-            shifts = _torch.mm(shifts_idx, cell)
-        else:
-            shifts = _torch.zeros((edge_index.shape[1], 3), dtype=dtype, device=device)
-
-        return edge_index, shifts
