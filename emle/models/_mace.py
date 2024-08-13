@@ -34,6 +34,7 @@ from torch import Tensor
 from typing import Optional, Tuple, List
 
 from ._emle import EMLE as _EMLE
+from ._emle import _has_nnpops
 
 try:
     import mace.tools as _mace_tools
