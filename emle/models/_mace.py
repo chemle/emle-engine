@@ -162,8 +162,8 @@ class MACEEMLE(_torch.nn.Module):
                 size = mace_model.split("-")[-1]
                 if not size in ["small", "medium", "large"]:
                     raise ValueError(
-                        f"Unsupported MACE model: '{mace_model}'. Available MACE-OFF23 models are 'mace-off23-small', "
-                        "'mace-off23-medium', 'mace-off23-large'"
+                        f"Unsupported MACE model: '{mace_model}'. Available MACE-OFF23 models are "
+                        "'mace-off23-small', 'mace-off23-medium', 'mace-off23-large'"
                     )
                 self._mace = _mace_off(model=size, device=device, return_raw_model=True)
             else:
