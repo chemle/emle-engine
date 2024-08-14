@@ -71,7 +71,8 @@ except:
 @pytest.mark.parametrize("alpha_mode", ["species", "reference"])
 def test_emle(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     """
-    Check that we can instantiate the default EMLE model.
+    Check that we can instantiate the default EMLE model, convert
+    to TorchScript, then compute energies and gradients.
     """
     # Instantiate the default EMLE model.
     model = EMLE(alpha_mode=alpha_mode)
@@ -87,7 +88,8 @@ def test_emle(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
 @pytest.mark.parametrize("alpha_mode", ["species", "reference"])
 def test_ani2x(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     """
-    Check that we can instantiate the default ANI2xEMLE model.
+    Check that we can instantiate the default ANI2xEMLE model,
+    convert to TorchScript, then compute energies and gradients
     """
     # Instantiate the ANI2xEMLE model.
     model = ANI2xEMLE(alpha_mode=alpha_mode)
@@ -115,7 +117,8 @@ def test_ani2x(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
 @pytest.mark.parametrize("alpha_mode", ["species", "reference"])
 def test_ani2x_nnpops(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     """
-    Check that we can instantiate the default ANI2xEMLE model with NNPOps.
+    Check that we can instantiate the default ANI2xEMLE model with NNPOps,
+    convert to TorchScript, then compute energies and gradients.
     """
     # Instantiate the ANI2xEMLE model using NNPOps.
     model = ANI2xEMLE(alpha_mode=alpha_mode, atomic_numbers=atomic_numbers)
@@ -136,7 +139,8 @@ def test_ani2x_nnpops(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
 )
 def test_mace(alpha_mode, mace_model, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     """
-    Check that we can instantiate the default MACE model.
+    Check that we can instantiate MACEMELE models, convert to TorchScript,
+    then compute energies and gradients.
     """
     # Instantiate the MACEEMLE model.
     model = MACEEMLE(alpha_mode=alpha_mode)
