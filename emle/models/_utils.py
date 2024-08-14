@@ -47,29 +47,39 @@ def _get_neighbor_pairs(
 
     Notes
     -----
-    This method calculates the shifts and edge indices by determining neighbor pairs (``neighbors``)
-    and respective wrapped distances (``wrappedDeltas``) using ``NNPOps.neighbors.getNeighborPairs``.
-    After obtaining the ``neighbors`` and ``wrappedDeltas``, the pairs with negative indices (r>cutoff)
-    are filtered out, and the edge indices and shifts are finally calculated.
+
+    This method calculates the shifts and edge indices by determining neighbor
+    pairs (``neighbors``) and respective wrapped distances (``wrappedDeltas``)
+    using ``NNPOps.neighbors.getNeighborPairs``.  After obtaining the
+    ``neighbors`` and ``wrappedDeltas``, the pairs with negative indices
+    (r>cutoff) are filtered out, and the edge indices and shifts are finally
+    calculated.
 
     Parameters
     ----------
-    positions : _torch.Tensor
+
+    positions: _torch.Tensor
         The positions of the atoms.
-    cell : _torch.Tensor
+
+    cell: _torch.Tensor
         The cell vectors.
-    cutoff : float
-        The cutoff distance.
-    dtype : _torch.dtype
+
+    cutoff: float
+        The cutoff distance in Angstrom.
+
+    dtype: _torch.dtype
         The data type.
-    device : _torch.device
+
+    device: _torch.device
         The device.
 
     Returns
     -------
-    edgeIndex : _torch.Tensor
+
+    edge_index : _torch.Tensor
         The edge indices.
-    shifts : _torch.Tensor
+
+    shifts: _torch.Tensor
         The shifts.
     """
     # Get the neighbor pairs, shifts and edge indices.
