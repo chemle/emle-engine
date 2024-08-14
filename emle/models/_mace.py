@@ -37,7 +37,6 @@ from ._emle import _has_nnpops
 from ._utils import _get_neighbor_pairs
 
 try:
-    import mace.tools as _mace_tools
     from mace.calculators.foundations_models import mace_off as _mace_off
 
     _has_mace = True
