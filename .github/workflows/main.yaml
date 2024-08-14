@@ -54,8 +54,8 @@ jobs:
           environment-file: environment.yaml
           miniforge-version: latest
 #
-      - name: Install pytest
-        run: conda install pytest
+      - name: Install additional test dependencies
+        run: conda install pytest nnpops mace-torch
 #
       - name: Install the package
         run: pip install .
