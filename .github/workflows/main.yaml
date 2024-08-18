@@ -55,7 +55,7 @@ jobs:
           miniforge-version: latest
 #
       - name: Install additional test dependencies
-        run: conda install pytest nnpops && pip install mace-torch
+        run: conda install pytest
 #
       - name: Install the package
         run: pip install .

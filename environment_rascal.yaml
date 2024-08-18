@@ -10,6 +10,7 @@ dependencies:
   - deepmd-kit
   - eigen
   - loguru
+  - nnpops
   - pip
   - psutil
   - pygit2
@@ -20,3 +21,4 @@ dependencies:
   - xtb-python
   - pip:
     - git+https://github.com/lab-cosmo/librascal.git
+    - mace-torch

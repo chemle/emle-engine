@@ -11,6 +11,7 @@ dependencies:
   - loguru
   - openmm >= 8.1
   - nnpops
+  - pip
   - psutil
   - pygit2
   - pytorch
@@ -19,3 +20,5 @@ dependencies:
   - sire
   - torchani
   - xtb-python
+  - pip:
+    - mace-torch
