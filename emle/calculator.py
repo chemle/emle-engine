@@ -2040,7 +2040,9 @@ class EMLECalculator:
 
             # Create the model.
             ani2x_emle = _ANI2xEMLE(
-                ani2x_model=self._torchani_model, device=self._device
+                emle_model=self._model,
+                ani2x_model=self._torchani_model,
+                device=self._device,
             )
 
             # Convert to TorchScript.
