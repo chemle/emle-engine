@@ -229,8 +229,8 @@ class EMLECalculator:
 
     # Create the name of the default model file for each alpha mode.
     _default_models = {
-        "species": _os.path.join(_resource_dir, "emle_qm7_aev.mat"),
-        "reference": _os.path.join(_resource_dir, "emle_qm7_aev_alphagpr.mat"),
+        "species": _os.path.join(_resource_dir, "emle_qm7_aev_species.mat"),
+        "reference": _os.path.join(_resource_dir, "emle_qm7_aev_reference.mat"),
     }
 
     # Store the list of supported species.
