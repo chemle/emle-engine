@@ -375,6 +375,14 @@ there is no need to specify the `lambda_interpolate` keyword when creating an
 `EMLECalculator` instance. Instead, interpolation can be enabled when creating a
 `Sire` dynamics object via the same keyword. (See the [tutorial](https://github.com/OpenBioSim/sire/tree/devel/doc/source/tutorial/part08/02_emle.rst) for details.)
 
+## Torch models
+
+The `emle.models` module provides a number of `torch` models. The base `EMLE` model
+can be used to compute the EMLE energy in isolation. The combined `ANI2xEMLE`
+and `MACEEMLE` models allow the computation of in vacuo and embedding energies
+in one go, using the [ANI2x](https://github.com/aiqm/torchani) and [MACE](https://github.com/ACEsuit/mace) models respectively. Creating additional models is straightforward. For details of how to use the `torch` models,
+see the tutorial documentation [here](https://github.com/OpenBioSim/sire/blob/feature_emle/doc/source/tutorial/part08/02_emle.rst#creating-an-emle-torch-module).
+
 ## Issues
 
 The [DeePMD-kit](https://docs.deepmodeling.com/projects/deepmd/en/master/index.html) conda package pulls in a version of MPI which may cause
