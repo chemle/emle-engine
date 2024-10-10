@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: Hedges
+  given-names: Lester
+  orcid: "https://orcid.org/0000-0002-5624-0500"
+- family-names: Zinovjev
+  given-names: Kirill
+  orcid: "https://orcid.org/0000-0003-1052-5698"
+- family-names: Woods
+  given-names: Christopher
+  orcid: "https://orcid.org/0000-0001-6563-9903"
+- family-names: Tuñón
+  given-names: Iñaki
+  orcid: "https://orcid.org/0000-0002-6995-1838"
+- family-names: van der Kamp
+  given-names: Marc
+  orcid: "https://orcid.org/0000-0002-8060-3359"
+title: "emle-engine"
+version: 1.0.0
+date-released: 2024-10-10
+url: "https://github.com/chemle/emle-engine"
+repository-code: "https://github.com/chemle/emle-engine"
