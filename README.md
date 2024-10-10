@@ -3,6 +3,10 @@
 [![GitHub Actions](https://github.com/chemle/emle-engine/actions/workflows/main.yaml/badge.svg)](https://github.com/chemle/emle-engine/actions/workflows/main.yaml)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL_v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 
+![Emily Engine](emily_engine.jpg)
+
+(Mascot courtesy [Nictrain123](https://www.deviantart.com/nictrain123/art/Simply-Emily-774815887) ![CC BY 3.0](https://licensebuttons.net/l/by/3.0/80x15.png).)
+
 A simple interface to allow electrostatic embedding of machine learning
 potentials using an [ORCA](https://orcaforum.kofo.mpg.de/i-nde-x.php-)-like interface. Based on [code](https://github.com/emedio/embedding) by Kirill Zinovjev. An example [sander](htps://ambermd.org/AmberTools.h) implementation is provided. This
 works by reusing the existing interface between sander and [ORCA](https://orcaforum.kofo.mpg.de/index.php), meaning
@@ -38,13 +42,13 @@ environment that is compatible with your CUDA driver.)
 Finally, install `emle-engine`:
 
 ```sh
-python setup.py install
+pip install .
 ```
 
 If you are developing and want an editable install, use:
 
 ```sh
-python setup.py develop
+pip install -e .
 ```
 
 ## Usage
@@ -156,7 +160,18 @@ regardless of where it is launched.
 
 We also support the use [Rascal](https://github.com/lab-cosmo/librascal)
 for the calculation of delta-learning corrections to the in vacuo energies and
-gradients. To use, you will need to specify a model file using the `--rascal-model`
+gradients. To use, you will first need to create an environment with the additional
+dependencies:
+
+```sh
+conda env create -f environment_rascal.yaml
+conda activate emle-rascal
+```
+
+(These are not included in the default environment as they limit the supported
+Python versions.)
+
+Then, specify a model file using the `--rascal-model`
 command-line argument, or via the `EMLE_RASCAL_MODEL` environment variable.
 
 Note that the chosen [backend](#backends) _must_ match the one used to train the model. At
@@ -209,6 +224,15 @@ of floats (space separated from the command-line, comma-separated when using
 the environment variable) or a path to a file. When using a file, this should
 be formatted as a single column, with one line per QM atom. The units
 are electron charge.
+
+## Alpha mode
+
+We support two methods for the calculation of atomic polarisabilities. The
+default, `species`, uses a single volume scaling factor for each species.
+Alternatively, `reference`, calculates the scaling factors using Gaussian
+Process Regression (GPR) using the values learned for each reference environment.
+The alpha mode can be specified using the `--alpha-mode` command-line argument,
+or via the `EMLE_ALPHA_MODE` environment variable.
 
 ## Logging
 
@@ -327,9 +351,8 @@ energies.
 
 We provide an interface between `emle-engine` and [OpenMM](https://openmm.org) via the
 [Sire](https://sire.openbiosim.org/) molecular simulation framework. This allows QM/MM simulations
-to be run with OpenMM using EMLE for the embedding model. This provides improved
-performance and flexibility in comparison to the `sander` interface, although
-the implementation should currently be treated as being _experimental_.
+to be run with OpenMM using EMLE for the embedding model. This provides greatly
+improved performance and flexibility in comparison to the `sander` interface.
 
 To use, first create an `emle-sire` conda environment:
 
@@ -341,16 +364,24 @@ conda activate emle-sire
 Next install `emle-engine` into the environment:
 
 ```sh
-python setup.py install
+pip install .
 ```
 
 For instructions on how to use the `emle-sire` interface, see the tutorial
-documentation [here](https://github.com/OpenBioSim/sire/blob/feature_emle/doc/source/tutorial/partXX/02_emle.rst).
+documentation [here](https://github.com/OpenBioSim/sire/tree/devel/doc/source/tutorial/part08/02_emle.rst).
 
 When performing end-state correction simulations using the `emle-sire` interface
 there is no need to specify the `lambda_interpolate` keyword when creating an
 `EMLECalculator` instance. Instead, interpolation can be enabled when creating a
-`Sire` dynamics object via the same keyword. (See the [tutorial](https://github.com/OpenBioSim/sire/blob/feature_emle/doc/source/tutorial/partXX/02_emle.rst) for details.)
+`Sire` dynamics object via the same keyword. (See the [tutorial](https://github.com/OpenBioSim/sire/tree/devel/doc/source/tutorial/part08/02_emle.rst) for details.)
+
+## Torch models
+
+The `emle.models` module provides a number of `torch` models. The base `EMLE` model
+can be used to compute the EMLE energy in isolation. The combined `ANI2xEMLE`
+and `MACEEMLE` models allow the computation of in vacuo and embedding energies
+in one go, using the [ANI2x](https://github.com/aiqm/torchani) and [MACE](https://github.com/ACEsuit/mace) models respectively. Creating additional models is straightforward. For details of how to use the `torch` models,
+see the tutorial documentation [here](https://github.com/OpenBioSim/sire/blob/feature_emle/doc/source/tutorial/part08/02_emle.rst#creating-an-emle-torch-module).
 
 ## Issues
 

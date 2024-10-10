@@ -1,0 +1,24 @@
+name: emle-rascal
+
+channels:
+  - conda-forge
+
+dependencies:
+  - ambertools
+  - ase
+  - compilers
+  - deepmd-kit
+  - eigen
+  - loguru
+  - nnpops
+  - pip
+  - psutil
+  - pygit2
+  - pytorch
+  - python < 3.11
+  - pyyaml
+  - torchani
+  - xtb-python
+  - pip:
+    - git+https://github.com/lab-cosmo/librascal.git
+    - mace-torch

@@ -53,11 +53,9 @@ jobs:
           activate-environment: emle
           environment-file: environment.yaml
           miniforge-version: latest
-          miniforge-variant: Mambaforge
-          use-mamba: true
 #
-      - name: Install pytest
-        run: mamba install pytest
+      - name: Install additional test dependencies
+        run: conda install pytest
 #
       - name: Install the package
         run: pip install .

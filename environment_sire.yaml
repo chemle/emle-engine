@@ -7,19 +7,18 @@ channels:
 dependencies:
   - ambertools
   - ase
-  - compilers
   - deepmd-kit
-  - eigen
   - loguru
   - openmm >= 8.1
+  - nnpops
   - pip
   - psutil
-  - pybind11
+  - pygit2
   - pytorch
-  - python < 3.11
+  - python
   - pyyaml
   - sire
   - torchani
   - xtb-python
   - pip:
-    - git+https://github.com/lab-cosmo/librascal.git
+    - mace-torch

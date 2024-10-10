@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with EMLE-Engine If not, see <http://www.gnu.org/licenses/>.
+# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
 #####################################################################
 
 """EMLE calculator implementation."""
@@ -44,15 +44,7 @@ import scipy.io as _scipy_io
 import ase as _ase
 import ase.io as _ase_io
 
-from rascal.representations import SphericalInvariants as _SphericalInvariants
-
 import torch as _torch
-
-try:
-    from torch.func import grad_and_value as _grad_and_value
-except:
-    from func_torch import grad_and_value as _grad_and_value
-
 
 _ANGSTROM_TO_BOHR = 1.0 / _ase.units.Bohr
 _NANOMETER_TO_BOHR = 10.0 / _ase.units.Bohr
@@ -60,25 +52,65 @@ _BOHR_TO_ANGSTROM = _ase.units.Bohr
 _EV_TO_HARTREE = 1.0 / _ase.units.Hartree
 _KCAL_MOL_TO_HARTREE = 1.0 / _ase.units.Hartree * _ase.units.kcal / _ase.units.mol
 _HARTREE_TO_KJ_MOL = _ase.units.Hartree / _ase.units.kJ * _ase.units.mol
+_NANOMETER_TO_ANGSTROM = 10.0
 
-# Settings for the default model. For system specific models, these will be
-# overwritten by values in the model file.
-_SPECIES = (1, 6, 7, 8, 16)
-_SIGMA = 1e-3
-_SPHERICAL_EXPANSION_HYPERS_COMMON = {
-    "gaussian_sigma_constant": 0.5,
-    "gaussian_sigma_type": "Constant",
-    "cutoff_smooth_width": 0.5,
-    "radial_basis": "GTO",
-    "expansion_by_species_method": "user defined",
-    "global_species": _SPECIES,
-}
+
+class _AEVCalculator:
+    """
+    Calculates AEV feature vectors for a given system
+    """
+
+    def __init__(self, aev_computer, aev_mask):
+        """
+        Constructor
+
+        Parameters
+        ----------
+
+        aev_computer: torchani.aev.AEVComputer
+            Computer for AEV features.
+
+        aev_mask: torch.tensor (N_REF, )
+            The mask for the AEV features.
+        """
+        self._aev_computer = aev_computer
+        self._aev_mask = aev_mask
+
+    def __call__(self, zid, xyz):
+        """
+        Calculates the AEV feature vectors for a given molecule.
+
+        Parameters
+        ----------
+
+        zid: numpy.array (N_ATOMS)
+            Chemical species indices for each atom.
+
+        xyz: torch.tensor (N_ATOMS, 3)
+            Atomic positions in Bohr.
+
+        Returns
+        -------
+
+        aev: torch.tensor (N_ATOMS, N_AEV)
+            AEV feature vectors for each atom.
+        """
+
+        # Reshape the species indices.
+        zid = zid.reshape(1, *zid.shape)
+
+        # Reshape the atomic positions and convert to Angstrom.
+        xyz = xyz.reshape(1, *xyz.shape) * _BOHR_TO_ANGSTROM
+
+        # Compute the AEVs.
+        aev = self._aev_computer((zid, xyz))[1][0][:, self._aev_mask]
+        return aev / _torch.linalg.norm(aev, axis=1, keepdims=True)
 
 
 class _GPRCalculator:
     """Predicts an atomic property for a molecule with Gaussian Process Regression (GPR)."""
 
-    def __init__(self, ref_values, ref_soap, n_ref, sigma):
+    def __init__(self, ref_values, ref_features, n_ref, sigma, device):
         """
         Constructor
 
@@ -88,7 +120,7 @@ class _GPRCalculator:
         ref_values: numpy.array (N_Z, N_REF)
             The property values corresponding to the basis vectors for each species.
 
-        ref_soap: numpy.array (N_Z, N_REF, N_SOAP)
+        ref_features: numpy.array (N_Z, N_REF, N_FEAT)
             The basis feature vectors for each species.
 
         n_ref: (N_Z,)
@@ -96,95 +128,74 @@ class _GPRCalculator:
 
         sigma: float
             The uncertainty of the observations (regularizer).
-        """
-        self.ref_soap = ref_soap
-        Kinv = self.get_Kinv(ref_soap, sigma)
-        self.n_ref = n_ref
-        self.n_z = len(n_ref)
-        self.ref_mean = _np.sum(ref_values, axis=1) / n_ref
-        ref_shifted = ref_values - self.ref_mean[:, None]
-        self.c = (Kinv @ ref_shifted[:, :, None]).squeeze()
 
-    def __call__(self, mol_soap, zid, gradient=False):
+        device: torch device
+            The PyTorch device to use for calculations.
+        """
+        # Store the device and reference features.
+        self._device = device
+        self._ref_features = ref_features
+
+        # Compute the inverse of the K matrix.
+        Kinv = _torch.tensor(
+            self._get_Kinv(ref_features, sigma),
+            dtype=_torch.float32,
+            device=self._device,
+        )
+
+        # Store additional attributes for the GPR model.
+        self._n_ref = n_ref
+        self._n_z = len(n_ref)
+        self._ref_mean = _np.sum(ref_values, axis=1) / n_ref
+        ref_shifted = _torch.tensor(
+            ref_values - self._ref_mean[:, None],
+            dtype=_torch.float32,
+            device=self._device,
+        )
+        self._c = (Kinv @ ref_shifted[:, :, None]).squeeze()
+
+    def __call__(self, mol_features, zid):
         """
 
         Parameters
         ----------
 
-        mol_soap: numpy.array (N_ATOMS, N_SOAP)
+        mol_features: numpy.array (N_ATOMS, N_FEAT)
             The feature vectors for each atom.
 
-        zid: numpy.array (N_ATOMS,)
+        zid: torch.tensor (N_ATOMS,)
             The species identity value of each atom.
-
-        gradient: bool
-            Whether the gradient should be calculated.
 
         Returns
         -------
 
-        result: numpy.array (N_ATOMS)
-            The values of the predicted property for each atom
-
-        gradient: numpy.array (N_ATOMS, N_SOAP)
-            The gradients of the property w.r.t. the SOAP features
+        result: torch.tensor, numpy.array (N_ATOMS)
+            The values of the predicted property for each atom.
         """
 
-        result = _np.zeros(len(zid), dtype=_np.float32)
-        for i in range(self.n_z):
-            n_ref = self.n_ref[i]
-            ref_soap_z = self.ref_soap[i, :n_ref]
-            mol_soap_z = mol_soap[zid == i, :, None]
+        result = _torch.zeros(len(zid), dtype=_torch.float32, device=self._device)
+        for i in range(self._n_z):
+            n_ref = self._n_ref[i]
+            ref_features_z = _torch.tensor(
+                self._ref_features[i, :n_ref], dtype=_torch.float32, device=self._device
+            )
+            mol_features_z = mol_features[zid == i, :, None]
 
-            K_mol_ref2 = (ref_soap_z @ mol_soap_z) ** 2
+            K_mol_ref2 = (ref_features_z @ mol_features_z) ** 2
             K_mol_ref2 = K_mol_ref2.reshape(K_mol_ref2.shape[:-1])
-            result[zid == i] = K_mol_ref2 @ self.c[i, :n_ref] + self.ref_mean[i]
-        if not gradient:
-            return result
-        return result, self.get_gradient(mol_soap, zid)
+            result[zid == i] = K_mol_ref2 @ self._c[i, :n_ref] + self._ref_mean[i]
 
-    def get_gradient(self, mol_soap, zid):
-        """
-        Returns the gradient of the predicted property with respect to
-        SOAP features.
-
-        Parameters
-        ----------
-
-        mol_soap: numpy.array (N_ATOMS, N_SOAP)
-            The feature vectors for each atom.
-
-        zid: numpy.array (N_ATOMS,)
-            The species identity value of each atom.
-
-        Returns
-        -------
-
-        result: numpy.array (N_ATOMS, N_SOAP)
-            The gradients of the property with respect to
-            the soap features.
-        """
-        n_at, n_soap = mol_soap.shape
-        df_dsoap = _np.zeros((n_at, n_soap), dtype=_np.float32)
-        for i in range(self.n_z):
-            n_ref = self.n_ref[i]
-            ref_soap_z = self.ref_soap[i, :n_ref]
-            mol_soap_z = mol_soap[zid == i, :, None]
-            K_mol_ref = ref_soap_z @ mol_soap_z
-            K_mol_ref = K_mol_ref.reshape(K_mol_ref.shape[:-1])
-            c = self.c[i, :n_ref]
-            df_dsoap[zid == i] = (K_mol_ref[:, None, :] * ref_soap_z.T) @ c * 2
-        return df_dsoap
+        return result
 
     @classmethod
-    def get_Kinv(cls, ref_soap, sigma):
+    def _get_Kinv(cls, ref_features, sigma):
         """
         Internal function to compute the inverse of the K matrix for GPR.
 
         Parameters
         ----------
 
-        ref_soap: numpy.array (N_Z, MAX_N_REF, N_SOAP)
+        ref_features: numpy.array (N_Z, MAX_N_REF, N_FEAT)
             The basis feature vectors for each species.
 
         sigma: float
@@ -196,120 +207,9 @@ class _GPRCalculator:
         result: numpy.array (MAX_N_REF, MAX_N_REF)
             The inverse of the K matrix.
         """
-        n = ref_soap.shape[1]
-        K = (ref_soap @ ref_soap.swapaxes(1, 2)) ** 2
+        n = ref_features.shape[1]
+        K = (ref_features @ ref_features.swapaxes(1, 2)) ** 2
         return _np.linalg.inv(K + sigma**2 * _np.eye(n, dtype=_np.float32))
-
-
-class _SOAPCalculatorSpinv:
-    """
-    Calculates Smooth Overlap of Atomic Positions (SOAP) feature vectors for
-    a given system from spherical invariants.
-    """
-
-    def __init__(self, hypers):
-        """
-        Constructor
-
-        Parameters
-        ----------
-
-        hypers: dict
-            Hyperparameters for rascal SphericalInvariants.
-
-        """
-        self.spinv = _SphericalInvariants(**hypers)
-
-    def __call__(self, z, xyz, gradient=False):
-        """
-        Calculates the SOAP feature vectors and their gradients for a
-        given molecule.
-
-        Parameters
-        ----------
-
-        z: numpy.array (N_ATOMS)
-            Chemical species (element) for each atom.
-
-        xyz: numpy.array (N_ATOMS, 3)
-            Atomic positions.
-
-        gradient: bool
-            Whether the gradient should be calculated.
-
-        Returns
-        -------
-
-        soap: numpy.array (N_ATOMS, N_SOAP)
-            SOAP feature vectors for each atom.
-
-        gradient: numpy.array (N_ATOMS, N_SOAP, N_ATOMS, 3)
-            gradients of the soap feature vectors w.r.t. atomic positions
-        """
-        mol = self.get_mol(z, xyz)
-        return self.get_soap(mol, self.spinv, gradient)
-
-    @staticmethod
-    def get_mol(z, xyz):
-        """
-        Creates Atomic Simulation Environment (ASE) Atoms object from atomic
-        species and positions.
-
-        Parameters
-        ----------
-
-        z: numpy.array (N_ATOMS)
-            Chemical species (element) for each atom.
-
-        xyz: numpy.array (N_ATOMS, 3)
-            Atomic positions.
-
-        Returns
-        -------
-
-        result: ase.Atoms
-            ASE atoms object.
-        """
-        xyz_min = _np.min(xyz, axis=0)
-        xyz_max = _np.max(xyz, axis=0)
-        xyz_range = xyz_max - xyz_min
-        return _ase.Atoms(z, positions=xyz - xyz_min, cell=xyz_range, pbc=0)
-
-    @staticmethod
-    def get_soap(atoms, spinv, gradient=False):
-        """
-        Calculates the SOAP feature vectors and their gradients for ASE atoms.
-
-        Parameters
-        ----------
-
-        atoms: ase.Atoms
-            ASE atoms object.
-
-        spinv: rascal.representations.SphericalInvariants
-            SphericalInvariants object to calculate SOAP features.
-
-        Returns
-        -------
-
-        soap: numpy.array (N_ATOMS, N_SOAP)
-            SOAP feature vectors for each atom.
-
-        gradient: numpy.array (N_ATOMS, N_SOAP, N_ATOMS, 3)
-            Gradients of the SOAP feature vectors with respect to atomic positions.
-        """
-        managers = spinv.transform(atoms)
-        soap = managers.get_features(spinv)
-        if not gradient:
-            return soap
-        grad = managers.get_features_gradient(spinv)
-        meta = managers.get_gradients_info()
-        n_at, n_soap = soap.shape
-        dsoap_dxyz = _np.zeros((n_at, n_soap, n_at, 3))
-        dsoap_dxyz[meta[:, 1], :, meta[:, 2], :] = grad.reshape(
-            (-1, 3, n_soap)
-        ).swapaxes(2, 1)
-        return soap, dsoap_dxyz
 
 
 class EMLECalculator:
@@ -318,31 +218,23 @@ class EMLECalculator:
     embedding. Requires the use of a QM (or ML) engine to compute in vacuo
     energies forces, to which those from the EMLE model are added. Supported
     backends are listed in the _supported_backends attribute below.
-
-    WARNING: This class is assumed to be static for the purposes of working with
-    PyTorch, i.e. all attributes assigned in the constructor and used within the
-    _get_E method are immutable.
     """
 
     # Class attributes.
 
-    # Get the directory of this module file.
-    _module_dir = _os.path.dirname(_os.path.abspath(__file__))
+    # Store the expected path to the resources directory.
+    _resource_dir = _os.path.join(
+        _os.path.dirname(_os.path.abspath(__file__)), "resources"
+    )
 
-    # Create the name of the default model file.
-    _default_model = _os.path.join(_module_dir, "emle_spinv.mat")
-
-    # Default ML model parameters. These will be overwritten by values in the
-    # embedding model file.
-
-    # Model hyper-parameters.
-    _hypers = {
-        "interaction_cutoff": 3.0,
-        "max_radial": 4,
-        "max_angular": 4,
-        "compute_gradients": True,
-        **_SPHERICAL_EXPANSION_HYPERS_COMMON,
+    # Create the name of the default model file for each alpha mode.
+    _default_models = {
+        "species": _os.path.join(_resource_dir, "emle_qm7_aev_species.mat"),
+        "reference": _os.path.join(_resource_dir, "emle_qm7_aev_reference.mat"),
     }
+
+    # Store the list of supported species.
+    _species = [1, 6, 7, 8, 16]
 
     # List of supported backends.
     _supported_backends = [
@@ -370,7 +262,9 @@ class EMLECalculator:
     def __init__(
         self,
         model=None,
+        species=None,
         method="electrostatic",
+        alpha_mode="species",
         backend="torchani",
         external_backend=None,
         plugin_path=".",
@@ -380,6 +274,7 @@ class EMLECalculator:
         deepmd_deviation_threshold=None,
         qm_xyz_file="qm.xyz",
         qm_xyz_frequency=0,
+        ani2x_model_index=None,
         rascal_model=None,
         parm7=None,
         qm_indices=None,
@@ -403,6 +298,9 @@ class EMLECalculator:
             Path to the EMLE embedding model parameter file. If None, then a
             default model will be used.
 
+        species: List[int]
+            List of species (atomic numbers) supported by the EMLE model. If
+
         method: str
             The desired embedding method. Options are:
                 "electrostatic":
@@ -422,6 +320,14 @@ class EMLECalculator:
             The backend to use to compute in vacuo energies and gradients. If None,
             then no backend will be used, allowing you to obtain the electrostatic
             embedding energy and gradients only.
+
+        alpha_mode: str
+            How atomic polarizabilities are calculated.
+                "species":
+                    one volume scaling factor is used for each species
+                "reference":
+                    scaling factors are obtained with GPR using the values learned
+                    for each reference environment
 
         external_backend: str
             The name of an external backend to use to compute in vacuo energies.
@@ -459,6 +365,10 @@ class EMLECalculator:
         qm_xyz_frequency: int
             How often to write the xyz trajectory of the QM region. Zero turns
             off writing.
+
+        ani2x_model_index: int
+            The index of the ANI model to use when using the TorchANI backend.
+            If None, then the full 8 model ensemble is used.
 
         rascal_model: str
             Path to the Rascal model file used to apply delta-learning corrections
@@ -541,6 +451,11 @@ class EMLECalculator:
             the calculator.
         """
 
+        from ._utils import _fetch_resources
+
+        # Fetch or update the resources.
+        _fetch_resources()
+
         # Validate input.
 
         # First handle the logger.
@@ -584,6 +499,25 @@ class EMLECalculator:
         _logger.remove()
         _logger.add(self._log_file, level=self._log_level)
 
+        # Validate the alpha mode first so that we can choose an appropriate
+        # default model.
+        if alpha_mode is not None:
+            if not isinstance(alpha_mode, str):
+                msg = "'alpha_mode' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
+        else:
+            alpha_mode = "species"
+
+        # Convert to lower case and strip whitespace.
+        alpha_mode = alpha_mode.lower().replace(" ", "")
+
+        if alpha_mode not in ["species", "reference"]:
+            msg = "'alpha_mode' must be either 'species' or 'reference'"
+            _logger.error(msg)
+            raise ValueError(msg)
+        self._alpha_mode = alpha_mode
+
         if model is not None:
             if not isinstance(model, str):
                 msg = "'model' must be of type 'str'"
@@ -598,8 +532,21 @@ class EMLECalculator:
                 _logger.error(msg)
                 raise IOError(msg)
             self._model = abs_model
+
+            # Validate the species for the custom model.
+            if species is not None:
+                if not isinstance(species, list):
+                    raise TypeError("'species' must be of type 'list'")
+                if not all(isinstance(s, int) for s in species):
+                    raise TypeError("All elements of 'species' must be of type 'int'")
+                if not all(s > 0 for s in species):
+                    raise ValueError(
+                        "All elements of 'species' must be greater than zero"
+                    )
+                self._species = species
         else:
-            self._model = self._default_model
+            # Choose the default model based on the alpha mode.
+            self._model = self._default_models[self._alpha_mode]
 
         if method is None:
             method = "electrostatic"
@@ -1130,66 +1077,45 @@ class EMLECalculator:
         # Initialise a null SanderCalculator object.
         self._sander_calculator = None
 
-        # Initialise EMLE embedding model attributes.
-        hypers_keys = (
-            "gaussian_sigma_constant",
-            "global_species",
-            "interaction_cutoff",
-            "max_radial",
-            "max_angular",
-        )
-        for key in hypers_keys:
-            if key in self._params:
-                try:
-                    self._hypers[key] = tuple(self._params[key].tolist())
-                except:
-                    self._hypers[key] = self._params[key]
-
-        # Work out the supported elements.
-        self._supported_elements = []
-        for id in self._hypers["global_species"]:
-            self._supported_elements.append(_ase.Atom(id).symbol)
-
-        self._get_soap = _SOAPCalculatorSpinv(self._hypers)
-        self._q_core = _torch.tensor(
-            self._params["q_core"], dtype=_torch.float32, device=self._device
-        )
-        if self._method == "mm" or self._is_interpolate:
-            self._q_core_mm = _torch.tensor(
-                self._mm_charges, dtype=_torch.float32, device=self._device
-            )
-        self._a_QEq = self._params["a_QEq"]
-        self._a_Thole = self._params["a_Thole"]
-        self._k_Z = _torch.tensor(
-            self._params["k_Z"], dtype=_torch.float32, device=self._device
-        )
-        self._q_total = _torch.tensor(
-            self._params.get("total_charge", 0),
-            dtype=_torch.float32,
-            device=self._device,
-        )
-        self._get_s = _GPRCalculator(
-            self._params["s_ref"],
-            self._params["ref_soap"],
-            self._params["n_ref"],
-            1e-3,
-        )
-        self._get_chi = _GPRCalculator(
-            self._params["chi_ref"],
-            self._params["ref_soap"],
-            self._params["n_ref"],
-            1e-3,
-        )
-        self._get_E_with_grad = _grad_and_value(self._get_E, argnums=(1, 2, 3, 4))
-
         # Initialise TorchANI backend attributes.
         if self._backend == "torchani":
             import torchani as _torchani
 
+            from .models import _patches
+
+            # Monkey-patch the TorchANI BuiltInModel and BuiltinEnsemble classes so that
+            # they call self.aev_computer using args only to allow forward hooks to work
+            # with TorchScript.
+            _torchani.models.BuiltinModel = _patches.BuiltinModel
+            _torchani.models.BuiltinEnsemble = _patches.BuiltinEnsemble
+
+            if ani2x_model_index is not None:
+                try:
+                    ani2x_model_index = int(ani2x_model_index)
+                except:
+                    msg = "'ani2x_model_index' must be of type 'int'"
+                    _logger.error(msg)
+                    raise TypeError(msg)
+
+                if ani2x_model_index < 0 or ani2x_model_index > 7:
+                    msg = "'ani2x_model_index' must be between 0 and 7"
+                    _logger.error(msg)
+                    raise ValueError(msg)
+
+            self._ani2x_model_index = ani2x_model_index
+
             # Create the TorchANI model.
-            self._torchani_model = _torchani.models.ANI2x(periodic_table_index=True).to(
-                self._device
-            )
+            self._torchani_model = _torchani.models.ANI2x(
+                periodic_table_index=True, model_index=ani2x_model_index
+            ).to(self._device)
+
+            try:
+                import NNPOps as _NNPOps
+
+                self._has_nnpops = True
+                self._nnpops_active = False
+            except:
+                self._has_nnpops = False
 
         # If the backend is ORCA, then try to find the executable.
         elif self._backend == "orca":
@@ -1213,6 +1139,84 @@ class EMLECalculator:
 
             self._orca_path = abs_orca_path
 
+        # Re-use the existing AEV computer from TorchANI.
+        if self._backend == "torchani":
+            self._aev_computer = self._torchani_model.aev_computer
+        # Create a new AEV computer.
+        else:
+            import torchani as _torchani
+
+            ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(self._device)
+            self._aev_computer = ani2x.aev_computer
+
+        # Create the AEVCaclulator.
+        aev_mask = _torch.tensor(
+            self._params["aev_mask"], dtype=_torch.bool, device=self._device
+        )
+        self._get_features = _AEVCalculator(self._aev_computer, aev_mask)
+
+        self._q_core = _torch.tensor(
+            self._params["q_core"], dtype=_torch.float32, device=self._device
+        )
+        if self._method == "mm" or self._is_interpolate:
+            self._q_core_mm = _torch.tensor(
+                self._mm_charges, dtype=_torch.float32, device=self._device
+            )
+        self._a_QEq = self._params["a_QEq"]
+        self._a_Thole = self._params["a_Thole"]
+        if self._alpha_mode == "species":
+            try:
+                self._k_Z = _torch.tensor(
+                    self._params["k_Z"], dtype=_torch.float32, device=self._device
+                )
+            except:
+                msg = (
+                    "Missing 'k_Z' key in model. This is required when "
+                    "using 'species' alpha mode."
+                )
+                _logger.error(msg)
+                raise ValueError(msg)
+        else:
+            try:
+                self.sqrtk_ref = _torch.tensor(
+                    self._params["sqrtk_ref"], dtype=_torch.float32, device=self._device
+                )
+            except:
+                msg = (
+                    "Missing 'sqrtk_ref' key in model. This is required when "
+                    "using 'reference' alpha mode."
+                )
+                _logger.error(msg)
+                raise ValueError(msg)
+
+        self._q_total = _torch.tensor(
+            self._params.get("total_charge", 0),
+            dtype=_torch.float32,
+            device=self._device,
+        )
+        self._get_s = _GPRCalculator(
+            self._params["s_ref"],
+            self._params["ref_aev"],
+            self._params["n_ref"],
+            1e-3,
+            self._device,
+        )
+        self._get_chi = _GPRCalculator(
+            self._params["chi_ref"],
+            self._params["ref_aev"],
+            self._params["n_ref"],
+            1e-3,
+            self._device,
+        )
+        if self._alpha_mode == "reference":
+            self._get_sqrtk = _GPRCalculator(
+                self._params["sqrtk_ref"],
+                self._params["ref_aev"],
+                self._params["n_ref"],
+                1e-3,
+                self._device,
+            )
+
         # Initialise the maximum number of MM atom that have been seen.
         self._max_mm_atoms = 0
 
@@ -1228,7 +1232,9 @@ class EMLECalculator:
         # Store the settings as a dictionary.
         self._settings = {
             "model": None if model is None else self._model,
+            "species": None if species is None else self._species,
             "method": self._method,
+            "alpha_mode": self._alpha_mode,
             "backend": self._backend,
             "external_backend": None if external_backend is None else external_backend,
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),
@@ -1237,6 +1243,7 @@ class EMLECalculator:
             "deepmd_deviation_threshold": deepmd_deviation_threshold,
             "qm_xyz_file": qm_xyz_file,
             "qm_xyz_frequency": qm_xyz_frequency,
+            "ani2x_model_index": ani2x_model_index,
             "rascal_model": rascal_model,
             "parm7": parm7,
             "qm_indices": None if qm_indices is None else self._qm_indices,
@@ -1258,6 +1265,9 @@ class EMLECalculator:
         if save_settings:
             with open("emle_settings.yaml", "w") as f:
                 _yaml.dump(self._settings, f)
+
+        # Initialise a NULL internal model calculator.
+        self._ani2x_emle = None
 
     def run(self, path=None):
         """
@@ -1296,7 +1306,7 @@ class EMLECalculator:
             xyz_file_qm,
         ) = self.parse_orca_input(orca_input)
 
-        # Make sure that the number of QM atoms matches the number of MM atoms
+        # Make sure that the number of QM atoms matches the number of MM charges
         # when using mm embedding.
         if self._method == "mm":
             if len(xyz_qm) != len(self._mm_charges):
@@ -1326,7 +1336,7 @@ class EMLECalculator:
         elements = []
         for id in atomic_numbers:
             try:
-                species_id.append(self._hypers["global_species"].index(id))
+                species_id.append(self._species.index(id))
                 elements.append(_ase.Atom(id).symbol)
             except:
                 msg = (
@@ -1335,7 +1345,7 @@ class EMLECalculator:
                 )
                 _logger.error(msg)
                 raise ValueError(msg)
-        self._species_id = _np.array(species_id)
+        self._species_id = _torch.tensor(_np.array(species_id), device=self._device)
 
         # First try to use the specified backend to compute in vacuo
         # energies and (optionally) gradients.
@@ -1436,40 +1446,29 @@ class EMLECalculator:
         xyz_qm_bohr = xyz_qm * _ANGSTROM_TO_BOHR
         xyz_mm_bohr = xyz_mm * _ANGSTROM_TO_BOHR
 
-        mol_soap, dsoap_dxyz = self._get_soap(atomic_numbers, xyz_qm, gradient=True)
-        dsoap_dxyz_qm_bohr = dsoap_dxyz * _BOHR_TO_ANGSTROM
-
-        s, ds_dsoap = self._get_s(mol_soap, self._species_id, gradient=True)
-        chi, dchi_dsoap = self._get_chi(mol_soap, self._species_id, gradient=True)
-        ds_dxyz_qm_bohr = self._get_df_dxyz(ds_dsoap, dsoap_dxyz_qm_bohr)
-        dchi_dxyz_qm_bohr = self._get_df_dxyz(dchi_dsoap, dsoap_dxyz_qm_bohr)
-
         # Convert inputs to Torch tensors.
         xyz_qm_bohr = _torch.tensor(
-            xyz_qm_bohr, dtype=_torch.float32, device=self._device
+            xyz_qm_bohr, dtype=_torch.float32, device=self._device, requires_grad=True
         )
         xyz_mm_bohr = _torch.tensor(
-            xyz_mm_bohr, dtype=_torch.float32, device=self._device
+            xyz_mm_bohr, dtype=_torch.float32, device=self._device, requires_grad=True
         )
         charges_mm = _torch.tensor(
             charges_mm, dtype=_torch.float32, device=self._device
         )
-        s = _torch.tensor(s, dtype=_torch.float32, device=self._device)
-        chi = _torch.tensor(chi, dtype=_torch.float32, device=self._device)
 
-        # Compute gradients and energy.
-        grads, E = self._get_E_with_grad(charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi)
-        dE_dxyz_qm_bohr_part, dE_dxyz_mm_bohr, dE_ds, dE_dchi = grads
-        dE_dxyz_qm_bohr = (
-            dE_dxyz_qm_bohr_part.cpu().numpy()
-            + dE_ds.cpu().numpy() @ ds_dxyz_qm_bohr.swapaxes(0, 1)
-            + dE_dchi.cpu().numpy() @ dchi_dxyz_qm_bohr.swapaxes(0, 1)
+        # Compute energy and gradients.
+        E = self._get_E(charges_mm, xyz_qm_bohr, xyz_mm_bohr)
+        dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
+            E, (xyz_qm_bohr, xyz_mm_bohr)
         )
+        dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
+        dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
 
         # Compute the total energy and gradients.
         E_tot = E_vac + E.detach().cpu().numpy()
         grad_qm = dE_dxyz_qm_bohr + grad_vac
-        grad_mm = dE_dxyz_mm_bohr.cpu().numpy()
+        grad_mm = dE_dxyz_mm_bohr
 
         # Interpolate between the MM and ML/MM potential.
         if self._is_interpolate:
@@ -1489,16 +1488,12 @@ class EMLECalculator:
             method = self._method
             self._method = "mm"
 
-            # Recompute the gradients and energy.
-            grads, E = self._get_E_with_grad(
-                charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi
+            # Recompute the energy and gradients.
+            E = self._get_E(charges_mm, xyz_qm_bohr, xyz_mm_bohr)
+            dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
+                E, (xyz_qm_bohr, xyz_mm_bohr)
             )
-            dE_dxyz_qm_bohr_part, dE_dxyz_mm_bohr, dE_ds, dE_dchi = grads
-            dE_dxyz_qm_bohr = (
-                dE_dxyz_qm_bohr_part.cpu().numpy()
-                + dE_ds.cpu().numpy() @ ds_dxyz_qm_bohr.swapaxes(0, 1)
-                + dE_dchi.cpu().numpy() @ dchi_dxyz_qm_bohr.swapaxes(0, 1)
-            )
+            dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
             dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
 
             # Restore the method.
@@ -1689,7 +1684,7 @@ class EMLECalculator:
         # Initialise a null ASE atoms object.
         atoms = None
 
-        # Make sure that the number of QM atoms matches the number of MM atoms
+        # Make sure that the number of QM atoms matches the number of MM charges
         # when using mm embedding.
         if self._method == "mm":
             if len(xyz_qm) != len(self._mm_charges):
@@ -1719,7 +1714,7 @@ class EMLECalculator:
         elements = []
         for id in atomic_numbers:
             try:
-                species_id.append(self._hypers["global_species"].index(id))
+                species_id.append(self._species.index(id))
                 elements.append(_ase.Atom(id).symbol)
             except:
                 msg = (
@@ -1728,7 +1723,7 @@ class EMLECalculator:
                 )
                 _logger.error(msg)
                 raise ValueError(msg)
-        self._species_id = _np.array(species_id)
+        self._species_id = _torch.tensor(_np.array(species_id), device=self._device)
 
         # First try to use the specified backend to compute in vacuo
         # energies and (optionally) gradients.
@@ -1842,40 +1837,29 @@ class EMLECalculator:
         xyz_qm_bohr = xyz_qm * _ANGSTROM_TO_BOHR
         xyz_mm_bohr = xyz_mm * _ANGSTROM_TO_BOHR
 
-        mol_soap, dsoap_dxyz = self._get_soap(atomic_numbers, xyz_qm, gradient=True)
-        dsoap_dxyz_qm_bohr = dsoap_dxyz * _BOHR_TO_ANGSTROM
-
-        s, ds_dsoap = self._get_s(mol_soap, self._species_id, gradient=True)
-        chi, dchi_dsoap = self._get_chi(mol_soap, self._species_id, gradient=True)
-        ds_dxyz_qm_bohr = self._get_df_dxyz(ds_dsoap, dsoap_dxyz_qm_bohr)
-        dchi_dxyz_qm_bohr = self._get_df_dxyz(dchi_dsoap, dsoap_dxyz_qm_bohr)
-
         # Convert inputs to Torch tensors.
         xyz_qm_bohr = _torch.tensor(
-            xyz_qm_bohr, dtype=_torch.float32, device=self._device
+            xyz_qm_bohr, dtype=_torch.float32, device=self._device, requires_grad=True
         )
         xyz_mm_bohr = _torch.tensor(
-            xyz_mm_bohr, dtype=_torch.float32, device=self._device
+            xyz_mm_bohr, dtype=_torch.float32, device=self._device, requires_grad=True
         )
         charges_mm = _torch.tensor(
             charges_mm, dtype=_torch.float32, device=self._device
         )
-        s = _torch.tensor(s, dtype=_torch.float32, device=self._device)
-        chi = _torch.tensor(chi, dtype=_torch.float32, device=self._device)
 
-        # Compute gradients and energy.
-        grads, E = self._get_E_with_grad(charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi)
-        dE_dxyz_qm_bohr_part, dE_dxyz_mm_bohr, dE_ds, dE_dchi = grads
-        dE_dxyz_qm_bohr = (
-            dE_dxyz_qm_bohr_part.cpu().numpy()
-            + dE_ds.cpu().numpy() @ ds_dxyz_qm_bohr.swapaxes(0, 1)
-            + dE_dchi.cpu().numpy() @ dchi_dxyz_qm_bohr.swapaxes(0, 1)
+        # Compute energy and gradients.
+        E = self._get_E(charges_mm, xyz_qm_bohr, xyz_mm_bohr)
+        dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
+            E, (xyz_qm_bohr, xyz_mm_bohr)
         )
+        dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
+        dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
 
         # Compute the total energy and gradients.
         E_tot = E_vac + E.detach().cpu().numpy()
         grad_qm = dE_dxyz_qm_bohr + grad_vac
-        grad_mm = dE_dxyz_mm_bohr.cpu().numpy()
+        grad_mm = dE_dxyz_mm_bohr
 
         # Interpolate between the MM and ML/MM potential.
         if self._is_interpolate:
@@ -1899,16 +1883,12 @@ class EMLECalculator:
             method = self._method
             self._method = "mm"
 
-            # Recompute the gradients and energy.
-            grads, E = self._get_E_with_grad(
-                charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi
+            # Recompute the energy and gradients.
+            E = self._get_E(charges_mm, xyz_qm_bohr, xyz_mm_bohr)
+            dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
+                E, (xyz_qm_bohr, xyz_mm_bohr)
             )
-            dE_dxyz_qm_bohr_part, dE_dxyz_mm_bohr, dE_ds, dE_dchi = grads
-            dE_dxyz_qm_bohr = (
-                dE_dxyz_qm_bohr_part.cpu().numpy()
-                + dE_ds.cpu().numpy() @ ds_dxyz_qm_bohr.swapaxes(0, 1)
-                + dE_dchi.cpu().numpy() @ dchi_dxyz_qm_bohr.swapaxes(0, 1)
-            )
+            dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
             dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
 
             # Restore the method.
@@ -1974,7 +1954,126 @@ class EMLECalculator:
             ).tolist(),
         )
 
-    def _get_E(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
+    def _sire_callback_optimised(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+        """
+        A callback function to be used with Sire.
+
+        Parameters
+        ----------
+
+        atomic_numbers: [float]
+            A list of atomic numbers for the QM region.
+
+        charges_mm: [float]
+            The charges on the MM atoms.
+
+        xyz_qm: [[float, float, float]]
+            The coordinates of the QM atoms in Angstrom.
+
+        xyz_mm: [[float, float, float]]
+            The coordinates of the MM atoms in Angstrom.
+
+        Returns
+        -------
+
+        energy: float
+            The energy in kJ/mol.
+
+        force_qm: [[float, float, float]]
+            The forces on the QM atoms in kJ/mol/nanometer.
+
+        force_mm: [[float, float, float]]
+            The forces on the MM atoms in kJ/mol/nanometer.
+        """
+
+        # For performance, we assume that the input is already validated.
+
+        # Update the maximum number of MM atoms if this is the largest seen.
+        num_mm_atoms = len(charges_mm)
+        if num_mm_atoms > self._max_mm_atoms:
+            self._max_mm_atoms = num_mm_atoms
+
+        # Pad the MM coordinates and charges arrays to avoid re-jitting.
+        if self._max_mm_atoms > num_mm_atoms:
+            num_pad = self._max_mm_atoms - num_mm_atoms
+            xyz_mm_pad = num_pad * [[0.0, 0.0, 0.0]]
+            charges_mm_pad = num_pad * [0.0]
+            xyz_mm = _np.append(xyz_mm, xyz_mm_pad, axis=0)
+            charges_mm = _np.append(charges_mm, charges_mm_pad)
+
+        # Convert to numpy arrays then Torch tensors.
+        atomic_numbers = _torch.tensor(atomic_numbers, device=self._device)
+        charges_mm = _torch.tensor(
+            charges_mm, dtype=_torch.float32, device=self._device
+        )
+        xyz_qm = _torch.tensor(
+            xyz_qm, dtype=_torch.float32, device=self._device, requires_grad=True
+        )
+        xyz_mm = _torch.tensor(
+            xyz_mm, dtype=_torch.float32, device=self._device, requires_grad=True
+        )
+
+        # Create an internal ANI2xEMLE model if one doesn't already exist.
+        if self._ani2x_emle is None:
+            # Apply NNPOps optimisations if available.
+            try:
+                import NNPOps as _NNPOps
+
+                from .models._patches import (
+                    OptimizedTorchANI as _OptimizedTorchANI,
+                )
+
+                _NNPOps.OptimizedTorchANI = _OptimizedTorchANI
+
+                # Optimise the TorchANI model.
+                self._torchani_model = _NNPOps.OptimizedTorchANI(
+                    self._torchani_model,
+                    atomic_numbers.reshape(-1, *atomic_numbers.shape),
+                ).to(self._device)
+
+                # Flag that NNPOps is active.
+                self._nnpops_active = True
+            except:
+                pass
+
+            from .models import ANI2xEMLE as _ANI2xEMLE
+
+            # Create the model.
+            ani2x_emle = _ANI2xEMLE(
+                emle_model=self._model,
+                ani2x_model=self._torchani_model,
+                device=self._device,
+            )
+
+            # Convert to TorchScript.
+            self._ani2x_emle = _torch.jit.script(ani2x_emle).eval()
+
+        # Are there any MM atoms?
+        allow_unused = len(charges_mm) == 0
+
+        # Compute the energy and gradients. Don't use optimised execution to
+        # avoid warmup costs.
+        with _torch.jit.optimized_execution(False):
+            E = self._ani2x_emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
+                E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
+            )
+
+        # Convert the energy and gradients to numpy arrays.
+        E = E.sum().item() * _HARTREE_TO_KJ_MOL
+        force_qm = (
+            -dE_dxyz_qm.cpu().numpy() * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_ANGSTROM
+        ).tolist()
+        if not allow_unused:
+            force_mm = (
+                -dE_dxyz_mm.cpu().numpy() * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_ANGSTROM
+            ).tolist()[:num_mm_atoms]
+        else:
+            force_mm = []
+
+        return E, force_qm, force_mm
+
+    def _get_E(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr):
         """
         Computes total EMLE embedding energy (sum of static and induced).
 
@@ -1982,20 +2081,13 @@ class EMLECalculator:
         ----------
 
         charges_mm: torch.tensor (max_mm_atoms,)
-            MM point charges, padded to max_mm_atoms with zeros.
+            MM point charges in atomic units, padded to max_mm_atoms with zeros.
 
         xyz_qm_bohr: torch.tensor (N_ATOMS, 3)
-            Positions of QM atoms (in bohr units).
+            Positions of QM atoms (in Bohr).
 
         xyz_mm_bohr: torch.tensor (max_mm_atoms, 3)
-            Positions of MM atoms (in bohr units),
-            padded to max_mm_atoms with zeros.
-
-        s: torch.tensor (N_ATOMS,)
-            MBIS valence shell widths.
-
-        chi: torch.tensor (N_ATOMS,)
-            Electronegativities.
+            Positions of MM atoms (in Bohr), padded to max_mm_atoms with zeros.
 
         Returns
         -------
@@ -2003,11 +2095,9 @@ class EMLECalculator:
         result: torch.tensor (1,)
             Total EMLE embedding energy.
         """
-        return _torch.sum(
-            self._get_E_components(charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi)
-        )
+        return _torch.sum(self._get_E_components(charges_mm, xyz_qm_bohr, xyz_mm_bohr))
 
-    def _get_E_components(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr, s, chi):
+    def _get_E_components(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr):
         """
         Computes EMLE energy components
 
@@ -2015,20 +2105,13 @@ class EMLECalculator:
         ----------
 
         charges_mm: torch.tensor (max_mm_atoms,)
-            MM point charges, padded to max_mm_atoms with zeros.
+            MM point charges in atomic units, padded to max_mm_atoms with zeros.
 
         xyz_qm_bohr: torch.tensor (N_ATOMS, 3)
-            Positions of QM atoms (in bohr units).
+            Positions of QM atoms (in Bohr).
 
         xyz_mm_bohr: torch.tensor (max_mm_atoms, 3)
-            Positions of MM atoms (in bohr units),
-            padded to max_mm_atoms with zeros
-
-        s: torch.tensor (N_ATOMS,)
-            MBIS valence shell widths.
-
-        chi: torch.tensor (N_ATOMS,)
-            Electronegativities.
+            Positions of MM atoms (in Bohr), padded to max_mm_atoms with zeros.
 
         Returns
         -------
@@ -2036,11 +2119,26 @@ class EMLECalculator:
         result: torch.tensor (2,)
             Values of static and induced EMLE energy components.
         """
+
+        # Get the features.
+        mol_features = self._get_features(self._species_id, xyz_qm_bohr)
+
+        # Compute the MBIS valence shell widths.
+        s = self._get_s(mol_features, self._species_id)
+
+        # Compute the electronegativities.
+        chi = self._get_chi(mol_features, self._species_id)
+
         if self._method != "mm":
             q_core = self._q_core[self._species_id]
         else:
             q_core = self._q_core_mm
-        k_Z = self._k_Z[self._species_id]
+
+        if self._alpha_mode == "species":
+            k = self._k_Z[self._species_id]
+        else:
+            k = self._get_sqrtk(mol_features, self._species_id) ** 2
+
         r_data = self._get_r_data(xyz_qm_bohr, self._device)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
         if self._method in ["electrostatic", "nonpol"]:
@@ -2057,7 +2155,7 @@ class EMLECalculator:
         E_static = _torch.sum(vpot_static @ charges_mm)
 
         if self._method == "electrostatic":
-            mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k_Z)
+            mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k)
             vpot_ind = self._get_vpot_mu(mu_ind, mesh_data["T1_mesh"])
             E_ind = _torch.sum(vpot_ind @ charges_mm) * 0.5
         else:
@@ -2137,7 +2235,7 @@ class EMLECalculator:
 
         return B
 
-    def _get_mu_ind(self, r_data, mesh_data, q, s, q_val, k_Z):
+    def _get_mu_ind(self, r_data, mesh_data, q, s, q_val, k):
         """
         Internal method, calculates induced atomic dipoles
         (Eq. 20 in 10.1021/acs.jctc.2c00914)
@@ -2158,7 +2256,7 @@ class EMLECalculator:
         q_val: torch.tensor (N_ATOMS,)
             MBIS valence charges.
 
-        k_Z: torch.tensor (N_Z)
+        k: torch.tensor (N_Z)
             Scaling factors for polarizabilities.
 
         Returns
@@ -2167,7 +2265,7 @@ class EMLECalculator:
         result: torch.tensor (N_ATOMS, 3)
             Array of induced dipoles
         """
-        A = self._get_A_thole(r_data, s, q_val, k_Z)
+        A = self._get_A_thole(r_data, s, q_val, k)
 
         r = 1.0 / mesh_data["T0_mesh"]
         f1 = self._get_f1_slater(r, s[:, None] * 2.0)
@@ -2178,7 +2276,7 @@ class EMLECalculator:
         mu_ind = _torch.linalg.solve(A, fields)
         return mu_ind.reshape((-1, 3))
 
-    def _get_A_thole(self, r_data, s, q_val, k_Z):
+    def _get_A_thole(self, r_data, s, q_val, k):
         """
         Internal method, generates A matrix for induced dipoles prediction
         (Eq. 20 in 10.1021/acs.jctc.2c00914)
@@ -2194,7 +2292,7 @@ class EMLECalculator:
         q_val: torch.tensor (N_ATOMS,)
             MBIS charges.
 
-        k_Z: torch.tensor (N_Z)
+        k: torch.tensor (N_Z)
             Scaling factors for polarizabilities.
 
         Returns
@@ -2204,7 +2302,7 @@ class EMLECalculator:
             The A matrix for induced dipoles prediction.
         """
         v = -60 * q_val * s**3
-        alpha = v * k_Z
+        alpha = v * k
 
         alphap = alpha * self._a_Thole
         alphap_mat = alphap[:, None] * alphap[None, :]
@@ -2222,26 +2320,6 @@ class EMLECalculator:
         A = mask * _torch.diag(new_diag) + (1.0 - mask) * A
 
         return A
-
-    @staticmethod
-    def _get_df_dxyz(df_dsoap, dsoap_dxyz):
-        """
-        Internal method to calculate the gradient of some property with respect to
-        xyz coordinates based on gradient with respect to SOAP and SOAP gradients.
-
-        Parameters
-        ----------
-
-        df_dsoap: numpy.array (N_ATOMS, N_SOAP)
-
-        dsoap_dxyz: numpy.array (N_ATOMS, N_SOAP, N_ATOMS, 3)
-
-        Returns
-        -------
-
-        result: numpy.array (N_ATOMS, N_ATOMS, 3)
-        """
-        return _np.einsum("ij,ijkl->ikl", df_dsoap, dsoap_dxyz)
 
     @staticmethod
     def _get_vpot_q(q, T0):
@@ -2752,6 +2830,21 @@ class EMLECalculator:
             atomic_numbers.reshape(1, *atomic_numbers.shape),
             device=self._device,
         )
+
+        # Check for NNPOps and optimise the model.
+        if self._has_nnpops and not self._nnpops_active:
+            from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
+
+            # Optimise the TorchANI model.
+            self._torchani_model = _OptimizedTorchANI(
+                self._torchani_model, atomic_numbers
+            ).to(self._device)
+
+            # Flag that NNPOps is active.
+            self._nnpops_active = True
+
+            # Apply the optimised AEV symmetry functions.
+            self._aev_computer = self._torchani_model.aev_computer
 
         # Compute the energy and gradient.
         energy = self._torchani_model((atomic_numbers, coords)).energies

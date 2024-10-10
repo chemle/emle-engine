@@ -19,7 +19,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with EMLE-Engine If not, see <http://www.gnu.org/licenses/>.
+# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
 #####################################################################
 
 import argparse
@@ -58,7 +58,12 @@ try:
 except:
     port = None
 model = os.getenv("EMLE_MODEL")
+try:
+    species = [int(x) for x in os.getenv("EMLE_SPECIES").split(",")]
+except:
+    species = None
 method = os.getenv("EMLE_METHOD")
+alpha_mode = os.getenv("EMLE_ALPHA_MODE")
 mm_charges = os.getenv("EMLE_MM_CHARGES")
 try:
     num_clients = int(os.getenv("EMLE_NUM_CLIENTS"))
@@ -85,6 +90,10 @@ try:
     qm_xyz_frequency = int(os.getenv("EMLE_QM_XYZ_FREQUENCY"))
 except:
     qm_xyz_frequency = 0
+try:
+    ani2x_model_index = int(os.getenv("EMLE_ANI2X_MODEL_INDEX"))
+except:
+    ani2x_model_index = None
 rascal_model = os.getenv("EMLE_RASCAL_MODEL")
 parm7 = os.getenv("EMLE_PARM7")
 try:
@@ -124,7 +133,9 @@ env = {
     "host": host,
     "port": port,
     "model": model,
+    "species": species,
     "method": method,
+    "alpha_mode": alpha_mode,
     "mm_charges": mm_charges,
     "num_clients": num_clients,
     "backend": backend,
@@ -136,6 +147,7 @@ env = {
     "deepmd_deviation_threshold": deepmd_deviation_threshold,
     "qm_xyz_file": qm_xyz_file,
     "qm_xyz_frequency": qm_xyz_frequency,
+    "ani2x_model_index": ani2x_model_index,
     "rascal_model": rascal_model,
     "lambda_interpolate": lambda_interpolate,
     "interpolate_steps": interpolate_steps,
@@ -178,10 +190,24 @@ parser.add_argument(
     "--model", type=str, help="path to an EMLE model file", required=False
 )
 parser.add_argument(
+    "--species",
+    type=str,
+    nargs="*",
+    help="the species supported by the model",
+    required=False,
+)
+parser.add_argument(
     "--method",
     type=str,
     help="the embedding method to use",
     choices=["electrostatic", "mechanical", "nonpol", "mm"],
+    required=False,
+)
+parser.add_argument(
+    "--alpha-mode",
+    type=str,
+    help="the alpha mode to use for the embedding method",
+    choices=["species", "reference"],
     required=False,
 )
 parser.add_argument(
