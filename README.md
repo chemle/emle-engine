@@ -10,9 +10,10 @@
 A simple interface to allow electrostatic embedding of machine learning
 potentials using an [ORCA](https://orcaforum.kofo.mpg.de/i-nde-x.php-)-like interface. Based on [code](https://github.com/emedio/embedding) by Kirill Zinovjev. An example [sander](htps://ambermd.org/AmberTools.h) implementation is provided. This
 works by reusing the existing interface between sander and [ORCA](https://orcaforum.kofo.mpg.de/index.php), meaning
-that no modifications to sander are needed. The embedding model currently
-supports the HCNOS elements. We plan to add support for further elements
-in the near future.
+that no modifications to sander are needed. An [OpenMM](#openmm-integration)
+interface is also available via [Sire](https://sire.openbiosim.org). The embedding
+model currently supports the HCNOS elements. We plan to add
+support for further elements in the near future.
 
 Further details can be found in our paper, available [here](https://pubs.acs.org/doi/10.1021/acs.jctc.4c00248). Please
 cite this work if you use `emle-engine` in your research. Supplementary
