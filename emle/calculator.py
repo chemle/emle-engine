@@ -1641,7 +1641,7 @@ class EMLECalculator:
         # Reset the first step flag.
         self._is_first_step = not self._restart
 
-    def _sire_callback(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    def _sire_callback(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm, idx_mm=None):
         """
         A callback function to be used with Sire.
 
@@ -1659,6 +1659,12 @@ class EMLECalculator:
 
         xyz_mm: [[float, float, float]]
             The coordinates of the MM atoms in Angstrom.
+
+        idx_mm: [int]
+            A list of indices of the MM atoms in the QM/MM region.
+            Note that len(idx_mm) <= len(charges_mm) since it only
+            contains the indices of true MM atoms, not link atoms
+            or virtual charges.
 
         Returns
         -------
@@ -1954,7 +1960,9 @@ class EMLECalculator:
             ).tolist(),
         )
 
-    def _sire_callback_optimised(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    def _sire_callback_optimised(
+        self, atomic_numbers, charges_mm, xyz_qm, xyz_mm, idx_mm=None
+    ):
         """
         A callback function to be used with Sire.
 
@@ -1972,6 +1980,12 @@ class EMLECalculator:
 
         xyz_mm: [[float, float, float]]
             The coordinates of the MM atoms in Angstrom.
+
+        idx_mm: [int]
+            A list of indices of the MM atoms in the QM/MM region.
+            Note that len(idx_mm) <= len(charges_mm) since it only
+            contains the indices of true MM atoms, not link atoms
+            or virtual charges.
 
         Returns
         -------
