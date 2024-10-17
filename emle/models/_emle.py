@@ -154,6 +154,8 @@ class EMLE(_torch.nn.Module):
         # Fetch or update the resources.
         _fetch_resources()
 
+        if method is None:
+            method = "electrostatic"
         if not isinstance(method, str):
             raise TypeError("'method' must be of type 'str'")
         method = method.lower().replace(" ", "")
@@ -163,6 +165,8 @@ class EMLE(_torch.nn.Module):
             )
         self._method = method
 
+        if alpha_mode is None:
+            alpha_mode = "species"
         if not isinstance(alpha_mode, str):
             raise TypeError("'alpha_mode' must be of type 'str'")
         alpha_mode = alpha_mode.lower().replace(" ", "")
@@ -209,6 +213,9 @@ class EMLE(_torch.nn.Module):
                 # Use the default species.
                 species = self._species
         else:
+            # Set to None as this will be used in any calculator configuration.
+            self._model = None
+
             # Choose the model based on the alpha_mode.
             model = self._default_models[alpha_mode]
 

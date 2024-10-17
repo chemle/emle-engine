@@ -66,20 +66,6 @@ class EMLECalculator:
 
     # Class attributes.
 
-    # Store the expected path to the resources directory.
-    _resource_dir = _os.path.join(
-        _os.path.dirname(_os.path.abspath(__file__)), "resources"
-    )
-
-    # Create the name of the default model file for each alpha mode.
-    _default_models = {
-        "species": _os.path.join(_resource_dir, "emle_qm7_aev_species.mat"),
-        "reference": _os.path.join(_resource_dir, "emle_qm7_aev_reference.mat"),
-    }
-
-    # Store the list of supported species.
-    _species = [1, 6, 7, 8, 16]
-
     # List of supported backends.
     _supported_backends = [
         "torchani",
@@ -344,69 +330,45 @@ class EMLECalculator:
         _logger.remove()
         _logger.add(self._log_file, level=self._log_level)
 
-        # Validate the alpha mode first so that we can choose an appropriate
-        # default model.
-        if alpha_mode is not None:
-            if not isinstance(alpha_mode, str):
-                msg = "'alpha_mode' must be of type 'str'"
+        # Validate the PyTorch device.
+        if device is not None:
+            if not isinstance(device, str):
+                msg = "'device' must be of type 'str'"
                 _logger.error(msg)
                 raise TypeError(msg)
-        else:
-            alpha_mode = "species"
+            # Strip whitespace and convert to lower case.
+            device = device.lower().replace(" ", "")
+            # See if the user has specified a GPU index.
+            if device.startswith("cuda"):
+                try:
+                    device, index = device.split(":")
+                except:
+                    index = 0
 
-        # Convert to lower case and strip whitespace.
-        alpha_mode = alpha_mode.lower().replace(" ", "")
+                # Make sure the GPU device index is valid.
+                try:
+                    index = int(index)
+                except:
+                    msg = f"Invalid GPU index: {index}"
+                    _logger.error(msg)
+                    raise ValueError(msg)
 
-        if alpha_mode not in ["species", "reference"]:
-            msg = "'alpha_mode' must be either 'species' or 'reference'"
-            _logger.error(msg)
-            raise ValueError(msg)
-        self._alpha_mode = alpha_mode
-
-        if model is not None:
-            if not isinstance(model, str):
-                msg = "'model' must be of type 'str'"
+            if not device in self._supported_devices:
+                msg = f"Unsupported device '{device}'. Options are: {', '.join(self._supported_devices)}"
                 _logger.error(msg)
-                raise TypeError(msg)
-
-            # Convert to an absolute path.
-            abs_model = _os.path.abspath(model)
-
-            if not _os.path.isfile(abs_model):
-                msg = f"Unable to locate EMLE embedding model file: '{model}'"
-                _logger.error(msg)
-                raise IOError(msg)
-            self._model = abs_model
-
-            # Validate the species for the custom model.
-            if species is not None:
-                if not isinstance(species, list):
-                    raise TypeError("'species' must be of type 'list'")
-                if not all(isinstance(s, int) for s in species):
-                    raise TypeError("All elements of 'species' must be of type 'int'")
-                if not all(s > 0 for s in species):
-                    raise ValueError(
-                        "All elements of 'species' must be greater than zero"
-                    )
-                self._species = species
+                raise ValueError(msg)
+            # Create the full CUDA device string.
+            if device == "cuda":
+                device = f"cuda:{index}"
+            # Set the device.
+            self._device = _torch.device(device)
         else:
-            # Choose the default model based on the alpha mode.
-            self._model = self._default_models[self._alpha_mode]
+            # Default to CUDA, if available.
+            self._device = _torch.device(
+                "cuda" if _torch.cuda.is_available() else "cpu"
+            )
 
-        if method is None:
-            method = "electrostatic"
-
-        if not isinstance(method, str):
-            msg = "'method' must be of type 'str'"
-            _logger.error(msg)
-            raise TypeError(msg)
-        method = method.replace(" ", "").lower()
-        if not method in ["electrostatic", "mechanical", "nonpol", "mm"]:
-            msg = "'method' must be either 'electrostatic', 'mechanical', 'nonpol, or 'mm'"
-            _logger.error(msg)
-            raise ValueError(msg)
-        self._method = method
-
+        # Validate the MM charges.
         if mm_charges is not None:
             # Convert lists/tuples to NumPy arrays.
             if isinstance(mm_charges, (list, tuple)):
@@ -447,20 +409,15 @@ class EMLECalculator:
         else:
             self._mm_charges = None
 
-        if self._method == "mm":
-            # Make sure MM charges have been passed for the QM region.
-            if mm_charges is None:
-                msg = "'mm_charges' are required when using 'mm' embedding"
-                _logger.error(msg)
-                raise ValueError(msg)
+        # Create the EMLE model instance.
+        self._emle = _EMLE(
+            model=model,
+            method=method,
+            mm_charges=self._mm_charges,
+            device=self._device,
+        )
 
-        # Load the model parameters.
-        try:
-            self._params = _scipy_io.loadmat(self._model, squeeze_me=True)
-        except:
-            msg = f"Unable to load model parameters from: '{self._model}'"
-            _logger.error(msg)
-            raise IOError(msg)
+        # Validate the backend.
 
         if backend is not None:
             if not isinstance(backend, str):
@@ -746,44 +703,6 @@ class EMLECalculator:
             restart = False
         self._restart = restart
 
-        # Validate the PyTorch device.
-        if device is not None:
-            if not isinstance(device, str):
-                msg = "'device' must be of type 'str'"
-                _logger.error(msg)
-                raise TypeError(msg)
-            # Strip whitespace and convert to lower case.
-            device = device.lower().replace(" ", "")
-            # See if the user has specified a GPU index.
-            if device.startswith("cuda"):
-                try:
-                    device, index = device.split(":")
-                except:
-                    index = 0
-
-                # Make sure the GPU device index is valid.
-                try:
-                    index = int(index)
-                except:
-                    msg = f"Invalid GPU index: {index}"
-                    _logger.error(msg)
-                    raise ValueError(msg)
-
-            if not device in self._supported_devices:
-                msg = f"Unsupported device '{device}'. Options are: {', '.join(self._supported_devices)}"
-                _logger.error(msg)
-                raise ValueError(msg)
-            # Create the full CUDA device string.
-            if device == "cuda":
-                device = f"cuda:{index}"
-            # Set the device.
-            self._device = _torch.device(device)
-        else:
-            # Default to CUDA, if available.
-            self._device = _torch.device(
-                "cuda" if _torch.cuda.is_available() else "cpu"
-            )
-
         # Validate the interpolation lambda parameter.
         if lambda_interpolate is not None:
             if self._backend == "rascal":
@@ -867,8 +786,8 @@ class EMLECalculator:
 
             # Create an MM EMLE model for interpolation.
             self._emle_mm = _EMLE(
-                model=self._model,
-                alpha_mode=self._alpha_mode,
+                model=model,
+                alpha_mode=alpha_mode,
                 method="mm",
                 mm_charges=self._mm_charges,
                 device=self._device,
@@ -998,21 +917,6 @@ class EMLECalculator:
 
             self._orca_path = abs_orca_path
 
-        # Create a new AEV computer.
-        else:
-            import torchani as _torchani
-
-            ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(self._device)
-            self._aev_computer = ani2x.aev_computer
-
-        # Create the EMLE model.
-        self._emle = _EMLE(
-            model=self._model,
-            method=self._method,
-            mm_charges=self._mm_charges,
-            device=self._device,
-        )
-
         # Intialise the maximum number of MM atoms that have been seen.
         self._max_mm_atoms = 0
 
@@ -1024,6 +928,12 @@ class EMLECalculator:
         # orca on startup when not performing a restart simulation, i.e. not
         # just after each integration step.
         self._is_first_step = not self._restart
+
+        # Get the settings from the internal EMLE model.
+        self._model = self._emle._model
+        self._species = self._emle._species
+        self._method = self._emle._method
+        self._alpha_mode = self._emle._alpha_mode
 
         # Store the settings as a dictionary.
         self._settings = {
