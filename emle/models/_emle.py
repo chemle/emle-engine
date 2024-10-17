@@ -84,8 +84,11 @@ class EMLE(_torch.nn.Module):
     def __init__(
         self,
         model=None,
+        method="electrostatic",
         species=None,
         alpha_mode="species",
+        atomic_numbers=None,
+        mm_charges=None,
         device=None,
         dtype=None,
         create_aev_calculator=True,
@@ -100,7 +103,22 @@ class EMLE(_torch.nn.Module):
             Path to a custom EMLE model parameter file. If None, then the
             default model for the specified 'alpha_mode' will be used.
 
-        species: List[int]
+        method: str
+            The desired embedding method. Options are:
+                "electrostatic":
+                    Full ML electrostatic embedding.
+                "mechanical":
+                    ML predicted charges for the core, but zero valence charge.
+                "nonpol":
+                    Non-polarisable ML embedding. Here the induced component of
+                    the potential is zeroed.
+                "mm":
+                    MM charges are used for the core charge and valence charges
+                    are set to zero. If this option is specified then the user
+                    should also specify the MM charges for atoms in the QM
+                    region.
+
+        species: List[int], Tuple[int], numpy.ndarray, torch.Tensor
             List of species (atomic numbers) supported by the EMLE model. If
             None, then the default species list will be used.
 
@@ -111,6 +129,16 @@ class EMLE(_torch.nn.Module):
                 "reference":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
+
+        atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor
+            Atomic numbers for the QM region. This allows use of optimised AEV
+            symmetry functions from the NNPOps package. Only use this option
+            if you are using a fixed QM region, i.e. the same QM region for each
+            evalulation of the module.
+
+        mm_charges: List[float], Tuple[Float], numpy.ndarray, torch.Tensor
+            List of MM charges for atoms in the QM region in units of mod
+            electron charge. This is required if the 'mm' method is specified.
 
         device: torch.device
             The device on which to run the model.
@@ -133,13 +161,56 @@ class EMLE(_torch.nn.Module):
         # Fetch or update the resources.
         _fetch_resources()
 
+        if method is None:
+            method = "electrostatic"
+        if not isinstance(method, str):
+            raise TypeError("'method' must be of type 'str'")
+        method = method.lower().replace(" ", "")
+        if method not in ["electrostatic", "mechanical", "nonpol", "mm"]:
+            raise ValueError(
+                "'method' must be 'electrostatic', 'mechanical', 'nonpol', or 'mm'"
+            )
+        self._method = method
+
+        if alpha_mode is None:
+            alpha_mode = "species"
         if not isinstance(alpha_mode, str):
             raise TypeError("'alpha_mode' must be of type 'str'")
-        # Convert to lower case and strip whitespace.
         alpha_mode = alpha_mode.lower().replace(" ", "")
         if alpha_mode not in ["species", "reference"]:
             raise ValueError("'alpha_mode' must be 'species' or 'reference'")
         self._alpha_mode = alpha_mode
+
+        if atomic_numbers is not None:
+            if isinstance(atomic_numbers, (_np.ndarray, _torch.Tensor)):
+                atomic_numbers = atomic_numbers.tolist()
+            if not isinstance(atomic_numbers, (tuple, list)):
+                raise TypeError(
+                    "'atomic_numbers' must be of type 'list', 'tuple', or 'numpy.ndarray'"
+                )
+            if not all(isinstance(a, int) for a in atomic_numbers):
+                raise TypeError(
+                    "All elements of 'atomic_numbers' must be of type 'int'"
+                )
+            if not all(a > 0 for a in atomic_numbers):
+                raise ValueError(
+                    "All elements of 'atomic_numbers' must be greater than zero"
+                )
+        self._atomic_numbers = atomic_numbers
+
+        if method == "mm":
+            if mm_charges is None:
+                raise ValueError("MM charges must be provided for the 'mm' method")
+            if isinstance(mm_charges, (list, tuple)):
+                mm_charges = _np.array(mm_charges)
+            elif isinstance(mm_charges, _torch.Tensor):
+                mm_charges = mm_charges.cpu().numpy()
+            if not isinstance(mm_charges, _np.ndarray):
+                raise TypeError("'mm_charges' must be of type 'numpy.ndarray'")
+            if mm_charges.dtype != _np.float64:
+                raise ValueError("'mm_charges' must be of type 'numpy.float64'")
+            if mm_charges.ndim != 1:
+                raise ValueError("'mm_charges' must be a 1D array")
 
         if model is not None:
             if not isinstance(model, str):
@@ -158,18 +229,27 @@ class EMLE(_torch.nn.Module):
 
             # Validate the species for the custom model.
             if species is not None:
-                if not isinstance(species, list):
-                    raise TypeError("'species' must be of type 'list'")
+                if isinstance(species, (_np.ndarray, _torch.Tensor)):
+                    species = species.tolist()
+                if not isinstance(species, (tuple, list)):
+                    raise TypeError(
+                        "'species' must be of type 'list', 'tuple', or 'numpy.ndarray'"
+                    )
                 if not all(isinstance(s, int) for s in species):
                     raise TypeError("All elements of 'species' must be of type 'int'")
                 if not all(s > 0 for s in species):
                     raise ValueError(
                         "All elements of 'species' must be greater than zero"
                     )
+                # Use the custom species.
+                self._species = species
             else:
                 # Use the default species.
                 species = self._species
         else:
+            # Set to None as this will be used in any calculator configuration.
+            self._model = None
+
             # Choose the model based on the alpha_mode.
             model = self._default_models[alpha_mode]
 
@@ -195,6 +275,26 @@ class EMLE(_torch.nn.Module):
         if create_aev_calculator:
             ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(device)
             self._aev_computer = ani2x.aev_computer
+
+            # Optimise the AEV computer using NNPOps if available.
+            if atomic_numbers is not None:
+                if _has_nnpops:
+                    try:
+                        atomic_numbers = _torch.tensor(
+                            atomic_numbers, dtype=_torch.int64, device=device
+                        )
+                        atomic_numbers = atomic_numbers.reshape(
+                            1, *atomic_numbers.shape
+                        )
+                        self._ani2x.aev_computer = (
+                            _NNPOps.SymmetryFunctions.TorchANISymmetryFunctions(
+                                self._aev_computer.species_converter,
+                                self._aev_computer.aev_computer,
+                                atomic_numbers,
+                            )
+                        )
+                    except:
+                        pass
         else:
             self._aev_computer = None
 
@@ -215,6 +315,10 @@ class EMLE(_torch.nn.Module):
         # Store model parameters as tensors.
         aev_mask = _torch.tensor(params["aev_mask"], dtype=_torch.bool, device=device)
         q_core = _torch.tensor(params["q_core"], dtype=dtype, device=device)
+        if method == "mm":
+            q_core_mm = _torch.tensor(mm_charges, dtype=dtype, device=device)
+        else:
+            q_core_mm = _torch.empty(0, dtype=dtype, device=device)
         a_QEq = _torch.tensor(params["a_QEq"], dtype=dtype, device=device)
         a_Thole = _torch.tensor(params["a_Thole"], dtype=dtype, device=device)
         if self._alpha_mode == "species":
@@ -279,6 +383,7 @@ class EMLE(_torch.nn.Module):
         self.register_buffer("_species_map", species_map)
         self.register_buffer("_aev_mask", aev_mask)
         self.register_buffer("_q_core", q_core)
+        self.register_buffer("_q_core_mm", q_core_mm)
         self.register_buffer("_a_QEq", a_QEq)
         self.register_buffer("_a_Thole", a_Thole)
         self.register_buffer("_k", k)
@@ -297,6 +402,17 @@ class EMLE(_torch.nn.Module):
         # Initalise an empty AEV tensor to use to store the AEVs in derived classes.
         self._aev = _torch.empty(0, dtype=dtype, device=device)
 
+    def _to_dict(self):
+        """
+        Return the configuration of the module as a dictionary.
+        """
+        return {
+            "model": self._model,
+            "method": self._method,
+            "species": self._species_map.tolist(),
+            "alpha_mode": self._alpha_mode,
+        }
+
     def to(self, *args, **kwargs):
         """
         Performs Tensor dtype and/or device conversion on the model.
@@ -306,6 +422,7 @@ class EMLE(_torch.nn.Module):
         self._species_map = self._species_map.to(*args, **kwargs)
         self._aev_mask = self._aev_mask.to(*args, **kwargs)
         self._q_core = self._q_core.to(*args, **kwargs)
+        self._q_core_mm = self._q_core_mm.to(*args, **kwargs)
         self._a_QEq = self._a_QEq.to(*args, **kwargs)
         self._a_Thole = self._a_Thole.to(*args, **kwargs)
         self._k = self._k.to(*args, **kwargs)
@@ -338,6 +455,7 @@ class EMLE(_torch.nn.Module):
         self._species_map = self._species_map.cuda(**kwargs)
         self._aev_mask = self._aev_mask.cuda(**kwargs)
         self._q_core = self._q_core.cuda(**kwargs)
+        self._q_core_mm = self._q_core_mm.cuda(**kwargs)
         self._a_QEq = self._a_QEq.cuda(**kwargs)
         self._a_Thole = self._a_Thole.cuda(**kwargs)
         self._k = self._k.cuda(**kwargs)
@@ -367,6 +485,7 @@ class EMLE(_torch.nn.Module):
         self._species_map = self._species_map.cpu(**kwargs)
         self._aev_mask = self._aev_mask.cpu(**kwargs)
         self._q_core = self._q_core.cpu(**kwargs)
+        self._q_core_mm = self._q_core_mm.cpu(**kwargs)
         self._a_QEq = self._a_QEq.cpu(**kwargs)
         self._a_Thole = self._a_Thole.cpu(**kwargs)
         self._k = self._k.cpu(**kwargs)
@@ -394,6 +513,7 @@ class EMLE(_torch.nn.Module):
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.double()
         self._q_core = self._q_core.double()
+        self._q_core_mm = self._q_core_mm.double()
         self._a_QEq = self._a_QEq.double()
         self._a_Thole = self._a_Thole.double()
         self._k = self._k.double()
@@ -416,6 +536,7 @@ class EMLE(_torch.nn.Module):
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.float()
         self._q_core = self._q_core.float()
+        self._q_core_mm = self._q_core_mm.float()
         self._a_QEq = self._a_QEq.float()
         self._a_Thole = self._a_Thole.float()
         self._k = self._k.float()
@@ -490,24 +611,40 @@ class EMLE(_torch.nn.Module):
         xyz_mm_bohr = xyz_mm * ANGSTROM_TO_BOHR
 
         # Compute the static energy.
-        q_core = self._q_core[species_id]
+        if self._method != "mm":
+            q_core = self._q_core[species_id]
+        else:
+            q_core = self._q_core_mm
         if self._alpha_mode == "species":
             k = self._k[species_id]
         else:
             k = self._gpr(aev, self._ref_mean_k, self._c_k, species_id) ** 2
         r_data = self._get_r_data(xyz_qm_bohr)
         mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
-        q = self._get_q(r_data, s, chi)
-        q_val = q - q_core
-        mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k)
+        if self._method in ["electrostatic", "nonpol"]:
+            q = self._get_q(r_data, s, chi)
+            q_val = q - q_core
+        elif self._method == "mechanical":
+            q_core = self._get_q(r_data, s, chi)
+            q_val = _torch.zeros_like(
+                q_core, dtype=charges_mm.dtype, device=self._device
+            )
+        else:
+            q_val = _torch.zeros_like(
+                q_core, dtype=charges_mm.dtype, device=self._device
+            )
         vpot_q_core = self._get_vpot_q(q_core, mesh_data[0])
         vpot_q_val = self._get_vpot_q(q_val, mesh_data[1])
         vpot_static = vpot_q_core + vpot_q_val
         E_static = _torch.sum(vpot_static @ charges_mm)
 
         # Compute the induced energy.
-        vpot_ind = self._get_vpot_mu(mu_ind, mesh_data[2])
-        E_ind = _torch.sum(vpot_ind @ charges_mm) * 0.5
+        if self._method == "electrostatic":
+            mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k)
+            vpot_ind = self._get_vpot_mu(mu_ind, mesh_data[2])
+            E_ind = _torch.sum(vpot_ind @ charges_mm) * 0.5
+        else:
+            E_ind = _torch.tensor(0.0, dtype=charges_mm.dtype, device=self._device)
 
         return _torch.stack([E_static, E_ind])
 

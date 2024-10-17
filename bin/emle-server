@@ -64,6 +64,7 @@ except:
     species = None
 method = os.getenv("EMLE_METHOD")
 alpha_mode = os.getenv("EMLE_ALPHA_MODE")
+atomic_numbers = os.getenv("EMLE_ATOMIC_NUMBERS")
 mm_charges = os.getenv("EMLE_MM_CHARGES")
 try:
     num_clients = int(os.getenv("EMLE_NUM_CLIENTS"))
@@ -136,6 +137,7 @@ env = {
     "species": species,
     "method": method,
     "alpha_mode": alpha_mode,
+    "atomic_numbers": atomic_numbers,
     "mm_charges": mm_charges,
     "num_clients": num_clients,
     "backend": backend,
@@ -208,6 +210,13 @@ parser.add_argument(
     type=str,
     help="the alpha mode to use for the embedding method",
     choices=["species", "reference"],
+    required=False,
+)
+parser.add_argument(
+    "--atomic-numbers",
+    type=str,
+    nargs="*",
+    help="the atomic numbers of the atoms in the qm region",
     required=False,
 )
 parser.add_argument(
@@ -479,6 +488,38 @@ if set_lambda_interpolate is not None:
 
 
 # Handle special case formatting for environment variables.
+
+# Validate the atomic numbers.
+if args["atomic_numbers"] is not None:
+    # Whether we are parsing a list of atomic numbers, rather than a file.
+    is_list = False
+
+    if isinstance(args["atomic_numbers"], str):
+        # If this isn't a path to a file, try splitting on commas.
+        if not os.path.isfile(args["atomic_numbers"]) or not os.path.isfile(
+            os.path.abspath(args["atomic_numbers"])
+        ):
+            try:
+                args["atomic_numbers"] = args["atomic_numbers"].split(",")
+                is_list = True
+            except:
+                raise ValueError(
+                    "Unable to parse EMLE_ATOMIC_NUMBERS environment variable as a comma-separated list of ints"
+                )
+
+    # A single entry list is assumed to be the path to a file.
+    elif isinstance(args["atomic_numbers"], list):
+        if len(args["atomic_numbers"]) == 1:
+            args["atomic_numbers"] = args["atomic_numbers"][0]
+        else:
+            is_list = True
+
+    # Try to parse lists of atomic numbers into a list of ints.
+    if is_list:
+        try:
+            args["atomic_numbers"] = [int(x) for x in args["atomic_numbers"]]
+        except:
+            raise TypeError("Unable to parse atomic numbers as a list of ints")
 
 # Validate the MM charges.
 if args["mm_charges"] is None:

@@ -39,177 +39,19 @@ import sys as _sys
 import tempfile as _tempfile
 import yaml as _yaml
 
-import scipy.io as _scipy_io
-
 import ase as _ase
 import ase.io as _ase_io
 
 import torch as _torch
 
-_ANGSTROM_TO_BOHR = 1.0 / _ase.units.Bohr
+from .models import EMLE as _EMLE
+
 _NANOMETER_TO_BOHR = 10.0 / _ase.units.Bohr
 _BOHR_TO_ANGSTROM = _ase.units.Bohr
 _EV_TO_HARTREE = 1.0 / _ase.units.Hartree
 _KCAL_MOL_TO_HARTREE = 1.0 / _ase.units.Hartree * _ase.units.kcal / _ase.units.mol
 _HARTREE_TO_KJ_MOL = _ase.units.Hartree / _ase.units.kJ * _ase.units.mol
 _NANOMETER_TO_ANGSTROM = 10.0
-
-
-class _AEVCalculator:
-    """
-    Calculates AEV feature vectors for a given system
-    """
-
-    def __init__(self, aev_computer, aev_mask):
-        """
-        Constructor
-
-        Parameters
-        ----------
-
-        aev_computer: torchani.aev.AEVComputer
-            Computer for AEV features.
-
-        aev_mask: torch.tensor (N_REF, )
-            The mask for the AEV features.
-        """
-        self._aev_computer = aev_computer
-        self._aev_mask = aev_mask
-
-    def __call__(self, zid, xyz):
-        """
-        Calculates the AEV feature vectors for a given molecule.
-
-        Parameters
-        ----------
-
-        zid: numpy.array (N_ATOMS)
-            Chemical species indices for each atom.
-
-        xyz: torch.tensor (N_ATOMS, 3)
-            Atomic positions in Bohr.
-
-        Returns
-        -------
-
-        aev: torch.tensor (N_ATOMS, N_AEV)
-            AEV feature vectors for each atom.
-        """
-
-        # Reshape the species indices.
-        zid = zid.reshape(1, *zid.shape)
-
-        # Reshape the atomic positions and convert to Angstrom.
-        xyz = xyz.reshape(1, *xyz.shape) * _BOHR_TO_ANGSTROM
-
-        # Compute the AEVs.
-        aev = self._aev_computer((zid, xyz))[1][0][:, self._aev_mask]
-        return aev / _torch.linalg.norm(aev, axis=1, keepdims=True)
-
-
-class _GPRCalculator:
-    """Predicts an atomic property for a molecule with Gaussian Process Regression (GPR)."""
-
-    def __init__(self, ref_values, ref_features, n_ref, sigma, device):
-        """
-        Constructor
-
-        Parameters
-        ----------
-
-        ref_values: numpy.array (N_Z, N_REF)
-            The property values corresponding to the basis vectors for each species.
-
-        ref_features: numpy.array (N_Z, N_REF, N_FEAT)
-            The basis feature vectors for each species.
-
-        n_ref: (N_Z,)
-            Number of supported species.
-
-        sigma: float
-            The uncertainty of the observations (regularizer).
-
-        device: torch device
-            The PyTorch device to use for calculations.
-        """
-        # Store the device and reference features.
-        self._device = device
-        self._ref_features = ref_features
-
-        # Compute the inverse of the K matrix.
-        Kinv = _torch.tensor(
-            self._get_Kinv(ref_features, sigma),
-            dtype=_torch.float32,
-            device=self._device,
-        )
-
-        # Store additional attributes for the GPR model.
-        self._n_ref = n_ref
-        self._n_z = len(n_ref)
-        self._ref_mean = _np.sum(ref_values, axis=1) / n_ref
-        ref_shifted = _torch.tensor(
-            ref_values - self._ref_mean[:, None],
-            dtype=_torch.float32,
-            device=self._device,
-        )
-        self._c = (Kinv @ ref_shifted[:, :, None]).squeeze()
-
-    def __call__(self, mol_features, zid):
-        """
-
-        Parameters
-        ----------
-
-        mol_features: numpy.array (N_ATOMS, N_FEAT)
-            The feature vectors for each atom.
-
-        zid: torch.tensor (N_ATOMS,)
-            The species identity value of each atom.
-
-        Returns
-        -------
-
-        result: torch.tensor, numpy.array (N_ATOMS)
-            The values of the predicted property for each atom.
-        """
-
-        result = _torch.zeros(len(zid), dtype=_torch.float32, device=self._device)
-        for i in range(self._n_z):
-            n_ref = self._n_ref[i]
-            ref_features_z = _torch.tensor(
-                self._ref_features[i, :n_ref], dtype=_torch.float32, device=self._device
-            )
-            mol_features_z = mol_features[zid == i, :, None]
-
-            K_mol_ref2 = (ref_features_z @ mol_features_z) ** 2
-            K_mol_ref2 = K_mol_ref2.reshape(K_mol_ref2.shape[:-1])
-            result[zid == i] = K_mol_ref2 @ self._c[i, :n_ref] + self._ref_mean[i]
-
-        return result
-
-    @classmethod
-    def _get_Kinv(cls, ref_features, sigma):
-        """
-        Internal function to compute the inverse of the K matrix for GPR.
-
-        Parameters
-        ----------
-
-        ref_features: numpy.array (N_Z, MAX_N_REF, N_FEAT)
-            The basis feature vectors for each species.
-
-        sigma: float
-            The uncertainty of the observations (regularizer).
-
-        Returns
-        -------
-
-        result: numpy.array (MAX_N_REF, MAX_N_REF)
-            The inverse of the K matrix.
-        """
-        n = ref_features.shape[1]
-        K = (ref_features @ ref_features.swapaxes(1, 2)) ** 2
-        return _np.linalg.inv(K + sigma**2 * _np.eye(n, dtype=_np.float32))
 
 
 class EMLECalculator:
@@ -221,20 +63,6 @@ class EMLECalculator:
     """
 
     # Class attributes.
-
-    # Store the expected path to the resources directory.
-    _resource_dir = _os.path.join(
-        _os.path.dirname(_os.path.abspath(__file__)), "resources"
-    )
-
-    # Create the name of the default model file for each alpha mode.
-    _default_models = {
-        "species": _os.path.join(_resource_dir, "emle_qm7_aev_species.mat"),
-        "reference": _os.path.join(_resource_dir, "emle_qm7_aev_reference.mat"),
-    }
-
-    # Store the list of supported species.
-    _species = [1, 6, 7, 8, 16]
 
     # List of supported backends.
     _supported_backends = [
@@ -265,6 +93,7 @@ class EMLECalculator:
         species=None,
         method="electrostatic",
         alpha_mode="species",
+        atomic_numbers=None,
         backend="torchani",
         external_backend=None,
         plugin_path=".",
@@ -300,6 +129,7 @@ class EMLECalculator:
 
         species: List[int]
             List of species (atomic numbers) supported by the EMLE model. If
+            None, then the default species list will be used.
 
         method: str
             The desired embedding method. Options are:
@@ -329,6 +159,12 @@ class EMLECalculator:
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
 
+        atomic_numbers: List[int], Tuple[int], numpy.ndarray
+            Atomic numbers for the QM region. This allows use of optimised AEV
+            symmetry functions from the NNPOps package. Only use this option if
+            you are using a fixed QM region, i.e. the same QM region for each
+            call to the calculator.
+
         external_backend: str
             The name of an external backend to use to compute in vacuo energies.
             This should be a callback function formatted as 'module.function'.
@@ -339,7 +175,7 @@ class EMLECalculator:
         plugin_path: str
             The direcory containing any scripts used for external backends.
 
-        mm_charges: numpy.array, str
+        mm_charges: List, Tuple, numpy.ndarray, str
             An array of MM charges for atoms in the QM region. This is required
             when the embedding method is "mm". Alternatively, pass the path to
             a file containing the charges. The file should contain a single
@@ -499,70 +335,49 @@ class EMLECalculator:
         _logger.remove()
         _logger.add(self._log_file, level=self._log_level)
 
-        # Validate the alpha mode first so that we can choose an appropriate
-        # default model.
-        if alpha_mode is not None:
-            if not isinstance(alpha_mode, str):
-                msg = "'alpha_mode' must be of type 'str'"
+        # Validate the PyTorch device.
+        if device is not None:
+            if not isinstance(device, str):
+                msg = "'device' must be of type 'str'"
                 _logger.error(msg)
                 raise TypeError(msg)
-        else:
-            alpha_mode = "species"
+            # Strip whitespace and convert to lower case.
+            device = device.lower().replace(" ", "")
+            # See if the user has specified a GPU index.
+            if device.startswith("cuda"):
+                try:
+                    device, index = device.split(":")
+                except:
+                    index = 0
 
-        # Convert to lower case and strip whitespace.
-        alpha_mode = alpha_mode.lower().replace(" ", "")
+                # Make sure the GPU device index is valid.
+                try:
+                    index = int(index)
+                except:
+                    msg = f"Invalid GPU index: {index}"
+                    _logger.error(msg)
+                    raise ValueError(msg)
 
-        if alpha_mode not in ["species", "reference"]:
-            msg = "'alpha_mode' must be either 'species' or 'reference'"
-            _logger.error(msg)
-            raise ValueError(msg)
-        self._alpha_mode = alpha_mode
-
-        if model is not None:
-            if not isinstance(model, str):
-                msg = "'model' must be of type 'str'"
+            if not device in self._supported_devices:
+                msg = f"Unsupported device '{device}'. Options are: {', '.join(self._supported_devices)}"
                 _logger.error(msg)
-                raise TypeError(msg)
-
-            # Convert to an absolute path.
-            abs_model = _os.path.abspath(model)
-
-            if not _os.path.isfile(abs_model):
-                msg = f"Unable to locate EMLE embedding model file: '{model}'"
-                _logger.error(msg)
-                raise IOError(msg)
-            self._model = abs_model
-
-            # Validate the species for the custom model.
-            if species is not None:
-                if not isinstance(species, list):
-                    raise TypeError("'species' must be of type 'list'")
-                if not all(isinstance(s, int) for s in species):
-                    raise TypeError("All elements of 'species' must be of type 'int'")
-                if not all(s > 0 for s in species):
-                    raise ValueError(
-                        "All elements of 'species' must be greater than zero"
-                    )
-                self._species = species
+                raise ValueError(msg)
+            # Create the full CUDA device string.
+            if device == "cuda":
+                device = f"cuda:{index}"
+            # Set the device.
+            self._device = _torch.device(device)
         else:
-            # Choose the default model based on the alpha mode.
-            self._model = self._default_models[self._alpha_mode]
+            # Default to CUDA, if available.
+            self._device = _torch.device(
+                "cuda" if _torch.cuda.is_available() else "cpu"
+            )
 
-        if method is None:
-            method = "electrostatic"
-
-        if not isinstance(method, str):
-            msg = "'method' must be of type 'str'"
-            _logger.error(msg)
-            raise TypeError(msg)
-        method = method.replace(" ", "").lower()
-        if not method in ["electrostatic", "mechanical", "nonpol", "mm"]:
-            msg = "'method' must be either 'electrostatic', 'mechanical', 'nonpol, or 'mm'"
-            _logger.error(msg)
-            raise ValueError(msg)
-        self._method = method
-
+        # Validate the MM charges.
         if mm_charges is not None:
+            # Convert lists/tuples to NumPy arrays.
+            if isinstance(mm_charges, (list, tuple)):
+                mm_charges = _np.array(mm_charges)
             if isinstance(mm_charges, _np.ndarray):
                 if mm_charges.dtype != _np.float64:
                     msg = "'mm_charges' must have dtype 'float64'"
@@ -596,21 +411,21 @@ class EMLECalculator:
                 msg = "'mm_charges' must be of type 'numpy.ndarray' or 'str'"
                 _logger.error(msg)
                 raise TypeError(msg)
+        else:
+            self._mm_charges = None
 
-        if self._method == "mm":
-            # Make sure MM charges have been passed for the QM region.
-            if mm_charges is None:
-                msg = "'mm_charges' are required when using 'mm' embedding"
-                _logger.error(msg)
-                raise ValueError(msg)
+        # Create the EMLE model instance.
+        self._emle = _EMLE(
+            model=model,
+            method=method,
+            species=species,
+            alpha_mode=alpha_mode,
+            atomic_numbers=atomic_numbers,
+            mm_charges=self._mm_charges,
+            device=self._device,
+        )
 
-        # Load the model parameters.
-        try:
-            self._params = _scipy_io.loadmat(self._model, squeeze_me=True)
-        except:
-            msg = f"Unable to load model parameters from: '{self._model}'"
-            _logger.error(msg)
-            raise IOError(msg)
+        # Validate the backend.
 
         if backend is not None:
             if not isinstance(backend, str):
@@ -977,46 +792,19 @@ class EMLECalculator:
                         raise ValueError(msg)
                     self._interpolate_steps = interpolate_steps
 
+            # Create an MM EMLE model for interpolation.
+            self._emle_mm = _EMLE(
+                model=model,
+                species=species,
+                alpha_mode=alpha_mode,
+                atomic_numbers=atomic_numbers,
+                method="mm",
+                mm_charges=self._mm_charges,
+                device=self._device,
+            )
+
         else:
             self._is_interpolate = False
-
-        # Validate the PyTorch device.
-        if device is not None:
-            if not isinstance(device, str):
-                msg = "'device' must be of type 'str'"
-                _logger.error(msg)
-                raise TypeError(msg)
-            # Strip whitespace and convert to lower case.
-            device = device.lower().replace(" ", "")
-            # See if the user has specified a GPU index.
-            if device.startswith("cuda"):
-                try:
-                    device, index = device.split(":")
-                except:
-                    index = 0
-
-                # Make sure the GPU device index is valid.
-                try:
-                    index = int(index)
-                except:
-                    msg = f"Invalid GPU index: {index}"
-                    _logger.error(msg)
-                    raise ValueError(msg)
-
-            if not device in self._supported_devices:
-                msg = f"Unsupported device '{device}'. Options are: {', '.join(self._supported_devices)}"
-                _logger.error(msg)
-                raise ValueError(msg)
-            # Create the full CUDA device string.
-            if device == "cuda":
-                device = f"cuda:{index}"
-            # Set the device.
-            self._device = _torch.device(device)
-        else:
-            # Default to CUDA, if available.
-            self._device = _torch.device(
-                "cuda" if _torch.cuda.is_available() else "cpu"
-            )
 
         if energy_frequency is None:
             energy_frequency = 0
@@ -1139,85 +927,7 @@ class EMLECalculator:
 
             self._orca_path = abs_orca_path
 
-        # Re-use the existing AEV computer from TorchANI.
-        if self._backend == "torchani":
-            self._aev_computer = self._torchani_model.aev_computer
-        # Create a new AEV computer.
-        else:
-            import torchani as _torchani
-
-            ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(self._device)
-            self._aev_computer = ani2x.aev_computer
-
-        # Create the AEVCaclulator.
-        aev_mask = _torch.tensor(
-            self._params["aev_mask"], dtype=_torch.bool, device=self._device
-        )
-        self._get_features = _AEVCalculator(self._aev_computer, aev_mask)
-
-        self._q_core = _torch.tensor(
-            self._params["q_core"], dtype=_torch.float32, device=self._device
-        )
-        if self._method == "mm" or self._is_interpolate:
-            self._q_core_mm = _torch.tensor(
-                self._mm_charges, dtype=_torch.float32, device=self._device
-            )
-        self._a_QEq = self._params["a_QEq"]
-        self._a_Thole = self._params["a_Thole"]
-        if self._alpha_mode == "species":
-            try:
-                self._k_Z = _torch.tensor(
-                    self._params["k_Z"], dtype=_torch.float32, device=self._device
-                )
-            except:
-                msg = (
-                    "Missing 'k_Z' key in model. This is required when "
-                    "using 'species' alpha mode."
-                )
-                _logger.error(msg)
-                raise ValueError(msg)
-        else:
-            try:
-                self.sqrtk_ref = _torch.tensor(
-                    self._params["sqrtk_ref"], dtype=_torch.float32, device=self._device
-                )
-            except:
-                msg = (
-                    "Missing 'sqrtk_ref' key in model. This is required when "
-                    "using 'reference' alpha mode."
-                )
-                _logger.error(msg)
-                raise ValueError(msg)
-
-        self._q_total = _torch.tensor(
-            self._params.get("total_charge", 0),
-            dtype=_torch.float32,
-            device=self._device,
-        )
-        self._get_s = _GPRCalculator(
-            self._params["s_ref"],
-            self._params["ref_aev"],
-            self._params["n_ref"],
-            1e-3,
-            self._device,
-        )
-        self._get_chi = _GPRCalculator(
-            self._params["chi_ref"],
-            self._params["ref_aev"],
-            self._params["n_ref"],
-            1e-3,
-            self._device,
-        )
-        if self._alpha_mode == "reference":
-            self._get_sqrtk = _GPRCalculator(
-                self._params["sqrtk_ref"],
-                self._params["ref_aev"],
-                self._params["n_ref"],
-                1e-3,
-                self._device,
-            )
-
-        # Initialise the maximum number of MM atom that have been seen.
+        # Intialise the maximum number of MM atoms that have been seen.
         self._max_mm_atoms = 0
 
         # Initialise the number of steps. (Calls to the calculator.)
@@ -1229,12 +939,23 @@ class EMLECalculator:
         # just after each integration step.
         self._is_first_step = not self._restart
 
+        # Get the settings from the internal EMLE model.
+        self._model = self._emle._model
+        self._species = self._emle._species
+        self._method = self._emle._method
+        self._alpha_mode = self._emle._alpha_mode
+        self._atomic_numbers = self._emle._atomic_numbers
+
+        if isinstance(atomic_numbers, _np.ndarray):
+            atomic_numbers = atomic_numbers.tolist()
+
         # Store the settings as a dictionary.
         self._settings = {
             "model": None if model is None else self._model,
             "species": None if species is None else self._species,
             "method": self._method,
             "alpha_mode": self._alpha_mode,
+            "atomic_numbers": None if atomic_numbers is None else atomic_numbers,
             "backend": self._backend,
             "external_backend": None if external_backend is None else external_backend,
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),
@@ -1304,7 +1025,7 @@ class EMLECalculator:
             xyz_mm,
             charges_mm,
             xyz_file_qm,
-        ) = self.parse_orca_input(orca_input)
+        ) = self._parse_orca_input(orca_input)
 
         # Make sure that the number of QM atoms matches the number of MM charges
         # when using mm embedding.
@@ -1442,31 +1163,30 @@ class EMLECalculator:
             E_vac += delta_E
             grad_vac += delta_grad
 
-        # Convert units.
-        xyz_qm_bohr = xyz_qm * _ANGSTROM_TO_BOHR
-        xyz_mm_bohr = xyz_mm * _ANGSTROM_TO_BOHR
+        # Store a copy of the QM coordinates as a NumPy array.
+        xyz_qm_np = xyz_qm
 
         # Convert inputs to Torch tensors.
-        xyz_qm_bohr = _torch.tensor(
-            xyz_qm_bohr, dtype=_torch.float32, device=self._device, requires_grad=True
+        xyz_qm = _torch.tensor(
+            xyz_qm, dtype=_torch.float32, device=self._device, requires_grad=True
         )
-        xyz_mm_bohr = _torch.tensor(
-            xyz_mm_bohr, dtype=_torch.float32, device=self._device, requires_grad=True
+        xyz_mm = _torch.tensor(
+            xyz_mm, dtype=_torch.float32, device=self._device, requires_grad=True
         )
         charges_mm = _torch.tensor(
             charges_mm, dtype=_torch.float32, device=self._device
         )
 
         # Compute energy and gradients.
-        E = self._get_E(charges_mm, xyz_qm_bohr, xyz_mm_bohr)
+        E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
         dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
-            E, (xyz_qm_bohr, xyz_mm_bohr)
+            E.sum(), (xyz_qm, xyz_mm)
         )
         dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
         dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
 
         # Compute the total energy and gradients.
-        E_tot = E_vac + E.detach().cpu().numpy()
+        E_tot = E_vac + E.sum().detach().cpu().numpy()
         grad_qm = dE_dxyz_qm_bohr + grad_vac
         grad_mm = dE_dxyz_mm_bohr
 
@@ -1484,23 +1204,16 @@ class EMLECalculator:
             else:
                 E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm)
 
-            # Swap the method to MM.
-            method = self._method
-            self._method = "mm"
-
-            # Recompute the energy and gradients.
-            E = self._get_E(charges_mm, xyz_qm_bohr, xyz_mm_bohr)
+            # Compute the embedding contributions.
+            E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
             dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
-                E, (xyz_qm_bohr, xyz_mm_bohr)
+                E.sum(), (xyz_qm, xyz_mm)
             )
             dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
             dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
 
-            # Restore the method.
-            self._method = method
-
             # Store the the MM and EMLE energies. The MM energy is an approximation.
-            E_mm = E_mm_qm_vac + E.detach().cpu().numpy()
+            E_mm = E_mm_qm_vac + E.sum().detach().cpu().numpy()
             E_emle = E_tot
 
             # Work out the current value of lambda.
@@ -1570,7 +1283,7 @@ class EMLECalculator:
 
         # Write out the QM region to the xyz trajectory file.
         if self._qm_xyz_frequency > 0 and self._step % self._qm_xyz_frequency == 0:
-            atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+            atoms = _ase.Atoms(positions=xyz_qm_np, numbers=atomic_numbers)
             if hasattr(self, "_max_f_std"):
                 atoms.info = {"max_f_std": self._max_f_std}
             _ase_io.write(self._qm_xyz_file, atoms, append=True)
@@ -1839,42 +1552,38 @@ class EMLECalculator:
                 [],
             )
 
-        # Convert units.
-        xyz_qm_bohr = xyz_qm * _ANGSTROM_TO_BOHR
-        xyz_mm_bohr = xyz_mm * _ANGSTROM_TO_BOHR
-
         # Convert inputs to Torch tensors.
-        xyz_qm_bohr = _torch.tensor(
-            xyz_qm_bohr, dtype=_torch.float32, device=self._device, requires_grad=True
+        xyz_qm = _torch.tensor(
+            xyz_qm, dtype=_torch.float32, device=self._device, requires_grad=True
         )
-        xyz_mm_bohr = _torch.tensor(
-            xyz_mm_bohr, dtype=_torch.float32, device=self._device, requires_grad=True
+        xyz_mm = _torch.tensor(
+            xyz_mm, dtype=_torch.float32, device=self._device, requires_grad=True
         )
         charges_mm = _torch.tensor(
             charges_mm, dtype=_torch.float32, device=self._device
         )
 
         # Compute energy and gradients.
-        E = self._get_E(charges_mm, xyz_qm_bohr, xyz_mm_bohr)
+        E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
         dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
-            E, (xyz_qm_bohr, xyz_mm_bohr)
+            E.sum(), (xyz_qm, xyz_mm)
         )
         dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
         dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
 
         # Compute the total energy and gradients.
-        E_tot = E_vac + E.detach().cpu().numpy()
+        E_tot = E_vac + E.sum().detach().cpu().numpy()
         grad_qm = dE_dxyz_qm_bohr + grad_vac
         grad_mm = dE_dxyz_mm_bohr
 
         # Interpolate between the MM and ML/MM potential.
         if self._is_interpolate:
+            # Create the ASE atoms object if it wasn't already created by the backend.
+            if atoms is None:
+                atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+
             # Compute the in vacuo MM energy and gradients for the QM region.
             if self._backend != None:
-                # Create the ASE atoms object if it wasn't already created by the backend.
-                if atoms is None:
-                    atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
-
                 E_mm_qm_vac, grad_mm_qm_vac = self._run_pysander(
                     atoms=atoms,
                     parm7=self._parm7,
@@ -1885,23 +1594,16 @@ class EMLECalculator:
             else:
                 E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm)
 
-            # Swap the method to MM.
-            method = self._method
-            self._method = "mm"
-
-            # Recompute the energy and gradients.
-            E = self._get_E(charges_mm, xyz_qm_bohr, xyz_mm_bohr)
+            # Compute the embedding contributions.
+            E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
             dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
-                E, (xyz_qm_bohr, xyz_mm_bohr)
+                E.sum(), (xyz_qm, xyz_mm)
             )
             dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
             dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
 
-            # Restore the method.
-            self._method = method
-
             # Store the the MM and EMLE energies. The MM energy is an approximation.
-            E_mm = E_mm_qm_vac + E.detach().cpu().numpy()
+            E_mm = E_mm_qm_vac + E.sum().detach().cpu().numpy()
             E_emle = E_tot
 
             # Work out the current value of lambda.
@@ -2055,7 +1757,12 @@ class EMLECalculator:
             # Create the model.
             ani2x_emle = _ANI2xEMLE(
                 emle_model=self._model,
+                emle_species=self._species,
+                alpha_mode=self._alpha_mode,
+                mm_charges=self._mm_charges,
+                model_index=self._ani2x_model_index,
                 ani2x_model=self._torchani_model,
+                atomic_numbers=atomic_numbers,
                 device=self._device,
             )
 
@@ -2087,505 +1794,8 @@ class EMLECalculator:
 
         return E, force_qm, force_mm
 
-    def _get_E(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr):
-        """
-        Computes total EMLE embedding energy (sum of static and induced).
-
-        Parameters
-        ----------
-
-        charges_mm: torch.tensor (max_mm_atoms,)
-            MM point charges in atomic units, padded to max_mm_atoms with zeros.
-
-        xyz_qm_bohr: torch.tensor (N_ATOMS, 3)
-            Positions of QM atoms (in Bohr).
-
-        xyz_mm_bohr: torch.tensor (max_mm_atoms, 3)
-            Positions of MM atoms (in Bohr), padded to max_mm_atoms with zeros.
-
-        Returns
-        -------
-
-        result: torch.tensor (1,)
-            Total EMLE embedding energy.
-        """
-        return _torch.sum(self._get_E_components(charges_mm, xyz_qm_bohr, xyz_mm_bohr))
-
-    def _get_E_components(self, charges_mm, xyz_qm_bohr, xyz_mm_bohr):
-        """
-        Computes EMLE energy components
-
-        Parameters
-        ----------
-
-        charges_mm: torch.tensor (max_mm_atoms,)
-            MM point charges in atomic units, padded to max_mm_atoms with zeros.
-
-        xyz_qm_bohr: torch.tensor (N_ATOMS, 3)
-            Positions of QM atoms (in Bohr).
-
-        xyz_mm_bohr: torch.tensor (max_mm_atoms, 3)
-            Positions of MM atoms (in Bohr), padded to max_mm_atoms with zeros.
-
-        Returns
-        -------
-
-        result: torch.tensor (2,)
-            Values of static and induced EMLE energy components.
-        """
-
-        # Get the features.
-        mol_features = self._get_features(self._species_id, xyz_qm_bohr)
-
-        # Compute the MBIS valence shell widths.
-        s = self._get_s(mol_features, self._species_id)
-
-        # Compute the electronegativities.
-        chi = self._get_chi(mol_features, self._species_id)
-
-        if self._method != "mm":
-            q_core = self._q_core[self._species_id]
-        else:
-            q_core = self._q_core_mm
-
-        if self._alpha_mode == "species":
-            k = self._k_Z[self._species_id]
-        else:
-            k = self._get_sqrtk(mol_features, self._species_id) ** 2
-
-        r_data = self._get_r_data(xyz_qm_bohr, self._device)
-        mesh_data = self._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
-        if self._method in ["electrostatic", "nonpol"]:
-            q = self._get_q(r_data, s, chi)
-            q_val = q - q_core
-        elif self._method == "mechanical":
-            q_core = self._get_q(r_data, s, chi)
-            q_val = _torch.zeros_like(q_core, dtype=_torch.float32, device=self._device)
-        else:
-            q_val = _torch.zeros_like(q_core, dtype=_torch.float32, device=self._device)
-        vpot_q_core = self._get_vpot_q(q_core, mesh_data["T0_mesh"])
-        vpot_q_val = self._get_vpot_q(q_val, mesh_data["T0_mesh_slater"])
-        vpot_static = vpot_q_core + vpot_q_val
-        E_static = _torch.sum(vpot_static @ charges_mm)
-
-        if self._method == "electrostatic":
-            mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k)
-            vpot_ind = self._get_vpot_mu(mu_ind, mesh_data["T1_mesh"])
-            E_ind = _torch.sum(vpot_ind @ charges_mm) * 0.5
-        else:
-            E_ind = _torch.tensor(0.0, dtype=_torch.float32, device=self._device)
-
-        return _torch.stack([E_static, E_ind])
-
-    def _get_q(self, r_data, s, chi):
-        """
-        Internal method that predicts MBIS charges
-        (Eq. 16 in 10.1021/acs.jctc.2c00914)
-
-        Parameters
-        ----------
-
-        r_data: r_data object (output of self._get_r_data)
-
-        s: torch.tensor (N_ATOMS,)
-            MBIS valence shell widths.
-
-        chi: torch.tensor (N_ATOMS,)
-            Electronegativities.
-
-        Returns
-        -------
-
-        result: torch.tensor (N_ATOMS,)
-            Predicted MBIS charges.
-        """
-        A = self._get_A_QEq(r_data, s)
-        b = _torch.hstack([-chi, self._q_total])
-        return _torch.linalg.solve(A, b)[:-1]
-
-    def _get_A_QEq(self, r_data, s):
-        """
-        Internal method, generates A matrix for charge prediction
-        (Eq. 16 in 10.1021/acs.jctc.2c00914)
-
-        Parameters
-        ----------
-
-        r_data: r_data object (output of self._get_r_data)
-
-        s: torch.tensor (N_ATOMS,)
-            MBIS valence shell widths.
-
-        Returns
-        -------
-
-        result: torch.tensor (N_ATOMS + 1, N_ATOMS + 1)
-        """
-        s_gauss = s * self._a_QEq
-        s2 = s_gauss**2
-        s_mat = _torch.sqrt(s2[:, None] + s2[None, :])
-
-        A = self._get_T0_gaussian(r_data["T01"], r_data["r_mat"], s_mat)
-
-        new_diag = _torch.ones_like(
-            A.diagonal(), dtype=_torch.float32, device=self._device
-        ) * (1.0 / (s_gauss * _np.sqrt(_np.pi)))
-        mask = _torch.diag(
-            _torch.ones_like(new_diag, dtype=_torch.float32, device=self._device)
-        )
-        A = mask * _torch.diag(new_diag) + (1.0 - mask) * A
-
-        # Store the dimensions of A.
-        x, y = A.shape
-
-        # Create an tensor of ones with one more row and column than A.
-        B = _torch.ones(x + 1, y + 1, dtype=_torch.float32, device=self._device)
-
-        # Copy A into B.
-        B[:x, :y] = A
-
-        # Set the final entry on the diagonal to zero.
-        B[-1, -1] = 0.0
-
-        return B
-
-    def _get_mu_ind(self, r_data, mesh_data, q, s, q_val, k):
-        """
-        Internal method, calculates induced atomic dipoles
-        (Eq. 20 in 10.1021/acs.jctc.2c00914)
-
-        Parameters
-        ----------
-
-        r_data: r_data object (output of self._get_r_data)
-
-        mesh_data: mesh_data object (output of self._get_mesh_data)
-
-        q: torch.tensor (max_mm_atoms,)
-            MM point charges, padded to max_mm_atoms with zeros.
-
-        s: torch.tensor (N_ATOMS,)
-            MBIS valence shell widths.
-
-        q_val: torch.tensor (N_ATOMS,)
-            MBIS valence charges.
-
-        k: torch.tensor (N_Z)
-            Scaling factors for polarizabilities.
-
-        Returns
-        -------
-
-        result: torch.tensor (N_ATOMS, 3)
-            Array of induced dipoles
-        """
-        A = self._get_A_thole(r_data, s, q_val, k)
-
-        r = 1.0 / mesh_data["T0_mesh"]
-        f1 = self._get_f1_slater(r, s[:, None] * 2.0)
-        fields = _torch.sum(
-            mesh_data["T1_mesh"] * f1[:, :, None] * q[:, None], axis=1
-        ).flatten()
-
-        mu_ind = _torch.linalg.solve(A, fields)
-        return mu_ind.reshape((-1, 3))
-
-    def _get_A_thole(self, r_data, s, q_val, k):
-        """
-        Internal method, generates A matrix for induced dipoles prediction
-        (Eq. 20 in 10.1021/acs.jctc.2c00914)
-
-        Parameters
-        ----------
-
-        r_data: r_data object (output of self._get_r_data)
-
-        s: torch.tensor (N_ATOMS,)
-            MBIS valence shell widths.
-
-        q_val: torch.tensor (N_ATOMS,)
-            MBIS charges.
-
-        k: torch.tensor (N_Z)
-            Scaling factors for polarizabilities.
-
-        Returns
-        -------
-
-        result: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
-            The A matrix for induced dipoles prediction.
-        """
-        v = -60 * q_val * s**3
-        alpha = v * k
-
-        alphap = alpha * self._a_Thole
-        alphap_mat = alphap[:, None] * alphap[None, :]
-
-        au3 = r_data["r_mat"] ** 3 / _torch.sqrt(alphap_mat)
-        au31 = au3.repeat_interleave(3, dim=1)
-        au32 = au31.repeat_interleave(3, dim=0)
-
-        A = -self._get_T2_thole(r_data["T21"], r_data["T22"], au32)
-
-        new_diag = 1.0 / alpha.repeat_interleave(3)
-        mask = _torch.diag(
-            _torch.ones_like(new_diag, dtype=_torch.float32, device=self._device)
-        )
-        A = mask * _torch.diag(new_diag) + (1.0 - mask) * A
-
-        return A
-
     @staticmethod
-    def _get_vpot_q(q, T0):
-        """
-        Internal method to calculate the electrostatic potential.
-
-        Parameters
-        ----------
-
-        q: torch.tensor (max_mm_atoms,)
-            MM point charges, padded to max_mm_atoms with zeros.
-
-        T0: torch.tensor (N_ATOMS, max_mm_atoms)
-            T0 tensor for QM atoms over MM atom positions.
-
-        Returns
-        -------
-
-        result: torch.tensor (max_mm_atoms)
-            Electrostatic potential over MM atoms.
-        """
-        return _torch.sum(T0 * q[:, None], axis=0)
-
-    @staticmethod
-    def _get_vpot_mu(mu, T1):
-        """
-        Internal method to calculate the electrostatic potential generated
-        by atomic dipoles.
-
-        Parameters
-        ----------
-
-        mu: torch.tensor (N_ATOMS, 3)
-            Atomic dipoles.
-
-        T1: torch.tensor (N_ATOMS, max_mm_atoms, 3)
-            T1 tensor for QM atoms over MM atom positions.
-
-        Returns
-        -------
-
-        result: torch.tensor (max_mm_atoms)
-            Electrostatic potential over MM atoms.
-        """
-        return -_torch.tensordot(T1, mu, ((0, 2), (0, 1)))
-
-    @classmethod
-    def _get_r_data(cls, xyz, device):
-        """
-        Internal method to calculate r_data object.
-
-        Parameters
-        ----------
-
-        xyz: torch.tensor (N_ATOMS, 3)
-            Atomic positions.
-
-        device: torch.device
-            The PyTorch device to use.
-
-        Returns
-        -------
-
-        result: r_data object
-        """
-        n_atoms = len(xyz)
-
-        rr_mat = xyz[:, None, :] - xyz[None, :, :]
-        r_mat = _torch.cdist(xyz, xyz)
-        r_inv = _torch.where(r_mat == 0.0, 0.0, 1.0 / r_mat)
-
-        r_inv1 = r_inv.repeat_interleave(3, dim=1)
-        r_inv2 = r_inv1.repeat_interleave(3, dim=0)
-
-        # Get a stacked matrix of outer products over the rr_mat tensors.
-        outer = _torch.einsum("bik,bij->bjik", rr_mat, rr_mat).reshape(
-            (n_atoms * 3, n_atoms * 3)
-        )
-
-        id2 = _torch.tile(
-            _torch.tile(
-                _torch.eye(3, dtype=_torch.float32, device=device).T, (1, n_atoms)
-            ).T,
-            (1, n_atoms),
-        )
-
-        t01 = r_inv
-        t11 = -rr_mat.reshape(n_atoms, n_atoms * 3) * r_inv1**3
-        t21 = -id2 * r_inv2**3
-        t22 = 3 * outer * r_inv2**5
-
-        return {"r_mat": r_mat, "T01": t01, "T11": t11, "T21": t21, "T22": t22}
-
-    @classmethod
-    def _get_mesh_data(cls, xyz, xyz_mesh, s):
-        """
-        Internal method, calculates mesh_data object.
-
-        Parameters
-        ----------
-
-        xyz: torch.tensor (N_ATOMS, 3)
-            Atomic positions.
-
-        xyz_mesh: torch.tensor (max_mm_atoms, 3)
-            MM positions.
-
-        s: torch.tensor (N_ATOMS,)
-            MBIS valence widths.
-        """
-        rr = xyz_mesh[None, :, :] - xyz[:, None, :]
-        r = _torch.linalg.norm(rr, axis=2)
-
-        return {
-            "T0_mesh": 1.0 / r,
-            "T0_mesh_slater": cls._get_T0_slater(r, s[:, None]),
-            "T1_mesh": -rr / r[:, :, None] ** 3,
-        }
-
-    @classmethod
-    def _get_f1_slater(cls, r, s):
-        """
-        Internal method, calculates damping factors for Slater densities.
-
-        Parameters
-        ----------
-
-        r: torch.tensor (N_ATOMS, max_mm_atoms)
-            Distances from QM to MM atoms.
-
-        s: torch.tensor (N_ATOMS,)
-            MBIS valence widths.
-
-        Returns
-        -------
-
-        result: torch.tensor (N_ATOMS, max_mm_atoms)
-        """
-        return (
-            cls._get_T0_slater(r, s) * r
-            - _torch.exp(-r / s) / s * (0.5 + r / (s * 2)) * r
-        )
-
-    @staticmethod
-    def _get_T0_slater(r, s):
-        """
-        Internal method, calculates T0 tensor for Slater densities.
-
-        Parameters
-        ----------
-
-        r: torch.tensor (N_ATOMS, max_mm_atoms)
-            Distances from QM to MM atoms.
-
-        s: torch.tensor (N_ATOMS,)
-            MBIS valence widths.
-
-        Returns
-        -------
-
-        results: torch.tensor (N_ATOMS, max_mm_atoms)
-        """
-        return (1 - (1 + r / (s * 2)) * _torch.exp(-r / s)) / r
-
-    @staticmethod
-    def _get_T0_gaussian(t01, r, s_mat):
-        """
-        Internal method, calculates T0 tensor for Gaussian densities (for QEq).
-
-        Parameters
-        ----------
-
-        t01: torch.tensor (N_ATOMS, N_ATOMS)
-            T0 tensor for QM atoms.
-
-        r: torch.tensor (N_ATOMS, N_ATOMS)
-            Distance matrix for QM atoms.
-
-        s_mat: torch.tensor (N_ATOMS, N_ATOMS)
-            Matrix of Gaussian sigmas for QM atoms.
-
-        Returns
-        -------
-
-        results: torch.tensor (N_ATOMS, N_ATOMS)
-        """
-        return t01 * _torch.erf(r / (s_mat * _np.sqrt(2)))
-
-    @classmethod
-    def _get_T2_thole(cls, tr21, tr22, au3):
-        """
-        Internal method, calculates T2 tensor with Thole damping.
-
-        Parameters
-        ----------
-
-        tr21: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
-            r_data["T21"]
-
-        tr21: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
-            r_data["T22"]
-
-        au3: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
-            Scaled distance matrix (see _get_A_thole).
-
-        Returns
-        -------
-
-        result: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
-        """
-        return cls._lambda3(au3) * tr21 + cls._lambda5(au3) * tr22
-
-    @staticmethod
-    def _lambda3(au3):
-        """
-        Internal method, calculates r^3 component of T2 tensor with Thole
-        damping.
-
-        Parameters
-        ----------
-
-        au3: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
-            Scaled distance matrix (see _get_A_thole).
-
-        Returns
-        -------
-
-        result: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
-        """
-        return 1 - _torch.exp(-au3)
-
-    @staticmethod
-    def _lambda5(au3):
-        """
-        Internal method, calculates r^5 component of T2 tensor with Thole
-        damping.
-
-        Parameters
-        ----------
-
-        au3: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
-            Scaled distance matrix (see _get_A_thole).
-
-        Returns
-        -------
-
-        result: torch.tensor (N_ATOMS * 3, N_ATOMS * 3)
-        """
-        return 1 - (1 + au3) * _torch.exp(-au3)
-
-    @staticmethod
-    def parse_orca_input(orca_input):
+    def _parse_orca_input(orca_input):
         """
         Internal method to parse an ORCA input file.
 
@@ -2856,9 +2066,6 @@ class EMLECalculator:
 
             # Flag that NNPOps is active.
             self._nnpops_active = True
-
-            # Apply the optimised AEV symmetry functions.
-            self._aev_computer = self._torchani_model.aev_computer
 
         # Compute the energy and gradient.
         energy = self._torchani_model((atomic_numbers, coords)).energies

@@ -63,8 +63,10 @@ class MACEEMLE(_torch.nn.Module):
     def __init__(
         self,
         emle_model=None,
+        emle_method="electrostatic",
         emle_species=None,
         alpha_mode="species",
+        mm_charges=None,
         mace_model=None,
         atomic_numbers=None,
         device=None,
@@ -80,7 +82,20 @@ class MACEEMLE(_torch.nn.Module):
             Path to a custom EMLE model parameter file. If None, then the
             default model for the specified 'alpha_mode' will be used.
 
-        emle_species: List[int]
+        emle_method: str
+            The desired embedding method. Options are:
+                "electrostatic":
+                    Full ML electrostatic embedding.
+                "mechanical":
+                    ML predicted charges for the core, but zero valence charge.
+                "nonpol":
+                    Non-polarisable ML embedding. Here the induced component of
+                    the potential is zeroed.
+                "mm":
+                    MM charges are used for the core charge and valence charges
+                    are set to zero.
+
+        emle_species: List[int], Tuple[int], numpy.ndarray, torch.Tensor
             List of species (atomic numbers) supported by the EMLE model. If
             None, then the default species list will be used.
 
@@ -92,13 +107,17 @@ class MACEEMLE(_torch.nn.Module):
                     scaling factors are obtained with GPR using the values learned
                     for each reference environmentw
 
+        mm_charges: List[float], Tuple[Float], numpy.ndarray, torch.Tensor
+            List of MM charges for atoms in the QM region in units of mod
+            electron charge. This is required if the 'mm' method is specified.
+
         mace_model: str
             Name of the MACE-OFF23 models to use.
             Available models are 'mace-off23-small', 'mace-off23-medium', 'mace-off23-large'.
             To use a locally trained MACE model, provide the path to the model file.
             If None, the MACE-OFF23(S) model will be used by default.
 
-        atomic_numbers: torch.Tensor (N_ATOMS,)
+        atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor (N_ATOMS,)
             List of atomic numbers to use in the MACE model.
 
         device: torch.device
@@ -132,21 +151,18 @@ class MACEEMLE(_torch.nn.Module):
         else:
             self._dtype = _torch.get_default_dtype()
 
-        # Create an instance of the EMLE model.
-        self._emle = _EMLE(
-            model=emle_model,
-            species=emle_species,
-            alpha_mode=alpha_mode,
-            device=device,
-            dtype=dtype,
-            create_aev_calculator=True,
-        )
-
         if atomic_numbers is not None:
+            if isinstance(atomic_numbers, _np.ndarray):
+                atomic_numbers = atomic_numbers.tolist()
+            if isinstance(atomic_numbers, (list, tuple)):
+                if not all(isinstance(i, int) for i in atomic_numbers):
+                    raise ValueError("'atomic_numbers' must be a list of integers")
+                else:
+                    atomic_numbers = _torch.tensor(atomic_numbers, dtype=_torch.int64)
             if not isinstance(atomic_numbers, _torch.Tensor):
                 raise TypeError("'atomic_numbers' must be of type 'torch.Tensor'")
             # Check that they are integers.
-            if atomic_numbers.dtype is not _torch.int64:
+            if atomic_numbers.dtype != _torch.int64:
                 raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
             self.register_buffer("_atomic_numbers", atomic_numbers)
         else:
@@ -154,6 +170,19 @@ class MACEEMLE(_torch.nn.Module):
                 "_atomic_numbers",
                 _torch.tensor([], dtype=_torch.int64, requires_grad=False),
             )
+
+        # Create an instance of the EMLE model.
+        self._emle = _EMLE(
+            model=emle_model,
+            method=emle_method,
+            species=emle_species,
+            alpha_mode=alpha_mode,
+            atomic_numbers=(atomic_numbers if atomic_numbers is not None else None),
+            mm_charges=mm_charges,
+            device=device,
+            dtype=dtype,
+            create_aev_calculator=True,
+        )
 
         # Load the MACE model.
         if mace_model is not None:
