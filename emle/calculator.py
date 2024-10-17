@@ -942,6 +942,7 @@ class EMLECalculator:
         self._species = self._emle._species
         self._method = self._emle._method
         self._alpha_mode = self._emle._alpha_mode
+        self._atomic_numbers = self._emle._atomic_numbers
 
         if isinstance(atomic_numbers, _np.ndarray):
             atomic_numbers = atomic_numbers.tolist()
@@ -1754,7 +1755,12 @@ class EMLECalculator:
             # Create the model.
             ani2x_emle = _ANI2xEMLE(
                 emle_model=self._model,
+                emle_species=self._species,
+                alpha_mode=self._alpha_mode,
+                mm_charges=self._mm_charges,
+                model_index=self._ani2x_model_index,
                 ani2x_model=self._torchani_model,
+                atomic_numbers=atomic_numbers,
                 device=self._device,
             )
 

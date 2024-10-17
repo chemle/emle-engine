@@ -196,6 +196,7 @@ class EMLE(_torch.nn.Module):
                 raise ValueError(
                     "All elements of 'atomic_numbers' must be greater than zero"
                 )
+        self._atomic_numbers = atomic_numbers
 
         if method == "mm":
             if mm_charges is None:
