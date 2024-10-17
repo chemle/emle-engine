@@ -241,6 +241,8 @@ class EMLE(_torch.nn.Module):
                     raise ValueError(
                         "All elements of 'species' must be greater than zero"
                     )
+                # Use the custom species.
+                self._species = species
             else:
                 # Use the default species.
                 species = self._species
