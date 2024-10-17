@@ -56,8 +56,10 @@ class ANI2xEMLE(_torch.nn.Module):
     def __init__(
         self,
         emle_model=None,
+        emle_method="electrostatic",
         emle_species=None,
         alpha_mode="species",
+        mm_charges=None,
         model_index=None,
         ani2x_model=None,
         atomic_numbers=None,
@@ -74,6 +76,19 @@ class ANI2xEMLE(_torch.nn.Module):
             Path to a custom EMLE model parameter file. If None, then the
             default model for the specified 'alpha_mode' will be used.
 
+        emle_method: str
+            The desired embedding method. Options are:
+                "electrostatic":
+                    Full ML electrostatic embedding.
+                "mechanical":
+                    ML predicted charges for the core, but zero valence charge.
+                "nonpol":
+                    Non-polarisable ML embedding. Here the induced component of
+                    the potential is zeroed.
+                "mm":
+                    MM charges are used for the core charge and valence charges
+                    are set to zero.
+
         emle_species: List[int]
             List of species (atomic numbers) supported by the EMLE model. If
             None, then the default species list will be used.
@@ -85,6 +100,10 @@ class ANI2xEMLE(_torch.nn.Module):
                 "reference":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
+
+        mm_charges: numpy.ndarray
+            An array of MM charges for atoms in the QM region in units of mod
+            electron charge. This is required if the 'mm' emle_method is specified.
 
         model_index: int
             The index of the ANI2x model to use. If None, then the full 8 model
@@ -143,8 +162,10 @@ class ANI2xEMLE(_torch.nn.Module):
         # Create an instance of the EMLE model.
         self._emle = _EMLE(
             model=emle_model,
+            method=emle_method,
             species=emle_species,
             alpha_mode=alpha_mode,
+            mm_charges=mm_charges,
             device=device,
             dtype=dtype,
             create_aev_calculator=False,
