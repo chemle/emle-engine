@@ -341,6 +341,17 @@ class EMLE(_torch.nn.Module):
         # Initalise an empty AEV tensor to use to store the AEVs in derived classes.
         self._aev = _torch.empty(0, dtype=dtype, device=device)
 
+    def _to_dict(self):
+        """
+        Return the configuration of the module as a dictionary.
+        """
+        return {
+            "model": self._model,
+            "method": self._method,
+            "species": self._species_map.tolist(),
+            "alpha_mode": self._alpha_mode,
+        }
+
     def to(self, *args, **kwargs):
         """
         Performs Tensor dtype and/or device conversion on the model.
