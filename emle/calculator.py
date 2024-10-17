@@ -418,6 +418,7 @@ class EMLECalculator:
         self._emle = _EMLE(
             model=model,
             method=method,
+            species=species,
             alpha_mode=alpha_mode,
             atomic_numbers=atomic_numbers,
             mm_charges=self._mm_charges,
@@ -794,6 +795,7 @@ class EMLECalculator:
             # Create an MM EMLE model for interpolation.
             self._emle_mm = _EMLE(
                 model=model,
+                species=species,
                 alpha_mode=alpha_mode,
                 atomic_numbers=atomic_numbers,
                 method="mm",
