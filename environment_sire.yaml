@@ -2,7 +2,7 @@ name: emle-sire
 
 channels:
   - conda-forge
-  - openbiosim/label/emle
+  - openbiosim/label/dev
 
 dependencies:
   - ambertools
