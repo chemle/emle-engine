@@ -93,6 +93,7 @@ class EMLECalculator:
         species=None,
         method="electrostatic",
         alpha_mode="species",
+        atomic_numbers=None,
         backend="torchani",
         external_backend=None,
         plugin_path=".",
@@ -157,6 +158,12 @@ class EMLECalculator:
                 "reference":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
+
+        atomic_numbers: List[int], Tuple[int], numpy.ndarray
+            Atomic numbers for the QM region. This allows use of optimised AEV
+            symmetry functions from the NNPOps package. Only use this option if
+            you are using a fixed QM region, i.e. the same QM region for each
+            call to the calculator.
 
         external_backend: str
             The name of an external backend to use to compute in vacuo energies.
@@ -411,6 +418,8 @@ class EMLECalculator:
         self._emle = _EMLE(
             model=model,
             method=method,
+            alpha_mode=alpha_mode,
+            atomic_numbers=atomic_numbers,
             mm_charges=self._mm_charges,
             device=self._device,
         )
@@ -786,6 +795,7 @@ class EMLECalculator:
             self._emle_mm = _EMLE(
                 model=model,
                 alpha_mode=alpha_mode,
+                atomic_numbers=atomic_numbers,
                 method="mm",
                 mm_charges=self._mm_charges,
                 device=self._device,
@@ -933,12 +943,16 @@ class EMLECalculator:
         self._method = self._emle._method
         self._alpha_mode = self._emle._alpha_mode
 
+        if isinstance(atomic_numbers, _np.ndarray):
+            atomic_numbers = atomic_numbers.tolist()
+
         # Store the settings as a dictionary.
         self._settings = {
             "model": None if model is None else self._model,
             "species": None if species is None else self._species,
             "method": self._method,
             "alpha_mode": self._alpha_mode,
+            "atomic_numbers": None if atomic_numbers is None else atomic_numbers,
             "backend": self._backend,
             "external_backend": None if external_backend is None else external_backend,
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),

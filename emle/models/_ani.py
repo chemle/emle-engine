@@ -27,6 +27,7 @@ __email__ = "lester.hedges@gmail.com"
 
 __all__ = ["ANI2xEMLE"]
 
+import numpy as _np
 import torch as _torch
 import torchani as _torchani
 
@@ -89,7 +90,7 @@ class ANI2xEMLE(_torch.nn.Module):
                     MM charges are used for the core charge and valence charges
                     are set to zero.
 
-        emle_species: List[int]
+        emle_species: List[int], Tuple[int], numpy.ndarray, torch.Tensor
             List of species (atomic numbers) supported by the EMLE model. If
             None, then the default species list will be used.
 
@@ -101,9 +102,9 @@ class ANI2xEMLE(_torch.nn.Module):
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
 
-        mm_charges: numpy.ndarray
-            An array of MM charges for atoms in the QM region in units of mod
-            electron charge. This is required if the 'mm' emle_method is specified.
+        mm_charges: List[float], Tuple[Float], numpy.ndarray, torch.Tensor
+            List of MM charges for atoms in the QM region in units of mod
+            electron charge. This is required if the 'mm' method is specified.
 
         model_index: int
             The index of the ANI2x model to use. If None, then the full 8 model
@@ -115,10 +116,11 @@ class ANI2xEMLE(_torch.nn.Module):
             the ANI2x model from which it derived was created using
             periodic_table_index=True.
 
-        atomic_numbers: torch.Tensor (N_ATOMS,)
-            List of atomic numbers to use in the ANI2x model. If specified,
-            and NNPOps is available, then an optimised version of ANI2x will
-            be used.
+        atomic_numbers: List[float], Tuple[float], numpy.ndarray, torch.Tensor (N_ATOMS,)
+            Atomic numbers for the QM region. This allows use of optimised AEV
+            symmetry functions from the NNPOps package. Only use this option
+            if you are using a fixed QM region, i.e. the same QM region for each
+            evalulation of the module.
 
         device: torch.device
             The device on which to run the model.
@@ -150,6 +152,13 @@ class ANI2xEMLE(_torch.nn.Module):
             dtype = _torch.get_default_dtype()
 
         if atomic_numbers is not None:
+            if isinstance(atomic_numbers, _np.ndarray):
+                atomic_numbers = atomic_numbers.tolist()
+            if isinstance(atomic_numbers, (list, tuple)):
+                if not all(isinstance(i, int) for i in atomic_numbers):
+                    raise ValueError("'atomic_numbers' must be a list of integers")
+                else:
+                    atomic_numbers = _torch.tensor(atomic_numbers, dtype=_torch.int64)
             if not isinstance(atomic_numbers, _torch.Tensor):
                 raise TypeError("'atomic_numbers' must be of type 'torch.Tensor'")
             # Check that they are integers.
@@ -165,6 +174,7 @@ class ANI2xEMLE(_torch.nn.Module):
             method=emle_method,
             species=emle_species,
             alpha_mode=alpha_mode,
+            atomic_numbers=(atomic_numbers if atomic_numbers is not None else None),
             mm_charges=mm_charges,
             device=device,
             dtype=dtype,
@@ -212,10 +222,10 @@ class ANI2xEMLE(_torch.nn.Module):
             # Optimise the ANI2x model if atomic_numbers are specified.
             if atomic_numbers is not None:
                 try:
-                    species = atomic_numbers.reshape(1, *atomic_numbers.shape)
-                    self._ani2x = _NNPOps.OptimizedTorchANI(self._ani2x, species).to(
-                        device
-                    )
+                    atomic_numbers = atomic_numbers.reshape(1, *atomic_numbers.shape)
+                    self._ani2x = _NNPOps.OptimizedTorchANI(
+                        self._ani2x, atomic_numbers
+                    ).to(device)
                 except:
                     pass
 

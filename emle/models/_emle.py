@@ -87,6 +87,7 @@ class EMLE(_torch.nn.Module):
         method="electrostatic",
         species=None,
         alpha_mode="species",
+        atomic_numbers=None,
         mm_charges=None,
         device=None,
         dtype=None,
@@ -117,7 +118,7 @@ class EMLE(_torch.nn.Module):
                     should also specify the MM charges for atoms in the QM
                     region.
 
-        species: List[int]
+        species: List[int], Tuple[int], numpy.ndarray, torch.Tensor
             List of species (atomic numbers) supported by the EMLE model. If
             None, then the default species list will be used.
 
@@ -129,8 +130,14 @@ class EMLE(_torch.nn.Module):
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
 
-        mm_charges: numpy.ndarray
-            An array of MM charges for atoms in the QM region in units of mod
+        atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor
+            Atomic numbers for the QM region. This allows use of optimised AEV
+            symmetry functions from the NNPOps package. Only use this option
+            if you are using a fixed QM region, i.e. the same QM region for each
+            evalulation of the module.
+
+        mm_charges: List[float], Tuple[Float], numpy.ndarray, torch.Tensor
+            List of MM charges for atoms in the QM region in units of mod
             electron charge. This is required if the 'mm' method is specified.
 
         device: torch.device
@@ -174,9 +181,29 @@ class EMLE(_torch.nn.Module):
             raise ValueError("'alpha_mode' must be 'species' or 'reference'")
         self._alpha_mode = alpha_mode
 
+        if atomic_numbers is not None:
+            if isinstance(atomic_numbers, (_np.ndarray, _torch.Tensor)):
+                atomic_numbers = atomic_numbers.tolist()
+            if not isinstance(atomic_numbers, (tuple, list)):
+                raise TypeError(
+                    "'atomic_numbers' must be of type 'list', 'tuple', or 'numpy.ndarray'"
+                )
+            if not all(isinstance(a, int) for a in atomic_numbers):
+                raise TypeError(
+                    "All elements of 'atomic_numbers' must be of type 'int'"
+                )
+            if not all(a > 0 for a in atomic_numbers):
+                raise ValueError(
+                    "All elements of 'atomic_numbers' must be greater than zero"
+                )
+
         if method == "mm":
             if mm_charges is None:
                 raise ValueError("MM charges must be provided for the 'mm' method")
+            if isinstance(mm_charges, (list, tuple)):
+                mm_charges = _np.array(mm_charges)
+            elif isinstance(mm_charges, _torch.Tensor):
+                mm_charges = mm_charges.cpu().numpy()
             if not isinstance(mm_charges, _np.ndarray):
                 raise TypeError("'mm_charges' must be of type 'numpy.ndarray'")
             if mm_charges.dtype != _np.float64:
@@ -201,8 +228,12 @@ class EMLE(_torch.nn.Module):
 
             # Validate the species for the custom model.
             if species is not None:
-                if not isinstance(species, list):
-                    raise TypeError("'species' must be of type 'list'")
+                if isinstance(species, (_np.ndarray, _torch.Tensor)):
+                    species = species.tolist()
+                if not isinstance(species, (tuple, list)):
+                    raise TypeError(
+                        "'species' must be of type 'list', 'tuple', or 'numpy.ndarray'"
+                    )
                 if not all(isinstance(s, int) for s in species):
                     raise TypeError("All elements of 'species' must be of type 'int'")
                 if not all(s > 0 for s in species):
@@ -241,6 +272,26 @@ class EMLE(_torch.nn.Module):
         if create_aev_calculator:
             ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(device)
             self._aev_computer = ani2x.aev_computer
+
+            # Optimise the AEV computer using NNPOps if available.
+            if atomic_numbers is not None:
+                if _has_nnpops:
+                    try:
+                        atomic_numbers = _torch.tensor(
+                            atomic_numbers, dtype=_torch.int64, device=device
+                        )
+                        atomic_numbers = atomic_numbers.reshape(
+                            1, *atomic_numbers.shape
+                        )
+                        self._ani2x.aev_computer = (
+                            _NNPOps.SymmetryFunctions.TorchANISymmetryFunctions(
+                                self._aev_computer.species_converter,
+                                self._aev_computer.aev_computer,
+                                atomic_numbers,
+                            )
+                        )
+                    except:
+                        pass
         else:
             self._aev_computer = None
 

@@ -96,6 +96,18 @@ To stop the server:
 emle-stop
 ```
 
+## NNPOps
+
+The ``EMLE`` model uses Atomic Environment Vectors (AEVs) for the calculation of
+the electrostatic embedding energy. For performance, it is desirable to use
+the optimised symmetry functions provided by the [NNPOps](https://github.com/openmm/NNPOps)
+package. This requires a *static* compute graph, so needs to know the atomic
+numbers for the atoms in the QM region in advance. These can be specified using
+the ``EMLE_ATOMIC_NUMBERS`` environment variable, or the ``--atomic-numbers``
+command-line argument when launching the server. This option should only be
+used if the QM region is fixed, i.e. the atoms in the QM region do not change
+each time the calculator is called.
+
 ## Backends
 
 The embedding method relies on in vacuo energies and gradients, to which
