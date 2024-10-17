@@ -39,8 +39,6 @@ import sys as _sys
 import tempfile as _tempfile
 import yaml as _yaml
 
-import scipy.io as _scipy_io
-
 import ase as _ase
 import ase.io as _ase_io
 
