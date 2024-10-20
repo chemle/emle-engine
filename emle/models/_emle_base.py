@@ -131,31 +131,23 @@ class EMLEBase(_torch.nn.Module):
         # Extract the reference features.
         ref_features = _torch.tensor(params["ref_aev"], dtype=dtype, device=device)
 
-        # Extract the reference values for the MBIS valence shell widths.
-        ref_values_s = _torch.tensor(params["s_ref"], dtype=dtype, device=device)
-
         # Compute the inverse of the K matrix.
         Kinv = self._get_Kinv(ref_features, 1e-3)
 
-        # Store additional attributes for the MBIS GPR model.
+        # Extract number of references per element
         n_ref = _torch.tensor(params["n_ref"], dtype=_torch.int64, device=device)
-        ref_mean_s = _torch.sum(ref_values_s, dim=1) / n_ref
-        ref_shifted = ref_values_s - ref_mean_s[:, None]
-        c_s = (Kinv @ ref_shifted[:, :, None]).squeeze()
 
-        # Extract the reference values for the electronegativities.
+        # Extract the reference values and GPR coefficients for the valence shell widths.
+        ref_values_s = _torch.tensor(params["s_ref"], dtype=dtype, device=device)
+        ref_mean_s, c_s = self._get_c(n_ref, ref_values_s, Kinv)
+
+        # Extract the reference values and GPR coefficients for the electronegativities.
         ref_values_chi = _torch.tensor(params["chi_ref"], dtype=dtype, device=device)
+        ref_mean_chi, c_chi = self._get_c(n_ref, ref_values_chi, Kinv)
 
-        # Store additional attributes for the electronegativity GPR model.
-        ref_mean_chi = _torch.sum(ref_values_chi, dim=1) / n_ref
-        ref_shifted = ref_values_chi - ref_mean_chi[:, None]
-        c_chi = (Kinv @ ref_shifted[:, :, None]).squeeze()
-
-        # Extract the reference values for the polarizabilities.
+        # Extract the reference values and GPR coefficients for the polarizabilities.
         if self._alpha_mode == "reference":
-            ref_mean_k = _torch.sum(k, dim=1) / n_ref
-            ref_shifted = k - ref_mean_k[:, None]
-            c_k = (Kinv @ ref_shifted[:, :, None]).squeeze()
+            ref_mean_k, c_k = self._get_c(n_ref, k, Kinv)
         else:
             ref_mean_k = _torch.empty(0, dtype=dtype, device=device)
             c_k = _torch.empty(0, dtype=dtype, device=device)
@@ -365,6 +357,12 @@ class EMLEBase(_torch.nn.Module):
         return _torch.linalg.inv(
             K + sigma**2 * _torch.eye(n, dtype=ref_features.dtype, device=K.device)
         )
+
+    @classmethod
+    def _get_c(cls, n_ref, ref, Kinv):
+        ref_mean = _torch.sum(ref, dim=1) / n_ref
+        ref_shifted = ref - ref_mean[:, None]
+        return ref_mean, (Kinv @ ref_shifted[:, :, None]).squeeze()
 
     def _gpr(self, mol_features, ref_mean, c, zid):
         """
