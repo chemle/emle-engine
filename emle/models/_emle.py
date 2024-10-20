@@ -310,6 +310,10 @@ class EMLE(_torch.nn.Module):
         self._emle_base = EMLEBase(params, self._aev_computer, species,
                                    alpha_mode, device, dtype)
 
+        q_total = _torch.tensor(
+            params.get("total_charge", 0), dtype=dtype, device=device
+        )
+
         if method == "mm":
             q_core_mm = _torch.tensor(mm_charges, dtype=dtype, device=device)
         else:
@@ -319,6 +323,7 @@ class EMLE(_torch.nn.Module):
         self._device = device
 
         # Register constants as buffers.
+        self.register_buffer("_q_total", q_total)
         self.register_buffer("_q_core_mm", q_core_mm)
 
         # Initalise an empty AEV tensor to use to store the AEVs in derived classes.
@@ -341,6 +346,7 @@ class EMLE(_torch.nn.Module):
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.to(*args, **kwargs)
+        self._q_total = self._q_total.to(*args, **kwargs)
         self._q_core_mm = self._q_core_mm.to(*args, **kwargs)
         self._emle_base = self._emle_base.to(*args, **kwargs)
 
@@ -358,6 +364,7 @@ class EMLE(_torch.nn.Module):
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.cuda(**kwargs)
+        self._q_total = self._q_total.cuda(**kwargs)
         self._q_core_mm = self._q_core_mm.cuda(**kwargs)
         self._emle_base = self._emle_base.cuda(**kwargs)
 
@@ -372,6 +379,7 @@ class EMLE(_torch.nn.Module):
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.cpu(**kwargs)
+        self._q_total = self._q_total.cpu(**kwargs)
         self._q_core_mm = self._q_core_mm.cpu(**kwargs)
         self._emle_base = self._emle_base.cpu()
 
@@ -386,6 +394,7 @@ class EMLE(_torch.nn.Module):
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.double()
+        self._q_total = self._q_total.double()
         self._q_core_mm = self._q_core_mm.double()
         self._emle_base = self._emle_base.double()
         return self
@@ -396,6 +405,7 @@ class EMLE(_torch.nn.Module):
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.float()
+        self._q_total = self._q_total.float()
         self._q_core_mm = self._q_core_mm.float()
         self._emle_base = self._emle_base.float()
         return self
@@ -430,7 +440,7 @@ class EMLE(_torch.nn.Module):
         if len(xyz_mm) == 0:
             return _torch.zeros(2, dtype=xyz_qm.dtype, device=xyz_qm.device)
 
-        s, q_core, q_val, A_thole = self._emle_base(atomic_numbers, xyz_qm)
+        s, q_core, q_val, A_thole = self._emle_base(atomic_numbers, xyz_qm, self._q_total)
 
         # Convert coordinates to Bohr.
         ANGSTROM_TO_BOHR = 1.8897261258369282

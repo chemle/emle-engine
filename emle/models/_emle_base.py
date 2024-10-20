@@ -128,10 +128,6 @@ class EMLEBase(_torch.nn.Module):
                 )
                 raise ValueError(msg)
 
-        q_total = _torch.tensor(
-            params.get("total_charge", 0), dtype=dtype, device=device
-        )
-
         # Extract the reference features.
         ref_features = _torch.tensor(params["ref_aev"], dtype=dtype, device=device)
 
@@ -174,7 +170,6 @@ class EMLEBase(_torch.nn.Module):
         self.register_buffer("_a_QEq", a_QEq)
         self.register_buffer("_a_Thole", a_Thole)
         self.register_buffer("_k", k)
-        self.register_buffer("_q_total", q_total)
         self.register_buffer("_ref_features", ref_features)
         self.register_buffer("_n_ref", n_ref)
         self.register_buffer("_ref_values_s", ref_values_s)
@@ -196,7 +191,6 @@ class EMLEBase(_torch.nn.Module):
         self._a_QEq = self._a_QEq.to(*args, **kwargs)
         self._a_Thole = self._a_Thole.to(*args, **kwargs)
         self._k = self._k.to(*args, **kwargs)
-        self._q_total = self._q_total.to(*args, **kwargs)
         self._ref_features = self._ref_features.to(*args, **kwargs)
         self._n_ref = self._n_ref.to(*args, **kwargs)
         self._ref_values_s = self._ref_values_s.to(*args, **kwargs)
@@ -218,7 +212,6 @@ class EMLEBase(_torch.nn.Module):
         self._a_QEq = self._a_QEq.cuda(**kwargs)
         self._a_Thole = self._a_Thole.cuda(**kwargs)
         self._k = self._k.cuda(**kwargs)
-        self._q_total = self._q_total.cuda(**kwargs)
         self._ref_features = self._ref_features.cuda(**kwargs)
         self._n_ref = self._n_ref.cuda(**kwargs)
         self._ref_values_s = self._ref_values_s.cuda(**kwargs)
@@ -240,7 +233,6 @@ class EMLEBase(_torch.nn.Module):
         self._a_QEq = self._a_QEq.cpu(**kwargs)
         self._a_Thole = self._a_Thole.cpu(**kwargs)
         self._k = self._k.cpu(**kwargs)
-        self._q_total = self._q_total.cpu(**kwargs)
         self._ref_features = self._ref_features.cpu(**kwargs)
         self._n_ref = self._n_ref.cpu(**kwargs)
         self._ref_values_s = self._ref_values_s.cpu(**kwargs)
@@ -260,7 +252,6 @@ class EMLEBase(_torch.nn.Module):
         self._a_QEq = self._a_QEq.double()
         self._a_Thole = self._a_Thole.double()
         self._k = self._k.double()
-        self._q_total = self._q_total.double()
         self._ref_features = self._ref_features.double()
         self._ref_values_s = self._ref_values_s.double()
         self._ref_values_chi = self._ref_values_chi.double()
@@ -280,7 +271,6 @@ class EMLEBase(_torch.nn.Module):
         self._a_QEq = self._a_QEq.float()
         self._a_Thole = self._a_Thole.float()
         self._k = self._k.float()
-        self._q_total = self._q_total.float()
         self._ref_features = self._ref_features.float()
         self._ref_values_s = self._ref_values_s.float()
         self._ref_values_chi = self._ref_values_chi.float()
@@ -292,7 +282,7 @@ class EMLEBase(_torch.nn.Module):
         self._c_k = self._c_k.float()
         return self
 
-    def forward(self, atomic_numbers, xyz_qm):
+    def forward(self, atomic_numbers, xyz_qm, q_total):
         """
         Computes the static and induced EMLE energy components.
 
@@ -304,6 +294,9 @@ class EMLEBase(_torch.nn.Module):
 
         xyz_qm: torch.Tensor (N_QM_ATOMS, 3)
             Positions of QM atoms in Angstrom.
+
+        q_total: torch.Tensor (1,)
+            Total charge
 
         Returns
         -------
@@ -339,7 +332,7 @@ class EMLEBase(_torch.nn.Module):
         r_data = self._get_r_data(xyz_qm_bohr)
 
         q_core = self._q_core[species_id]
-        q = self._get_q(r_data, s, chi)
+        q = self._get_q(r_data, s, chi, q_total)
         q_val = q - q_core
 
         if self._alpha_mode == "species":
@@ -460,7 +453,7 @@ class EMLEBase(_torch.nn.Module):
 
         return (r_mat, t01, t21, t22)
 
-    def _get_q(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, chi):
+    def _get_q(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, chi, q_total):
         """
         Internal method that predicts MBIS charges
         (Eq. 16 in 10.1021/acs.jctc.2c00914)
@@ -476,6 +469,9 @@ class EMLEBase(_torch.nn.Module):
         chi: torch.Tensor (N_ATOMS,)
             Electronegativities.
 
+        q_total: torch.Tensor (1,)
+            Total charge
+
         Returns
         -------
 
@@ -483,7 +479,7 @@ class EMLEBase(_torch.nn.Module):
             Predicted MBIS charges.
         """
         A = self._get_A_QEq(r_data, s)
-        b = _torch.hstack([-chi, self._q_total])
+        b = _torch.hstack([-chi, q_total])
         return _torch.linalg.solve(A, b)[:-1]
 
     def _get_A_QEq(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s):
