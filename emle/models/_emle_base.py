@@ -124,7 +124,7 @@ class EMLEBase(_torch.nn.Module):
 
         # Create a map between species (1, 6, 8)
         # and their indices in the model (0, 1, 2).
-        species_map = _np.full(max(species) + 1, fill_value=-1, dtype=_np.int64)
+        species_map = _np.full(max(species) + 2, fill_value=-1, dtype=_np.int64)
         for i, s in enumerate(species):
             species_map[s] = i
         species_map = _torch.tensor(species_map, dtype=_torch.int64, device=device)
