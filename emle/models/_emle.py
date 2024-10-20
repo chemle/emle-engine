@@ -307,8 +307,23 @@ class EMLE(_torch.nn.Module):
         except:
             raise IOError(f"Unable to load model parameters from: '{model}'")
 
-        self._emle_base = EMLEBase(params, self._aev_computer, species,
-                                   alpha_mode, device, dtype)
+        q_core = _torch.tensor(params["q_core"], dtype=dtype, device=device)
+        aev_mask = _torch.tensor(params["aev_mask"], dtype=_torch.bool, device=device)
+        n_ref = _torch.tensor(params["n_ref"], dtype=_torch.int64, device=device)
+        ref_features = _torch.tensor(params["ref_aev"], dtype=dtype, device=device)
+
+        emle_params = {
+            'a_QEq': _torch.tensor(params["a_QEq"], dtype=dtype, device=device),
+            'a_Thole': _torch.tensor(params["a_Thole"], dtype=dtype, device=device),
+            'ref_values_s': _torch.tensor(params["s_ref"], dtype=dtype, device=device),
+            'ref_values_chi': _torch.tensor(params["chi_ref"], dtype=dtype, device=device),
+            'k_Z': _torch.tensor(params["k_Z"], dtype=dtype, device=device)
+            if 'k_Z' in params else None,
+            'sqrtk_ref': _torch.tensor(params["sqrtk_ref"], dtype=dtype, device=device)
+            if 'sqrtk_ref' in params else None
+        }
+        self._emle_base = EMLEBase(emle_params, self._aev_computer, aev_mask, species,
+                                   n_ref, ref_features, q_core, alpha_mode, device, dtype)
 
         q_total = _torch.tensor(
             params.get("total_charge", 0), dtype=dtype, device=device

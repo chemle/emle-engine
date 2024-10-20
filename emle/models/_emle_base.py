@@ -14,10 +14,12 @@ class EMLEBase(_torch.nn.Module):
         self,
         params,
         aev_computer,
-        # method="electrostatic", # Not used here, always electrostatic
-        species=None,
+        aev_mask,
+        species,
+        n_ref,
+        ref_features,
+        q_core,
         alpha_mode="species",
-        # atomic_numbers=None, # Not used here, since aev_computer is provided
         device=None,
         dtype=None,
     ):
@@ -96,20 +98,18 @@ class EMLEBase(_torch.nn.Module):
 
         self._aev_computer = aev_computer
 
-        # q_core is not trained, so not a parameter
-        q_core = _torch.tensor(params["q_core"], dtype=dtype, device=device)
-
         # Store model parameters as tensors.
-        a_QEq = _torch.tensor(params["a_QEq"], dtype=dtype, device=device)
-        a_Thole = _torch.tensor(params["a_Thole"], dtype=dtype, device=device)
-        ref_values_s = _torch.tensor(params["s_ref"], dtype=dtype, device=device)
-        ref_values_chi = _torch.tensor(params["chi_ref"], dtype=dtype, device=device)
+        a_QEq = _torch.nn.Parameter(params["a_QEq"])
+        a_Thole = _torch.nn.Parameter(params["a_Thole"])
+        ref_values_s = _torch.nn.Parameter(params["ref_values_s"])
+        ref_values_chi = _torch.nn.Parameter(params["ref_values_chi"])
 
         if self._alpha_mode == "species":
             try:
-                k_Z = _torch.tensor(params["k_Z"], dtype=dtype, device=device)
-                ref_values_sqrtk = _torch.zeros_like(ref_values_s,
-                                                     dtype=dtype, device=device)
+                k_Z = _torch.nn.Parameter(params["k_Z"])
+                ref_values_sqrtk = _torch.nn.Parameter(
+                    _torch.zeros_like(ref_values_s)
+                )
             except:
                 msg = (
                     "Missing 'k_Z' key in params. This is required when "
@@ -118,9 +118,10 @@ class EMLEBase(_torch.nn.Module):
                 raise ValueError(msg)
         else:
             try:
-                k_Z = _torch.zeros_like(q_core, dtype=dtype, device=device)
-                ref_values_sqrtk = _torch.tensor(params["sqrtk_ref"],
-                                                 dtype=dtype, device=device)
+                k_Z = _torch.nn.Parameter(
+                    _torch.zeros_like(q_core, dtype=dtype, device=device)
+                )
+                ref_values_sqrtk = _torch.nn.Parameter(params["sqrtk_ref"])
             except:
                 msg = (
                     "Missing 'sqrtk_ref' key in params. This is required when "
@@ -134,14 +135,6 @@ class EMLEBase(_torch.nn.Module):
         for i, s in enumerate(species):
             species_map[s] = i
         species_map = _torch.tensor(species_map, dtype=_torch.int64, device=device)
-
-        aev_mask = _torch.tensor(params["aev_mask"], dtype=_torch.bool, device=device)
-
-        # Extract number of references per element
-        n_ref = _torch.tensor(params["n_ref"], dtype=_torch.int64, device=device)
-
-        # Extract the reference features.
-        ref_features = _torch.tensor(params["ref_aev"], dtype=dtype, device=device)
 
         # Compute the inverse of the K matrix.
         Kinv = self._get_Kinv(ref_features, 1e-3)
