@@ -642,7 +642,8 @@ class EMLE(_torch.nn.Module):
 
         # Compute the induced energy.
         if self._method == "electrostatic":
-            mu_ind = self._get_mu_ind(r_data, mesh_data, charges_mm, s, q_val, k)
+            A_thole = self._get_A_thole(r_data, s, q_val, k)
+            mu_ind = self._get_mu_ind(A_thole, mesh_data, charges_mm, s)
             vpot_ind = self._get_vpot_mu(mu_ind, mesh_data[2])
             E_ind = _torch.sum(vpot_ind @ charges_mm) * 0.5
         else:
@@ -795,12 +796,10 @@ class EMLE(_torch.nn.Module):
 
     def _get_mu_ind(
         self,
-        r_data: Tuple[Tensor, Tensor, Tensor, Tensor],
+        A,
         mesh_data: Tuple[Tensor, Tensor, Tensor],
         q,
         s,
-        q_val,
-        k,
     ):
         """
         Internal method, calculates induced atomic dipoles
@@ -809,7 +808,8 @@ class EMLE(_torch.nn.Module):
         Parameters
         ----------
 
-        r_data: r_data object (output of self._get_r_data)
+        A: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
+            The A matrix for induced dipoles prediction.
 
         mesh_data: mesh_data object (output of self._get_mesh_data)
 
@@ -822,16 +822,12 @@ class EMLE(_torch.nn.Module):
         q_val: torch.Tensor (N_QM_ATOMS,)
             MBIS valence charges.
 
-        k: torch.Tensor (N_Z)
-            Scaling factors for polarizabilities.
-
         Returns
         -------
 
         result: torch.Tensor (N_ATOMS, 3)
             Array of induced dipoles
         """
-        A = self._get_A_thole(r_data, s, q_val, k)
 
         r = 1.0 / mesh_data[0]
         f1 = self._get_f1_slater(r, s[:, None] * 2.0)
