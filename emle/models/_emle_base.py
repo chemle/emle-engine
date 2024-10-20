@@ -109,24 +109,6 @@ class EMLEBase(_torch.nn.Module):
         q_core = _torch.tensor(params["q_core"], dtype=dtype, device=device)
         a_QEq = _torch.tensor(params["a_QEq"], dtype=dtype, device=device)
         a_Thole = _torch.tensor(params["a_Thole"], dtype=dtype, device=device)
-        if self._alpha_mode == "species":
-            try:
-                k = _torch.tensor(params["k_Z"], dtype=dtype, device=device)
-            except:
-                msg = (
-                    "Missing 'k_Z' key in params. This is required when "
-                    "using 'species' alpha mode."
-                )
-                raise ValueError(msg)
-        else:
-            try:
-                k = _torch.tensor(params["sqrtk_ref"], dtype=dtype, device=device)
-            except:
-                msg = (
-                    "Missing 'sqrtk_ref' key in params. This is required when "
-                    "using 'reference' alpha mode."
-                )
-                raise ValueError(msg)
 
         # Extract the reference features.
         ref_features = _torch.tensor(params["ref_aev"], dtype=dtype, device=device)
@@ -145,12 +127,30 @@ class EMLEBase(_torch.nn.Module):
         ref_values_chi = _torch.tensor(params["chi_ref"], dtype=dtype, device=device)
         ref_mean_chi, c_chi = self._get_c(n_ref, ref_values_chi, Kinv)
 
-        # Extract the reference values and GPR coefficients for the polarizabilities.
-        if self._alpha_mode == "reference":
-            ref_mean_k, c_k = self._get_c(n_ref, k, Kinv)
+        if self._alpha_mode == "species":
+            try:
+                k_Z = _torch.tensor(params["k_Z"], dtype=dtype, device=device)
+                ref_values_sqrtk = _torch.empty(0, dtype=dtype, device=device)
+                ref_mean_sqrtk = _torch.empty(0, dtype=dtype, device=device)
+                c_sqrtk = _torch.empty(0, dtype=dtype, device=device)
+            except:
+                msg = (
+                    "Missing 'k_Z' key in params. This is required when "
+                    "using 'species' alpha mode."
+                )
+                raise ValueError(msg)
         else:
-            ref_mean_k = _torch.empty(0, dtype=dtype, device=device)
-            c_k = _torch.empty(0, dtype=dtype, device=device)
+            try:
+                k_Z = torch.empty(0, dtype=dtype, device=device)
+                ref_values_sqrtk = _torch.tensor(params["sqrtk_ref"],
+                                                 dtype=dtype, device=device)
+                ref_mean_sqrtk, c_sqrtk = self._get_c(n_ref, ref_values_sqrtk, Kinv)
+            except:
+                msg = (
+                    "Missing 'sqrtk_ref' key in params. This is required when "
+                    "using 'reference' alpha mode."
+                )
+                raise ValueError(msg)
 
         # Store the current device.
         self._device = device
@@ -161,17 +161,18 @@ class EMLEBase(_torch.nn.Module):
         self.register_buffer("_q_core", q_core)
         self.register_buffer("_a_QEq", a_QEq)
         self.register_buffer("_a_Thole", a_Thole)
-        self.register_buffer("_k", k)
+        self.register_buffer("_k_Z", k_Z)
         self.register_buffer("_ref_features", ref_features)
         self.register_buffer("_n_ref", n_ref)
         self.register_buffer("_ref_values_s", ref_values_s)
         self.register_buffer("_ref_values_chi", ref_values_chi)
+        self.register_buffer("_ref_values_sqrtk", ref_values_sqrtk)
         self.register_buffer("_ref_mean_s", ref_mean_s)
         self.register_buffer("_ref_mean_chi", ref_mean_chi)
+        self.register_buffer("_ref_mean_sqrtk", ref_mean_sqrtk)
         self.register_buffer("_c_s", c_s)
         self.register_buffer("_c_chi", c_chi)
-        self.register_buffer("_ref_mean_k", ref_mean_k)
-        self.register_buffer("_c_k", c_k)
+        self.register_buffer("_c_sqrtk", c_sqrtk)
 
         # Initalise an empty AEV tensor to use to store the AEVs in derived classes.
         self._aev = _torch.empty(0, dtype=dtype, device=device)
@@ -182,16 +183,16 @@ class EMLEBase(_torch.nn.Module):
         self._q_core = self._q_core.to(*args, **kwargs)
         self._a_QEq = self._a_QEq.to(*args, **kwargs)
         self._a_Thole = self._a_Thole.to(*args, **kwargs)
-        self._k = self._k.to(*args, **kwargs)
+        self._k_Z = self._k_Z.to(*args, **kwargs)
         self._ref_features = self._ref_features.to(*args, **kwargs)
         self._n_ref = self._n_ref.to(*args, **kwargs)
         self._ref_values_s = self._ref_values_s.to(*args, **kwargs)
         self._ref_values_chi = self._ref_values_chi.to(*args, **kwargs)
         self._ref_mean_s = self._ref_mean_s.to(*args, **kwargs)
         self._ref_mean_chi = self._ref_mean_chi.to(*args, **kwargs)
+        self._ref_mean_sqrtk = self._ref_mean_sqrtk.to(*args, **kwargs)
         self._c_s = self._c_s.to(*args, **kwargs)
         self._c_chi = self._c_chi.to(*args, **kwargs)
-        self._ref_mean_k = self._ref_mean_k.to(*args, **kwargs)
         self._c_k = self._c_k.to(*args, **kwargs)
 
     def cuda(self, **kwargs):
@@ -203,17 +204,17 @@ class EMLEBase(_torch.nn.Module):
         self._q_core = self._q_core.cuda(**kwargs)
         self._a_QEq = self._a_QEq.cuda(**kwargs)
         self._a_Thole = self._a_Thole.cuda(**kwargs)
-        self._k = self._k.cuda(**kwargs)
+        self._k_Z = self._k_Z.cuda(**kwargs)
         self._ref_features = self._ref_features.cuda(**kwargs)
         self._n_ref = self._n_ref.cuda(**kwargs)
         self._ref_values_s = self._ref_values_s.cuda(**kwargs)
         self._ref_values_chi = self._ref_values_chi.cuda(**kwargs)
         self._ref_mean_s = self._ref_mean_s.cuda(**kwargs)
         self._ref_mean_chi = self._ref_mean_chi.cuda(**kwargs)
+        self._ref_mean_sqrtk = self._ref_mean_sqrtk.cuda(**kwargs)
         self._c_s = self._c_s.cuda(**kwargs)
         self._c_chi = self._c_chi.cuda(**kwargs)
-        self._ref_mean_k = self._ref_mean_k.cuda(**kwargs)
-        self._c_k = self._c_k.cuda(**kwargs)
+        self._c_sqrtk = self._c_sqrtk.cuda(**kwargs)
 
     def cpu(self, **kwargs):
         """
@@ -224,17 +225,17 @@ class EMLEBase(_torch.nn.Module):
         self._q_core = self._q_core.cpu(**kwargs)
         self._a_QEq = self._a_QEq.cpu(**kwargs)
         self._a_Thole = self._a_Thole.cpu(**kwargs)
-        self._k = self._k.cpu(**kwargs)
+        self._k_Z = self._k_Z.cpu(**kwargs)
         self._ref_features = self._ref_features.cpu(**kwargs)
         self._n_ref = self._n_ref.cpu(**kwargs)
         self._ref_values_s = self._ref_values_s.cpu(**kwargs)
         self._ref_values_chi = self._ref_values_chi.cpu(**kwargs)
         self._ref_mean_s = self._ref_mean_s.cpu(**kwargs)
         self._ref_mean_chi = self._ref_mean_chi.cpu(**kwargs)
+        self._ref_mean_sqrtk = self._ref_mean_sqrtk.to(**kwargs)
         self._c_s = self._c_s.cpu(**kwargs)
         self._c_chi = self._c_chi.cpu(**kwargs)
-        self._ref_mean_k = self._ref_mean_k.cpu(**kwargs)
-        self._c_k = self._c_k.cpu(**kwargs)
+        self._c_sqrtk = self._c_sqrtk.cpu(**kwargs)
 
     def double(self):
         """
@@ -243,16 +244,16 @@ class EMLEBase(_torch.nn.Module):
         self._q_core = self._q_core.double()
         self._a_QEq = self._a_QEq.double()
         self._a_Thole = self._a_Thole.double()
-        self._k = self._k.double()
+        self._k_Z = self._k_Z.double()
         self._ref_features = self._ref_features.double()
         self._ref_values_s = self._ref_values_s.double()
         self._ref_values_chi = self._ref_values_chi.double()
         self._ref_mean_s = self._ref_mean_s.double()
         self._ref_mean_chi = self._ref_mean_chi.double()
+        self._ref_mean_sqrtk = self._ref_mean_sqrtk.double()
         self._c_s = self._c_s.double()
         self._c_chi = self._c_chi.double()
-        self._ref_mean_k = self._ref_mean_k.double()
-        self._c_k = self._c_k.double()
+        self._c_sqrtk = self._c_sqrtk.double()
         return self
 
     def float(self):
@@ -268,10 +269,10 @@ class EMLEBase(_torch.nn.Module):
         self._ref_values_chi = self._ref_values_chi.float()
         self._ref_mean_s = self._ref_mean_s.float()
         self._ref_mean_chi = self._ref_mean_chi.float()
+        self._ref_mean_sqrtk = self._ref_mean_sqrtk.float()
         self._c_s = self._c_s.float()
         self._c_chi = self._c_chi.float()
-        self._ref_mean_k = self._ref_mean_k.float()
-        self._c_k = self._c_k.float()
+        self._c_sqrtk = self._c_sqrtk.float()
         return self
 
     def forward(self, atomic_numbers, xyz_qm, q_total):
@@ -324,9 +325,9 @@ class EMLEBase(_torch.nn.Module):
         q_val = q - q_core
 
         if self._alpha_mode == "species":
-            k = self._k[species_id]
+            k = self._k_Z[species_id]
         else:
-            k = self._gpr(aev, self._ref_mean_k, self._c_k, species_id) ** 2
+            k = self._gpr(aev, self._ref_mean_sqrtk, self._c_sqrtk, species_id) ** 2
 
         A_thole = self._get_A_thole(r_data, s, q_val, k)
 
