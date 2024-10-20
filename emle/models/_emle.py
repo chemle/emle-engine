@@ -27,6 +27,8 @@ __email__ = "lester.hedges@gmail.com"
 
 __all__ = ["EMLE"]
 
+from loguru import logger as _logger
+
 import numpy as _np
 import os as _os
 import scipy.io as _scipy_io
