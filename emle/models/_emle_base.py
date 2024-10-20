@@ -158,6 +158,7 @@ class EMLEBase(_torch.nn.Module):
         # Register constants as buffers.
         self.register_buffer("_species_map", species_map)
         self.register_buffer("_aev_mask", aev_mask)
+        self.register_buffer("_Kinv", Kinv)
         self.register_buffer("_q_core", q_core)
         self.register_buffer("_a_QEq", a_QEq)
         self.register_buffer("_a_Thole", a_Thole)
@@ -176,6 +177,7 @@ class EMLEBase(_torch.nn.Module):
 
     def to(self, *args, **kwargs):
         self._species_map = self._species_map.to(*args, **kwargs)
+        self._Kinv = self._Kinv.to(*args, **kwargs)
         self._aev_mask = self._aev_mask.to(*args, **kwargs)
         self._q_core = self._q_core.to(*args, **kwargs)
         self._a_QEq = self._a_QEq.to(*args, **kwargs)
@@ -195,6 +197,7 @@ class EMLEBase(_torch.nn.Module):
         Move all model parameters and buffers to CUDA memory.
         """
         self._species_map = self._species_map.cuda(**kwargs)
+        self._Kinv = self._Kinv.cuda(**kwargs)
         self._aev_mask = self._aev_mask.cuda(**kwargs)
         self._q_core = self._q_core.cuda(**kwargs)
         self._a_QEq = self._a_QEq.cuda(**kwargs)
@@ -214,6 +217,7 @@ class EMLEBase(_torch.nn.Module):
         Move all model parameters and buffers to CPU memory.
         """
         self._species_map = self._species_map.cpu(**kwargs)
+        self._Kinv = self._Kinv.cpu(**kwargs)
         self._aev_mask = self._aev_mask.cpu(**kwargs)
         self._q_core = self._q_core.cpu(**kwargs)
         self._a_QEq = self._a_QEq.cpu(**kwargs)
@@ -232,6 +236,7 @@ class EMLEBase(_torch.nn.Module):
         """
         Casts all floating point model parameters and buffers to float64 precision.
         """
+        self._Kinv = self._Kinv.double()
         self._q_core = self._q_core.double()
         self._a_QEq = self._a_QEq.double()
         self._a_Thole = self._a_Thole.double()
@@ -249,6 +254,7 @@ class EMLEBase(_torch.nn.Module):
         """
         Casts all floating point model parameters and buffers to float32 precision.
         """
+        self._Kinv = self._Kinv.float()
         self._q_core = self._q_core.float()
         self._a_QEq = self._a_QEq.float()
         self._a_Thole = self._a_Thole.float()
