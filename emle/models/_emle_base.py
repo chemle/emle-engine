@@ -96,43 +96,20 @@ class EMLEBase(_torch.nn.Module):
 
         self._aev_computer = aev_computer
 
-        # Create a map between species and their indices.
-        species_map = _np.full(max(species) + 1, fill_value=-1, dtype=_np.int64)
-        for i, s in enumerate(species):
-            species_map[s] = i
-
-        # Convert to a tensor.
-        species_map = _torch.tensor(species_map, dtype=_torch.int64, device=device)
+        # q_core is not trained, so not a parameter
+        q_core = _torch.tensor(params["q_core"], dtype=dtype, device=device)
 
         # Store model parameters as tensors.
-        aev_mask = _torch.tensor(params["aev_mask"], dtype=_torch.bool, device=device)
-        q_core = _torch.tensor(params["q_core"], dtype=dtype, device=device)
         a_QEq = _torch.tensor(params["a_QEq"], dtype=dtype, device=device)
         a_Thole = _torch.tensor(params["a_Thole"], dtype=dtype, device=device)
-
-        # Extract the reference features.
-        ref_features = _torch.tensor(params["ref_aev"], dtype=dtype, device=device)
-
-        # Compute the inverse of the K matrix.
-        Kinv = self._get_Kinv(ref_features, 1e-3)
-
-        # Extract number of references per element
-        n_ref = _torch.tensor(params["n_ref"], dtype=_torch.int64, device=device)
-
-        # Extract the reference values and GPR coefficients for the valence shell widths.
         ref_values_s = _torch.tensor(params["s_ref"], dtype=dtype, device=device)
-        ref_mean_s, c_s = self._get_c(n_ref, ref_values_s, Kinv)
-
-        # Extract the reference values and GPR coefficients for the electronegativities.
         ref_values_chi = _torch.tensor(params["chi_ref"], dtype=dtype, device=device)
-        ref_mean_chi, c_chi = self._get_c(n_ref, ref_values_chi, Kinv)
 
         if self._alpha_mode == "species":
             try:
                 k_Z = _torch.tensor(params["k_Z"], dtype=dtype, device=device)
-                ref_values_sqrtk = _torch.empty(0, dtype=dtype, device=device)
-                ref_mean_sqrtk = _torch.empty(0, dtype=dtype, device=device)
-                c_sqrtk = _torch.empty(0, dtype=dtype, device=device)
+                ref_values_sqrtk = _torch.zeros_like(ref_values_s,
+                                                     dtype=dtype, device=device)
             except:
                 msg = (
                     "Missing 'k_Z' key in params. This is required when "
@@ -141,16 +118,45 @@ class EMLEBase(_torch.nn.Module):
                 raise ValueError(msg)
         else:
             try:
-                k_Z = _torch.empty(0, dtype=dtype, device=device)
+                k_Z = _torch.zeros_like(q_core, dtype=dtype, device=device)
                 ref_values_sqrtk = _torch.tensor(params["sqrtk_ref"],
                                                  dtype=dtype, device=device)
-                ref_mean_sqrtk, c_sqrtk = self._get_c(n_ref, ref_values_sqrtk, Kinv)
             except:
                 msg = (
                     "Missing 'sqrtk_ref' key in params. This is required when "
                     "using 'reference' alpha mode."
                 )
                 raise ValueError(msg)
+
+        # Create a map between species (1, 6, 8)
+        # and their indices in the model (0, 1, 2).
+        species_map = _np.full(max(species) + 1, fill_value=-1, dtype=_np.int64)
+        for i, s in enumerate(species):
+            species_map[s] = i
+        species_map = _torch.tensor(species_map, dtype=_torch.int64, device=device)
+
+        aev_mask = _torch.tensor(params["aev_mask"], dtype=_torch.bool, device=device)
+
+        # Extract number of references per element
+        n_ref = _torch.tensor(params["n_ref"], dtype=_torch.int64, device=device)
+
+        # Extract the reference features.
+        ref_features = _torch.tensor(params["ref_aev"], dtype=dtype, device=device)
+
+        # Compute the inverse of the K matrix.
+        Kinv = self._get_Kinv(ref_features, 1e-3)
+
+        # Calculate GPR coefficients for the valence shell widths (s)
+        # and electronegativities (chi).
+        ref_mean_s, c_s = self._get_c(n_ref, ref_values_s, Kinv)
+        ref_mean_chi, c_chi = self._get_c(n_ref, ref_values_chi, Kinv)
+
+        if self._alpha_mode == "species":
+            ref_mean_sqrtk = _torch.zeros_like(ref_mean_s, dtype=dtype,
+                                               device=device)
+            c_sqrtk = _torch.zeros_like(c_s, dtype=dtype, device=device)
+        else:
+            ref_mean_sqrtk, c_sqrtk = self._get_c(n_ref, ref_values_sqrtk, Kinv)
 
         # Store the current device.
         self._device = device
