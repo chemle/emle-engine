@@ -440,7 +440,10 @@ class EMLE(_torch.nn.Module):
         if len(xyz_mm) == 0:
             return _torch.zeros(2, dtype=xyz_qm.dtype, device=xyz_qm.device)
 
-        s, q_core, q_val, A_thole = self._emle_base(atomic_numbers, xyz_qm, self._q_total)
+        s, q_core, q_val, A_thole = self._emle_base(atomic_numbers[None, :],
+                                                    xyz_qm[None, :, :],
+                                                    self._q_total[None])
+        s, q_core, q_val, A_thole = s[0], q_core[0], q_val[0], A_thole[0]
 
         # Convert coordinates to Bohr.
         ANGSTROM_TO_BOHR = 1.8897261258369282

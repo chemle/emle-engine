@@ -289,10 +289,10 @@ class EMLEBase(_torch.nn.Module):
         Parameters
         ----------
 
-        atomic_numbers: torch.Tensor (N_QM_ATOMS,)
+        atomic_numbers: torch.Tensor (N_BATCH, N_QM_ATOMS,)
             Atomic numbers of QM atoms.
 
-        xyz_qm: torch.Tensor (N_QM_ATOMS, 3)
+        xyz_qm: torch.Tensor (N_BATCH, N_QM_ATOMS, 3)
             Positions of QM atoms in Angstrom.
 
         q_total: torch.Tensor (1,)
@@ -301,25 +301,21 @@ class EMLEBase(_torch.nn.Module):
         Returns
         -------
 
-        result: (torch.Tensor (N_QM_ATOMS,),
-                 torch.Tensor (N_QM_ATOMS,),
-                 torch.Tensor (N_QM_ATOMS,),
-                 torch.Tensor (N_QM_ATOMS * 3, N_QM_ATOMS * 3,))
+        result: (torch.Tensor (N_BATCH, N_QM_ATOMS,),
+                 torch.Tensor (N_BATCH, N_QM_ATOMS,),
+                 torch.Tensor (N_BATCH, N_QM_ATOMS,),
+                 torch.Tensor (N_BATCH, N_QM_ATOMS * 3, N_QM_ATOMS * 3,))
             Valence widths, core charges, valence charges, A_thole tensor
         """
+
+        mask = atomic_numbers > 0
 
         # Convert the atomic numbers to species IDs.
         species_id = self._species_map[atomic_numbers]
 
-        # Reshape the IDs.
-        zid = species_id.unsqueeze(0)
-
-        # Reshape the atomic positions.
-        xyz = xyz_qm.unsqueeze(0)
-
         # Compute the AEVs.
-        aev = self._aev_computer((zid, xyz))[1][0][:, self._aev_mask]
-        aev = aev / _torch.linalg.norm(aev, ord=2, dim=1, keepdim=True)
+        aev = self._aev_computer((species_id, xyz_qm))[1][:, :, self._aev_mask]
+        aev = aev / _torch.linalg.norm(aev, ord=2, dim=2, keepdim=True)
 
         # Compute the MBIS valence shell widths.
         s = self._gpr(aev, self._ref_mean_s, self._c_s, species_id)
@@ -331,7 +327,7 @@ class EMLEBase(_torch.nn.Module):
 
         r_data = self._get_r_data(xyz_qm_bohr)
 
-        q_core = self._q_core[species_id]
+        q_core = self._q_core[species_id] * mask
         q = self._get_q(r_data, s, chi, q_total)
         q_val = q - q_core
 
@@ -377,7 +373,7 @@ class EMLEBase(_torch.nn.Module):
         Parameters
         ----------
 
-        mol_features: torch.Tensor (N_ATOMS, N_FEAT)
+        mol_features: torch.Tensor (N_BATCH, N_ATOMS, N_FEAT)
             The feature vectors for each atom.
 
         ref_mean: torch.Tensor (N_Z,)
@@ -386,26 +382,26 @@ class EMLEBase(_torch.nn.Module):
         c: torch.Tensor (N_Z, MAX_N_REF)
             The coefficients of the GPR model.
 
-        zid: torch.Tensor (N_ATOMS,)
+        zid: torch.Tensor (N_BATCH, N_ATOMS,)
             The species identity value of each atom.
 
         Returns
         -------
 
-        result: torch.Tensor (N_ATOMS)
+        result: torch.Tensor (N_BATCH, N_ATOMS)
             The values of the predicted property for each atom.
         """
 
         result = _torch.zeros(
-            len(zid), dtype=mol_features.dtype, device=mol_features.device
+            zid.shape, dtype=mol_features.dtype, device=mol_features.device
         )
         for i in range(len(self._n_ref)):
             n_ref = self._n_ref[i]
             ref_features_z = self._ref_features[i, :n_ref]
-            mol_features_z = mol_features[zid == i, :, None]
+            mol_features_z = mol_features[zid == i]
 
-            K_mol_ref2 = (ref_features_z @ mol_features_z) ** 2
-            K_mol_ref2 = K_mol_ref2.reshape(K_mol_ref2.shape[:-1])
+            K_mol_ref2 = (mol_features_z @ ref_features_z.T) ** 2
+            # K_mol_ref2 = K_mol_ref2.reshape(K_mol_ref2.shape[:-1])
             result[zid == i] = K_mol_ref2 @ c[i, :n_ref] + ref_mean[i]
 
         return result
@@ -418,7 +414,7 @@ class EMLEBase(_torch.nn.Module):
         Parameters
         ----------
 
-        xyz: torch.Tensor (N_ATOMS, 3)
+        xyz: torch.Tensor (N_BATCH, N_ATOMS, 3)
             Atomic positions.
 
         Returns
@@ -426,32 +422,30 @@ class EMLEBase(_torch.nn.Module):
 
         result: r_data object
         """
-        n_atoms = len(xyz)
+        n_batch, n_atoms_max = xyz.shape[:2]
 
-        rr_mat = xyz[:, None, :] - xyz[None, :, :]
+        rr_mat = xyz[:, :, None, :] - xyz[:, None, :, :]
         r_mat = _torch.cdist(xyz, xyz)
         r_inv = _torch.where(r_mat == 0.0, 0.0, 1.0 / r_mat)
 
-        r_inv1 = r_inv.repeat_interleave(3, dim=1)
-        r_inv2 = r_inv1.repeat_interleave(3, dim=0)
+        r_inv1 = r_inv.repeat_interleave(3, dim=2)
+        r_inv2 = r_inv1.repeat_interleave(3, dim=1)
 
         # Get a stacked matrix of outer products over the rr_mat tensors.
-        outer = _torch.einsum("bik,bij->bjik", rr_mat, rr_mat).reshape(
-            (n_atoms * 3, n_atoms * 3)
+        outer = _torch.einsum("bnik,bnij->bnjik", rr_mat, rr_mat).reshape(
+            (n_batch, n_atoms_max * 3, n_atoms_max * 3)
         )
 
         id2 = _torch.tile(
-            _torch.tile(
-                _torch.eye(3, dtype=xyz.dtype, device=xyz.device).T, (1, n_atoms)
-            ).T,
-            (1, n_atoms),
+            _torch.eye(3, dtype=xyz.dtype, device=xyz.device).T,
+            (1, n_atoms_max, n_atoms_max)
         )
 
         t01 = r_inv
         t21 = -id2 * r_inv2 ** 3
         t22 = 3 * outer * r_inv2 ** 5
 
-        return (r_mat, t01, t21, t22)
+        return r_mat, t01, t21, t22
 
     def _get_q(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, chi, q_total):
         """
@@ -463,24 +457,24 @@ class EMLEBase(_torch.nn.Module):
 
         r_data: r_data object (output of self._get_r_data)
 
-        s: torch.Tensor (N_ATOMS,)
+        s: torch.Tensor (N_BATCH, N_ATOMS,)
             MBIS valence shell widths.
 
-        chi: torch.Tensor (N_ATOMS,)
+        chi: torch.Tensor (N_BATCH, N_ATOMS,)
             Electronegativities.
 
-        q_total: torch.Tensor (1,)
+        q_total: torch.Tensor (N_BATCH,)
             Total charge
 
         Returns
         -------
 
-        result: torch.Tensor (N_ATOMS,)
+        result: torch.Tensor (N_BATCH, N_ATOMS,)
             Predicted MBIS charges.
         """
         A = self._get_A_QEq(r_data, s)
-        b = _torch.hstack([-chi, q_total])
-        return _torch.linalg.solve(A, b)[:-1]
+        b = _torch.hstack([-chi, q_total[:, None]])
+        return _torch.linalg.solve(A, b)[:, :-1]
 
     def _get_A_QEq(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s):
         """
@@ -492,44 +486,42 @@ class EMLEBase(_torch.nn.Module):
 
         r_data: r_data object (output of self._get_r_data)
 
-        s: torch.Tensor (N_ATOMS,)
+        s: torch.Tensor (N_BATCH, N_ATOMS,)
             MBIS valence shell widths.
 
         Returns
         -------
 
-        result: torch.Tensor (N_ATOMS + 1, N_ATOMS + 1)
+        result: torch.Tensor (N_BATCH, N_ATOMS + 1, N_ATOMS + 1)
         """
         s_gauss = s * self._a_QEq
         s2 = s_gauss**2
-        s_mat = _torch.sqrt(s2[:, None] + s2[None, :])
+        s_mat = _torch.sqrt(s2[:, :, None] + s2[:, None, :])
 
         device = r_data[0].device
         dtype = r_data[0].dtype
 
         A = self._get_T0_gaussian(r_data[1], r_data[0], s_mat)
 
-        new_diag = _torch.ones_like(A.diagonal(), dtype=dtype, device=device) * (
-            1.0
-            / (
-                s_gauss
-                * _torch.sqrt(_torch.tensor([_torch.pi], dtype=dtype, device=device))
-            )
-        )
-        mask = _torch.diag(_torch.ones_like(new_diag, dtype=dtype, device=device))
-        A = mask * _torch.diag(new_diag) + (1.0 - mask) * A
+        diag_ones = _torch.ones_like(A.diagonal(dim1=-2, dim2=-1),
+                                     dtype=dtype, device=device)
+        pi = _torch.sqrt(_torch.tensor([_torch.pi], dtype=dtype, device=device))
+        new_diag = diag_ones * _torch.where(s2 > 0, 1.0 / (s_gauss * pi), 0)
+
+        mask = _torch.diag_embed(diag_ones)
+        A = mask * _torch.diag_embed(new_diag) + (1.0 - mask) * A
 
         # Store the dimensions of A.
-        x, y = A.shape
+        x, y = A.shape[1:]
 
         # Create an tensor of ones with one more row and column than A.
-        B = _torch.ones(x + 1, y + 1, dtype=dtype, device=device)
+        B = _torch.ones(len(A), x + 1, y + 1, dtype=dtype, device=device)
 
         # Copy A into B.
-        B[:x, :y] = A
+        B[:, :x, :y] = A
 
         # Set the final entry on the diagonal to zero.
-        B[-1, -1] = 0.0
+        B[:, -1, -1] = 0.0
 
         return B
 
@@ -541,19 +533,19 @@ class EMLEBase(_torch.nn.Module):
         Parameters
         ----------
 
-        t01: torch.Tensor (N_ATOMS, N_ATOMS)
+        t01: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS)
             T0 tensor for QM atoms.
 
-        r: torch.Tensor (N_ATOMS, N_ATOMS)
+        r: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS)
             Distance matrix for QM atoms.
 
-        s_mat: torch.Tensor (N_ATOMS, N_ATOMS)
+        s_mat: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS)
             Matrix of Gaussian sigmas for QM atoms.
 
         Returns
         -------
 
-        results: torch.Tensor (N_ATOMS, N_ATOMS)
+        results: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS)
         """
         return t01 * _torch.erf(
             r
@@ -573,36 +565,38 @@ class EMLEBase(_torch.nn.Module):
 
         r_data: r_data object (output of self._get_r_data)
 
-        s: torch.Tensor (N_ATOMS,)
+        s: torch.Tensor (N_BATCH, N_ATOMS,)
             MBIS valence shell widths.
 
-        q_val: torch.Tensor (N_ATOMS,)
+        q_val: torch.Tensor (N_BATCH, N_ATOMS,)
             MBIS charges.
 
-        k: torch.Tensor (N_Z)
+        k: torch.Tensor (N_BATCH, N_ATOMS,)
             Scaling factors for polarizabilities.
 
         Returns
         -------
 
-        result: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
+        result: torch.Tensor (N_BATCH, N_ATOMS * 3, N_ATOMS * 3)
             The A matrix for induced dipoles prediction.
         """
         v = -60 * q_val * s**3
         alpha = v * k
 
         alphap = alpha * self._a_Thole
-        alphap_mat = alphap[:, None] * alphap[None, :]
+        alphap_mat = alphap[:, :, None] * alphap[:, None, :]
 
         au3 = r_data[0] ** 3 / _torch.sqrt(alphap_mat)
-        au31 = au3.repeat_interleave(3, dim=1)
-        au32 = au31.repeat_interleave(3, dim=0)
+        au31 = au3.repeat_interleave(3, dim=2)
+        au32 = au31.repeat_interleave(3, dim=1)
 
         A = -self._get_T2_thole(r_data[2], r_data[3], au32)
 
-        new_diag = 1.0 / alpha.repeat_interleave(3)
-        mask = _torch.diag(_torch.ones_like(new_diag, dtype=A.dtype, device=A.device))
-        A = mask * _torch.diag(new_diag) + (1.0 - mask) * A
+        alpha3 = alpha.repeat_interleave(3, dim=1)
+        new_diag = _torch.where(alpha3 > 0, 1.0 / alpha3, 1.)
+        diag_ones = _torch.ones_like(new_diag, dtype=A.dtype, device=A.device)
+        mask = _torch.diag_embed(diag_ones)
+        A = mask * _torch.diag_embed(new_diag) + (1.0 - mask) * A
 
         return A
 
