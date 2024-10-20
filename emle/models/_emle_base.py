@@ -189,6 +189,109 @@ class EMLEBase(_torch.nn.Module):
         # Initalise an empty AEV tensor to use to store the AEVs in derived classes.
         self._aev = _torch.empty(0, dtype=dtype, device=device)
 
+    def to(self, *args, **kwargs):
+        self._species_map = self._species_map.to(*args, **kwargs)
+        self._aev_mask = self._aev_mask.to(*args, **kwargs)
+        self._q_core = self._q_core.to(*args, **kwargs)
+        self._a_QEq = self._a_QEq.to(*args, **kwargs)
+        self._a_Thole = self._a_Thole.to(*args, **kwargs)
+        self._k = self._k.to(*args, **kwargs)
+        self._q_total = self._q_total.to(*args, **kwargs)
+        self._ref_features = self._ref_features.to(*args, **kwargs)
+        self._n_ref = self._n_ref.to(*args, **kwargs)
+        self._ref_values_s = self._ref_values_s.to(*args, **kwargs)
+        self._ref_values_chi = self._ref_values_chi.to(*args, **kwargs)
+        self._ref_mean_s = self._ref_mean_s.to(*args, **kwargs)
+        self._ref_mean_chi = self._ref_mean_chi.to(*args, **kwargs)
+        self._c_s = self._c_s.to(*args, **kwargs)
+        self._c_chi = self._c_chi.to(*args, **kwargs)
+        self._ref_mean_k = self._ref_mean_k.to(*args, **kwargs)
+        self._c_k = self._c_k.to(*args, **kwargs)
+
+    def cuda(self, **kwargs):
+        """
+        Move all model parameters and buffers to CUDA memory.
+        """
+        self._species_map = self._species_map.cuda(**kwargs)
+        self._aev_mask = self._aev_mask.cuda(**kwargs)
+        self._q_core = self._q_core.cuda(**kwargs)
+        self._a_QEq = self._a_QEq.cuda(**kwargs)
+        self._a_Thole = self._a_Thole.cuda(**kwargs)
+        self._k = self._k.cuda(**kwargs)
+        self._q_total = self._q_total.cuda(**kwargs)
+        self._ref_features = self._ref_features.cuda(**kwargs)
+        self._n_ref = self._n_ref.cuda(**kwargs)
+        self._ref_values_s = self._ref_values_s.cuda(**kwargs)
+        self._ref_values_chi = self._ref_values_chi.cuda(**kwargs)
+        self._ref_mean_s = self._ref_mean_s.cuda(**kwargs)
+        self._ref_mean_chi = self._ref_mean_chi.cuda(**kwargs)
+        self._c_s = self._c_s.cuda(**kwargs)
+        self._c_chi = self._c_chi.cuda(**kwargs)
+        self._ref_mean_k = self._ref_mean_k.cuda(**kwargs)
+        self._c_k = self._c_k.cuda(**kwargs)
+
+    def cpu(self, **kwargs):
+        """
+        Move all model parameters and buffers to CPU memory.
+        """
+        self._species_map = self._species_map.cpu(**kwargs)
+        self._aev_mask = self._aev_mask.cpu(**kwargs)
+        self._q_core = self._q_core.cpu(**kwargs)
+        self._a_QEq = self._a_QEq.cpu(**kwargs)
+        self._a_Thole = self._a_Thole.cpu(**kwargs)
+        self._k = self._k.cpu(**kwargs)
+        self._q_total = self._q_total.cpu(**kwargs)
+        self._ref_features = self._ref_features.cpu(**kwargs)
+        self._n_ref = self._n_ref.cpu(**kwargs)
+        self._ref_values_s = self._ref_values_s.cpu(**kwargs)
+        self._ref_values_chi = self._ref_values_chi.cpu(**kwargs)
+        self._ref_mean_s = self._ref_mean_s.cpu(**kwargs)
+        self._ref_mean_chi = self._ref_mean_chi.cpu(**kwargs)
+        self._c_s = self._c_s.cpu(**kwargs)
+        self._c_chi = self._c_chi.cpu(**kwargs)
+        self._ref_mean_k = self._ref_mean_k.cpu(**kwargs)
+        self._c_k = self._c_k.cpu(**kwargs)
+
+    def double(self):
+        """
+        Casts all floating point model parameters and buffers to float64 precision.
+        """
+        self._q_core = self._q_core.double()
+        self._a_QEq = self._a_QEq.double()
+        self._a_Thole = self._a_Thole.double()
+        self._k = self._k.double()
+        self._q_total = self._q_total.double()
+        self._ref_features = self._ref_features.double()
+        self._ref_values_s = self._ref_values_s.double()
+        self._ref_values_chi = self._ref_values_chi.double()
+        self._ref_mean_s = self._ref_mean_s.double()
+        self._ref_mean_chi = self._ref_mean_chi.double()
+        self._c_s = self._c_s.double()
+        self._c_chi = self._c_chi.double()
+        self._ref_mean_k = self._ref_mean_k.double()
+        self._c_k = self._c_k.double()
+        return self
+
+    def float(self):
+        """
+        Casts all floating point model parameters and buffers to float32 precision.
+        """
+        self._q_core = self._q_core.float()
+        self._a_QEq = self._a_QEq.float()
+        self._a_Thole = self._a_Thole.float()
+        self._k = self._k.float()
+        self._q_total = self._q_total.float()
+        self._ref_features = self._ref_features.float()
+        self._ref_values_s = self._ref_values_s.float()
+        self._ref_values_chi = self._ref_values_chi.float()
+        self._ref_mean_s = self._ref_mean_s.float()
+        self._ref_mean_chi = self._ref_mean_chi.float()
+        self._c_s = self._c_s.float()
+        self._c_chi = self._c_chi.float()
+        self._ref_mean_k = self._ref_mean_k.float()
+        self._c_k = self._c_k.float()
+        return self
+
     def forward(self, atomic_numbers, xyz_qm):
         """
         Computes the static and induced EMLE energy components.

@@ -341,6 +341,7 @@ class EMLE(_torch.nn.Module):
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.to(*args, **kwargs)
+        self._q_core_mm = self._q_core_mm.to(*args, **kwargs)
         self._emle_base = self._emle_base.to(*args, **kwargs)
 
         # Check for a device type in args and update the device attribute.
@@ -357,6 +358,7 @@ class EMLE(_torch.nn.Module):
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.cuda(**kwargs)
+        self._q_core_mm = self._q_core_mm.cuda(**kwargs)
         self._emle_base = self._emle_base.cuda(**kwargs)
 
         # Update the device attribute.
@@ -370,6 +372,7 @@ class EMLE(_torch.nn.Module):
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.cpu(**kwargs)
+        self._q_core_mm = self._q_core_mm.cpu(**kwargs)
         self._emle_base = self._emle_base.cpu()
 
         # Update the device attribute.
@@ -383,6 +386,7 @@ class EMLE(_torch.nn.Module):
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.double()
+        self._q_core_mm = self._q_core_mm.double()
         self._emle_base = self._emle_base.double()
         return self
 
@@ -392,6 +396,7 @@ class EMLE(_torch.nn.Module):
         """
         if self._aev_computer is not None:
             self._aev_computer = self._aev_computer.float()
+        self._q_core_mm = self._q_core_mm.float()
         self._emle_base = self._emle_base.float()
         return self
 
