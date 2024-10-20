@@ -141,7 +141,7 @@ class EMLEBase(_torch.nn.Module):
                 raise ValueError(msg)
         else:
             try:
-                k_Z = torch.empty(0, dtype=dtype, device=device)
+                k_Z = _torch.empty(0, dtype=dtype, device=device)
                 ref_values_sqrtk = _torch.tensor(params["sqrtk_ref"],
                                                  dtype=dtype, device=device)
                 ref_mean_sqrtk, c_sqrtk = self._get_c(n_ref, ref_values_sqrtk, Kinv)
