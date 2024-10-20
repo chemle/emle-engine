@@ -570,7 +570,7 @@ class EMLEBase(_torch.nn.Module):
         alphap = alpha * self._a_Thole
         alphap_mat = alphap[:, :, None] * alphap[:, None, :]
 
-        au3 = r_data[0] ** 3 / _torch.sqrt(alphap_mat)
+        au3 = _torch.where(alphap_mat > 0, r_data[0] ** 3 / _torch.sqrt(alphap_mat), 0)
         au31 = au3.repeat_interleave(3, dim=2)
         au32 = au31.repeat_interleave(3, dim=1)
 
