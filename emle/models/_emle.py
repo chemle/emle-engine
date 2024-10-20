@@ -475,46 +475,6 @@ class EMLE(_torch.nn.Module):
 
         return _torch.stack([E_static, E_ind])
 
-    def _gpr(self, mol_features, ref_mean, c, zid):
-        """
-        Internal method to predict a property using Gaussian Process Regression.
-
-        Parameters
-        ----------
-
-        mol_features: torch.Tensor (N_ATOMS, N_FEAT)
-            The feature vectors for each atom.
-
-        ref_mean: torch.Tensor (N_Z,)
-            The mean of the reference values for each species.
-
-        c: torch.Tensor (N_Z, MAX_N_REF)
-            The coefficients of the GPR model.
-
-        zid: torch.Tensor (N_ATOMS,)
-            The species identity value of each atom.
-
-        Returns
-        -------
-
-        result: torch.Tensor (N_ATOMS)
-            The values of the predicted property for each atom.
-        """
-
-        result = _torch.zeros(
-            len(zid), dtype=mol_features.dtype, device=mol_features.device
-        )
-        for i in range(len(self._n_ref)):
-            n_ref = self._n_ref[i]
-            ref_features_z = self._ref_features[i, :n_ref]
-            mol_features_z = mol_features[zid == i, :, None]
-
-            K_mol_ref2 = (ref_features_z @ mol_features_z) ** 2
-            K_mol_ref2 = K_mol_ref2.reshape(K_mol_ref2.shape[:-1])
-            result[zid == i] = K_mol_ref2 @ c[i, :n_ref] + ref_mean[i]
-
-        return result
-
     def _get_mu_ind(
         self,
         A,
