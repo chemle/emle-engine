@@ -34,24 +34,21 @@ class EMLEBase(_torch.nn.Module):
 
         aev_computer: AEVComputer instance (torchani/NNPOps)
 
-        method: str
-            The desired embedding method. Options are:
-                "electrostatic":
-                    Full ML electrostatic embedding.
-                "mechanical":
-                    ML predicted charges for the core, but zero valence charge.
-                "nonpol":
-                    Non-polarisable ML embedding. Here the induced component of
-                    the potential is zeroed.
-                "mm":
-                    MM charges are used for the core charge and valence charges
-                    are set to zero. If this option is specified then the user
-                    should also specify the MM charges for atoms in the QM
-                    region.
+        aev_mask: torch.Tensor
+            mask for features coming from aev_computer
 
         species: List[int], Tuple[int], numpy.ndarray, torch.Tensor
             List of species (atomic numbers) supported by the EMLE model. If
             None, then the default species list will be used.
+
+        n_ref: torch.Tensor
+            number of GPR references for each element in species list
+
+        ref_features: torch.Tensor
+            Feature vectors for GPR references
+
+        q_core: torch.Tensor
+            Core charges for each element in species list
 
         alpha_mode: str
             How atomic polarizabilities are calculated.
@@ -60,10 +57,6 @@ class EMLEBase(_torch.nn.Module):
                 "reference":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
-
-        mm_charges: List[float], Tuple[Float], numpy.ndarray, torch.Tensor
-            List of MM charges for atoms in the QM region in units of mod
-            electron charge. This is required if the 'mm' method is specified.
 
         device: torch.device
             The device on which to run the model.
