@@ -254,7 +254,7 @@ class EMLEBase(_torch.nn.Module):
             Valence widths, core charges, valence charges, A_thole tensor
         """
 
-        mask = atomic_numbers > 0
+        mask = _torch.tensor(atomic_numbers > 0, device=self._ref_mean_s.device)
 
         # Convert the atomic numbers to species IDs.
         species_id = self._species_map[atomic_numbers]
@@ -315,7 +315,7 @@ class EMLEBase(_torch.nn.Module):
 
     @classmethod
     def _get_c(cls, n_ref, ref, Kinv):
-        mask = _torch.arange(ref.shape[1]) < n_ref[:, None]
+        mask = _torch.arange(ref.shape[1], device=n_ref.device) < n_ref[:, None]
         ref_mean = _torch.sum(ref * mask, dim=1) / n_ref
         ref_shifted = ref - ref_mean[:, None]
         return ref_mean, (Kinv @ ref_shifted[:, :, None]).squeeze()
