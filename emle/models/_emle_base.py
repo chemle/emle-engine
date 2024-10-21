@@ -176,7 +176,7 @@ class EMLEBase(_torch.nn.Module):
         self._ref_mean_sqrtk = self._ref_mean_sqrtk.to(*args, **kwargs)
         self._c_s = self._c_s.to(*args, **kwargs)
         self._c_chi = self._c_chi.to(*args, **kwargs)
-        self._c_k = self._c_k.to(*args, **kwargs)
+        self._c_sqrtk = self._c_sqrtk.to(*args, **kwargs)
 
     def cuda(self, **kwargs):
         """
