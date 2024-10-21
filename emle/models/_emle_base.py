@@ -96,24 +96,10 @@ class EMLEBase(_torch.nn.Module):
         self.a_Thole = _torch.nn.Parameter(params["a_Thole"])
         self.ref_values_s = _torch.nn.Parameter(params["ref_values_s"])
         self.ref_values_chi = _torch.nn.Parameter(params["ref_values_chi"])
+        self.k_Z = _torch.nn.Parameter(params["k_Z"])
 
-        if self._alpha_mode == "species":
+        if self._alpha_mode == "reference":
             try:
-                self.k_Z = _torch.nn.Parameter(params["k_Z"])
-                self.ref_values_sqrtk = _torch.nn.Parameter(
-                    _torch.zeros_like(self.ref_values_s)
-                )
-            except:
-                msg = (
-                    "Missing 'k_Z' key in params. This is required when "
-                    "using 'species' alpha mode."
-                )
-                raise ValueError(msg)
-        else:
-            try:
-                self.k_Z = _torch.nn.Parameter(
-                    _torch.zeros_like(q_core, dtype=dtype, device=device)
-                )
                 self.ref_values_sqrtk = _torch.nn.Parameter(params["sqrtk_ref"])
             except:
                 msg = (
@@ -291,10 +277,11 @@ class EMLEBase(_torch.nn.Module):
         q = self._get_q(r_data, s, chi, q_total, mask)
         q_val = q - q_core
 
-        if self._alpha_mode == "species":
-            k = self._k_Z[species_id]
-        else:
-            k = self._gpr(aev, self._ref_mean_sqrtk, self._c_sqrtk, species_id) ** 2
+        k = self.k_Z[species_id]
+
+        if self._alpha_mode == "reference":
+            k_scale = self._gpr(aev, self._ref_mean_sqrtk, self._c_sqrtk, species_id) ** 2
+            k = k_scale * k
 
         A_thole = self._get_A_thole(r_data, s, q_val, k)
 
