@@ -303,10 +303,10 @@ class EMLEBase(_torch.nn.Module):
 
         xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
 
-        r_data = self._get_r_data(xyz_qm_bohr)
+        r_data = self._get_r_data(xyz_qm_bohr, mask)
 
         q_core = self._q_core[species_id] * mask
-        q = self._get_q(r_data, s, chi, q_total)
+        q = self._get_q(r_data, s, chi, q_total, mask)
         q_val = q - q_core
 
         if self._alpha_mode == "species":
@@ -391,7 +391,7 @@ class EMLEBase(_torch.nn.Module):
         return result
 
     @classmethod
-    def _get_r_data(cls, xyz):
+    def _get_r_data(cls, xyz, mask):
         """
         Internal method to calculate r_data object.
 
@@ -401,15 +401,19 @@ class EMLEBase(_torch.nn.Module):
         xyz: torch.Tensor (N_BATCH, N_ATOMS, 3)
             Atomic positions.
 
+        mask: torch.Tensor (N_BATCH, N_ATOMS)
+            Mask for padded coordinates
+
         Returns
         -------
 
         result: r_data object
         """
         n_batch, n_atoms_max = xyz.shape[:2]
+        mask_mat = mask[:, :, None] * mask[:, None, :]
 
         rr_mat = xyz[:, :, None, :] - xyz[:, None, :, :]
-        r_mat = _torch.cdist(xyz, xyz)
+        r_mat = _torch.where(mask_mat, _torch.cdist(xyz, xyz), 0.)
         r_inv = _torch.where(r_mat == 0.0, 0.0, 1.0 / r_mat)
 
         r_inv1 = r_inv.repeat_interleave(3, dim=2)
@@ -431,7 +435,8 @@ class EMLEBase(_torch.nn.Module):
 
         return r_mat, t01, t21, t22
 
-    def _get_q(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, chi, q_total):
+    def _get_q(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor],
+               s, chi, q_total, mask):
         """
         Internal method that predicts MBIS charges
         (Eq. 16 in 10.1021/acs.jctc.2c00914)
@@ -450,17 +455,20 @@ class EMLEBase(_torch.nn.Module):
         q_total: torch.Tensor (N_BATCH,)
             Total charge
 
+        mask: torch.Tensor (N_BATCH, N_ATOMS)
+            Mask for padded coordinates
+
         Returns
         -------
 
         result: torch.Tensor (N_BATCH, N_ATOMS,)
             Predicted MBIS charges.
         """
-        A = self._get_A_QEq(r_data, s)
+        A = self._get_A_QEq(r_data, s, mask)
         b = _torch.hstack([-chi, q_total[:, None]])
         return _torch.linalg.solve(A, b)[:, :-1]
 
-    def _get_A_QEq(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s):
+    def _get_A_QEq(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, mask):
         """
         Internal method, generates A matrix for charge prediction
         (Eq. 16 in 10.1021/acs.jctc.2c00914)
@@ -472,6 +480,9 @@ class EMLEBase(_torch.nn.Module):
 
         s: torch.Tensor (N_BATCH, N_ATOMS,)
             MBIS valence shell widths.
+
+        mask: torch.Tensor (N_BATCH, N_ATOMS)
+            Mask for padded coordinates
 
         Returns
         -------
@@ -490,19 +501,25 @@ class EMLEBase(_torch.nn.Module):
         diag_ones = _torch.ones_like(A.diagonal(dim1=-2, dim2=-1),
                                      dtype=dtype, device=device)
         pi = _torch.sqrt(_torch.tensor([_torch.pi], dtype=dtype, device=device))
-        new_diag = diag_ones * _torch.where(s2 > 0, 1.0 / (s_gauss * pi), 0)
+        new_diag = diag_ones * _torch.where(s > 0, 1.0 / (s_gauss * pi), 0)
 
-        mask = _torch.diag_embed(diag_ones)
-        A = mask * _torch.diag_embed(new_diag) + (1.0 - mask) * A
+        diag_mask = _torch.diag_embed(diag_ones)
+        A = diag_mask * _torch.diag_embed(new_diag) + (1.0 - diag_mask) * A
 
         # Store the dimensions of A.
-        x, y = A.shape[1:]
+        n_batch, x, y = A.shape
 
         # Create an tensor of ones with one more row and column than A.
-        B = _torch.ones(len(A), x + 1, y + 1, dtype=dtype, device=device)
+        B_diag = _torch.ones((n_batch, x + 1), dtype=dtype, device=device)
+        B = _torch.diag_embed(B_diag)
 
         # Copy A into B.
-        B[:, :x, :y] = A
+        mask_mat = mask[:, :, None] * mask[:, None, :]
+        B[:, :x, :y] = _torch.where(mask_mat, A, B[:, :x, :y])
+
+        # Set last row and column to 1 (masked)
+        B[:, -1, :-1] = mask.float()
+        B[:, :-1, -1] = mask.float()
 
         # Set the final entry on the diagonal to zero.
         B[:, -1, -1] = 0.0
@@ -531,13 +548,8 @@ class EMLEBase(_torch.nn.Module):
 
         results: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS)
         """
-        return t01 * _torch.erf(
-            r
-            / (
-                    s_mat
-                    * _torch.sqrt(_torch.tensor([2.0], dtype=r.dtype, device=r.device))
-            )
-        )
+        sqrt2 = _torch.sqrt(_torch.tensor([2.0], dtype=r.dtype, device=r.device))
+        return t01 * _torch.where(s_mat > 0, _torch.erf(r / (s_mat * sqrt2)), 0.)
 
     def _get_A_thole(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, q_val, k):
         """
