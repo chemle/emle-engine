@@ -368,7 +368,6 @@ class EMLEBase(_torch.nn.Module):
             mol_features_z = mol_features[zid == i]
 
             K_mol_ref2 = (mol_features_z @ ref_features_z.T) ** 2
-            # K_mol_ref2 = K_mol_ref2.reshape(K_mol_ref2.shape[:-1])
             result[zid == i] = K_mol_ref2 @ c[i, :n_ref] + ref_mean[i]
 
         return result
