@@ -92,16 +92,16 @@ class EMLEBase(_torch.nn.Module):
         self._aev_computer = aev_computer
 
         # Store model parameters as tensors.
-        a_QEq = _torch.nn.Parameter(params["a_QEq"])
-        a_Thole = _torch.nn.Parameter(params["a_Thole"])
-        ref_values_s = _torch.nn.Parameter(params["ref_values_s"])
-        ref_values_chi = _torch.nn.Parameter(params["ref_values_chi"])
+        self.a_QEq = _torch.nn.Parameter(params["a_QEq"])
+        self.a_Thole = _torch.nn.Parameter(params["a_Thole"])
+        self.ref_values_s = _torch.nn.Parameter(params["ref_values_s"])
+        self.ref_values_chi = _torch.nn.Parameter(params["ref_values_chi"])
 
         if self._alpha_mode == "species":
             try:
-                k_Z = _torch.nn.Parameter(params["k_Z"])
-                ref_values_sqrtk = _torch.nn.Parameter(
-                    _torch.zeros_like(ref_values_s)
+                self.k_Z = _torch.nn.Parameter(params["k_Z"])
+                self.ref_values_sqrtk = _torch.nn.Parameter(
+                    _torch.zeros_like(self.ref_values_s)
                 )
             except:
                 msg = (
@@ -111,10 +111,10 @@ class EMLEBase(_torch.nn.Module):
                 raise ValueError(msg)
         else:
             try:
-                k_Z = _torch.nn.Parameter(
+                self.k_Z = _torch.nn.Parameter(
                     _torch.zeros_like(q_core, dtype=dtype, device=device)
                 )
-                ref_values_sqrtk = _torch.nn.Parameter(params["sqrtk_ref"])
+                self.ref_values_sqrtk = _torch.nn.Parameter(params["sqrtk_ref"])
             except:
                 msg = (
                     "Missing 'sqrtk_ref' key in params. This is required when "
@@ -134,15 +134,15 @@ class EMLEBase(_torch.nn.Module):
 
         # Calculate GPR coefficients for the valence shell widths (s)
         # and electronegativities (chi).
-        ref_mean_s, c_s = self._get_c(n_ref, ref_values_s, Kinv)
-        ref_mean_chi, c_chi = self._get_c(n_ref, ref_values_chi, Kinv)
+        ref_mean_s, c_s = self._get_c(n_ref, self.ref_values_s, Kinv)
+        ref_mean_chi, c_chi = self._get_c(n_ref, self.ref_values_chi, Kinv)
 
         if self._alpha_mode == "species":
             ref_mean_sqrtk = _torch.zeros_like(ref_mean_s, dtype=dtype,
                                                device=device)
             c_sqrtk = _torch.zeros_like(c_s, dtype=dtype, device=device)
         else:
-            ref_mean_sqrtk, c_sqrtk = self._get_c(n_ref, ref_values_sqrtk, Kinv)
+            ref_mean_sqrtk, c_sqrtk = self._get_c(n_ref, self.ref_values_sqrtk, Kinv)
 
         # Store the current device.
         self._device = device
@@ -152,9 +152,6 @@ class EMLEBase(_torch.nn.Module):
         self.register_buffer("_aev_mask", aev_mask)
         self.register_buffer("_Kinv", Kinv)
         self.register_buffer("_q_core", q_core)
-        self.register_buffer("_a_QEq", a_QEq)
-        self.register_buffer("_a_Thole", a_Thole)
-        self.register_buffer("_k_Z", k_Z)
         self.register_buffer("_ref_features", ref_features)
         self.register_buffer("_n_ref", n_ref)
         self.register_buffer("_ref_mean_s", ref_mean_s)
@@ -172,9 +169,6 @@ class EMLEBase(_torch.nn.Module):
         self._Kinv = self._Kinv.to(*args, **kwargs)
         self._aev_mask = self._aev_mask.to(*args, **kwargs)
         self._q_core = self._q_core.to(*args, **kwargs)
-        self._a_QEq = self._a_QEq.to(*args, **kwargs)
-        self._a_Thole = self._a_Thole.to(*args, **kwargs)
-        self._k_Z = self._k_Z.to(*args, **kwargs)
         self._ref_features = self._ref_features.to(*args, **kwargs)
         self._n_ref = self._n_ref.to(*args, **kwargs)
         self._ref_mean_s = self._ref_mean_s.to(*args, **kwargs)
@@ -192,9 +186,6 @@ class EMLEBase(_torch.nn.Module):
         self._Kinv = self._Kinv.cuda(**kwargs)
         self._aev_mask = self._aev_mask.cuda(**kwargs)
         self._q_core = self._q_core.cuda(**kwargs)
-        self._a_QEq = self._a_QEq.cuda(**kwargs)
-        self._a_Thole = self._a_Thole.cuda(**kwargs)
-        self._k_Z = self._k_Z.cuda(**kwargs)
         self._ref_features = self._ref_features.cuda(**kwargs)
         self._n_ref = self._n_ref.cuda(**kwargs)
         self._ref_mean_s = self._ref_mean_s.cuda(**kwargs)
@@ -212,9 +203,6 @@ class EMLEBase(_torch.nn.Module):
         self._Kinv = self._Kinv.cpu(**kwargs)
         self._aev_mask = self._aev_mask.cpu(**kwargs)
         self._q_core = self._q_core.cpu(**kwargs)
-        self._a_QEq = self._a_QEq.cpu(**kwargs)
-        self._a_Thole = self._a_Thole.cpu(**kwargs)
-        self._k_Z = self._k_Z.cpu(**kwargs)
         self._ref_features = self._ref_features.cpu(**kwargs)
         self._n_ref = self._n_ref.cpu(**kwargs)
         self._ref_mean_s = self._ref_mean_s.cpu(**kwargs)
@@ -230,9 +218,6 @@ class EMLEBase(_torch.nn.Module):
         """
         self._Kinv = self._Kinv.double()
         self._q_core = self._q_core.double()
-        self._a_QEq = self._a_QEq.double()
-        self._a_Thole = self._a_Thole.double()
-        self._k_Z = self._k_Z.double()
         self._ref_features = self._ref_features.double()
         self._ref_mean_s = self._ref_mean_s.double()
         self._ref_mean_chi = self._ref_mean_chi.double()
@@ -248,9 +233,6 @@ class EMLEBase(_torch.nn.Module):
         """
         self._Kinv = self._Kinv.float()
         self._q_core = self._q_core.float()
-        self._a_QEq = self._a_QEq.float()
-        self._a_Thole = self._a_Thole.float()
-        self._k = self._k.float()
         self._ref_features = self._ref_features.float()
         self._ref_mean_s = self._ref_mean_s.float()
         self._ref_mean_chi = self._ref_mean_chi.float()
@@ -489,7 +471,7 @@ class EMLEBase(_torch.nn.Module):
 
         result: torch.Tensor (N_BATCH, N_ATOMS + 1, N_ATOMS + 1)
         """
-        s_gauss = s * self._a_QEq
+        s_gauss = s * self.a_QEq
         s2 = s_gauss**2
         s_mat = _torch.sqrt(s2[:, :, None] + s2[:, None, :])
 
@@ -579,7 +561,7 @@ class EMLEBase(_torch.nn.Module):
         v = -60 * q_val * s**3
         alpha = v * k
 
-        alphap = alpha * self._a_Thole
+        alphap = alpha * self.a_Thole
         alphap_mat = alphap[:, :, None] * alphap[:, None, :]
 
         au3 = _torch.where(alphap_mat > 0, r_data[0] ** 3 / _torch.sqrt(alphap_mat), 0)
