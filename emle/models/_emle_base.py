@@ -328,7 +328,8 @@ class EMLEBase(_torch.nn.Module):
 
     @classmethod
     def _get_c(cls, n_ref, ref, Kinv):
-        ref_mean = _torch.sum(ref, dim=1) / n_ref
+        mask = _torch.arange(ref.shape[1]) < n_ref[:, None]
+        ref_mean = _torch.sum(ref * mask, dim=1) / n_ref
         ref_shifted = ref - ref_mean[:, None]
         return ref_mean, (Kinv @ ref_shifted[:, :, None]).squeeze()
 
