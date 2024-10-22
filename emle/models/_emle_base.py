@@ -273,6 +273,8 @@ class EMLEBase(_torch.nn.Module):
         self.register_buffer("_k_Z", k_Z)
 
         # Initalise an empty AEV tensor to use to store the AEVs in parent models.
+        # If AEVs are computed externally, then this tensor will be set by the
+        # parent.
         self._aev = _torch.empty(0, dtype=dtype, device=device)
 
     def to(self, *args, **kwargs):
