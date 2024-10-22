@@ -7,6 +7,12 @@ from typing import Tuple
 
 
 class EMLEBase(_torch.nn.Module):
+    """
+    Base class for the EMLE model. This is used to compute valence shell
+    widths, core charges, valence charges, and the A_thole tensor for a batch
+    of QM systems, which in turn can be used to compute static and induced
+    electrostating embedding energies using the EMLE model.
+    """
 
     def __init__(
         self,
@@ -228,7 +234,8 @@ class EMLEBase(_torch.nn.Module):
 
     def forward(self, atomic_numbers, xyz_qm, q_total):
         """
-        Computes the static and induced EMLE energy components.
+        Compute the valence widths, core charges, valence charges, and
+        A_thole tensor for a batch of QM systems.
 
         Parameters
         ----------
