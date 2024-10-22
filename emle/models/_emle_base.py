@@ -30,10 +30,11 @@ class EMLEBase(_torch.nn.Module):
         params: dict
             EMLE model parameters
 
-        aev_computer: AEVComputer instance (torchani/NNPOps)
+        aev_computer: torchani.AEVComputer
+            AEV computer instance used to compute AEVs.
 
         aev_mask: torch.Tensor
-            mask for features coming from aev_computer
+            Mask for features coming from aev_computer.
 
         species: List[int], Tuple[int], numpy.ndarray, torch.Tensor
             List of species (atomic numbers) supported by the EMLE model. If
