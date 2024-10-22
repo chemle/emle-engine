@@ -1163,27 +1163,36 @@ class EMLECalculator:
             E_vac += delta_E
             grad_vac += delta_grad
 
-        # Store a copy of the QM coordinates as a NumPy array.
+        # Store a copy of the atomic numbers and QM coordinates as NumPy arrays.
+        atomic_numbers_np = atomic_numbers
         xyz_qm_np = xyz_qm
 
         # Convert inputs to Torch tensors.
+        atomic_numbers = _torch.tensor(
+            atomic_numbers, dtype=_torch.int64, device=self._device
+        )
+        charges_mm = _torch.tensor(
+            charges_mm, dtype=_torch.float32, device=self._device
+        )
         xyz_qm = _torch.tensor(
             xyz_qm, dtype=_torch.float32, device=self._device, requires_grad=True
         )
         xyz_mm = _torch.tensor(
             xyz_mm, dtype=_torch.float32, device=self._device, requires_grad=True
         )
-        charges_mm = _torch.tensor(
-            charges_mm, dtype=_torch.float32, device=self._device
-        )
 
         # Compute energy and gradients.
-        E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-        dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
-            E.sum(), (xyz_qm, xyz_mm)
-        )
-        dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
-        dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
+        try:
+            E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+            dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
+                E.sum(), (xyz_qm, xyz_mm)
+            )
+            dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
+            dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
+        except Exception as e:
+            msg = f"Failed to compute EMLE energies and gradients: {e}"
+            _logger.error(msg)
+            raise RuntimeError(msg)
 
         # Compute the total energy and gradients.
         E_tot = E_vac + E.sum().detach().cpu().numpy()
@@ -1283,7 +1292,7 @@ class EMLECalculator:
 
         # Write out the QM region to the xyz trajectory file.
         if self._qm_xyz_frequency > 0 and self._step % self._qm_xyz_frequency == 0:
-            atoms = _ase.Atoms(positions=xyz_qm_np, numbers=atomic_numbers)
+            atoms = _ase.Atoms(positions=xyz_qm_np, numbers=atomic_numbers_np)
             if hasattr(self, "_max_f_std"):
                 atoms.info = {"max_f_std": self._max_f_std}
             _ase_io.write(self._qm_xyz_file, atoms, append=True)
@@ -1553,23 +1562,31 @@ class EMLECalculator:
             )
 
         # Convert inputs to Torch tensors.
+        atomic_numbers = _torch.tensor(
+            atomic_numbers, dtype=_torch.int64, device=self._device
+        )
+        charges_mm = _torch.tensor(
+            charges_mm, dtype=_torch.float32, device=self._device
+        )
         xyz_qm = _torch.tensor(
             xyz_qm, dtype=_torch.float32, device=self._device, requires_grad=True
         )
         xyz_mm = _torch.tensor(
             xyz_mm, dtype=_torch.float32, device=self._device, requires_grad=True
         )
-        charges_mm = _torch.tensor(
-            charges_mm, dtype=_torch.float32, device=self._device
-        )
 
         # Compute energy and gradients.
-        E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-        dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
-            E.sum(), (xyz_qm, xyz_mm)
-        )
-        dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
-        dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
+        try:
+            E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+            dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
+                E.sum(), (xyz_qm, xyz_mm)
+            )
+            dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
+            dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
+        except Exception as e:
+            msg = f"Failed to compute EMLE energies and gradients: {e}"
+            _logger.error(msg)
+            raise RuntimeError(msg)
 
         # Compute the total energy and gradients.
         E_tot = E_vac + E.sum().detach().cpu().numpy()
