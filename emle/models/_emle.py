@@ -313,17 +313,35 @@ class EMLE(_torch.nn.Module):
         ref_features = _torch.tensor(params["ref_aev"], dtype=dtype, device=device)
 
         emle_params = {
-            'a_QEq': _torch.tensor(params["a_QEq"], dtype=dtype, device=device),
-            'a_Thole': _torch.tensor(params["a_Thole"], dtype=dtype, device=device),
-            'ref_values_s': _torch.tensor(params["s_ref"], dtype=dtype, device=device),
-            'ref_values_chi': _torch.tensor(params["chi_ref"], dtype=dtype, device=device),
-            'k_Z': _torch.tensor(params["k_Z"], dtype=dtype, device=device)
-            if 'k_Z' in params else None,
-            'sqrtk_ref': _torch.tensor(params["sqrtk_ref"], dtype=dtype, device=device)
-            if 'sqrtk_ref' in params else None
+            "a_QEq": _torch.tensor(params["a_QEq"], dtype=dtype, device=device),
+            "a_Thole": _torch.tensor(params["a_Thole"], dtype=dtype, device=device),
+            "ref_values_s": _torch.tensor(params["s_ref"], dtype=dtype, device=device),
+            "ref_values_chi": _torch.tensor(
+                params["chi_ref"], dtype=dtype, device=device
+            ),
+            "k_Z": (
+                _torch.tensor(params["k_Z"], dtype=dtype, device=device)
+                if "k_Z" in params
+                else None
+            ),
+            "sqrtk_ref": (
+                _torch.tensor(params["sqrtk_ref"], dtype=dtype, device=device)
+                if "sqrtk_ref" in params
+                else None
+            ),
         }
-        self._emle_base = EMLEBase(emle_params, self._aev_computer, aev_mask, species,
-                                   n_ref, ref_features, q_core, alpha_mode, device, dtype)
+        self._emle_base = EMLEBase(
+            emle_params,
+            self._aev_computer,
+            aev_mask,
+            species,
+            n_ref,
+            ref_features,
+            q_core,
+            alpha_mode,
+            device,
+            dtype,
+        )
 
         q_total = _torch.tensor(
             params.get("total_charge", 0), dtype=dtype, device=device
@@ -455,9 +473,9 @@ class EMLE(_torch.nn.Module):
         if len(xyz_mm) == 0:
             return _torch.zeros(2, dtype=xyz_qm.dtype, device=xyz_qm.device)
 
-        s, q_core, q_val, A_thole = self._emle_base(atomic_numbers[None, :],
-                                                    xyz_qm[None, :, :],
-                                                    self._q_total[None])
+        s, q_core, q_val, A_thole = self._emle_base(
+            atomic_numbers[None, :], xyz_qm[None, :, :], self._q_total[None]
+        )
         s, q_core, q_val, A_thole = s[0], q_core[0], q_val[0], A_thole[0]
 
         # Convert coordinates to Bohr.
@@ -534,7 +552,6 @@ class EMLE(_torch.nn.Module):
 
         mu_ind = _torch.linalg.solve(A, fields)
         return mu_ind.reshape((-1, 3))
-
 
     @staticmethod
     def _get_vpot_q(q, T0):

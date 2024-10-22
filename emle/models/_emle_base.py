@@ -124,8 +124,7 @@ class EMLEBase(_torch.nn.Module):
         ref_mean_chi, c_chi = self._get_c(n_ref, self.ref_values_chi, Kinv)
 
         if self._alpha_mode == "species":
-            ref_mean_sqrtk = _torch.zeros_like(ref_mean_s, dtype=dtype,
-                                               device=device)
+            ref_mean_sqrtk = _torch.zeros_like(ref_mean_s, dtype=dtype, device=device)
             c_sqrtk = _torch.zeros_like(c_s, dtype=dtype, device=device)
         else:
             ref_mean_sqrtk, c_sqrtk = self._get_c(n_ref, self.ref_values_sqrtk, Kinv)
@@ -280,7 +279,9 @@ class EMLEBase(_torch.nn.Module):
         k = self.k_Z[species_id]
 
         if self._alpha_mode == "reference":
-            k_scale = self._gpr(aev, self._ref_mean_sqrtk, self._c_sqrtk, species_id) ** 2
+            k_scale = (
+                self._gpr(aev, self._ref_mean_sqrtk, self._c_sqrtk, species_id) ** 2
+            )
             k = k_scale * k
 
         A_thole = self._get_A_thole(r_data, s, q_val, k)
@@ -382,7 +383,7 @@ class EMLEBase(_torch.nn.Module):
         mask_mat = mask[:, :, None] * mask[:, None, :]
 
         rr_mat = xyz[:, :, None, :] - xyz[:, None, :, :]
-        r_mat = _torch.where(mask_mat, _torch.cdist(xyz, xyz), 0.)
+        r_mat = _torch.where(mask_mat, _torch.cdist(xyz, xyz), 0.0)
         r_inv = _torch.where(r_mat == 0.0, 0.0, 1.0 / r_mat)
 
         r_inv1 = r_inv.repeat_interleave(3, dim=2)
@@ -395,17 +396,18 @@ class EMLEBase(_torch.nn.Module):
 
         id2 = _torch.tile(
             _torch.eye(3, dtype=xyz.dtype, device=xyz.device).T,
-            (1, n_atoms_max, n_atoms_max)
+            (1, n_atoms_max, n_atoms_max),
         )
 
         t01 = r_inv
-        t21 = -id2 * r_inv2 ** 3
-        t22 = 3 * outer * r_inv2 ** 5
+        t21 = -id2 * r_inv2**3
+        t22 = 3 * outer * r_inv2**5
 
         return r_mat, t01, t21, t22
 
-    def _get_q(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor],
-               s, chi, q_total, mask):
+    def _get_q(
+        self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, chi, q_total, mask
+    ):
         """
         Internal method that predicts MBIS charges
         (Eq. 16 in 10.1021/acs.jctc.2c00914)
@@ -467,8 +469,9 @@ class EMLEBase(_torch.nn.Module):
 
         A = self._get_T0_gaussian(r_data[1], r_data[0], s_mat)
 
-        diag_ones = _torch.ones_like(A.diagonal(dim1=-2, dim2=-1),
-                                     dtype=dtype, device=device)
+        diag_ones = _torch.ones_like(
+            A.diagonal(dim1=-2, dim2=-1), dtype=dtype, device=device
+        )
         pi = _torch.sqrt(_torch.tensor([_torch.pi], dtype=dtype, device=device))
         new_diag = diag_ones * _torch.where(s > 0, 1.0 / (s_gauss * pi), 0)
 
@@ -518,7 +521,7 @@ class EMLEBase(_torch.nn.Module):
         results: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS)
         """
         sqrt2 = _torch.sqrt(_torch.tensor([2.0], dtype=r.dtype, device=r.device))
-        return t01 * _torch.where(s_mat > 0, _torch.erf(r / (s_mat * sqrt2)), 0.)
+        return t01 * _torch.where(s_mat > 0, _torch.erf(r / (s_mat * sqrt2)), 0.0)
 
     def _get_A_thole(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, q_val, k):
         """
@@ -558,7 +561,7 @@ class EMLEBase(_torch.nn.Module):
         A = -self._get_T2_thole(r_data[2], r_data[3], au32)
 
         alpha3 = alpha.repeat_interleave(3, dim=1)
-        new_diag = _torch.where(alpha3 > 0, 1.0 / alpha3, 1.)
+        new_diag = _torch.where(alpha3 > 0, 1.0 / alpha3, 1.0)
         diag_ones = _torch.ones_like(new_diag, dtype=A.dtype, device=A.device)
         mask = _torch.diag_embed(diag_ones)
         A = mask * _torch.diag_embed(new_diag) + (1.0 - mask) * A
