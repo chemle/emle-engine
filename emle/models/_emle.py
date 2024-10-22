@@ -348,7 +348,7 @@ class EMLE(_torch.nn.Module):
             aev_computer=self._aev_computer,
             aev_mask=aev_mask,
             alpha_mode=self._alpha_mode,
-            species=self._species,
+            species=params.get("species", self._species),
             device=device,
             dtype=dtype,
         )
