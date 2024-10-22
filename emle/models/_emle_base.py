@@ -252,7 +252,8 @@ class EMLEBase(_torch.nn.Module):
             Valence widths, core charges, valence charges, A_thole tensor
         """
 
-        mask = _torch.tensor(atomic_numbers > 0, device=self._ref_mean_s.device)
+        # Mask for padded coordinates.
+        mask = atomic_numbers > 0
 
         # Convert the atomic numbers to species IDs.
         species_id = self._species_map[atomic_numbers]
