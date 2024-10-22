@@ -144,6 +144,7 @@ class ANI2xEMLE(_torch.nn.Module):
                 raise TypeError("'device' must be of type 'torch.device'")
         else:
             device = _torch.get_default_device()
+        self._device = device
 
         if dtype is not None:
             if not isinstance(dtype, _torch.dtype):
@@ -229,8 +230,15 @@ class ANI2xEMLE(_torch.nn.Module):
                 except:
                     pass
 
+        # Add a hook to the ANI2x model to capture the AEV features.
+        self._add_hook()
+
+    def _add_hook(self):
+        """
+        Add a hook to the ANI2x model to capture the AEV features.
+        """
         # Assign a tensor attribute that can be used for assigning the AEVs.
-        self._ani2x.aev_computer._aev = _torch.empty(0, device=device)
+        self._ani2x.aev_computer._aev = _torch.empty(0, device=self._device)
 
         # Hook the forward pass of the ANI2x model to get the AEV features.
         # Note that this currently requires a patched versions of TorchANI and NNPOps.
@@ -241,7 +249,7 @@ class ANI2xEMLE(_torch.nn.Module):
                 input: Tuple[Tuple[Tensor, Tensor], Optional[Tensor], Optional[Tensor]],
                 output: Tuple[Tensor, Tensor],
             ):
-                module._aev = output[1][0]
+                module._aev = output[1]
 
         else:
 
@@ -250,7 +258,7 @@ class ANI2xEMLE(_torch.nn.Module):
                 input: Tuple[Tuple[Tensor, Tensor], Optional[Tensor], Optional[Tensor]],
                 output: _torchani.aev.SpeciesAEV,
             ):
-                module._aev = output[1][0]
+                module._aev = output[1]
 
         # Register the hook.
         self._aev_hook = self._ani2x.aev_computer.register_forward_hook(hook)
@@ -261,6 +269,13 @@ class ANI2xEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.to(*args, **kwargs)
         self._ani2x = self._ani2x.to(*args, **kwargs)
+
+        # Check for a device type in args and update the device attribute.
+        for arg in args:
+            if isinstance(arg, _torch.device):
+                self._device = arg
+                break
+
         return self
 
     def cpu(self, **kwargs):
@@ -269,6 +284,7 @@ class ANI2xEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.cpu(**kwargs)
         self._ani2x = self._ani2x.cpu(**kwargs)
+        self._device = _torch.device("cpu")
         return self
 
     def cuda(self, **kwargs):
@@ -277,6 +293,7 @@ class ANI2xEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.cuda(**kwargs)
         self._ani2x = self._ani2x.cuda(**kwargs)
+        self._device = _torch.device("cuda")
         return self
 
     def double(self):
@@ -305,6 +322,9 @@ class ANI2xEMLE(_torch.nn.Module):
                 self._ani2x = _OptimizedTorchANI(self._ani2x, species).to(self._device)
             except:
                 pass
+
+        # Re-append the hook.
+        self._add_hook()
 
         return self
 
@@ -351,7 +371,7 @@ class ANI2xEMLE(_torch.nn.Module):
 
         # Set the AEVs captured by the forward hook as an attribute of the
         # EMLE model.
-        self._emle._aev = self._ani2x.aev_computer._aev
+        self._emle._emle_base._aev = self._ani2x.aev_computer._aev
 
         # Get the EMLE energy components.
         E_emle = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
