@@ -39,7 +39,7 @@ from torch import Tensor
 from typing import Optional, Tuple, List
 
 from . import _patches
-from . import EMLEBase
+from . import EMLEBase as _EMLEBase
 
 # Monkey-patch the TorchANI BuiltInModel and BuiltinEnsemble classes so that
 # they call self.aev_computer using args only to allow forward hooks to work
@@ -330,19 +330,8 @@ class EMLE(_torch.nn.Module):
                 else None
             ),
         }
-        self._emle_base = EMLEBase(
-            emle_params,
-            self._aev_computer,
-            aev_mask,
-            species,
-            n_ref,
-            ref_features,
-            q_core,
-            alpha_mode,
-            device,
-            dtype,
-        )
 
+        # Store the total charge.
         q_total = _torch.tensor(
             params.get("total_charge", 0), dtype=dtype, device=device
         )
@@ -359,8 +348,19 @@ class EMLE(_torch.nn.Module):
         self.register_buffer("_q_total", q_total)
         self.register_buffer("_q_core_mm", q_core_mm)
 
-        # Initalise an empty AEV tensor to use to store the AEVs in derived classes.
-        self._aev = _torch.empty(0, dtype=dtype, device=device)
+        # Create the base EMLE model.
+        self._emle_base = _EMLEBase(
+            emle_params,
+            n_ref,
+            ref_features,
+            q_core,
+            aev_computer=self._aev_computer,
+            aev_mask=aev_mask,
+            alpha_mode=self._alpha_mode,
+            species=self._species,
+            device=device,
+            dtype=dtype,
+        )
 
     def _to_dict(self):
         """
