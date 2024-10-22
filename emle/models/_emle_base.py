@@ -207,7 +207,7 @@ class EMLEBase(_torch.nn.Module):
         self.a_Thole = _torch.nn.Parameter(params["a_Thole"])
         self.ref_values_s = _torch.nn.Parameter(params["ref_values_s"])
         self.ref_values_chi = _torch.nn.Parameter(params["ref_values_chi"])
-        self.k_Z = _torch.nn.Parameter(params["k_Z"])
+        k_Z = _torch.nn.Parameter(params["k_Z"])
 
         if self._alpha_mode == "reference":
             try:
@@ -270,6 +270,7 @@ class EMLEBase(_torch.nn.Module):
         self.register_buffer("_c_s", c_s)
         self.register_buffer("_c_chi", c_chi)
         self.register_buffer("_c_sqrtk", c_sqrtk)
+        self.register_buffer("_k_Z", k_Z)
 
         # Initalise an empty AEV tensor to use to store the AEVs in parent models.
         self._aev = _torch.empty(0, dtype=dtype, device=device)
@@ -289,12 +290,15 @@ class EMLEBase(_torch.nn.Module):
         self._c_s = self._c_s.to(*args, **kwargs)
         self._c_chi = self._c_chi.to(*args, **kwargs)
         self._c_sqrtk = self._c_sqrtk.to(*args, **kwargs)
+        self._k_Z = self._k_Z.to(*args, **kwargs)
 
         # Check for a device type in args and update the device attribute.
         for arg in args:
             if isinstance(arg, _torch.device):
                 self._device = arg
                 break
+
+        return self
 
     def cuda(self, **kwargs):
         """
@@ -314,6 +318,12 @@ class EMLEBase(_torch.nn.Module):
         self._c_s = self._c_s.cuda(**kwargs)
         self._c_chi = self._c_chi.cuda(**kwargs)
         self._c_sqrtk = self._c_sqrtk.cuda(**kwargs)
+        self._k_Z = self._k_Z.cuda(**kwargs)
+
+        # Update the device attribute.
+        self._device = self._species_map.device
+
+        return self
 
     def cpu(self, **kwargs):
         """
@@ -333,6 +343,12 @@ class EMLEBase(_torch.nn.Module):
         self._c_s = self._c_s.cpu(**kwargs)
         self._c_chi = self._c_chi.cpu(**kwargs)
         self._c_sqrtk = self._c_sqrtk.cpu(**kwargs)
+        self._k_Z = self._k_Z.cpu(**kwargs)
+
+        # Update the device attribute.
+        self._device = self._species_map.device
+
+        return self
 
     def double(self):
         """
@@ -349,6 +365,7 @@ class EMLEBase(_torch.nn.Module):
         self._c_s = self._c_s.double()
         self._c_chi = self._c_chi.double()
         self._c_sqrtk = self._c_sqrtk.double()
+        self._k_Z = self._k_Z.double()
         return self
 
     def float(self):
@@ -366,6 +383,7 @@ class EMLEBase(_torch.nn.Module):
         self._c_s = self._c_s.float()
         self._c_chi = self._c_chi.float()
         self._c_sqrtk = self._c_sqrtk.float()
+        self._k_Z = self._k_Z.float()
         return self
 
     def forward(self, atomic_numbers, xyz_qm, q_total):
@@ -425,7 +443,7 @@ class EMLEBase(_torch.nn.Module):
         q = self._get_q(r_data, s, chi, q_total, mask)
         q_val = q - q_core
 
-        k = self.k_Z[species_id]
+        k = self._k_Z[species_id]
 
         if self._alpha_mode == "reference":
             k_scale = (
