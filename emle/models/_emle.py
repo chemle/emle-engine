@@ -27,8 +27,6 @@ __email__ = "lester.hedges@gmail.com"
 
 __all__ = ["EMLE"]
 
-from loguru import logger as _logger
-
 import numpy as _np
 import os as _os
 import scipy.io as _scipy_io
@@ -217,17 +215,13 @@ class EMLE(_torch.nn.Module):
 
         if model is not None:
             if not isinstance(model, str):
-                msg = "'model' must be of type 'str'"
-                _logger.error(msg)
-                raise TypeError(msg)
+                raise TypeError("'model' must be of type 'str'")
 
             # Convert to an absolute path.
             abs_model = _os.path.abspath(model)
 
             if not _os.path.isfile(abs_model):
-                msg = f"Unable to locate EMLE embedding model file: '{model}'"
-                _logger.error(msg)
-                raise IOError(msg)
+                raise IOError(f"Unable to locate EMLE embedding model file: '{model}'")
             self._model = abs_model
 
             # Validate the species for the custom model.
