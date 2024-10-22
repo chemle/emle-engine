@@ -73,11 +73,8 @@ class EMLE(_torch.nn.Module):
         _os.path.dirname(_os.path.abspath(__file__)), "..", "resources"
     )
 
-    # Create the name of the default model file for each alpha mode.
-    _default_models = {
-        "species": _os.path.join(_resource_dir, "emle_qm7_aev_species.mat"),
-        "reference": _os.path.join(_resource_dir, "emle_qm7_aev_reference.mat"),
-    }
+    # Create the name of the default model file.
+    _default_model = _os.path.join(_resource_dir, "emle_qm7_aev.mat")
 
     # Store the list of supported species.
     _species = [1, 6, 7, 8, 16]
@@ -247,8 +244,8 @@ class EMLE(_torch.nn.Module):
             # Set to None as this will be used in any calculator configuration.
             self._model = None
 
-            # Choose the model based on the alpha_mode.
-            model = self._default_models[alpha_mode]
+            # Use the default model.
+            model = self._default_model
 
             # Use the default species.
             species = self._species
