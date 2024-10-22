@@ -20,6 +20,13 @@
 # along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
 #####################################################################
 
+"""EMLE base model implementation."""
+
+__author__ = "Kirill Zinovjev"
+__email__ = "kzinovjev@gmail.com"
+
+__all__ = ["EMLEBase"]
+
 import numpy as _np
 
 import torch as _torch
