@@ -353,17 +353,6 @@ class EMLE(_torch.nn.Module):
             dtype=dtype,
         )
 
-    def _to_dict(self):
-        """
-        Return the configuration of the module as a dictionary.
-        """
-        return {
-            "model": self._model,
-            "method": self._method,
-            "species": self._species_map.tolist(),
-            "alpha_mode": self._alpha_mode,
-        }
-
     def to(self, *args, **kwargs):
         """
         Performs Tensor dtype and/or device conversion on the model.
@@ -393,7 +382,7 @@ class EMLE(_torch.nn.Module):
         self._emle_base = self._emle_base.cuda(**kwargs)
 
         # Update the device attribute.
-        self._device = self._species_map.device
+        self._device = self._q_total.device
 
         return self
 
@@ -408,7 +397,7 @@ class EMLE(_torch.nn.Module):
         self._emle_base = self._emle_base.cpu()
 
         # Update the device attribute.
-        self._device = self._species_map.device
+        self._device = self._q_total.device
 
         return self
 
