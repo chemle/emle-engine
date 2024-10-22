@@ -401,7 +401,7 @@ class EMLEBase(_torch.nn.Module):
             Positions of QM atoms in Angstrom.
 
         q_total: torch.Tensor (1,)
-            Total charge
+            Total charge.
 
         Returns
         -------
@@ -483,6 +483,10 @@ class EMLEBase(_torch.nn.Module):
 
     @classmethod
     def _get_c(cls, n_ref, ref, Kinv):
+        """
+        Internal method to compute the coefficients of the GPR model.
+        """
+
         mask = _torch.arange(ref.shape[1], device=n_ref.device) < n_ref[:, None]
         ref_mean = _torch.sum(ref * mask, dim=1) / n_ref
         ref_shifted = ref - ref_mean[:, None]
