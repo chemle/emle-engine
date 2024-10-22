@@ -467,6 +467,10 @@ class EMLE(_torch.nn.Module):
         if len(xyz_mm) == 0:
             return _torch.zeros(2, dtype=xyz_qm.dtype, device=xyz_qm.device)
 
+        # Get the parameters from the base model:
+        #    valence widths, core charges, valence charges, A_thole tensor
+        # These are returned as batched tensors, so we need to extract the
+        # first element of each.
         s, q_core, q_val, A_thole = self._emle_base(
             atomic_numbers[None, :], xyz_qm[None, :, :], self._q_total[None]
         )
