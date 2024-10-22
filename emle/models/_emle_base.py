@@ -5,8 +5,6 @@ import torch as _torch
 from torch import Tensor
 from typing import Tuple
 
-ANGSTROM_TO_BOHR = 1.8897261258369282
-
 
 class EMLEBase(_torch.nn.Module):
 
@@ -268,6 +266,8 @@ class EMLEBase(_torch.nn.Module):
         # Compute the electronegativities.
         chi = self._gpr(aev, self._ref_mean_chi, self._c_chi, species_id)
 
+        # Convert coordinates to Bohr.
+        ANGSTROM_TO_BOHR = 1.8897261258369282
         xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
 
         r_data = self._get_r_data(xyz_qm_bohr, mask)
