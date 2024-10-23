@@ -31,6 +31,7 @@ def _fetch_resources():
 
     import os as _os
     import pygit2 as _pygit2
+    import sys
 
     # Create the name for the expected resources directory.
     resource_dir = _os.path.join(
@@ -40,7 +41,7 @@ def _fetch_resources():
     # Check if the resources directory exists.
     if not _os.path.exists(resource_dir):
         # If it doesn't, clone the resources repository.
-        print("Downloading EMLE resources...")
+        print("Downloading EMLE resources...", file=sys.stderr)
         _pygit2.clone_repository(
             "https://github.com/chemle/emle-models.git", resource_dir
         )

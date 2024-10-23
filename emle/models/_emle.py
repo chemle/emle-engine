@@ -83,7 +83,6 @@ class EMLE(_torch.nn.Module):
         self,
         model=None,
         method="electrostatic",
-        species=None,
         alpha_mode="species",
         atomic_numbers=None,
         mm_charges=None,
@@ -115,10 +114,6 @@ class EMLE(_torch.nn.Module):
                     are set to zero. If this option is specified then the user
                     should also specify the MM charges for atoms in the QM
                     region.
-
-        species: List[int], Tuple[int], numpy.ndarray, torch.Tensor
-            List of species (atomic numbers) supported by the EMLE model. If
-            None, then the default species list will be used.
 
         alpha_mode: str
             How atomic polarizabilities are calculated.
@@ -220,26 +215,6 @@ class EMLE(_torch.nn.Module):
             if not _os.path.isfile(abs_model):
                 raise IOError(f"Unable to locate EMLE embedding model file: '{model}'")
             self._model = abs_model
-
-            # Validate the species for the custom model.
-            if species is not None:
-                if isinstance(species, (_np.ndarray, _torch.Tensor)):
-                    species = species.tolist()
-                if not isinstance(species, (tuple, list)):
-                    raise TypeError(
-                        "'species' must be of type 'list', 'tuple', or 'numpy.ndarray'"
-                    )
-                if not all(isinstance(s, int) for s in species):
-                    raise TypeError("All elements of 'species' must be of type 'int'")
-                if not all(s > 0 for s in species):
-                    raise ValueError(
-                        "All elements of 'species' must be greater than zero"
-                    )
-                # Use the custom species.
-                self._species = species
-            else:
-                # Use the default species.
-                species = self._species
         else:
             # Set to None as this will be used in any calculator configuration.
             self._model = None
