@@ -310,11 +310,7 @@ class EMLE(_torch.nn.Module):
             "ref_values_chi": _torch.tensor(
                 params["chi_ref"], dtype=dtype, device=device
             ),
-            "k_Z": (
-                _torch.tensor(params["k_Z"], dtype=dtype, device=device)
-                if "k_Z" in params
-                else None
-            ),
+            "k_Z": _torch.tensor(params["k_Z"], dtype=dtype, device=device),
             "sqrtk_ref": (
                 _torch.tensor(params["sqrtk_ref"], dtype=dtype, device=device)
                 if "sqrtk_ref" in params
@@ -348,7 +344,7 @@ class EMLE(_torch.nn.Module):
             aev_computer=self._aev_computer,
             aev_mask=aev_mask,
             alpha_mode=self._alpha_mode,
-            species=self._species,
+            species=params.get("species", self._species),
             device=device,
             dtype=dtype,
         )
