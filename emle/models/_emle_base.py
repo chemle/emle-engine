@@ -173,7 +173,8 @@ class EMLEBase(_torch.nn.Module):
                 )
             if not isinstance(aev_computer, tuple(allowed_types)):
                 raise TypeError(
-                    "'aev_computer' must be of type 'torchani.AEVComputer' or 'NNPOps.SymmetryFunctions.TorchANISymmetryFunctions'"
+                    "'aev_computer' must be of type 'torchani.AEVComputer' or "
+                    "'NNPOps.SymmetryFunctions.TorchANISymmetryFunctions'"
                 )
             self._aev_computer = aev_computer
         else:

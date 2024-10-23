@@ -58,7 +58,6 @@ class ANI2xEMLE(_torch.nn.Module):
         self,
         emle_model=None,
         emle_method="electrostatic",
-        emle_species=None,
         alpha_mode="species",
         mm_charges=None,
         model_index=None,
@@ -89,10 +88,6 @@ class ANI2xEMLE(_torch.nn.Module):
                 "mm":
                     MM charges are used for the core charge and valence charges
                     are set to zero.
-
-        emle_species: List[int], Tuple[int], numpy.ndarray, torch.Tensor
-            List of species (atomic numbers) supported by the EMLE model. If
-            None, then the default species list will be used.
 
         alpha_mode: str
             How atomic polarizabilities are calculated.
@@ -173,7 +168,6 @@ class ANI2xEMLE(_torch.nn.Module):
         self._emle = _EMLE(
             model=emle_model,
             method=emle_method,
-            species=emle_species,
             alpha_mode=alpha_mode,
             atomic_numbers=(atomic_numbers if atomic_numbers is not None else None),
             mm_charges=mm_charges,

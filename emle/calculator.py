@@ -90,7 +90,6 @@ class EMLECalculator:
     def __init__(
         self,
         model=None,
-        species=None,
         method="electrostatic",
         alpha_mode="species",
         atomic_numbers=None,
@@ -126,10 +125,6 @@ class EMLECalculator:
         model: str
             Path to the EMLE embedding model parameter file. If None, then a
             default model will be used.
-
-        species: List[int]
-            List of species (atomic numbers) supported by the EMLE model. If
-            None, then the default species list will be used.
 
         method: str
             The desired embedding method. Options are:
@@ -418,7 +413,6 @@ class EMLECalculator:
         self._emle = _EMLE(
             model=model,
             method=method,
-            species=species,
             alpha_mode=alpha_mode,
             atomic_numbers=atomic_numbers,
             mm_charges=self._mm_charges,
@@ -795,7 +789,6 @@ class EMLECalculator:
             # Create an MM EMLE model for interpolation.
             self._emle_mm = _EMLE(
                 model=model,
-                species=species,
                 alpha_mode=alpha_mode,
                 atomic_numbers=atomic_numbers,
                 method="mm",
@@ -941,7 +934,6 @@ class EMLECalculator:
 
         # Get the settings from the internal EMLE model.
         self._model = self._emle._model
-        self._species = self._emle._species
         self._method = self._emle._method
         self._alpha_mode = self._emle._alpha_mode
         self._atomic_numbers = self._emle._atomic_numbers
@@ -952,7 +944,6 @@ class EMLECalculator:
         # Store the settings as a dictionary.
         self._settings = {
             "model": None if model is None else self._model,
-            "species": None if species is None else self._species,
             "method": self._method,
             "alpha_mode": self._alpha_mode,
             "atomic_numbers": None if atomic_numbers is None else atomic_numbers,
@@ -1052,21 +1043,10 @@ class EMLECalculator:
             xyz_mm = _np.append(xyz_mm, xyz_mm_pad, axis=0)
             charges_mm = _np.append(charges_mm, charges_mm_pad)
 
-        # Convert the QM atomic numbers to elements and species IDs.
-        species_id = []
+        # Convert the QM atomic numbers to elements.
         elements = []
         for id in atomic_numbers:
-            try:
-                species_id.append(self._species.index(id))
-                elements.append(_ase.Atom(id).symbol)
-            except:
-                msg = (
-                    f"Unsupported element index '{id}'. "
-                    f"The current model supports {', '.join(self._supported_elements)}"
-                )
-                _logger.error(msg)
-                raise ValueError(msg)
-        self._species_id = _torch.tensor(_np.array(species_id), device=self._device)
+            elements.append(_ase.Atom(id).symbol)
 
         # First try to use the specified backend to compute in vacuo
         # energies and (optionally) gradients.
@@ -1437,21 +1417,10 @@ class EMLECalculator:
             xyz_mm = _np.append(xyz_mm, xyz_mm_pad, axis=0)
             charges_mm = _np.append(charges_mm, charges_mm_pad)
 
-        # Convert the QM atomic numbers to elements and species IDs.
-        species_id = []
+        # Convert the QM atomic numbers to elements.
         elements = []
         for id in atomic_numbers:
-            try:
-                species_id.append(self._species.index(id))
-                elements.append(_ase.Atom(id).symbol)
-            except:
-                msg = (
-                    f"Unsupported element index '{id}'. "
-                    f"The current model supports {', '.join(self._supported_elements)}"
-                )
-                _logger.error(msg)
-                raise ValueError(msg)
-        self._species_id = _torch.tensor(_np.array(species_id), device=self._device)
+            elements.append(_ase.Atom(id).symbol)
 
         # First try to use the specified backend to compute in vacuo
         # energies and (optionally) gradients.
@@ -1774,7 +1743,6 @@ class EMLECalculator:
             # Create the model.
             ani2x_emle = _ANI2xEMLE(
                 emle_model=self._model,
-                emle_species=self._species,
                 alpha_mode=self._alpha_mode,
                 mm_charges=self._mm_charges,
                 model_index=self._ani2x_model_index,
