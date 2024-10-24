@@ -1,9 +1,8 @@
-#!/usr/bin/env python
 
 import numpy as np
 import torch
 
-from emle.models import EMLEBase
+from ..models import EMLEBase
 
 
 def ivm(features, thr=0.02, n_max=None):
@@ -150,13 +149,48 @@ class TholeLoss(torch.nn.Module):
         )
 
 
-def emle_train(self, z, xyz,
+def emle_train(z, xyz,
                s, q_core, q, alpha,
                train_mask, test_mask,
                sigma=1E-3, ivm_thr=0.2, epochs=1000):
+    """
+    Train an EMLE model.
 
+    Parameters
+    ----------
+    z: (N_BATCH, MAX_N_ATOMS)
+        Atomic numbers.
+    xyz: (N_BATCH, MAX_N_ATOMS, 3)
+        Atomic coordinates.
+    s: (N_BATCH, MAX_N_ATOMS)
+        Atomic widths.
+    q_core: (N_BATCH, MAX_N_ATOMS)
+        Atomic core charges.
+    q: (N_BATCH, MAX_N_ATOMS)
+        Total atomic charges.
+    alpha: (N_BATCH, MAX_N_ATOMS, 3)
+        Atomic polarizabilities.
+    train_mask: (N_BATCH,)
+        Mask for training samples.
+    test_mask: (N_BATCH,)
+        Mask for test samples.
+    sigma: float
+        GPR sigma value.
+    ivm_thr: float
+        IVM threshold.
+    epochs: int
+        Number of training epochs.
+
+    Returns
+    -------
+    dict
+        Trained EMLE model.
+    """
     # Do IVM
+    
     # "Fit" q_core (just take averages over the entire training set)
+    q_core = torch.mean(q_core[train_mask], dim=0)
+
     # Fit s (pure GPR, no fancy optimization needed)
     # Fit chi, a_QEq (QEq over chi predicted with GPR)
     # Fit a_Thole, k_Z (uses volumes predicted by QEq model)
