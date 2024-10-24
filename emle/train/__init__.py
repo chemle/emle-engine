@@ -149,6 +149,11 @@ class TholeLoss(torch.nn.Module):
         )
 
 
+def mean_by_z(arr, zid):
+    max_index = torch.max(zid).item()
+    mean_values = torch.tensor([torch.mean(arr[zid == i]) for i in range(max_index + 1)])
+    return mean_values
+
 def emle_train(z, xyz,
                s, q_core, q, alpha,
                train_mask, test_mask,
@@ -187,9 +192,9 @@ def emle_train(z, xyz,
         Trained EMLE model.
     """
     # Do IVM
-    
+
     # "Fit" q_core (just take averages over the entire training set)
-    q_core = torch.mean(q_core[train_mask], dim=0)
+    q_core = mean_by_z(q_core, z)
 
     # Fit s (pure GPR, no fancy optimization needed)
     # Fit chi, a_QEq (QEq over chi predicted with GPR)
