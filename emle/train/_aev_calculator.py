@@ -6,6 +6,53 @@ from ..calculator import ANGSTROM_TO_BOHR
 from ._utils import pad_to_max
 
 
+class EMLEAEVComputer(_torch.nn.Module):
+    """
+    Wrapper for AEVCalculator from torchani
+    (not a subclass to make sure it works with TorchScript)
+    """
+    def __init__(self, num_species, hypers=None,
+                 mask=None, external=False, zid_map=None):
+        """
+        num_species: int
+            number of supported species
+        Hypers: dict
+            hyperparameters for wrapped AEVComputer
+        mask: torch.BoolTensor
+            mask for the features returned from wrapped AEVComputer
+        external: bool
+            Whether the features are calculated externally
+        zid_map: dict
+            map from zid provided here to the ones passed to AEVComputer
+
+        """
+        super().__init__()
+
+        self._external = external
+        self._mask = mask
+        self._aev = None
+
+        if not external:
+            self._aev_computer = _torchani.AEVComputer(**hypers,
+                                                       num_species=num_species)
+
+        self._zid_map = - _torch.ones(num_species + 1)
+        for self_atom_zid, aev_atom_zid in zid_map.items():
+            self._zid_map[self_atom_zid] = aev_atom_zid
+
+    def forward(self, zid, xyz):
+        """
+        zid: (N_BATCH, MAX_N_ATOMS)
+        xyz: (N_BATCH, MAX_N_ATOMS, 3)
+        """
+        if not self._external:
+            zid_aev = self._zid_map[zid]
+            self._aev = self._aev_computer((zid_aev, xyz))
+
+        norm = _torch.linalg.norm(self._aev, dim=2, keepdims=True)
+        return self._apply_mask(self._aev / norm)[:, :, self._mask]
+
+
 class AEVCalculator:
     """
     Calculates AEV feature vectors using the ANI2x model.
