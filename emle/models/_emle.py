@@ -271,6 +271,12 @@ class EMLE(_torch.nn.Module):
         try:
             params = _scipy_io.loadmat(model, squeeze_me=True)
         except:
+            if model is self._default_model and not _os.path.isfile(model):
+                raise IOError(
+                    f"Unable to locate default EMLE embedding model file: '{model}'. "
+                    "Please ensure that the resources are installed correctly. For "
+                    "details, see: https://github.com/chemle/emle-models"
+                )
             raise IOError(f"Unable to load model parameters from: '{model}'")
 
         q_core = _torch.tensor(params["q_core"], dtype=dtype, device=device)
