@@ -1,9 +1,34 @@
 """AEVCalculator class for calculating AEV feature vectors using the ANI2x model."""
+import numpy as _np
 import torch as _torch
 import torchani as _torchani
 
 from ..calculator import ANGSTROM_TO_BOHR
 from ._utils import pad_to_max
+
+# From ANI-2x
+DEFAULT_HYPERS_DICT = {
+    "Rcr": _np.array(5.1000e+00),
+    "Rca": _np.array(3.5000e+00),
+    "EtaR": _np.array([1.9700000e+01]),
+    "ShfR": _np.array([8.0000000e-01, 1.0687500e+00, 1.3375000e+00,
+                      1.6062500e+00, 1.8750000e+00, 2.1437500e+00,
+                      2.4125000e+00, 2.6812500e+00, 2.9500000e+00,
+                      3.2187500e+00, 3.4875000e+00, 3.7562500e+00,
+                      4.0250000e+00, 4.2937500e+00, 4.5625000e+00,
+                      4.8312500e+00]),
+    "Zeta": _np.array([1.4100000e+01]),
+    "ShfZ": _np.array([3.9269908e-01, 1.1780972e+00, 1.9634954e+00,
+                      2.7488936e+00]),
+    "EtaA": _np.array([1.2500000e+01]),
+    "ShfA": _np.array([8.0000000e-01, 1.1375000e+00, 1.4750000e+00,
+                      1.8125000e+00, 2.1500000e+00, 2.4875000e+00,
+                      2.8250000e+00, 3.1625000e+00])
+}
+
+
+def get_default_hypers():
+    return {k: _torch.tensor(v) for k, v in DEFAULT_HYPERS_DICT.items()}
 
 
 class EMLEAEVComputer(_torch.nn.Module):
@@ -33,6 +58,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         self._aev = None
 
         if not external:
+            hypers = hypers or get_default_hypers()
             self._aev_computer = _torchani.AEVComputer(**hypers,
                                                        num_species=num_species)
 
