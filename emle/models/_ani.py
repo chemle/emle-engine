@@ -367,7 +367,7 @@ class ANI2xEMLE(_torch.nn.Module):
 
         # Set the AEVs captured by the forward hook as an attribute of the
         # EMLE model.
-        self._emle._emle_base._aev = self._ani2x.aev_computer._aev
+        self._emle._emle_base._emle_aev_computer._aev = self._ani2x.aev_computer._aev
 
         # Get the EMLE energy components.
         E_emle = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)

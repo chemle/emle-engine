@@ -3,8 +3,9 @@ import numpy as _np
 import torch as _torch
 import torchani as _torchani
 
-from ..calculator import ANGSTROM_TO_BOHR
 from ._utils import pad_to_max
+
+ANGSTROM_TO_BOHR = 1.8897261258369282 #TODO: keep constants in one place
 
 # From ANI-2x
 DEFAULT_HYPERS_DICT = {
@@ -27,8 +28,9 @@ DEFAULT_HYPERS_DICT = {
 }
 
 
-def get_default_hypers():
-    return {k: _torch.tensor(v) for k, v in DEFAULT_HYPERS_DICT.items()}
+def get_default_hypers(device, dtype):
+    return {k: _torch.tensor(v, device=device, dtype=dtype)
+            for k, v in DEFAULT_HYPERS_DICT.items()}
 
 
 class EMLEAEVComputer(_torch.nn.Module):
@@ -37,7 +39,8 @@ class EMLEAEVComputer(_torch.nn.Module):
     (not a subclass to make sure it works with TorchScript)
     """
     def __init__(self, num_species=7, hypers=None,
-                 mask=None, external=False, zid_map=None):
+                 mask=None, external=False, zid_map=None,
+                 device=None, dtype=None):
         """
         num_species: int
             number of supported species
@@ -49,22 +52,43 @@ class EMLEAEVComputer(_torch.nn.Module):
             Whether the features are calculated externally
         zid_map: dict
             map from zid provided here to the ones passed to AEVComputer
-
+        device: torch.device
+            The device on which to run the model.
+        dtype: torch.dtype
+            The data type to use for the models floating point tensors.
         """
         super().__init__()
 
+        if device is not None:
+            if not isinstance(device, _torch.device):
+                raise TypeError("'device' must be of type 'torch.device'")
+        else:
+            device = _torch.get_default_device()
+        self._device = device
+
         self._external = external
+
+        # Validate the AEV mask.
+        if mask is not None:
+            if not isinstance(mask, _torch.Tensor):
+                raise TypeError("'mask' must be of type 'torch.Tensor'")
+            if len(mask.shape) != 1:
+                raise ValueError("'mask' must be a 1D tensor")
+            if not mask.dtype == _torch.bool:
+                raise ValueError("'mask' must have dtype 'torch.bool'")
         self._mask = mask
+
         self._aev = None
 
         if not external:
-            hypers = hypers or get_default_hypers()
+            hypers = hypers or get_default_hypers(device, dtype)
             self._aev_computer = _torchani.AEVComputer(**hypers,
                                                        num_species=num_species)
 
         if not zid_map:
             zid_map = {i: i for i in range(num_species)}
-        self._zid_map = - _torch.ones(num_species + 1)
+        self._zid_map = - _torch.ones(num_species + 1, dtype=_torch.int,
+                                      device=device)
         for self_atom_zid, aev_atom_zid in zid_map.items():
             self._zid_map[self_atom_zid] = aev_atom_zid
 
@@ -75,10 +99,47 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if not self._external:
             zid_aev = self._zid_map[zid]
-            self._aev = self._aev_computer((zid_aev, xyz))
+            self._aev = self._aev_computer((zid_aev, xyz))[1]
 
         norm = _torch.linalg.norm(self._aev, dim=2, keepdims=True)
-        return self._apply_mask(self._aev / norm)[:, :, self._mask]
+        return self._apply_mask(self._aev / norm)
+
+    def _apply_mask(self, aev):
+        return aev[:, :, self._mask] if self._mask is not None else aev
+
+    def to(self, *args, **kwargs):
+        if self._aev_computer:
+            self._aev_computer = self._aev_computer.to(*args, **kwargs)
+        if self._mask:
+            self._mask = self._mask.to(*args, **kwargs)
+        self._zid_map = self._zid_map.to(*args, **kwargs)
+        return self
+
+    def cuda(self, **kwargs):
+        if self._aev_computer:
+            self._aev_computer = self._aev_computer.cuda(**kwargs)
+        if self._mask:
+            self._mask = self._mask.cuda(**kwargs)
+        self._zid_map = self._zid_map.cuda(**kwargs)
+        return self
+
+    def cpu(self, **kwargs):
+        if self._aev_computer:
+            self._aev_computer = self._aev_computer.cpu(**kwargs)
+        if self._mask:
+            self._mask = self._mask.cpu(**kwargs)
+        self._zid_map = self._zid_map.cpu(**kwargs)
+        return self
+
+    def double(self):
+        if self._aev_computer:
+            self._aev_computer = self._aev_computer.double()
+        return self
+
+    def float(self):
+        if self._aev_computer:
+            self._aev_computer = self._aev_computer.float()
+        return self
 
 
 class AEVCalculator:

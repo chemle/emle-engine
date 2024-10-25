@@ -38,6 +38,7 @@ from typing import Optional, Tuple, List
 
 from . import _patches
 from . import EMLEBase as _EMLEBase
+from ..train import EMLEAEVComputer
 
 # Monkey-patch the TorchANI BuiltInModel and BuiltinEnsemble classes so that
 # they call self.aev_computer using args only to allow forward hooks to work
@@ -291,8 +292,12 @@ class EMLE(_torch.nn.Module):
 
         # Create an AEV calculator to perform the feature calculations.
         if create_aev_calculator:
-            ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(device)
-            self._aev_computer = ani2x.aev_computer
+            emle_aev_computer = EMLEAEVComputer(mask=aev_mask,
+                                                # TODO: wrong mask, update default model
+                                                # num_species=len(n_ref),
+                                                zid_map=params.get('zid_map', None),
+                                                device=device,
+                                                dtype=dtype)
 
             # Optimise the AEV computer using NNPOps if available.
             if _has_nnpops and atomic_numbers is not None:
@@ -301,10 +306,10 @@ class EMLE(_torch.nn.Module):
                         atomic_numbers, dtype=_torch.int64, device=device
                     )
                     atomic_numbers = atomic_numbers.reshape(1, *atomic_numbers.shape)
-                    self._aev_computer = (
+                    emle_aev_computer._aev_computer = (
                         _NNPOps.SymmetryFunctions.TorchANISymmetryFunctions(
-                            self._aev_computer.species_converter,
-                            self._aev_computer.aev_computer,
+                            emle_aev_computer._aev_computer.species_converter,
+                            emle_aev_computer._aev_computer.aev_computer,
                             atomic_numbers,
                         )
                     )
@@ -313,7 +318,8 @@ class EMLE(_torch.nn.Module):
                         "Unable to create optimised AEVComputer using NNPOps."
                     ) from e
         else:
-            self._aev_computer = None
+            emle_aev_computer = EMLEAEVComputer(external=True, mask=aev_mask,
+                                                device=device)
 
         # Create the base EMLE model.
         self._emle_base = _EMLEBase(
@@ -321,8 +327,7 @@ class EMLE(_torch.nn.Module):
             n_ref,
             ref_features,
             q_core,
-            aev_computer=self._aev_computer,
-            aev_mask=aev_mask,
+            emle_aev_computer=emle_aev_computer,
             alpha_mode=self._alpha_mode,
             species=params.get("species", self._species),
             device=device,
@@ -333,8 +338,6 @@ class EMLE(_torch.nn.Module):
         """
         Performs Tensor dtype and/or device conversion on the model.
         """
-        if self._aev_computer is not None:
-            self._aev_computer = self._aev_computer.to(*args, **kwargs)
         self._q_total = self._q_total.to(*args, **kwargs)
         self._q_core_mm = self._q_core_mm.to(*args, **kwargs)
         self._emle_base = self._emle_base.to(*args, **kwargs)
@@ -351,8 +354,6 @@ class EMLE(_torch.nn.Module):
         """
         Move all model parameters and buffers to CUDA memory.
         """
-        if self._aev_computer is not None:
-            self._aev_computer = self._aev_computer.cuda(**kwargs)
         self._q_total = self._q_total.cuda(**kwargs)
         self._q_core_mm = self._q_core_mm.cuda(**kwargs)
         self._emle_base = self._emle_base.cuda(**kwargs)
@@ -366,8 +367,6 @@ class EMLE(_torch.nn.Module):
         """
         Move all model parameters and buffers to CPU memory.
         """
-        if self._aev_computer is not None:
-            self._aev_computer = self._aev_computer.cpu(**kwargs)
         self._q_total = self._q_total.cpu(**kwargs)
         self._q_core_mm = self._q_core_mm.cpu(**kwargs)
         self._emle_base = self._emle_base.cpu()
@@ -381,8 +380,6 @@ class EMLE(_torch.nn.Module):
         """
         Casts all floating point model parameters and buffers to float64 precision.
         """
-        if self._aev_computer is not None:
-            self._aev_computer = self._aev_computer.double()
         self._q_total = self._q_total.double()
         self._q_core_mm = self._q_core_mm.double()
         self._emle_base = self._emle_base.double()
@@ -392,8 +389,6 @@ class EMLE(_torch.nn.Module):
         """
         Casts all floating point model parameters and buffers to float32 precision.
         """
-        if self._aev_computer is not None:
-            self._aev_computer = self._aev_computer.float()
         self._q_total = self._q_total.float()
         self._q_core_mm = self._q_core_mm.float()
         self._emle_base = self._emle_base.float()
