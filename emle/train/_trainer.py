@@ -1,9 +1,8 @@
 import numpy as np
-import _torch as _torch
+import torch as _torch
 
 from ..models import EMLEBase
-from ..train import AEVCalculator
-from ._batch import MoleculeBatch
+from ._aev_calculator import AEVCalculator
 from ._ivm import IVM
 from ._utils import mean_by_z, pad_to_max
 from ._loss import QEqLoss, TholeLoss
@@ -12,8 +11,8 @@ from ._loss import QEqLoss, TholeLoss
 class EMLETrainer:
     def __init__(self, emle_base, qeq_loss=QEqLoss, thole_loss=TholeLoss):
         self._emle_base = emle_base
-        self._qeq_loss = qeq_loss(emle_base)
-        self._thole_loss = thole_loss(emle_base)
+        self._qeq_loss = qeq_loss
+        self._thole_loss = thole_loss
 
     @staticmethod
     def _norm_aev_kernel(a, b):
@@ -182,18 +181,8 @@ class EMLETrainer:
         dict
             Trained EMLE model.
         """
-        # Validate input shapes
-        nbatch = z.shape[0]
-        if not (
-            xyz.shape[0]
-            == s.shape[0]
-            == q_core.shape[0]
-            == q.shape[0]
-            == alpha.shape[0]
-            == nbatch
-        ):
-            raise ValueError("All input arrays must have the same first dimension.")
-
+        # TODO: Validate input shapes
+        
         # Prepare batch data
         q_mol = _torch.Tensor([q_m.sum() for q_m in q])
         z = pad_to_max(z)
@@ -201,12 +190,14 @@ class EMLETrainer:
         s = pad_to_max(s)
         q_core = pad_to_max(q_core)
         q = pad_to_max(q)
+       
         species = _torch.unique(z[z > 0]).to(_torch.int)
 
         # Calculate AEVs
         aev = AEVCalculator()
         aev_mols = aev.calculate_aev(z, xyz, species)
 
+        exit()
         # Perform IVM
         # TODO: need to calculate aev_ivm_allz
         ivm = IVM()
@@ -224,10 +215,11 @@ class EMLETrainer:
 
         # Fit s (pure GPR, no fancy optimization needed)
         s_ref = self.fit_atomic_sparse_gpr(
-            s, k_mols_ref, k_ref_ref, z, self._SIGMA
+            s, k_mols_ref, k_ref_ref, z, sigma
         )
 
         # Fit chi, a_QEq (QEq over chi predicted with GPR)
+        self._qeq_loss = self._qeq_loss(emle_base)
         optimizer = _torch.optim.Adam(self._qeq_loss.parameters(), lr=0.001)
         for epoch in range(epochs):
             self._qeq_loss.train()
@@ -237,7 +229,6 @@ class EMLETrainer:
             optimizer.step()
 
         # Fit a_Thole, k_Z (uses volumes predicted by QEq model)
-        # Fit chi, a_QEq (QEq over chi predicted with GPR)
         optimizer = _torch.optim.Adam(self._thole_loss.parameters(), lr=0.002)
         for epoch in range(epochs):
             self._thole_loss.train()
@@ -268,4 +259,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    xyz = np.random.rand(10, 10, 3)
+    z = np.random.randint(10, 10)
+    s = np.random.rand(10, 10)
+    q_core = np.random.rand(10, 10)
+    q = np.random.rand(10, 10)
+    alpha = np.random.rand(10, 3, 3)
+
+    emle_base = EMLEBase()
+    trainer = EMLETrainer(emle_base)
+    trainer.train(z, xyz, s, q_core, q, alpha, None, None)

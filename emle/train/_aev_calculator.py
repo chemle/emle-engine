@@ -2,7 +2,7 @@
 import torch as _torch
 import torchani as _torchani
 
-from ..calculator import ANGSTROM_TO_BOHR
+from ..calculator import _BOHR_TO_ANGSTROM
 from ._utils import pad_to_max
 
 
@@ -29,7 +29,7 @@ class AEVCalculator:
         self._device = device or _torch.device(
             "cuda" if _torch.cuda.is_available() else "cpu"
         )
-        self._model = _torchani.models.ANI2x().to(self.device)
+        self._model = _torchani.models.ANI2x().to(self._device)
         self._aev_computer = self._model.aev_computer
 
     def _get_aev(self, zid, xyz):
@@ -38,9 +38,9 @@ class AEVCalculator:
 
         Parameters
         ----------
-        zid : torch.Tensor(N_ATOMS)
+        zid : torch.Tensor(N_BATCH, N_ATOMS)
             Species ids of the atoms.
-        xyz : torch.Tensor(N_ATOMS, 3)
+        xyz : torch.Tensor(N_BATCH, N_ATOMS, 3)
             Cartesian coordinates of the atoms.
 
         Returns
@@ -49,9 +49,10 @@ class AEVCalculator:
             AEV feature vectors.
         """
         natoms = sum(zid > -1)
-        zid = zid[:natoms].to(self._device)
-        xyz = xyz[:natoms].to(self._device)
-        result = self.aev_computer.forward((zid, xyz))[1][0]
+        zid = zid[:natoms].to(self._device).unsqueeze(0)
+        xyz = xyz[:natoms].to(self._device).unsqueeze(0)
+
+        result = self._aev_computer.forward((zid, xyz))[1][0]
         return result.cpu().numpy()
     
     def _get_zid_mapping(self, species):
@@ -98,12 +99,12 @@ class AEVCalculator:
         # Calculate AEVs
         aev_full = pad_to_max(
             [
-                self._get_aev(zid_mapping[z_mol], xyz_mol / ANGSTROM_TO_BOHR)
+                self._get_aev(zid_mapping[z_mol], xyz_mol * _BOHR_TO_ANGSTROM)
                 for z_mol, xyz_mol in zip(z, xyz)
             ]
         )
         aev_mask = _torch.sum(aev_full.reshape(-1, aev_full.shape[-1]) ** 2, dim=0) > 0
         aev = aev_full[:, :, aev_mask]
         aev_norm = aev / _torch.linalg.norm(aev, dim=2, keepdims=True)
-
+        
         return aev_norm
