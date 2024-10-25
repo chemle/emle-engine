@@ -45,7 +45,7 @@ class EMLETrainer:
         alpha,
         train_mask,
         test_mask,
-        alpha_mode=None,
+        alpha_mode='species',
         sigma=1e-3,
         ivm_thr=0.2,
         epochs=1000,
@@ -71,6 +71,8 @@ class EMLETrainer:
             Mask for training samples.
         test_mask: _torch.Tensor(N_BATCH,)
             Mask for test samples.
+        alpha_mode: 'species' or 'reference'
+            Mode for polarizability model
         sigma: float
             GPR sigma value.
         ivm_thr: float
@@ -101,8 +103,8 @@ class EMLETrainer:
         zid = zid_mapping[z]
 
         # Calculate AEVs
-        aev = EMLEAEVComputer(num_species=len(species))
-        aev_mols = aev(zid, xyz)
+        emle_aev_computer = EMLEAEVComputer(num_species=len(species))
+        aev_mols = emle_aev_computer(zid, xyz)
 
         # "Fit" q_core (just take averages over the entire training set)
         q_core = mean_by_z(q_core, zid)
@@ -157,8 +159,6 @@ class EMLETrainer:
             optimizer.step()
 
         # Checks for alpha_mode
-        if alpha_mode is None:
-            alpha_mode = "species"
         if not isinstance(alpha_mode, str):
             raise TypeError("'alpha_mode' must be of type 'str'")
         alpha_mode = alpha_mode.lower().replace(" ", "")
