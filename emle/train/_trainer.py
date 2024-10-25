@@ -1,8 +1,8 @@
-import numpy as np
 import torch as _torch
 
 from ..models import EMLEBase
 from ._aev_calculator import EMLEAEVComputer
+from ._gpr import GPR
 from ._ivm import IVM
 from ._utils import mean_by_z, pad_to_max
 from ._loss import QEqLoss, TholeLoss
@@ -111,7 +111,7 @@ class EMLETrainer:
         for i, q_core_i in enumerate(q_core):
             print(f"{species[i]}: {q_core_i}")
 
-        # Ccreate an array of (molecule_id, atom_id) pairs (as in the full dataset) for the training set.
+        # Create an array of (molecule_id, atom_id) pairs (as in the full dataset) for the training set.
         # This is needed to be able to locate atoms/molecules in the original dataset that were picked by IVM.
         n_mols, max_atoms = q.shape
         atom_ids = _torch.stack(
@@ -120,17 +120,20 @@ class EMLETrainer:
 
         # Perform IVM
         ivm = IVM()
-        ivm_mol_atom_ids_padded, aev_ivm_allz = ivm.calculate_representation(
-            aev_mols, z, species, atom_ids, ivm_thr
+        ivm_mol_atom_ids_padded, aev_ivm_allz = ivm.perform_ivm(
+            aev_mols, z, atom_ids, species, ivm_thr
         )
 
         # Get kernels for GPR
-        k_ref_ref, k_mols_ref = self._get_gpr_kernels(
+        k_ref_ref, k_mols_ref = GPR._get_gpr_kernels(
             aev_mols, z, aev_ivm_allz, species
         )
 
         # Fit s (pure GPR, no fancy optimization needed)
-        s_ref = self.fit_atomic_sparse_gpr(s, k_mols_ref, k_ref_ref, z, self._SIGMA)
+        s_ref = GPR.fit_atomic_sparse_gpr(s, k_mols_ref, k_ref_ref, z, sigma)
+        # TODO: currently working up to here
+        exit()
+
 
         # Fit chi, a_QEq (QEq over chi predicted with GPR)
         QEq_model = QEqLoss(self.emle_base)
