@@ -9,7 +9,7 @@ from ._loss import QEqLoss, TholeLoss
 
 
 class EMLETrainer:
-    def __init__(self, emle_base, qeq_loss=QEqLoss, thole_loss=TholeLoss):
+    def __init__(self, emle_base=EMLEBase, qeq_loss=QEqLoss, thole_loss=TholeLoss):
         self._emle_base = emle_base
         self._qeq_loss = qeq_loss
         self._thole_loss = thole_loss
@@ -153,17 +153,17 @@ class EMLETrainer:
 
         Parameters
         ----------
-        z: list of tensor/arrays of shape (N_BATCH, N_ATOMS)
+        z: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS)
             Atomic numbers.
-        xyz: list of tensor/arrays of shape (N_BATCH, N_ATOMS, 3)
+        xyz: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS, 3)
             Atomic coordinates.
-        s: list of tensor/arrays of shape (N_BATCH, N_ATOMS)
+        s: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS)
             Atomic widths.
-        q_core: list of tensor/arrays of shape (N_BATCH, N_ATOMS)
+        q_core: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS)
             Atomic core charges.
-        q: list of tensor/arrays of shape (N_BATCH, N_ATOMS)
+        q: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS)
             Total atomic charges.
-        alpha: list of tensor/arrays of shape (N_BATCH, 3, 3)
+        alpha: array or tensor or list of tensor/arrays of shape (N_BATCH, 3, 3)
             Atomic polarizabilities.
         train_mask: _torch.Tensor(N_BATCH,)
             Mask for training samples.
@@ -181,7 +181,9 @@ class EMLETrainer:
         dict
             Trained EMLE model.
         """
-        # TODO: Validate input shapes
+        assert len(z) == len(xyz) == len(s) == len(q_core) == len(q) == len(alpha), (
+            "z, xyz, s, q_core, q, and alpha must have the same number of samples"
+        )
         
         # Prepare batch data
         q_mol = _torch.Tensor([q_m.sum() for q_m in q])
@@ -190,21 +192,24 @@ class EMLETrainer:
         s = pad_to_max(s)
         q_core = pad_to_max(q_core)
         q = pad_to_max(q)
-       
         species = _torch.unique(z[z > 0]).to(_torch.int)
 
         # Calculate AEVs
         aev = AEVCalculator()
         aev_mols = aev.calculate_aev(z, xyz, species)
 
-        exit()
+        # "Fit" q_core (just take averages over the entire training set)
+        q_core = mean_by_z(q_core, z)
+
+        print(q_core)
+
         # Perform IVM
         # TODO: need to calculate aev_ivm_allz
         ivm = IVM()
         aev_mols = ivm.calculate_representation(
             z, aev_mols, species, ivm_thr
         )
-
+        exit()
         # "Fit" q_core (just take averages over the entire training set)
         q_core = mean_by_z(q_core, z)
 
