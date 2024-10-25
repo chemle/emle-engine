@@ -51,7 +51,7 @@ class EMLEBase(_torch.nn.Module):
     Base class for the EMLE model. This is used to compute valence shell
     widths, core charges, valence charges, and the A_thole tensor for a batch
     of QM systems, which in turn can be used to compute static and induced
-    electrostating embedding energies using the EMLE model.
+    electrostatic embedding energies using the EMLE model.
     """
 
     # Store the list of supported species.
