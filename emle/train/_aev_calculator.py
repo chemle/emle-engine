@@ -39,7 +39,7 @@ class AEVCalculator:
         Parameters
         ----------
         zid : torch.Tensor(N_ATOMS)
-            Atomic numbers of the atoms.
+            Species ids of the atoms.
         xyz : torch.Tensor(N_ATOMS, 3)
             Cartesian coordinates of the atoms.
 
@@ -53,6 +53,26 @@ class AEVCalculator:
         xyz = xyz[:natoms].to(self._device)
         result = self.aev_computer.forward((zid, xyz))[1][0]
         return result.cpu().numpy()
+    
+    def _get_zid_mapping(self, species):
+        """
+        Generates a mapping from atomic numbers to species indices.
+
+        Parameters
+        ----------
+        species : torch.Tensor(N_SPECIES)
+            Species supported by the current EMLE model.
+
+        Returns
+        -------
+        torch.Tensor(N_SPECIES + 1)
+            Mapping from atomic numbers to species indices.
+        """
+        zid_mapping = _torch.zeros(max(species) + 1, dtype=_torch.int)
+        for i, z in enumerate(species):
+            zid_mapping[z] = i
+        zid_mapping[0] = -1
+        return zid_mapping
 
     def calculate_aev(self, z, xyz, species):
         """
@@ -64,22 +84,21 @@ class AEVCalculator:
             Atomic numbers for all molecules.
         xyz : torch.Tensor(N_BATCH, MAX_N_ATOMS, 3)
             Cartesian coordinates for all molecules.
+        species : torch.Tensor(N_SPECIES)
+            Species supported by the current EMLE model.
 
         Returns
         -------
         torch.Tensor(N_BATCH, MAX_N_ATOMS, AEV_DIM)
             AEV feature vectors for all molecules.
         """
-        # Generate the species ID mapping
-        _species_id = _torch.zeros(max(species) + 1, dtype=_torch.int)
-        for i, z in enumerate(species):
-            _species_id[z] = i
-        _species_id[0] = -1
+        # Generate the mapping from atomic numbers to species indices
+        zid_mapping = self._get_zid_mapping(species)
 
         # Calculate AEVs
         aev_full = pad_to_max(
             [
-                self._get_aev(_species_id[z_mol], xyz_mol / ANGSTROM_TO_BOHR)
+                self._get_aev(zid_mapping[z_mol], xyz_mol / ANGSTROM_TO_BOHR)
                 for z_mol, xyz_mol in zip(z, xyz)
             ]
         )
