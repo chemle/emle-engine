@@ -237,35 +237,6 @@ class EMLE(_torch.nn.Module):
         else:
             dtype = _torch.get_default_dtype()
 
-        if not isinstance(create_aev_calculator, bool):
-            raise TypeError("'create_aev_calculator' must be of type 'bool'")
-
-        # Create an AEV calculator to perform the feature calculations.
-        if create_aev_calculator:
-            ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(device)
-            self._aev_computer = ani2x.aev_computer
-
-            # Optimise the AEV computer using NNPOps if available.
-            if _has_nnpops and atomic_numbers is not None:
-                try:
-                    atomic_numbers = _torch.tensor(
-                        atomic_numbers, dtype=_torch.int64, device=device
-                    )
-                    atomic_numbers = atomic_numbers.reshape(1, *atomic_numbers.shape)
-                    self._aev_computer = (
-                        _NNPOps.SymmetryFunctions.TorchANISymmetryFunctions(
-                            self._aev_computer.species_converter,
-                            self._aev_computer.aev_computer,
-                            atomic_numbers,
-                        )
-                    )
-                except Exception as e:
-                    raise RuntimeError(
-                        "Unable to create optimised AEVComputer using NNPOps."
-                    ) from e
-        else:
-            self._aev_computer = None
-
         # Load the model parameters.
         try:
             params = _scipy_io.loadmat(model, squeeze_me=True)
@@ -314,6 +285,35 @@ class EMLE(_torch.nn.Module):
         # Register constants as buffers.
         self.register_buffer("_q_total", q_total)
         self.register_buffer("_q_core_mm", q_core_mm)
+
+        if not isinstance(create_aev_calculator, bool):
+            raise TypeError("'create_aev_calculator' must be of type 'bool'")
+
+        # Create an AEV calculator to perform the feature calculations.
+        if create_aev_calculator:
+            ani2x = _torchani.models.ANI2x(periodic_table_index=True).to(device)
+            self._aev_computer = ani2x.aev_computer
+
+            # Optimise the AEV computer using NNPOps if available.
+            if _has_nnpops and atomic_numbers is not None:
+                try:
+                    atomic_numbers = _torch.tensor(
+                        atomic_numbers, dtype=_torch.int64, device=device
+                    )
+                    atomic_numbers = atomic_numbers.reshape(1, *atomic_numbers.shape)
+                    self._aev_computer = (
+                        _NNPOps.SymmetryFunctions.TorchANISymmetryFunctions(
+                            self._aev_computer.species_converter,
+                            self._aev_computer.aev_computer,
+                            atomic_numbers,
+                        )
+                    )
+                except Exception as e:
+                    raise RuntimeError(
+                        "Unable to create optimised AEVComputer using NNPOps."
+                    ) from e
+        else:
+            self._aev_computer = None
 
         # Create the base EMLE model.
         self._emle_base = _EMLEBase(
