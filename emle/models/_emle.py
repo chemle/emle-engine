@@ -255,7 +255,7 @@ class EMLE(_torch.nn.Module):
                         atomic_numbers = atomic_numbers.reshape(
                             1, *atomic_numbers.shape
                         )
-                        self._ani2x.aev_computer = (
+                        self._aev_computer = (
                             _NNPOps.SymmetryFunctions.TorchANISymmetryFunctions(
                                 self._aev_computer.species_converter,
                                 self._aev_computer.aev_computer,
