@@ -36,7 +36,7 @@ class EMLEAEVComputer(_torch.nn.Module):
     Wrapper for AEVCalculator from torchani
     (not a subclass to make sure it works with TorchScript)
     """
-    def __init__(self, num_species, hypers=None,
+    def __init__(self, num_species=7, hypers=None,
                  mask=None, external=False, zid_map=None):
         """
         num_species: int
