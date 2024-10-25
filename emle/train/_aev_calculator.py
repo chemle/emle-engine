@@ -51,9 +51,8 @@ class AEVCalculator:
         natoms = sum(zid > -1)
         zid = zid[:natoms].to(self._device).unsqueeze(0)
         xyz = xyz[:natoms].to(self._device).unsqueeze(0)
-
         result = self._aev_computer.forward((zid, xyz))[1][0]
-        return result.cpu().numpy()
+        return result
     
     def _get_zid_mapping(self, species):
         """
@@ -106,5 +105,5 @@ class AEVCalculator:
         aev_mask = _torch.sum(aev_full.reshape(-1, aev_full.shape[-1]) ** 2, dim=0) > 0
         aev = aev_full[:, :, aev_mask]
         aev_norm = aev / _torch.linalg.norm(aev, dim=2, keepdims=True)
-        
+   
         return aev_norm
