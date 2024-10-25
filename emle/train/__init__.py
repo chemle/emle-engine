@@ -25,6 +25,6 @@
 
 
 from ._trainer import EMLETrainer
-from ._aev_calculator import EMLEAEVComputer
+from ._emle_aev_computer import EMLEAEVComputer
 
 __all__ = ["EMLETrainer", "EMLEAEVComputer"]

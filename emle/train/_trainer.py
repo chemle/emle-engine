@@ -1,7 +1,7 @@
 import torch as _torch
 
 from ..models import EMLEBase
-from ._aev_calculator import EMLEAEVComputer
+from ._emle_aev_computer import EMLEAEVComputer
 from ._gpr import GPR
 from ._ivm import IVM
 from ._utils import mean_by_z, pad_to_max
