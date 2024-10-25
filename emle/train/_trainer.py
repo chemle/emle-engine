@@ -2,7 +2,7 @@ import numpy as np
 import torch as _torch
 
 from ..models import EMLEBase
-from ._aev_calculator import AEVCalculator
+from ._aev_calculator import EMLEAEVComputer
 from ._ivm import IVM
 from ._utils import mean_by_z, pad_to_max
 from ._loss import QEqLoss, TholeLoss
@@ -132,6 +132,27 @@ class EMLETrainer:
                 values[z_mask], K_ref_ref[i], K_mols_ref[z_mask], sigma
             )
         return result
+    
+    @staticmethod
+    def _get_zid_mapping(species):
+        """
+        Generate the species ID mapping.
+
+        Parameters
+        ----------
+        species: torch.Tensor(N_SPECIES)
+            Species IDs.
+        
+        Returns
+        -------
+        torch.Tensor
+            Species ID mapping.
+        """
+        zid_mapping = _torch.zeros(max(species) + 1, dtype=_torch.int)
+        for i, z in enumerate(species):
+            zid_mapping[z] = i
+        zid_mapping[0] = -1
+        return zid_mapping
 
     def train(
         self,
@@ -194,14 +215,20 @@ class EMLETrainer:
         q = pad_to_max(q)
         species = _torch.unique(z[z > 0]).to(_torch.int)
 
+        # Get zid mapping
+        zid_mapping = self._get_zid_mapping(species)
+        zid = zid_mapping[z]
+
         # Calculate AEVs
-        aev = AEVCalculator()
-        aev_mols = aev.calculate_aev(z, xyz, species)
+        aev = EMLEAEVComputer(num_species=len(species))
+        aev_mols = aev(zid, xyz)
 
         # "Fit" q_core (just take averages over the entire training set)
-        q_core = mean_by_z(q_core, z)
+        q_core = mean_by_z(q_core, zid)
 
-        print(q_core)
+        print("Predicted core charges:")
+        for i, q_core_i in enumerate(q_core):
+            print(f"{species[i]}: {q_core_i}")
 
         # Perform IVM
         # TODO: need to calculate aev_ivm_allz
@@ -210,8 +237,6 @@ class EMLETrainer:
             z, aev_mols, species, ivm_thr
         )
         exit()
-        # "Fit" q_core (just take averages over the entire training set)
-        q_core = mean_by_z(q_core, z)
 
         # Get kernels for GPR
         k_ref_ref, k_mols_ref = self._get_gpr_kernels(
@@ -220,25 +245,27 @@ class EMLETrainer:
 
         # Fit s (pure GPR, no fancy optimization needed)
         s_ref = self.fit_atomic_sparse_gpr(
-            s, k_mols_ref, k_ref_ref, z, sigma
+            s, k_mols_ref, k_ref_ref, z, self._SIGMA
         )
 
         # Fit chi, a_QEq (QEq over chi predicted with GPR)
-        self._qeq_loss = self._qeq_loss(emle_base)
-        optimizer = _torch.optim.Adam(self._qeq_loss.parameters(), lr=0.001)
+        QEq_model = QEqLoss(self.emle_base)
+        optimizer = _torch.optim.Adam(QEq_model.parameters(), lr=0.001)
         for epoch in range(epochs):
-            self._qeq_loss.train()
+            QEq_model.train()
             optimizer.zero_grad()
-            loss = self._qeq_loss(z, xyz, q_mol, q)
+            loss = QEq_model(z, xyz, q_mol, q)
             loss.backward()
             optimizer.step()
 
         # Fit a_Thole, k_Z (uses volumes predicted by QEq model)
-        optimizer = _torch.optim.Adam(self._thole_loss.parameters(), lr=0.002)
+        # Fit chi, a_QEq (QEq over chi predicted with GPR)
+        Thole_model = TholeLoss(self.emle_base)
+        optimizer = _torch.optim.Adam(Thole_model.parameters(), lr=0.002)
         for epoch in range(epochs):
-            self._thole_loss.train()
+            QEq_model.train()
             optimizer.zero_grad()
-            loss = self._thole_loss(
+            loss = QEq_model(
                 z, xyz, q_mol, alpha
             )
             loss.backward()
@@ -264,13 +291,4 @@ def main():
 
 
 if __name__ == "__main__":
-    xyz = np.random.rand(10, 10, 3)
-    z = np.random.randint(10, 10)
-    s = np.random.rand(10, 10)
-    q_core = np.random.rand(10, 10)
-    q = np.random.rand(10, 10)
-    alpha = np.random.rand(10, 3, 3)
-
-    emle_base = EMLEBase()
-    trainer = EMLETrainer(emle_base)
-    trainer.train(z, xyz, s, q_core, q, alpha, None, None)
+    main()
