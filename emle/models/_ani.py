@@ -215,14 +215,16 @@ class ANI2xEMLE(_torch.nn.Module):
                 self._ani2x = self._ani2x.double()
 
             # Optimise the ANI2x model if atomic_numbers are specified.
-            if atomic_numbers is not None:
+            if _has_nnpops and atomic_numbers is not None:
                 try:
                     atomic_numbers = atomic_numbers.reshape(1, *atomic_numbers.shape)
                     self._ani2x = _NNPOps.OptimizedTorchANI(
                         self._ani2x, atomic_numbers
                     ).to(device)
-                except:
-                    pass
+                except Exception as e:
+                    raise RuntimeError(
+                        "Failed to optimise the ANI2x model with NNPOps."
+                    ) from e
 
         # Add a hook to the ANI2x model to capture the AEV features.
         self._add_hook()

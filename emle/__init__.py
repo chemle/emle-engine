@@ -25,6 +25,13 @@
 # avoid severe module import overheads when running the client code,
 # which requires no EMLE functionality.
 
+"""
+Electrostatic Machine-Learned Embedding.
+
+emle is a package for the calculation of electrostatic interactions in
+molecular systems.
+"""
+
 from ._version import get_versions
 
 __version__ = get_versions()["version"]

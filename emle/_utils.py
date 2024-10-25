@@ -40,15 +40,21 @@ def _fetch_resources():
 
     # Check if the resources directory exists.
     if not _os.path.exists(resource_dir):
-        # If it doesn't, clone the resources repository.
-        print("Downloading EMLE resources...", file=sys.stderr)
-        _pygit2.clone_repository(
-            "https://github.com/chemle/emle-models.git", resource_dir
-        )
+        try:
+            # If it doesn't, clone the resources repository.
+            print("Downloading EMLE resources...", file=sys.stderr)
+            _pygit2.clone_repository(
+                "https://github.com/chemle/emle-models.git", resource_dir
+            )
+        except Exception as e:
+            print(f"Failed to download EMLE resources: {e}", file=sys.stderr)
     else:
         # If it does, open the repository and pull the latest changes.
-        repo = _pygit2.Repository(resource_dir)
-        _pull(repo)
+        try:
+            repo = _pygit2.Repository(resource_dir)
+            _pull(repo)
+        except Exception as e:
+            print(f"Failed to update EMLE resources: {e}", file=sys.stderr)
 
 
 # The MIT License (MIT)

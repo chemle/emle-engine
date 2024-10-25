@@ -246,24 +246,23 @@ class EMLE(_torch.nn.Module):
             self._aev_computer = ani2x.aev_computer
 
             # Optimise the AEV computer using NNPOps if available.
-            if atomic_numbers is not None:
-                if _has_nnpops:
-                    try:
-                        atomic_numbers = _torch.tensor(
-                            atomic_numbers, dtype=_torch.int64, device=device
+            if _has_nnpops and atomic_numbers is not None:
+                try:
+                    atomic_numbers = _torch.tensor(
+                        atomic_numbers, dtype=_torch.int64, device=device
+                    )
+                    atomic_numbers = atomic_numbers.reshape(1, *atomic_numbers.shape)
+                    self._aev_computer = (
+                        _NNPOps.SymmetryFunctions.TorchANISymmetryFunctions(
+                            self._aev_computer.species_converter,
+                            self._aev_computer.aev_computer,
+                            atomic_numbers,
                         )
-                        atomic_numbers = atomic_numbers.reshape(
-                            1, *atomic_numbers.shape
-                        )
-                        self._ani2x.aev_computer = (
-                            _NNPOps.SymmetryFunctions.TorchANISymmetryFunctions(
-                                self._aev_computer.species_converter,
-                                self._aev_computer.aev_computer,
-                                atomic_numbers,
-                            )
-                        )
-                    except:
-                        pass
+                    )
+                except Exception as e:
+                    raise RuntimeError(
+                        "Unable to create optimised AEVComputer using NNPOps."
+                    ) from e
         else:
             self._aev_computer = None
 
@@ -271,6 +270,12 @@ class EMLE(_torch.nn.Module):
         try:
             params = _scipy_io.loadmat(model, squeeze_me=True)
         except:
+            if model is self._default_model and not _os.path.isfile(model):
+                raise IOError(
+                    f"Unable to locate default EMLE embedding model file: '{model}'. "
+                    "Please ensure that the resources are installed correctly. For "
+                    "details, see: https://github.com/chemle/emle-models"
+                )
             raise IOError(f"Unable to load model parameters from: '{model}'")
 
         q_core = _torch.tensor(params["q_core"], dtype=dtype, device=device)

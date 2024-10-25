@@ -25,6 +25,10 @@
 # avoid severe module import overheads when running the client code,
 # which requires no EMLE functionality.
 
+"""
+Torch modules for EMLE calculations.
+"""
+
 from ._emle_base import EMLEBase
 from ._emle import EMLE
 from ._ani import ANI2xEMLE
