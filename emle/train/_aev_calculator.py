@@ -62,6 +62,8 @@ class EMLEAEVComputer(_torch.nn.Module):
             self._aev_computer = _torchani.AEVComputer(**hypers,
                                                        num_species=num_species)
 
+        if not zid_map:
+            zid_map = {i: i for i in range(num_species)}
         self._zid_map = - _torch.ones(num_species + 1)
         for self_atom_zid, aev_atom_zid in zid_map.items():
             self._zid_map[self_atom_zid] = aev_atom_zid
