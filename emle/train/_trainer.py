@@ -10,10 +10,10 @@ from ._loss import QEqLoss, TholeLoss
 
 
 class EMLETrainer:
-    def __init__(self, emle_base):
-        self.emle_base = emle_base
-        self.qeq_loss = QEqLoss(emle_base)
-        self.thole_loss = TholeLoss(emle_base)
+    def __init__(self, emle_base, qeq_loss=QEqLoss, thole_loss=TholeLoss):
+        self._emle_base = emle_base
+        self._qeq_loss = qeq_loss(emle_base)
+        self._thole_loss = thole_loss(emle_base)
 
     @staticmethod
     def _norm_aev_kernel(a, b):
@@ -154,17 +154,17 @@ class EMLETrainer:
 
         Parameters
         ----------
-        z: _torch.Tensor(N_BATCH, MAX_N_ATOMS)
+        z: list of tensor/arrays of shape (N_BATCH, N_ATOMS)
             Atomic numbers.
-        xyz: _torch.Tensor(N_BATCH, MAX_N_ATOMS, 3)
+        xyz: list of tensor/arrays of shape (N_BATCH, N_ATOMS, 3)
             Atomic coordinates.
-        s: _torch.Tensor(N_BATCH, MAX_N_ATOMS)
+        s: list of tensor/arrays of shape (N_BATCH, N_ATOMS)
             Atomic widths.
-        q_core: _torch.Tensor(N_BATCH, MAX_N_ATOMS)
+        q_core: list of tensor/arrays of shape (N_BATCH, N_ATOMS)
             Atomic core charges.
-        q: _torch.Tensor(N_BATCH, MAX_N_ATOMS)
+        q: list of tensor/arrays of shape (N_BATCH, N_ATOMS)
             Total atomic charges.
-        alpha: _torch.Tensor(N_BATCH, MAX_N_ATOMS, 3)
+        alpha: list of tensor/arrays of shape (N_BATCH, 3, 3)
             Atomic polarizabilities.
         train_mask: _torch.Tensor(N_BATCH,)
             Mask for training samples.
@@ -194,56 +194,56 @@ class EMLETrainer:
         ):
             raise ValueError("All input arrays must have the same first dimension.")
 
-        # Create the molecule batch and add molecules to it
-        # This is a data structure that holds all the data for the molecules
-        mol_batch = MoleculeBatch()
-        nbatch = z.shape[0]
-        for i in range(nbatch):
-            mol_batch.add_molecule(z[i], xyz[i], s[i], q_core[i], q[i])
+        # Prepare batch data
+        q_mol = _torch.Tensor([q_m.sum() for q_m in q])
+        z = pad_to_max(z)
+        xyz = pad_to_max(xyz)
+        s = pad_to_max(s)
+        q_core = pad_to_max(q_core)
+        q = pad_to_max(q)
+        species = _torch.unique(z[z > 0]).to(_torch.int)
 
         # Calculate AEVs
         aev = AEVCalculator()
-        aev_mols = aev.calculate_aev(mol_batch.z, mol_batch.xyz, mol_batch.species)
+        aev_mols = aev.calculate_aev(z, xyz, species)
 
         # Perform IVM
         # TODO: need to calculate aev_ivm_allz
         ivm = IVM()
         aev_mols = ivm.calculate_representation(
-            mol_batch.z, aev_mols, mol_batch.species, ivm_thr
+            z, aev_mols, species, ivm_thr
         )
 
         # "Fit" q_core (just take averages over the entire training set)
-        q_core = mean_by_z(mol_batch.q_core, mol_batch.z)
+        q_core = mean_by_z(q_core, z)
 
         # Get kernels for GPR
         k_ref_ref, k_mols_ref = self._get_gpr_kernels(
-            aev_mols, mol_batch.z, aev_ivm_allz, mol_batch.species
+            aev_mols, z, aev_ivm_allz, species
         )
 
         # Fit s (pure GPR, no fancy optimization needed)
         s_ref = self.fit_atomic_sparse_gpr(
-            mol_batch.s, k_mols_ref, k_ref_ref, mol_batch.z, self._SIGMA
+            s, k_mols_ref, k_ref_ref, z, self._SIGMA
         )
 
         # Fit chi, a_QEq (QEq over chi predicted with GPR)
-        QEq_model = QEqLoss(self.emle_base)
-        optimizer = _torch.optim.Adam(QEq_model.parameters(), lr=0.001)
+        optimizer = _torch.optim.Adam(self._qeq_loss.parameters(), lr=0.001)
         for epoch in range(epochs):
-            QEq_model.train()
+            self._qeq_loss.train()
             optimizer.zero_grad()
-            loss = QEq_model(mol_batch.z, mol_batch.xyz, mol_batch.q_mol, mol_batch.q)
+            loss = self._qeq_loss(z, xyz, q_mol, q)
             loss.backward()
             optimizer.step()
 
         # Fit a_Thole, k_Z (uses volumes predicted by QEq model)
         # Fit chi, a_QEq (QEq over chi predicted with GPR)
-        Thole_model = TholeLoss(self.emle_base)
-        optimizer = _torch.optim.Adam(Thole_model.parameters(), lr=0.002)
+        optimizer = _torch.optim.Adam(self._thole_loss.parameters(), lr=0.002)
         for epoch in range(epochs):
-            QEq_model.train()
+            self._thole_loss.train()
             optimizer.zero_grad()
-            loss = QEq_model(
-                mol_batch.z, mol_batch.xyz, mol_batch.q_mol, mol_batch.alpha
+            loss = self._thole_loss(
+                z, xyz, q_mol, alpha
             )
             loss.backward()
             optimizer.step()
