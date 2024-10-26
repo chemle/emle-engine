@@ -101,6 +101,7 @@ class EMLECalculator:
         deepmd_deviation=None,
         deepmd_deviation_threshold=None,
         qm_xyz_file="qm.xyz",
+        pc_xyz_file="pc.xyz",
         qm_xyz_frequency=0,
         ani2x_model_index=None,
         rascal_model=None,
@@ -193,9 +194,13 @@ class EMLECalculator:
             Path to an output file for writing the xyz trajectory of the QM
             region.
 
+        pc_xyz_file: str
+            Path to an output file for writing the charges and positions of the
+            MM point charges.
+
         qm_xyz_frequency: int
-            How often to write the xyz trajectory of the QM region. Zero turns
-            off writing.
+            How often to write the xyz trajectory of the QM and MM regions. Zero
+            turns off writing.
 
         ani2x_model_index: int
             The index of the ANI model to use when using the TorchANI backend.
@@ -598,6 +603,15 @@ class EMLECalculator:
                 raise TypeError(msg)
         self._qm_xyz_file = qm_xyz_file
 
+        if pc_xyz_file is None:
+            pc_xyz_file = "pc.xyz"
+        else:
+            if not isinstance(pc_xyz_file, str):
+                msg = "'pc_xyz_file' must be of type 'str'"
+                _logger.error(msg)
+                raise TypeError(msg)
+        self._pc_xyz_file = pc_xyz_file
+
         if qm_xyz_frequency is None:
             qm_xyz_frequency = 0
         else:
@@ -954,6 +968,7 @@ class EMLECalculator:
             "deepmd_deviation": deepmd_deviation,
             "deepmd_deviation_threshold": deepmd_deviation_threshold,
             "qm_xyz_file": qm_xyz_file,
+            "pc_xyz_file": pc_xyz_file,
             "qm_xyz_frequency": qm_xyz_frequency,
             "ani2x_model_index": ani2x_model_index,
             "rascal_model": rascal_model,
@@ -1276,6 +1291,14 @@ class EMLECalculator:
             if hasattr(self, "_max_f_std"):
                 atoms.info = {"max_f_std": self._max_f_std}
             _ase_io.write(self._qm_xyz_file, atoms, append=True)
+
+            pc_data = _np.hstack((charges_mm[:, None].cpu().numpy(),
+                                  xyz_mm.detach().cpu().numpy()))
+            pc_data = pc_data[pc_data[:, 0] != 0]
+            with open(self._pc_xyz_file, 'a') as f:
+                f.write(f'{len(pc_data)}\n')
+                _np.savetxt(f, pc_data, fmt='%14.6f')
+                f.write('\n')
 
         # Increment the step counter.
         if self._is_first_step:
