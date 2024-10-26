@@ -438,7 +438,6 @@ class EMLE(_torch.nn.Module):
         s, q_core, q_val, A_thole = self._emle_base(
             atomic_numbers[None, :], xyz_qm[None, :, :], self._q_total[None]
         )
-        s, q_core, q_val, A_thole = s[0], q_core[0], q_val[0], A_thole[0]
 
         # Convert coordinates to Bohr.
         ANGSTROM_TO_BOHR = 1.8897261258369282
@@ -449,20 +448,23 @@ class EMLE(_torch.nn.Module):
         if self._method == "mm":
             q_core = self._q_core_mm
             q_val = _torch.zeros_like(
-                q_core, dtype=charges_mm.dtype, device=self._device
+                q_core[0], dtype=charges_mm.dtype, device=self._device
             )
 
-        mesh_data = _EMLEPC._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s)
+        mesh_data = _EMLEPC._get_mesh_data(xyz_qm_bohr[None, :, :],
+                                           xyz_mm_bohr[None, :, :],
+                                           s)
+
         if self._method == "mechanical":
             q_core = q_core + q_val
             q_val = _torch.zeros_like(
                 q_core, dtype=charges_mm.dtype, device=self._device
             )
-        E_static = _EMLEPC.get_E_static(q_core, q_val, charges_mm, mesh_data)
+        E_static = _EMLEPC.get_E_static(q_core, q_val, charges_mm[None, :], mesh_data)[0]
 
         # Compute the induced energy.
         if self._method == "electrostatic":
-            E_ind = _EMLEPC.get_E_induced(A_thole, charges_mm, s, mesh_data)
+            E_ind = _EMLEPC.get_E_induced(A_thole, charges_mm[None, :], s, mesh_data)[0]
         else:
             E_ind = _torch.tensor(0.0, dtype=charges_mm.dtype, device=self._device)
 
