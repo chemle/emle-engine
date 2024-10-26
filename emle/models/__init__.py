@@ -30,6 +30,7 @@ Torch modules for EMLE calculations.
 """
 
 from ._emle_base import EMLEBase
+from ._emle_pc import EMLEPC
 from ._emle import EMLE
 from ._ani import ANI2xEMLE
 from ._mace import MACEEMLE
