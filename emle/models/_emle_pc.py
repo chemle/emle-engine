@@ -31,6 +31,19 @@ from typing import Optional, Tuple, List
 class EMLEPC:
 
     @classmethod
+    def get_E_static(cls, q_core, q_val, charges_mm, mesh_data):
+        vpot_q_core = cls._get_vpot_q(q_core, mesh_data[0])
+        vpot_q_val = cls._get_vpot_q(q_val, mesh_data[1])
+        vpot_static = vpot_q_core + vpot_q_val
+        return _torch.sum(vpot_static @ charges_mm)
+
+    @classmethod
+    def get_E_induced(cls, A_thole, charges_mm, s, mesh_data):
+        mu_ind = cls._get_mu_ind(A_thole, mesh_data, charges_mm, s)
+        vpot_ind = cls._get_vpot_mu(mu_ind, mesh_data[2])
+        return _torch.sum(vpot_ind @ charges_mm) * 0.5
+
+    @classmethod
     def _get_mu_ind(
         cls,
         A,

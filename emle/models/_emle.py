@@ -458,16 +458,11 @@ class EMLE(_torch.nn.Module):
             q_val = _torch.zeros_like(
                 q_core, dtype=charges_mm.dtype, device=self._device
             )
-        vpot_q_core = _EMLEPC._get_vpot_q(q_core, mesh_data[0])
-        vpot_q_val = _EMLEPC._get_vpot_q(q_val, mesh_data[1])
-        vpot_static = vpot_q_core + vpot_q_val
-        E_static = _torch.sum(vpot_static @ charges_mm)
+        E_static = _EMLEPC.get_E_static(q_core, q_val, charges_mm, mesh_data)
 
         # Compute the induced energy.
         if self._method == "electrostatic":
-            mu_ind = _EMLEPC._get_mu_ind(A_thole, mesh_data, charges_mm, s)
-            vpot_ind = _EMLEPC._get_vpot_mu(mu_ind, mesh_data[2])
-            E_ind = _torch.sum(vpot_ind @ charges_mm) * 0.5
+            E_ind = _EMLEPC.get_E_induced(A_thole, charges_mm, s, mesh_data)
         else:
             E_ind = _torch.tensor(0.0, dtype=charges_mm.dtype, device=self._device)
 
