@@ -151,7 +151,7 @@ class EMLE(_torch.nn.Module):
         # Call the base class constructor.
         super().__init__()
 
-        from .._utils import _fetch_resources
+        from .._resources import _fetch_resources
 
         # Fetch or update the resources.
         _fetch_resources()
