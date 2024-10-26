@@ -81,7 +81,8 @@ class EMLEPC:
 
         r = 1.0 / mesh_data[0]
         f1 = cls._get_f1_slater(r, s[:, :, None] * 2.0)
-        fields = _torch.sum(mesh_data[2] * f1[..., None] * q[:, :, None], dim=2).flatten()
+        fields = _torch.sum(mesh_data[2] * f1[..., None] * q[:, None, :, None],
+                            dim=2).reshape(len(s), -1)
 
         mu_ind = _torch.linalg.solve(A, fields)
         return mu_ind.reshape((mu_ind.shape[0], -1, 3))
@@ -129,7 +130,7 @@ class EMLEPC:
         result: torch.Tensor (N_BATCH, MAX_MM_ATOMS)
             Electrostatic potential over MM atoms.
         """
-        return -_torch.tensordot(T1, mu, ((1, 3), (1, 2))).squeeze(-1)
+        return _torch.einsum('ijkl,ijl->ik', T1, mu)
 
     @classmethod
     def _get_mesh_data(cls, xyz, xyz_mesh, s):
