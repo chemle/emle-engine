@@ -202,6 +202,7 @@ class EMLEBase(_torch.nn.Module):
                 raise TypeError("'dtype' must be of type 'torch.dtype'")
         else:
             dtype = _torch.get_default_dtype()
+        self._dtype = dtype
 
         # Store model parameters as tensors.
         self.a_QEq = _torch.nn.Parameter(params["a_QEq"])
