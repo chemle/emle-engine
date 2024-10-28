@@ -1,4 +1,5 @@
 """AEVCalculator class for calculating AEV feature vectors using the ANI2x model."""
+
 import numpy as _np
 import torch as _torch
 import torchani as _torchani
@@ -7,28 +8,52 @@ from ._utils import pad_to_max
 
 # From ANI-2x
 DEFAULT_HYPERS_DICT = {
-    "Rcr": _np.array(5.1000e+00),
-    "Rca": _np.array(3.5000e+00),
-    "EtaR": _np.array([1.9700000e+01]),
-    "ShfR": _np.array([8.0000000e-01, 1.0687500e+00, 1.3375000e+00,
-                      1.6062500e+00, 1.8750000e+00, 2.1437500e+00,
-                      2.4125000e+00, 2.6812500e+00, 2.9500000e+00,
-                      3.2187500e+00, 3.4875000e+00, 3.7562500e+00,
-                      4.0250000e+00, 4.2937500e+00, 4.5625000e+00,
-                      4.8312500e+00]),
-    "Zeta": _np.array([1.4100000e+01]),
-    "ShfZ": _np.array([3.9269908e-01, 1.1780972e+00, 1.9634954e+00,
-                      2.7488936e+00]),
-    "EtaA": _np.array([1.2500000e+01]),
-    "ShfA": _np.array([8.0000000e-01, 1.1375000e+00, 1.4750000e+00,
-                      1.8125000e+00, 2.1500000e+00, 2.4875000e+00,
-                      2.8250000e+00, 3.1625000e+00])
+    "Rcr": _np.array(5.1000e00),
+    "Rca": _np.array(3.5000e00),
+    "EtaR": _np.array([1.9700000e01]),
+    "ShfR": _np.array(
+        [
+            8.0000000e-01,
+            1.0687500e00,
+            1.3375000e00,
+            1.6062500e00,
+            1.8750000e00,
+            2.1437500e00,
+            2.4125000e00,
+            2.6812500e00,
+            2.9500000e00,
+            3.2187500e00,
+            3.4875000e00,
+            3.7562500e00,
+            4.0250000e00,
+            4.2937500e00,
+            4.5625000e00,
+            4.8312500e00,
+        ]
+    ),
+    "Zeta": _np.array([1.4100000e01]),
+    "ShfZ": _np.array([3.9269908e-01, 1.1780972e00, 1.9634954e00, 2.7488936e00]),
+    "EtaA": _np.array([1.2500000e01]),
+    "ShfA": _np.array(
+        [
+            8.0000000e-01,
+            1.1375000e00,
+            1.4750000e00,
+            1.8125000e00,
+            2.1500000e00,
+            2.4875000e00,
+            2.8250000e00,
+            3.1625000e00,
+        ]
+    ),
 }
 
 
 def get_default_hypers(device, dtype):
-    return {k: _torch.tensor(v, device=device, dtype=dtype)
-            for k, v in DEFAULT_HYPERS_DICT.items()}
+    return {
+        k: _torch.tensor(v, device=device, dtype=dtype)
+        for k, v in DEFAULT_HYPERS_DICT.items()
+    }
 
 
 class EMLEAEVComputer(_torch.nn.Module):
@@ -36,9 +61,17 @@ class EMLEAEVComputer(_torch.nn.Module):
     Wrapper for AEVCalculator from torchani
     (not a subclass to make sure it works with TorchScript)
     """
-    def __init__(self, num_species=7, hypers=None,
-                 mask=None, external=False, zid_map=None,
-                 device=None, dtype=None):
+
+    def __init__(
+        self,
+        num_species=7,
+        hypers=None,
+        mask=None,
+        external=False,
+        zid_map=None,
+        device=None,
+        dtype=None,
+    ):
         """
         num_species: int
             number of supported species
@@ -80,13 +113,13 @@ class EMLEAEVComputer(_torch.nn.Module):
 
         if not external:
             hypers = hypers or get_default_hypers(device, dtype)
-            self._aev_computer = _torchani.AEVComputer(**hypers,
-                                                       num_species=num_species)
+            self._aev_computer = _torchani.AEVComputer(
+                **hypers, num_species=num_species
+            )
 
         if not zid_map:
             zid_map = {i: i for i in range(num_species)}
-        self._zid_map = - _torch.ones(num_species + 1, dtype=_torch.int,
-                                      device=device)
+        self._zid_map = -_torch.ones(num_species + 1, dtype=_torch.int, device=device)
         for self_atom_zid, aev_atom_zid in zid_map.items():
             self._zid_map[self_atom_zid] = aev_atom_zid
 
