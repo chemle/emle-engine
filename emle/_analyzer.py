@@ -103,6 +103,9 @@ class EMLEAnalyzer:
                                               self.s,
                                               mesh_data)
 
+        for attr in ('s', 'q_core', 'q_val', 'A_thole', 'e_static', 'e_induced'):
+            setattr(self, attr, getattr(self, attr).detach())
+
     @staticmethod
     def _parse_qm_xyz(qm_xyz_filename):
         atoms = ase.io.read(qm_xyz_filename, index=':')
