@@ -386,7 +386,6 @@ class EMLEBase(_torch.nn.Module):
                  torch.Tensor (N_BATCH, N_QM_ATOMS * 3, N_QM_ATOMS * 3,))
             Valence widths, core charges, valence charges, A_thole tensor
         """
-
         # Mask for padded coordinates.
         mask = atomic_numbers > 0
 
@@ -600,7 +599,8 @@ class EMLEBase(_torch.nn.Module):
 
         result: torch.Tensor (N_BATCH, N_ATOMS + 1, N_ATOMS + 1)
         """
-        s_gauss = s * self.a_QEq
+        s = _torch.clamp(s, min=1e-16)
+        s_gauss = s * self.a_QEq  
         s2 = s_gauss**2
         s_mat = _torch.sqrt(s2[:, :, None] + s2[:, None, :])
 
@@ -693,6 +693,7 @@ class EMLEBase(_torch.nn.Module):
 
         alphap = alpha * self.a_Thole
         alphap_mat = alphap[:, :, None] * alphap[:, None, :]
+        alphap_mat = _torch.clamp(alphap_mat, min=1e-16)       
 
         au3 = _torch.where(alphap_mat > 0, r_data[0] ** 3 / _torch.sqrt(alphap_mat), 0)
         au31 = au3.repeat_interleave(3, dim=2)
@@ -700,7 +701,8 @@ class EMLEBase(_torch.nn.Module):
 
         A = -self._get_T2_thole(r_data[2], r_data[3], au32)
 
-        alpha3 = alpha.repeat_interleave(3, dim=1)
+        alpha3 = alpha.repeat_interleave(3, dim=1) 
+        alpha3 = _torch.clamp(alpha3, min=1e-16)
         new_diag = _torch.where(alpha3 > 0, 1.0 / alpha3, 1.0)
         diag_ones = _torch.ones_like(new_diag, dtype=A.dtype, device=A.device)
         mask = _torch.diag_embed(diag_ones)

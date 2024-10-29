@@ -34,6 +34,18 @@ class EMLETrainer:
         zid_mapping[0] = -1
         return zid_mapping
 
+    @staticmethod
+    def _train(loss_instance, optimizer, epochs, *args, **kwargs):
+        for epoch in range(epochs):
+            loss_instance.train()
+            optimizer.zero_grad()
+            loss = loss_instance(*args, **kwargs)
+            loss.backward(retain_graph=True)
+            optimizer.step()
+            print(f"Epoch {epoch}: Loss = {loss.item()}")
+
+        return loss
+
     def train(
         self,
         z,
@@ -48,6 +60,8 @@ class EMLETrainer:
         sigma=1e-3,
         ivm_thr=0.2,
         epochs=1000,
+        lr_qeq=0.001,
+        lr_thole=0.001,
     ):
         """
         Train an EMLE model.
@@ -96,6 +110,7 @@ class EMLETrainer:
         q_core = pad_to_max(q_core)
         q = pad_to_max(q)
         species = _torch.unique(z[z > 0]).to(_torch.int)
+        alpha = _torch.tensor(alpha)
 
         # Get zid mapping
         zid_mapping = self._get_zid_mapping(species)
@@ -107,10 +122,6 @@ class EMLETrainer:
 
         # "Fit" q_core (just take averages over the entire training set)
         q_core = mean_by_z(q_core, zid)
-
-        print("Predicted core charges:")
-        for i, q_core_i in enumerate(q_core):
-            print(f"{species[i]}: {q_core_i}")
 
         # Create an array of (molecule_id, atom_id) pairs (as in the full dataset) for the training set.
         # This is needed to be able to locate atoms/molecules in the original dataset that were picked by IVM.
@@ -135,12 +146,15 @@ class EMLETrainer:
             s, K_mols_ref, K_ref_ref_padded, zid, sigma
         )
 
+        ref_values_s = pad_to_max(ref_values_s)
+
         params = {
-            "a_QEq": None,
+            "a_QEq": _torch.ones(1),
             "a_Thole": _torch.zeros(1),
-            "ref_values_s": pad_to_max(ref_values_s),
-            "ref_values_chi": _torch.zeros(len(species)),
-            "k_Z": None,
+            "ref_values_s": ref_values_s,
+            "ref_values_chi": _torch.zeros(*ref_values_s.shape, dtype=ref_values_s.dtype),
+            "k_Z": _torch.ones(3),
+            "sqrtk_ref": _torch.ones(*ref_values_s.shape, dtype=ref_values_s.dtype) if alpha_mode == "reference" else None,
         }
 
         ref_mask = ivm_mol_atom_ids_padded[:, :, 0] > -1
@@ -154,32 +168,16 @@ class EMLETrainer:
             q_core=q_core,
             emle_aev_computer=emle_aev_computer,
             species=species,
-        )
-
-        # Fit s (pure GPR, no fancy optimization needed)
-        s, _, _, _ = emle_base(z, xyz, q_mol)
-        exit()
-
+        )   
         # Fit chi, a_QEq (QEq over chi predicted with GPR)
-        QEq_model = QEqLoss(self.emle_base)
-        optimizer = _torch.optim.Adam(QEq_model.parameters(), lr=0.001)
-        for epoch in range(epochs):
-            QEq_model.train()
-            optimizer.zero_grad()
-            loss = QEq_model(z, xyz, q_mol, q)
-            loss.backward()
-            optimizer.step()
+        QEq_model = QEqLoss(emle_base)
+        optimizer = _torch.optim.Adam(QEq_model.parameters(), lr=lr_qeq)
+        self._train(QEq_model, optimizer, epochs, z, xyz, q_mol, q, ref_features, n_ref)
 
         # Fit a_Thole, k_Z (uses volumes predicted by QEq model)
-        # Fit chi, a_QEq (QEq over chi predicted with GPR)
-        Thole_model = TholeLoss(self.emle_base)
-        optimizer = _torch.optim.Adam(Thole_model.parameters(), lr=0.002)
-        for epoch in range(epochs):
-            QEq_model.train()
-            optimizer.zero_grad()
-            loss = QEq_model(z, xyz, q_mol, alpha)
-            loss.backward()
-            optimizer.step()
+        TholeModel = TholeLoss(emle_base)
+        optimizer = _torch.optim.Adam(TholeModel.parameters(), lr=lr_thole)
+        self._train(TholeModel, optimizer, epochs, z, xyz, q_mol, alpha)
 
         # Checks for alpha_mode
         if not isinstance(alpha_mode, str):
@@ -191,7 +189,7 @@ class EMLETrainer:
         # Fit sqrtk_ref ( alpha = sqrtk ** 2 * k_Z * v)
         if alpha_mode == "reference":
             pass
-
+        
 
 def main():
     # Parse CLI args, read the files and run emle_train
