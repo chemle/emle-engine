@@ -26,7 +26,7 @@ def pad_to_max(arrays, value=0, side="right"):
         for array in arrays
     ]
     padded_arrays = _torch.nn.utils.rnn.pad_sequence(
-        tensors, batch_first=True, padding_value=value, padding_side=side
+        tensors, batch_first=True, padding_value=value
     )
     return padded_arrays
 
