@@ -1,11 +1,10 @@
 import torch as _torch
 
-from ..models import EMLEBase
-from ._emle_aev_computer import EMLEAEVComputer
-from ._gpr import GPR
 from ._ivm import IVM
 from ._utils import mean_by_z, pad_to_max
 from ._loss import QEqLoss, TholeLoss
+from ._gpr import GPR
+from ..models import EMLEBase, EMLEAEVComputer
 
 
 class EMLETrainer:
@@ -45,7 +44,7 @@ class EMLETrainer:
         alpha,
         train_mask,
         test_mask,
-        alpha_mode='species',
+        alpha_mode="species",
         sigma=1e-3,
         ivm_thr=0.2,
         epochs=1000,
@@ -121,21 +120,45 @@ class EMLETrainer:
         )
 
         # Perform IVM
-        ivm = IVM()
-        ivm_mol_atom_ids_padded, aev_ivm_allz = ivm.perform_ivm(
+        ivm_mol_atom_ids_padded, aev_ivm_allz = IVM.perform_ivm(
             aev_mols, z, atom_ids, species, ivm_thr
         )
 
-        # Get kernels for GPR
-        k_ref_ref, k_mols_ref = GPR._get_gpr_kernels(
+        ref_features = pad_to_max(aev_ivm_allz)
+
+        # Fit s (pure GPR, no fancy optimization needed)
+        K_ref_ref_padded, K_mols_ref = GPR._get_gpr_kernels(
             aev_mols, z, aev_ivm_allz, species
         )
 
-        # Fit s (pure GPR, no fancy optimization needed)
-        s_ref = GPR.fit_atomic_sparse_gpr(s, k_mols_ref, k_ref_ref, z, sigma)
-        # TODO: currently working up to here
-        exit()
+        ref_values_s = GPR.fit_atomic_sparse_gpr(
+            s, K_mols_ref, K_ref_ref_padded, zid, sigma
+        )
 
+        params = {
+            "a_QEq": None,
+            "a_Thole": _torch.zeros(1),
+            "ref_values_s": pad_to_max(ref_values_s),
+            "ref_values_chi": _torch.zeros(len(species)),
+            "k_Z": None,
+        }
+
+        ref_mask = ivm_mol_atom_ids_padded[:, :, 0] > -1
+        n_ref = _torch.sum(ref_mask, dim=1)
+
+        # Create the EMLE base instance
+        emle_base = self._emle_base(
+            params=params,
+            n_ref=n_ref,
+            ref_features=ref_features,
+            q_core=q_core,
+            emle_aev_computer=emle_aev_computer,
+            species=species,
+        )
+
+        # Fit s (pure GPR, no fancy optimization needed)
+        s, _, _, _ = emle_base(z, xyz, q_mol)
+        exit()
 
         # Fit chi, a_QEq (QEq over chi predicted with GPR)
         QEq_model = QEqLoss(self.emle_base)
