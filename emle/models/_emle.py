@@ -38,7 +38,6 @@ from typing import Optional, Tuple, List
 
 from . import _patches
 from . import EMLEBase as _EMLEBase
-from ..train import EMLEAEVComputer
 
 # Monkey-patch the TorchANI BuiltInModel and BuiltinEnsemble classes so that
 # they call self.aev_computer using args only to allow forward hooks to work
@@ -291,6 +290,8 @@ class EMLE(_torch.nn.Module):
             raise TypeError("'create_aev_calculator' must be of type 'bool'")
 
         # Create an AEV calculator to perform the feature calculations.
+        from . import EMLEAEVComputer
+
         if create_aev_calculator:
             emle_aev_computer = EMLEAEVComputer(mask=aev_mask,
                                                 # TODO: wrong mask, update default model
