@@ -1,4 +1,5 @@
 """Gaussian Process Regression (GPR) for EMLE training."""
+
 import torch as _torch
 from ._utils import pad_to_max
 
@@ -20,6 +21,19 @@ class GPR:
         return GPR._norm_aev_kernel(a, b) ** 2
 
     @staticmethod
+    def get_K_mols_ref(K_ivm_allz, z_mols, species):
+        # K_ivm_allz: NSP x NZ x NIVMZ
+        # z_mols: NMOLS x ATOMS_MAX
+        # result: NMOLS x ATOMS_MAX x MAXIVMZ
+        ivm_max = max([K_ivm_z.shape[1] for K_ivm_z in K_ivm_allz])
+        result = _torch.zeros((*z_mols.shape, ivm_max), dtype=K_ivm_allz[0].dtype)
+        for z, K_ivm_z in zip(species, K_ivm_allz):
+            pad = (0, ivm_max - K_ivm_z.shape[1])
+            result[z_mols == z] = _torch.nn.functional.pad(K_ivm_z, pad)
+
+        return result
+
+    @staticmethod
     def _get_gpr_kernels(aev_mols, z_mols, aev_ivm_allz, species):
         """
         Get kernels for performing GPR.
@@ -35,9 +49,6 @@ class GPR:
         species : _torch.Tensor(N_SPECIES)
             Unique species in the dataset.
         """
-        # Calculate kernels
-        # aev_mols: NMOLS x ATOMS_MAX x NAEV
-        # aev_ivm_allz: NSP x NZ x NAEV
         aev_allz = [aev_mols[z_mols == z] for z in species]
 
         K_ref_ref = [
@@ -106,7 +117,7 @@ class GPR:
 
         Returns
         -------
-        torch.Tensor(N_REF, N_SPECIES)
+        torch.Tensor(N_SPECIES, MAX_N_REF)
             Fitted atomic values.
 
         Notes
@@ -114,23 +125,11 @@ class GPR:
         Really only used for s, the rest are predicted by learning.
         """
         n_species, max_n_ref = K_ref_ref.shape[:2]
-        result = _torch.zeros((max_n_ref, n_species), dtype=values.dtype)
+
+        result = _torch.zeros((n_species, max_n_ref), dtype=values.dtype)
         for i in range(n_species):
             z_mask = zid == i
-            result[:max_n_ref, i] = GPR.fit_sparse_gpr(
+            result[i, :max_n_ref] = GPR.fit_sparse_gpr(
                 values[z_mask], K_mols_ref[z_mask], K_ref_ref[i], sigma
             )
-        return result
-
-    @staticmethod
-    def get_K_mols_ref(K_ivm_allz, z_mols, species):
-        # K_ivm_allz: NSP x NZ x NIVMZ
-        # z_mols: NMOLS x ATOMS_MAX
-        # result: NMOLS x ATOMS_MAX x MAXIVMZ
-        ivm_max = max([K_ivm_z.shape[1] for K_ivm_z in K_ivm_allz])
-        result = _torch.zeros((*z_mols.shape, ivm_max), dtype=K_ivm_allz[0].dtype)
-        for z, K_ivm_z in zip(species, K_ivm_allz):
-            pad = (0, ivm_max - K_ivm_z.shape[1])
-            result[z_mols == z] = _torch.nn.functional.pad(K_ivm_z, pad)
-            
         return result
