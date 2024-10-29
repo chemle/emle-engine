@@ -65,6 +65,7 @@ class EMLEBase(_torch.nn.Module):
         q_core,
         aev_computer=None,
         aev_mask=None,
+        aev_mean=None,
         species=None,
         alpha_mode="species",
         device=None,
@@ -101,6 +102,9 @@ class EMLEBase(_torch.nn.Module):
 
         aev_mask: torch.Tensor
             Mask for features coming from aev_computer.
+
+        aev_mean: torch.Tensor
+            Mean values to be subtracted from features
 
         species: List[int], Tuple[int], numpy.ndarray, torch.Tensor
             List of species (atomic numbers) supported by the EMLE model.
@@ -203,6 +207,10 @@ class EMLEBase(_torch.nn.Module):
         else:
             dtype = _torch.get_default_dtype()
         self._dtype = dtype
+
+        self._aev_mean = None
+        if aev_mean is not None:
+            self._aev_mean = _torch.tensor(aev_mean, dtype=dtype, device=device)
 
         # Store model parameters as tensors.
         self.a_QEq = _torch.nn.Parameter(params["a_QEq"])
@@ -426,6 +434,10 @@ class EMLEBase(_torch.nn.Module):
         # The AEVs have been pre-computed by a parent model.
         else:
             aev = self._aev[:, :, self._aev_mask]
+
+        if self._aev_mean is not None:
+            aev = aev - self._aev_mean[None, None, :]
+
         aev = aev / _torch.linalg.norm(aev, ord=2, dim=2, keepdim=True)
 
         # Compute the MBIS valence shell widths.
