@@ -109,7 +109,7 @@ class DeepMDBackend(BaseBackend):
 class EMLEAnalyzer:
 
     def __init__(self, qm_xyz_filename, pc_xyz_filename, q_total,
-                 backend, emle_base):
+                 emle_base, backend=None):
 
         self.q_total = q_total
         dtype = emle_base._dtype
@@ -118,7 +118,8 @@ class EMLEAnalyzer:
         atomic_numbers, qm_xyz = self._parse_qm_xyz(qm_xyz_filename)
         pc_charges, pc_xyz = self._parse_pc_xyz(pc_xyz_filename)
 
-        self.e_backend = backend(atomic_numbers, qm_xyz)
+        if backend:
+            self.e_backend = backend(atomic_numbers, qm_xyz)
 
         self.atomic_numbers = _torch.tensor(atomic_numbers,
                                             dtype=_torch.int,

@@ -12,7 +12,6 @@ parser.add_argument("--orca-tarball", type=str,
 parser.add_argument("--emle-model", type=str, metavar='name.mat',
                     required=True, help="EMLE model file")
 parser.add_argument("--backend", type=str, choices=["deepmd", "ani2x"],
-                    required=True,
                     help="Gas phase ML backend ('deepmd' or 'ani2x')")
 parser.add_argument("--deepmd-model", type=str,
                     metavar='name.pb',
@@ -43,16 +42,18 @@ from emle._analyzer import EMLEAnalyzer, ANI2xBackend, DeepMDBackend
 if args.backend == "deepmd" and not args.deepmd_model:
     parser.error("--deepmd-model is required when backend='deepmd'")
 
-backend = ANI2xBackend() if args.backend == "ani2x" \
-    else DeepMDBackend(args.deepmd_model)
+backend = None
+if args.backend == "ani2x":
+    backend = ANI2xBackend()
+elif args.backend == "deepmd":
+    backend = DeepMDBackend(args.deepmd_model)
 
 emle_base = EMLE(model=args.emle_model)._emle_base
 
 analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz, args.q,
-                        backend, emle_base)
+                        emle_base, backend)
 
-parser = ORCAParser(args.orca_tarball, decompose=True,
-                         alpha=args.alpha)
+parser = ORCAParser(args.orca_tarball, decompose=True, alpha=args.alpha)
 
 result = {'z': parser.z,
           'xyz': parser.xyz,
@@ -62,13 +63,14 @@ result = {'z': parser.z,
           's_qm': parser.mbis['s'],
           'q_core_qm': parser.mbis['q_core'],
           'q_val_qm': parser.mbis['q_core'],
-          'E_vac_emle': analyzer.e_backend,
           'E_static_emle': analyzer.e_static,
           'E_induced_emle': analyzer.e_induced,
           's_emle': analyzer.s,
           'q_core_emle': analyzer.q_core,
           'q_val_emle': analyzer.q_val,
           'alpha_emle': analyzer.alpha}
+if args.backend:
+    result['E_vac_emle'] = analyzer.e_backend
 if args.alpha:
     result['alpha_qm'] = parser.alpha
 
