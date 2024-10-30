@@ -4,15 +4,43 @@ import torch as _torch
 
 
 class QEqLoss(_torch.nn.Module):
-    def __init__(self, emle_base):
-        """
-        To train ref_values_chi, a_QEq
-        """
+    """
+    Loss function for the charge equilibration (QEq). Used to train ref_values_chi, a_QEq.
+    
+    Parameters
+    ----------
+    emle_base: EMLEBase
+        EMLEBase object.
+    loss: torch.nn.Module, optional, default=torch.nn.MSELoss()
+        Loss function.
+
+    Attributes
+    ----------
+    _emle_base: EMLEBase
+        EMLEBase object.
+    _loss: torch.nn.Module
+        Loss function.
+    """
+    def __init__(self, emle_base, loss=_torch.nn.MSELoss()):
         super().__init__()
         self._emle_base = emle_base
-        self._loss = _torch.nn.MSELoss()
+        self._loss = loss
 
     def forward(self, atomic_numbers, xyz, q_mol, q_target):
+        """
+        Forward pass.
+
+        Parameters
+        ----------
+        atomic_numbers: _torch.Tensor(N_BATCH, MAX_N_ATOMS)
+            Atomic numbers.
+        xyz: _torch.Tensor(N_BATCH, MAX_N_ATOMS, 3)
+            Cartesian coordinates.
+        q_mol: _torch.Tensor(N_BATCH)
+            Total molecular charges.
+        q_target: _torch.Tensor(N_BATCH, MAX_N_ATOMS)
+            Target atomic charges.
+        """
         # Recalculate reference values for chi
         self._emle_base._ref_mean_chi, self._emle_base._c_chi = self._emle_base._get_c(
             self._emle_base._n_ref,
@@ -24,17 +52,33 @@ class QEqLoss(_torch.nn.Module):
         _, q_core, q_val, _ = self._emle_base(atomic_numbers, xyz, q_mol)
 
         return self._loss(q_core + q_val, q_target)
-
+ 
 
 class TholeLoss(_torch.nn.Module):
     """
-    To train a_Thole, k_Z, ref_values_sqrtk
+    Loss function for the Thole model. Used to train a_Thole, k_Z, ref_values_sqrtk.
+    
+    Parameters
+    ----------
+    emle_base: EMLEBase
+        EMLEBase object.
+    mode: str, optional, default='species'
+        Alpha mode. Either 'species' or 'reference'.
+    loss: torch.nn.Module, optional, default=torch.nn.MSELoss()
+        Loss function.
+
+    Attributes
+    ----------
+    _emle_base: EMLEBase
+        EMLEBase object.
+    _loss: torch.nn.Module
+        Loss function.
     """
 
-    def __init__(self, emle_base, mode="species"):
+    def __init__(self, emle_base, mode="species", loss=_torch.nn.MSELoss()):
         super().__init__()
         self._emle_base = emle_base
-        self._loss = _torch.nn.MSELoss()
+        self._loss = loss
 
         # Set alpha mode
         self.set_mode(mode)
@@ -68,6 +112,14 @@ class TholeLoss(_torch.nn.Module):
         return _torch.sum(A_thole_inv.reshape((-1, n_atoms, 3, n_atoms, 3)), dim=(1, 3))
 
     def set_mode(self, mode):
+        """
+        Set alpha mode.
+
+        Parameters
+        ----------
+        mode: str
+            Alpha mode. Either 'species' or 'reference'.
+        """
         if mode not in ("species", "reference"):
             raise ValueError("TholeLoss: mode must be either 'species' or 'reference'")
         self._emle_base.alpha_mode = mode
@@ -75,6 +127,24 @@ class TholeLoss(_torch.nn.Module):
     def forward(
         self, atomic_numbers, xyz, q_mol, alpha_mol_target, opt_sqrtk=False, l2_reg=None
     ):
+        """
+        Forward pass.
+
+        Parameters
+        ----------
+        atomic_numbers: _torch.Tensor(N_BATCH, MAX_N_ATOMS)
+            Atomic numbers.
+        xyz: _torch.Tensor(N_BATCH, MAX_N_ATOMS, 3)
+            Cartesian coordinates.
+        q_mol: _torch.Tensor(N_BATCH, MAX_N_ATOMS)
+            Molecular charges.
+        alpha_mol_target: _torch.Tensor(N_BATCH, 3, 3)
+            Target molecular dipolar polarizability tensor.
+        opt_sqrtk: bool, optional, default=False
+            Whether to optimize sqrtk.
+        l2_reg: float, optional, default=None
+            L2 regularization coefficient. If None, no regularization is applied.
+        """
         if opt_sqrtk:
             self._emle_base._ref_mean_sqrtk, self._emle_base._c_sqrtk = (
                 self._emle_base._get_c(
