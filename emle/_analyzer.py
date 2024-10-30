@@ -104,7 +104,7 @@ class EMLEAnalyzer:
                                               mesh_data)
 
         for attr in ('s', 'q_core', 'q_val', 'A_thole', 'e_static', 'e_induced'):
-            setattr(self, attr, getattr(self, attr).detach())
+            setattr(self, attr, getattr(self, attr).detach().cpu().numpy())
 
     @staticmethod
     def _parse_qm_xyz(qm_xyz_filename):
