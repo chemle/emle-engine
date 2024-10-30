@@ -167,7 +167,6 @@ class EMLETrainer:
         q,
         alpha,
         train_mask,
-        test_mask,
         alpha_mode="reference",
         sigma=1e-3,
         ivm_thr=0.2,
@@ -196,8 +195,6 @@ class EMLETrainer:
             Atomic polarizabilities.
         train_mask: _torch.Tensor(N_BATCH,)
             Mask for training samples.
-        test_mask: _torch.Tensor(N_BATCH,)
-            Mask for test samples.
         alpha_mode: 'species' or 'reference'
             Mode for polarizability model
         sigma: float
@@ -227,14 +224,15 @@ class EMLETrainer:
             raise ValueError("'alpha_mode' must be 'species' or 'reference'")
 
         # Prepare batch data
-        q_mol = _torch.Tensor([q_m.sum() for q_m in q])
-        z = pad_to_max(z)
-        xyz = pad_to_max(xyz)
-        s = pad_to_max(s)
-        q_core = pad_to_max(q_core)
-        q = pad_to_max(q)
+        q_mol = _torch.Tensor([q_m.sum() for q_m in q])[train_mask]
+        z = pad_to_max(z)[train_mask]
+        xyz = pad_to_max(xyz)[train_mask]
+        s = pad_to_max(s)[train_mask]
+        q_core = pad_to_max(q_core)[train_mask]
+        q = pad_to_max(q)[train_mask]
+        alpha = _torch.tensor(alpha)[train_mask]
+
         species = _torch.unique(z[z > 0]).to(_torch.int)
-        alpha = _torch.tensor(alpha)
 
         # Get zid mapping
         zid_mapping = self._get_zid_mapping(species)
