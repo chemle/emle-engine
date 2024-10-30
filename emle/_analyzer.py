@@ -132,6 +132,7 @@ class EMLEAnalyzer:
             self.qm_xyz,
             _torch.ones(len(self.qm_xyz), device=device) * self.q_total
         )
+        self.alpha = self._get_mol_alpha(self.A_thole, self.atomic_numbers)
 
         mesh_data = EMLEPC._get_mesh_data(self.qm_xyz, self.pc_xyz, self.s)
         self.e_static = EMLEPC.get_E_static(self.q_core,
@@ -143,7 +144,7 @@ class EMLEAnalyzer:
                                               self.s,
                                               mesh_data)
 
-        for attr in ('s', 'q_core', 'q_val', 'A_thole', 'e_static', 'e_induced'):
+        for attr in ('s', 'q_core', 'q_val', 'alpha', 'e_static', 'e_induced'):
             setattr(self, attr, getattr(self, attr).detach().cpu().numpy())
 
     @staticmethod
@@ -166,3 +167,16 @@ class EMLEAnalyzer:
                     break
         padded_frames = pad_to_max(frames)
         return padded_frames[:, :, 0], padded_frames[:, :, 1:]
+
+    @staticmethod
+    def _get_mol_alpha(A_thole, atomic_numbers):
+        mask = atomic_numbers > 0
+        mask_mat = mask[:, :, None] * mask[:, None, :]
+        mask_mat = mask_mat.repeat_interleave(3, dim=1)
+        mask_mat = mask_mat.repeat_interleave(3, dim=2)
+
+        n_mols = A_thole.shape[0]
+        n_atoms = A_thole.shape[1] // 3
+        Ainv = _torch.linalg.inv(A_thole) * mask_mat
+        return _torch.sum(Ainv.reshape(n_mols, n_atoms, 3, n_atoms, 3),
+                          dim=(1, 3))
