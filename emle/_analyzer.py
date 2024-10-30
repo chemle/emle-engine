@@ -134,7 +134,6 @@ class EMLEAnalyzer:
                                             self.q_val,
                                             self.pc_charges,
                                             mesh_data)
-        # print(mesh_data[0].shape, mesh_data[2].shape, self.pc_charges.shape)
         self.e_induced = EMLEPC.get_E_induced(self.A_thole,
                                               self.pc_charges,
                                               self.s,
