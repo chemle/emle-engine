@@ -5,7 +5,7 @@
 #
 # Authors: Lester Hedges   <lester.hedges@gmail.com>
 #          Kirill Zinovjev <kzinovjev@gmail.com>
-#          Joao Morado     <joaomorado@gmail.com
+#          Joao Morado     <joaomorado@gmail.com>
 #
 # EMLE-Engine is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by

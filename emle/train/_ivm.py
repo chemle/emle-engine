@@ -20,15 +20,19 @@ class IVM:
             pending = _torch.tensor([i for i in range(n_samples) if i not in selected])
             aev_sel, aev_pen = aev_0[selected], aev_0[pending]
             K_sel = GPR._sq_aev_kernel(aev_sel, aev_sel)
-            K_sel_inv = _torch.linalg.inv(K_sel)
+            K_sel_inv = _torch.linalg.inv(
+                K_sel
+            )  # K_sel_inv = torch.linalg.inv(K_sel + torch.eye(len(aev_sel)) * SIGMA ** 2)
 
             if k_old is None:
                 k = GPR._sq_aev_kernel(aev_pen, aev_sel)
             else:
                 k_new = GPR._sq_aev_kernel(aev_pen, aev_sel[-1:])
-                k = _torch.cat([k_old, k_new], dim=1)
+                k = _torch.hstack([k_old, k_new])
 
-            var = _torch.ones(len(pending)) - _torch.sum(k @ K_sel_inv * k, dim=1)
+            var = _torch.ones(len(pending), device=k.device) - _torch.sum(
+                k @ K_sel_inv * k, dim=1
+            )
 
             max_var = _torch.max(var)
             if max_var < thr:
@@ -60,7 +64,7 @@ class IVM:
 
         Returns
         -------
-        
+
 
         """
         aev_allz = [aev_mols[z_mols == z] for z in species]

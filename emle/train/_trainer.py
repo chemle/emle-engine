@@ -1,14 +1,19 @@
 import torch as _torch
 
-from ._ivm import IVM
-from ._utils import mean_by_z, pad_to_max
-from ._loss import QEqLoss, TholeLoss
+from ..models import EMLEAEVComputer, EMLEBase
 from ._gpr import GPR
-from ..models import EMLEBase, EMLEAEVComputer
+from ._ivm import IVM
+from ._loss import QEqLoss, TholeLoss
+from ._utils import mean_by_z, pad_to_max
 
 
 class EMLETrainer:
-    def __init__(self, emle_base=EMLEBase, qeq_loss=QEqLoss, thole_loss=TholeLoss):
+    def __init__(
+        self,
+        emle_base=EMLEBase,
+        qeq_loss=QEqLoss,
+        thole_loss=TholeLoss,
+    ):
         self._emle_base = emle_base
         self._qeq_loss = qeq_loss
         self._thole_loss = thole_loss
@@ -28,12 +33,14 @@ class EMLETrainer:
         torch.Tensor
             Species ID mapping.
         """
-        zid_mapping = _torch.zeros(max(species) + 1, dtype=_torch.int)
+        zid_mapping = _torch.zeros(
+            max(species) + 1, dtype=_torch.int, device=species.device
+        )
         for i, z in enumerate(species):
             zid_mapping[z] = i
         zid_mapping[0] = -1
         return zid_mapping
-    
+
     @staticmethod
     def write_model_to_file(emle_model, model_filename):
         """
@@ -46,10 +53,14 @@ class EMLETrainer:
         model_filename: str
             Filename to save the trained model.
         """
-        # Save the model as a MATLAB struct
-        import scipy.io 
+        import scipy.io
+
         # Deatch the tensors, convert to numpy arrays and save the model
-        emle_model = {k: v.detach().numpy() for k, v in emle_model.items() if isinstance(v, _torch.Tensor)}
+        emle_model = {
+            k: v.detach().numpy()
+            for k, v in emle_model.items()
+            if isinstance(v, _torch.Tensor)
+        }
         scipy.io.savemat(model_filename, emle_model)
 
     @staticmethod
@@ -79,7 +90,7 @@ class EMLETrainer:
         torch.Tensor(N_BATCH, N_ATOMS)
             Atomic widths.
         """
-        K_ref_ref_padded, K_mols_ref = GPR._get_gpr_kernels(
+        K_ref_ref_padded, K_mols_ref = GPR.get_gpr_kernels(
             aev_mols, z, aev_ivm_allz, species
         )
 
@@ -175,6 +186,8 @@ class EMLETrainer:
         lr_thole=0.001,
         lr_sqrtk=0.001,
         model_filename="emle_model.mat",
+        device=_torch.device("cuda"),
+        dtype=_torch.float64,
     ):
         """
         Train an EMLE model.
@@ -205,6 +218,10 @@ class EMLETrainer:
             Number of training epochs.
         model_filename: str or None
             Filename to save the trained model. If None, the model is not saved.
+        device: torch.device
+            Device to use for training.
+        dtype: torch.dtype
+            Data type to use for training. Default is torch.float64.
 
         Returns
         -------
@@ -223,6 +240,9 @@ class EMLETrainer:
         if alpha_mode not in ["species", "reference"]:
             raise ValueError("'alpha_mode' must be 'species' or 'reference'")
 
+        if train_mask is None:
+            train_mask = _torch.ones(len(z), dtype=_torch.bool)
+
         # Prepare batch data
         q_mol = _torch.Tensor([q_m.sum() for q_m in q])[train_mask]
         z = pad_to_max(z)[train_mask]
@@ -231,15 +251,26 @@ class EMLETrainer:
         q_core = pad_to_max(q_core)[train_mask]
         q = pad_to_max(q)[train_mask]
         alpha = _torch.tensor(alpha)[train_mask]
+        species = _torch.unique(z[z > 0])
 
-        species = _torch.unique(z[z > 0]).to(_torch.int)
+        # Place on the correct device and set the data type
+        q_mol = q_mol.to(device=device, dtype=dtype)
+        z = z.to(device=device, dtype=_torch.int64)
+        xyz = xyz.to(device=device, dtype=dtype)
+        s = s.to(device=device, dtype=dtype)
+        q_core = q_core.to(device=device, dtype=dtype)
+        q = q.to(device=device, dtype=dtype)
+        alpha = alpha.to(device=device, dtype=dtype)
+        species = species.to(device=device, dtype=_torch.int64)
 
         # Get zid mapping
         zid_mapping = self._get_zid_mapping(species)
         zid = zid_mapping[z]
 
         # Calculate AEVs
-        emle_aev_computer = EMLEAEVComputer(num_species=len(species))
+        emle_aev_computer = EMLEAEVComputer(
+            num_species=len(species), dtype=dtype, device=device
+        )
         aev_mols = emle_aev_computer(zid, xyz)
 
         # "Fit" q_core (just take averages over the entire training set)
@@ -250,7 +281,7 @@ class EMLETrainer:
         n_mols, max_atoms = q.shape
         atom_ids = _torch.stack(
             _torch.meshgrid(_torch.arange(n_mols), _torch.arange(max_atoms)), dim=-1
-        )
+        ).to(device)
 
         # Perform IVM
         ivm_mol_atom_ids_padded, aev_ivm_allz = IVM.perform_ivm(
@@ -266,17 +297,27 @@ class EMLETrainer:
 
         # Initial guess for the model parameters
         params = {
-            "a_QEq": _torch.ones(1),
-            "a_Thole": _torch.zeros(1),
-            "ref_values_s": ref_values_s,
+            "a_QEq": _torch.ones(1, dtype=dtype, device=_torch.device(device)),
+            "a_Thole": _torch.zeros(1, dtype=dtype, device=_torch.device(device)),
+            "ref_values_s": ref_values_s.to(device),
             "ref_values_chi": _torch.zeros(
-                *ref_values_s.shape, dtype=ref_values_s.dtype
+                *ref_values_s.shape,
+                dtype=ref_values_s.dtype,
+                device=_torch.device(device),
             ),
-            "k_Z": _torch.ones(len(species)),
-            "sqrtk_ref": _torch.ones(*ref_values_s.shape, dtype=ref_values_s.dtype)
+            "k_Z": _torch.ones(len(species), dtype=dtype, device=_torch.device(device)),
+            "sqrtk_ref": _torch.ones(
+                *ref_values_s.shape,
+                dtype=ref_values_s.dtype,
+                device=_torch.device(device),
+            )
             if alpha_mode == "reference"
             else None,
         }
+
+        for k, v in params.items():
+            if v is not None:
+                print(f"{k}: {v.dtype}")
 
         # Create the EMLE base instance
         emle_base = self._emle_base(
@@ -287,6 +328,8 @@ class EMLETrainer:
             emle_aev_computer=emle_aev_computer,
             species=species,
             alpha_mode=alpha_mode,
+            device=_torch.device(device),
+            dtype=dtype,
         )
 
         # Fit chi, a_QEq (QEq over chi predicted with GPR)
