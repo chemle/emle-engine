@@ -33,18 +33,130 @@ class EMLETrainer:
             zid_mapping[z] = i
         zid_mapping[0] = -1
         return zid_mapping
+    
+    @staticmethod
+    def write_model_to_file(emle_model, model_filename):
+        """
+        Write the trained model to a file.
+
+        Parameters
+        ----------
+        emle_model: dict
+            Trained EMLE model.
+        model_filename: str
+            Filename to save the trained model.
+        """
+        # Save the model as a MATLAB struct
+        import scipy.io 
+        # Deatch the tensors, convert to numpy arrays and save the model
+        emle_model = {k: v.detach().numpy() for k, v in emle_model.items() if isinstance(v, _torch.Tensor)}
+        scipy.io.savemat(model_filename, emle_model)
 
     @staticmethod
-    def _train(loss_instance, optimizer, epochs, *args, **kwargs):
-        for epoch in range(epochs):
-            loss_instance.train()
-            optimizer.zero_grad()
-            loss = loss_instance(*args, **kwargs)
-            loss.backward(retain_graph=True)
-            optimizer.step()
-            print(f"Epoch {epoch}: Loss = {loss.item()}")
+    def _train_s(s, z, zid, aev_mols, aev_ivm_allz, species, sigma):
+        """
+        Train the s model.
 
-        return loss
+        Parameters
+        ----------
+        s: torch.Tensor(N_BATCH, N_ATOMS)
+            Atomic widths.
+        z: torch.Tensor(N_BATCH, N_ATOMS)
+            Atomic numbers.
+        zid: torch.Tensor(N_BATCH, N_ATOMS)
+            Species IDs.
+        aev_mols: torch.Tensor(N_BATCH, N_ATOMS, N_AEV)
+            Atomic environment vectors.
+        aev_ivm_allz: torch.Tensor(N_BATCH, N_ATOMS, N_AEV)
+            Atomic environment vectors for all species.
+        species: torch.Tensor(N_SPECIES)
+            Species IDs.
+        sigma: float
+            GPR sigma value.
+
+        Returns
+        -------
+        torch.Tensor(N_BATCH, N_ATOMS)
+            Atomic widths.
+        """
+        K_ref_ref_padded, K_mols_ref = GPR._get_gpr_kernels(
+            aev_mols, z, aev_ivm_allz, species
+        )
+
+        ref_values_s = GPR.fit_atomic_sparse_gpr(
+            s, K_mols_ref, K_ref_ref_padded, zid, sigma
+        )
+
+        return pad_to_max(ref_values_s)
+
+    @staticmethod
+    def _train_model(
+        loss_class, opt_param_names, lr, epochs, emle_base, *args, **kwargs
+    ):
+        """
+        Train a model.
+
+        Parameters
+        ----------
+        loss_class: class
+            Loss class.
+        opt_param_names: list of str
+            List of parameter names to optimize.
+        lr: float
+            Learning rate.
+        epochs: int
+            Number of training epochs.
+        emle_base: EMLEBase
+            EMLEBase instance.
+
+        Returns
+        -------
+        model
+            Trained model.
+        """
+
+        def _train_loop(loss_instance, optimizer, epochs, *args, **kwargs):
+            """
+            Perform the training loop.
+
+            Parameters
+            ----------
+            loss_instance: nn.Module
+                Loss instance.
+            optimizer: torch.optim.Optimizer
+                Optimizer.
+            epochs: int
+                Number of training epochs.
+            args: list
+                Positional arguments to pass to the forward method.
+            kwargs: dict
+                Keyword arguments to pass to the forward method.
+
+            Returns
+            -------
+            loss
+                Forward loss.
+            """
+            for epoch in range(epochs):
+                loss_instance.train()
+                optimizer.zero_grad()
+                loss = loss_instance(*args, **kwargs)
+                loss.backward(retain_graph=True)
+                optimizer.step()
+                print(f"Epoch {epoch}: Loss = {loss.item()}")
+
+            return loss
+
+        model = loss_class(emle_base)
+        opt_parameters = [
+            param
+            for name, param in model.named_parameters()
+            if name.split(".")[1] in opt_param_names
+        ]
+
+        optimizer = _torch.optim.Adam(opt_parameters, lr=lr)
+        _train_loop(model, optimizer, epochs, *args, **kwargs)
+        return model
 
     def train(
         self,
@@ -56,12 +168,14 @@ class EMLETrainer:
         alpha,
         train_mask,
         test_mask,
-        alpha_mode="species",
+        alpha_mode="reference",
         sigma=1e-3,
         ivm_thr=0.2,
-        epochs=1000,
+        epochs=100,
         lr_qeq=0.001,
         lr_thole=0.001,
+        lr_sqrtk=0.001,
+        model_filename="emle_model.mat",
     ):
         """
         Train an EMLE model.
@@ -92,15 +206,25 @@ class EMLETrainer:
             IVM threshold.
         epochs: int
             Number of training epochs.
+        model_filename: str or None
+            Filename to save the trained model. If None, the model is not saved.
 
         Returns
         -------
         dict
             Trained EMLE model.
         """
+        # Check input data
         assert (
             len(z) == len(xyz) == len(s) == len(q_core) == len(q) == len(alpha)
         ), "z, xyz, s, q_core, q, and alpha must have the same number of samples"
+
+        # Checks for alpha_mode
+        if not isinstance(alpha_mode, str):
+            raise TypeError("'alpha_mode' must be of type 'str'")
+        alpha_mode = alpha_mode.lower().replace(" ", "")
+        if alpha_mode not in ["species", "reference"]:
+            raise ValueError("'alpha_mode' must be 'species' or 'reference'")
 
         # Prepare batch data
         q_mol = _torch.Tensor([q_m.sum() for q_m in q])
@@ -136,29 +260,25 @@ class EMLETrainer:
         )
 
         ref_features = pad_to_max(aev_ivm_allz)
+        ref_mask = ivm_mol_atom_ids_padded[:, :, 0] > -1
+        n_ref = _torch.sum(ref_mask, dim=1)
 
         # Fit s (pure GPR, no fancy optimization needed)
-        K_ref_ref_padded, K_mols_ref = GPR._get_gpr_kernels(
-            aev_mols, z, aev_ivm_allz, species
-        )
+        ref_values_s = self._train_s(s, z, zid, aev_mols, aev_ivm_allz, species, sigma)
 
-        ref_values_s = GPR.fit_atomic_sparse_gpr(
-            s, K_mols_ref, K_ref_ref_padded, zid, sigma
-        )
-
-        ref_values_s = pad_to_max(ref_values_s)
-
+        # Initial guess for the model parameters
         params = {
             "a_QEq": _torch.ones(1),
             "a_Thole": _torch.zeros(1),
             "ref_values_s": ref_values_s,
-            "ref_values_chi": _torch.zeros(*ref_values_s.shape, dtype=ref_values_s.dtype),
-            "k_Z": _torch.ones(3),
-            "sqrtk_ref": _torch.ones(*ref_values_s.shape, dtype=ref_values_s.dtype) if alpha_mode == "reference" else None,
+            "ref_values_chi": _torch.zeros(
+                *ref_values_s.shape, dtype=ref_values_s.dtype
+            ),
+            "k_Z": _torch.ones(len(species)),
+            "sqrtk_ref": _torch.ones(*ref_values_s.shape, dtype=ref_values_s.dtype)
+            if alpha_mode == "reference"
+            else None,
         }
-
-        ref_mask = ivm_mol_atom_ids_padded[:, :, 0] > -1
-        n_ref = _torch.sum(ref_mask, dim=1)
 
         # Create the EMLE base instance
         emle_base = self._emle_base(
@@ -168,28 +288,74 @@ class EMLETrainer:
             q_core=q_core,
             emle_aev_computer=emle_aev_computer,
             species=species,
-        )   
+            alpha_mode=alpha_mode,
+        )
+
         # Fit chi, a_QEq (QEq over chi predicted with GPR)
-        QEq_model = QEqLoss(emle_base)
-        optimizer = _torch.optim.Adam(QEq_model.parameters(), lr=lr_qeq)
-        self._train(QEq_model, optimizer, epochs, z, xyz, q_mol, q, ref_features, n_ref)
+        print("Fitting chi, a_QEq")
+        self._train_model(
+            loss_class=self._qeq_loss,
+            opt_param_names=["a_QEq", "ref_values_chi"],
+            lr=lr_qeq,
+            epochs=epochs,
+            emle_base=emle_base,
+            atomic_numbers=z,
+            xyz=xyz,
+            q_mol=q_mol,
+            q_target=q,
+        )
 
         # Fit a_Thole, k_Z (uses volumes predicted by QEq model)
-        TholeModel = TholeLoss(emle_base)
-        optimizer = _torch.optim.Adam(TholeModel.parameters(), lr=lr_thole)
-        self._train(TholeModel, optimizer, epochs, z, xyz, q_mol, alpha)
-
-        # Checks for alpha_mode
-        if not isinstance(alpha_mode, str):
-            raise TypeError("'alpha_mode' must be of type 'str'")
-        alpha_mode = alpha_mode.lower().replace(" ", "")
-        if alpha_mode not in ["species", "reference"]:
-            raise ValueError("'alpha_mode' must be 'species' or 'reference'")
+        print("Fitting a_Thole, k_Z")
+        self._train_model(
+            loss_class=self._thole_loss,
+            opt_param_names=["a_Thole", "k_Z"],
+            lr=lr_thole,
+            epochs=epochs,
+            emle_base=emle_base,
+            atomic_numbers=z,
+            xyz=xyz,
+            q_mol=q_mol,
+            alpha_mol_target=alpha,
+        )
 
         # Fit sqrtk_ref ( alpha = sqrtk ** 2 * k_Z * v)
         if alpha_mode == "reference":
-            pass
-        
+            print("Fitting ref_values_sqrtk")
+            self._train_model(
+                loss_class=self._thole_loss,
+                opt_param_names=["ref_values_sqrtk"],
+                lr=lr_sqrtk,
+                epochs=epochs,
+                emle_base=emle_base,
+                atomic_numbers=z,
+                xyz=xyz,
+                q_mol=q_mol,
+                alpha_mol_target=alpha,
+                opt_sqrtk=True,
+                l2_reg=20.0,
+            )
+
+        # Create the final model
+        emle_model = {
+            "a_QEq": emle_base.a_QEq,
+            "a_Thole": emle_base.a_Thole,
+            "ref_values_s": emle_base.ref_values_s,
+            "ref_values_chi": emle_base.ref_values_chi,
+            "k_Z": emle_base.k_Z,
+            "sqrtk_ref": emle_base.ref_values_sqrtk,
+            "species": species,
+            "alpha_mode": alpha_mode,
+            "n_ref": n_ref,
+            "aev_ref": ref_features,
+            "aev_mask": ref_mask,
+        }
+
+        if model_filename is not None:
+            self.write_model_to_file(emle_model, model_filename)
+
+        return emle_model
+
 
 def main():
     # Parse CLI args, read the files and run emle_train

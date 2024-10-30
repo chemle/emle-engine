@@ -12,11 +12,12 @@ class QEqLoss(_torch.nn.Module):
         self._emle_base = emle_base
         self._loss = _torch.nn.MSELoss()
 
-    def forward(self, atomic_numbers, xyz, q_mol, q_target, ref_features, n_ref):
-        # Recalculate reference values for chi and s
-        Kinv = self._emle_base._get_Kinv(ref_features, 1e-3)
+    def forward(self, atomic_numbers, xyz, q_mol, q_target):
+        # Recalculate reference values for chi
         self._emle_base._ref_mean_chi, self._emle_base._c_chi = self._emle_base._get_c(
-            n_ref, self._emle_base.ref_values_chi, Kinv
+            self._emle_base._n_ref,
+            self._emle_base.ref_values_chi,
+            self._emle_base._Kinv,
         )
 
         # Calculate q_core and q_val
@@ -71,12 +72,40 @@ class TholeLoss(_torch.nn.Module):
             raise ValueError("TholeLoss: mode must be either 'species' or 'reference'")
         self._emle_base.alpha_mode = mode
 
-    def forward(self, atomic_numbers, xyz, q_mol, alpha_mol_target):
+    def forward(
+        self, atomic_numbers, xyz, q_mol, alpha_mol_target, opt_sqrtk=False, l2_reg=None
+    ):
+        if opt_sqrtk:
+            self._emle_base._ref_mean_sqrtk, self._emle_base._c_sqrtk = (
+                self._emle_base._get_c(
+                    self._emle_base._n_ref,
+                    self._emle_base.ref_values_sqrtk,
+                    self._emle_base._Kinv,
+                )
+            )
+
+        # Calculate A_thole and alpha_mol
         _, _, _, A_thole = self._emle_base(atomic_numbers, xyz, q_mol)
         alpha_mol = self._get_alpha_mol(A_thole, atomic_numbers > 0)
-      
+
         triu_idx = _torch.triu_indices(3, 3, offset=0)
         alpha_mol_triu = alpha_mol[:, *triu_idx]
         alpha_mol_target_triu = alpha_mol_target[:, *triu_idx]
-        
-        return self._loss(alpha_mol_triu, alpha_mol_target_triu)
+
+        loss = self._loss(alpha_mol_triu, alpha_mol_target_triu)
+
+        if l2_reg is not None:
+            mask = (
+                _torch.arange(
+                    self._emle_base.ref_values_sqrtk.shape[1],
+                    device=self._emle_base._n_ref.device,
+                )
+                < self._emle_base._n_ref[:, None]
+            )
+            loss += (
+                l2_reg
+                * _torch.sum((self._emle_base.ref_values_sqrtk - 1) ** 2 * mask)
+                / _torch.sum(self._emle_base._n_ref)
+            )
+
+        return loss
