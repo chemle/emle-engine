@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
+import os as _os
 
 import numpy as _np
 import torch as _torch
-import ase.io
+import ase as _ase
 
 from ._utils import pad_to_max
 from .models._emle_pc import EMLEPC
@@ -65,6 +66,32 @@ class ANI2xBackend(BaseBackend):
         return energy, gradient
 
 
+class DeepMDBackend(BaseBackend):
+
+    def __init__(self, device=None, model=None):
+
+        super().__init__(device)
+
+        if not _os.path.isfile(model):
+            raise ValueError(f"Unable to locate DeePMD model file: '{model}'")
+
+        try:
+            from deepmd.infer import DeepPot as _DeepPot
+            self._dp = _DeepPot(model)
+            self._z_map = {element: index for index, element in
+                           enumerate(self._dp.get_type_map())}
+        except Exception as e:
+            raise RuntimeError(f"Unable to create the DeePMD potentials: {e}")
+
+    def eval(self, atomic_numbers, xyz, do_gradient=False):
+        # Assuming all the frames are of the same system
+        atom_types = [self._z_map[_ase.Atom(z).symbol]
+                      for z in atomic_numbers[0]]
+        e, f, _ = self._dp.eval(xyz.cpu().numpy(), cells=None, atom_types=atom_types)
+        e = e.flatten()
+        return (e, f) if do_gradient else e
+
+
 class EMLEAnalyzer:
 
     def __init__(self, qm_xyz_filename, pc_xyz_filename, q_total,
@@ -108,7 +135,7 @@ class EMLEAnalyzer:
 
     @staticmethod
     def _parse_qm_xyz(qm_xyz_filename):
-        atoms = ase.io.read(qm_xyz_filename, index=':')
+        atoms = _ase.io.read(qm_xyz_filename, index=':')
         atomic_numbers = pad_to_max([_.get_atomic_numbers() for _ in atoms], -1)
         xyz = _np.array([_.get_positions() for _ in atoms])
         return atomic_numbers, xyz
