@@ -11,34 +11,44 @@ from .models._emle_pc import EMLEPC
 
 class BaseBackend(ABC):
 
-    def __init__(self, device=None):
-        if device is None:
-            cuda_available = _torch.cuda.is_available()
-            device = _torch.device("cuda" if cuda_available else "cpu")
-        self._device = device
+    def __init__(self, torch_device=None):
+        self._device = torch_device
 
     def __call__(self, atomic_numbers, xyz, gradient=False):
         """
-        atomic_numbers: torch.Tensor (N_BATCH, N_QM_ATOMS,)
+        atomic_numbers: np.ndarray (N_BATCH, N_QM_ATOMS,)
             The atomic numbers of the atoms.
 
-        xyz: torch.Tensor (N_BATCH, N_QM_ATOMS,)
+        xyz: np.ndarray (N_BATCH, N_QM_ATOMS,)
             The positions of the atoms.
 
         gradient: bool
             Whether the gradient should be calculated
+
+        Returns energy (and, optionally, gradient) as np.ndarrays
         """
-        return self.eval(atomic_numbers.to(self._device),
-                         xyz.to(self._device),
-                         gradient)
+        if self._device:
+            atomic_numbers = _torch.tensor(atomic_numbers, device=self._device)
+            xyz = _torch.tensor(xyz, device=self._device)
+
+        result = self.eval(atomic_numbers, xyz, gradient)
+
+        if not self._device:
+            return result
+
+        if gradient:
+            e = result[0].detach().cpu().numpy()
+            f = result[1].detach().cpu().numpy()
+            return e, f
+        return result.detach().cpu().numpy()
 
     @abstractmethod
     def eval(self, atomic_numbers, xyz, gradient=False):
         """
-        atomic_numbers: torch.Tensor (N_BATCH, N_QM_ATOMS,)
+        atomic_numbers: (N_BATCH, N_QM_ATOMS,)
             The atomic numbers of the atoms.
 
-        xyz: torch.Tensor (N_BATCH, N_QM_ATOMS,)
+        xyz: (N_BATCH, N_QM_ATOMS,)
             The positions of the atoms.
 
         gradient: bool
@@ -49,17 +59,17 @@ class BaseBackend(ABC):
 
 class ANI2xBackend(BaseBackend):
 
-    def __init__(self, device=None, ani2x_model_index=None):
+    def __init__(self, device, ani2x_model_index=None):
         import torchani as _torchani
 
         super().__init__(device)
 
         self._ani2x = _torchani.models.ANI2x(
             periodic_table_index=True, model_index=ani2x_model_index
-        ).to(self._device)
+        ).to(device)
 
     def eval(self, atomic_numbers, xyz, do_gradient=False):
-        energy = self._ani2x((atomic_numbers, xyz)).energies
+        energy = self._ani2x((atomic_numbers, xyz.float())).energies
         if not do_gradient:
             return energy
         gradient = _torch.autograd.grad(energy.sum(), xyz)[0]
@@ -68,9 +78,9 @@ class ANI2xBackend(BaseBackend):
 
 class DeepMDBackend(BaseBackend):
 
-    def __init__(self, device=None, model=None):
+    def __init__(self, model=None):
 
-        super().__init__(device)
+        super().__init__()
 
         if not _os.path.isfile(model):
             raise ValueError(f"Unable to locate DeePMD model file: '{model}'")
@@ -87,7 +97,7 @@ class DeepMDBackend(BaseBackend):
         # Assuming all the frames are of the same system
         atom_types = [self._z_map[_ase.Atom(z).symbol]
                       for z in atomic_numbers[0]]
-        e, f, _ = self._dp.eval(xyz.cpu().numpy(), cells=None, atom_types=atom_types)
+        e, f, _ = self._dp.eval(xyz, cells=None, atom_types=atom_types)
         e = e.flatten()
         return (e, f) if do_gradient else e
 
@@ -104,14 +114,14 @@ class EMLEAnalyzer:
         atomic_numbers, qm_xyz = self._parse_qm_xyz(qm_xyz_filename)
         pc_charges, pc_xyz = self._parse_pc_xyz(pc_xyz_filename)
 
+        self.e_backend = backend(atomic_numbers, qm_xyz)
+
         self.atomic_numbers = _torch.tensor(atomic_numbers,
                                             dtype=_torch.int,
                                             device=device)
         self.qm_xyz = _torch.tensor(qm_xyz, dtype=dtype, device=device)
         self.pc_charges = _torch.tensor(pc_charges, dtype=dtype, device=device)
         self.pc_xyz = _torch.tensor(pc_xyz, dtype=dtype, device=device)
-
-        self.e_backend = backend(self.atomic_numbers, self.qm_xyz)
 
         self.s, self.q_core, self.q_val, self.A_thole = emle_base(
             self.atomic_numbers,
