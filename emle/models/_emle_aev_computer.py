@@ -113,7 +113,7 @@ class EMLEAEVComputer(_torch.nn.Module):
             hypers = hypers or get_default_hypers(device, dtype)
             self._aev_computer = _torchani.AEVComputer(
                 **hypers, num_species=num_species
-            )
+            ).to(device=device, dtype=dtype)
 
         if not zid_map:
             zid_map = {i: i for i in range(num_species)}
