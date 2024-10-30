@@ -59,8 +59,12 @@ class BaseBackend(ABC):
 
 class ANI2xBackend(BaseBackend):
 
-    def __init__(self, device, ani2x_model_index=None):
+    def __init__(self, device=None, ani2x_model_index=None):
         import torchani as _torchani
+
+        if device is None:
+            cuda_available = _torch.cuda.is_available()
+            device = _torch.device("cuda" if cuda_available else "cpu")
 
         super().__init__(device)
 
