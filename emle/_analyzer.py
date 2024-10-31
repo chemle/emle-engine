@@ -91,16 +91,17 @@ class DeepMDBackend(BaseBackend):
 
         try:
             from deepmd.infer import DeepPot as _DeepPot
+
             self._dp = _DeepPot(model)
-            self._z_map = {element: index for index, element in
-                           enumerate(self._dp.get_type_map())}
+            self._z_map = {
+                element: index for index, element in enumerate(self._dp.get_type_map())
+            }
         except Exception as e:
             raise RuntimeError(f"Unable to create the DeePMD potentials: {e}")
 
     def eval(self, atomic_numbers, xyz, do_gradient=False):
         # Assuming all the frames are of the same system
-        atom_types = [self._z_map[_ase.Atom(z).symbol]
-                      for z in atomic_numbers[0]]
+        atom_types = [self._z_map[_ase.Atom(z).symbol] for z in atomic_numbers[0]]
         e, f, _ = self._dp.eval(xyz, cells=None, atom_types=atom_types)
         e = e.flatten()
         return (e, f) if do_gradient else e
@@ -108,8 +109,9 @@ class DeepMDBackend(BaseBackend):
 
 class EMLEAnalyzer:
 
-    def __init__(self, qm_xyz_filename, pc_xyz_filename, q_total,
-                 emle_base, backend=None):
+    def __init__(
+        self, qm_xyz_filename, pc_xyz_filename, q_total, emle_base, backend=None
+    ):
 
         self.q_total = q_total
         dtype = emle_base._dtype
@@ -121,9 +123,9 @@ class EMLEAnalyzer:
         if backend:
             self.e_backend = backend(atomic_numbers, qm_xyz)
 
-        self.atomic_numbers = _torch.tensor(atomic_numbers,
-                                            dtype=_torch.int,
-                                            device=device)
+        self.atomic_numbers = _torch.tensor(
+            atomic_numbers, dtype=_torch.int, device=device
+        )
         self.qm_xyz = _torch.tensor(qm_xyz, dtype=dtype, device=device)
         self.pc_charges = _torch.tensor(pc_charges, dtype=dtype, device=device)
         self.pc_xyz = _torch.tensor(pc_xyz, dtype=dtype, device=device)
@@ -131,26 +133,24 @@ class EMLEAnalyzer:
         self.s, self.q_core, self.q_val, self.A_thole = emle_base(
             self.atomic_numbers,
             self.qm_xyz,
-            _torch.ones(len(self.qm_xyz), device=device) * self.q_total
+            _torch.ones(len(self.qm_xyz), device=device) * self.q_total,
         )
         self.alpha = self._get_mol_alpha(self.A_thole, self.atomic_numbers)
 
         mesh_data = EMLEPC._get_mesh_data(self.qm_xyz, self.pc_xyz, self.s)
-        self.e_static = EMLEPC.get_E_static(self.q_core,
-                                            self.q_val,
-                                            self.pc_charges,
-                                            mesh_data)
-        self.e_induced = EMLEPC.get_E_induced(self.A_thole,
-                                              self.pc_charges,
-                                              self.s,
-                                              mesh_data)
+        self.e_static = EMLEPC.get_E_static(
+            self.q_core, self.q_val, self.pc_charges, mesh_data
+        )
+        self.e_induced = EMLEPC.get_E_induced(
+            self.A_thole, self.pc_charges, self.s, mesh_data
+        )
 
-        for attr in ('s', 'q_core', 'q_val', 'alpha', 'e_static', 'e_induced'):
+        for attr in ("s", "q_core", "q_val", "alpha", "e_static", "e_induced"):
             setattr(self, attr, getattr(self, attr).detach().cpu().numpy())
 
     @staticmethod
     def _parse_qm_xyz(qm_xyz_filename):
-        atoms = _ase.io.read(qm_xyz_filename, index=':')
+        atoms = _ase.io.read(qm_xyz_filename, index=":")
         atomic_numbers = pad_to_max([_.get_atomic_numbers() for _ in atoms], -1)
         xyz = _np.array([_.get_positions() for _ in atoms])
         return atomic_numbers, xyz
@@ -158,7 +158,7 @@ class EMLEAnalyzer:
     @staticmethod
     def _parse_pc_xyz(pc_xyz_filename):
         frames = []
-        with open(pc_xyz_filename, 'r') as file:
+        with open(pc_xyz_filename, "r") as file:
             while True:
                 try:
                     n = int(file.readline().strip())
@@ -179,5 +179,4 @@ class EMLEAnalyzer:
         n_mols = A_thole.shape[0]
         n_atoms = A_thole.shape[1] // 3
         Ainv = _torch.linalg.inv(A_thole) * mask_mat
-        return _torch.sum(Ainv.reshape(n_mols, n_atoms, 3, n_atoms, 3),
-                          dim=(1, 3))
+        return _torch.sum(Ainv.reshape(n_mols, n_atoms, 3, n_atoms, 3), dim=(1, 3))

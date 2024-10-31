@@ -452,16 +452,18 @@ class EMLE(_torch.nn.Module):
                 q_core[0], dtype=charges_mm.dtype, device=self._device
             )
 
-        mesh_data = _EMLEPC._get_mesh_data(xyz_qm_bohr[None, :, :],
-                                           xyz_mm_bohr[None, :, :],
-                                           s)
+        mesh_data = _EMLEPC._get_mesh_data(
+            xyz_qm_bohr[None, :, :], xyz_mm_bohr[None, :, :], s
+        )
 
         if self._method == "mechanical":
             q_core = q_core + q_val
             q_val = _torch.zeros_like(
                 q_core, dtype=charges_mm.dtype, device=self._device
             )
-        E_static = _EMLEPC.get_E_static(q_core, q_val, charges_mm[None, :], mesh_data)[0]
+        E_static = _EMLEPC.get_E_static(q_core, q_val, charges_mm[None, :], mesh_data)[
+            0
+        ]
 
         # Compute the induced energy.
         if self._method == "electrostatic":

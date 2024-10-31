@@ -1292,13 +1292,14 @@ class EMLECalculator:
                 atoms.info = {"max_f_std": self._max_f_std}
             _ase_io.write(self._qm_xyz_file, atoms, append=True)
 
-            pc_data = _np.hstack((charges_mm[:, None].cpu().numpy(),
-                                  xyz_mm.detach().cpu().numpy()))
+            pc_data = _np.hstack(
+                (charges_mm[:, None].cpu().numpy(), xyz_mm.detach().cpu().numpy())
+            )
             pc_data = pc_data[pc_data[:, 0] != 0]
-            with open(self._pc_xyz_file, 'a') as f:
-                f.write(f'{len(pc_data)}\n')
-                _np.savetxt(f, pc_data, fmt='%14.6f')
-                f.write('\n')
+            with open(self._pc_xyz_file, "a") as f:
+                f.write(f"{len(pc_data)}\n")
+                _np.savetxt(f, pc_data, fmt="%14.6f")
+                f.write("\n")
 
         # Increment the step counter.
         if self._is_first_step:

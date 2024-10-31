@@ -19,8 +19,12 @@ class ORCAParser:
     point charges).
     """
 
-    HORTON_KEYS = ('cartesian_multipoles', 'core_charges',
-                   'valence_charges', 'valence_widths')
+    HORTON_KEYS = (
+        "cartesian_multipoles",
+        "core_charges",
+        "valence_charges",
+        "valence_widths",
+    )
 
     def __init__(self, filename, decompose=False, alpha=False):
         """
@@ -61,7 +65,7 @@ class ORCAParser:
             E_induced: induced embedding energies (decompose=True)
         """
 
-        with tarfile.open(filename, 'r') as tar:
+        with tarfile.open(filename, "r") as tar:
 
             self.tar = tar
             self.names = self._get_names(tar)
@@ -77,23 +81,27 @@ class ORCAParser:
 
             if alpha:
                 self.alpha = self._get_alpha()
-                
+
         del self.tar
 
     @staticmethod
     def _get_names(tar):
-        return sorted([int(name.split('.')[0]) for name in tar.getnames()
-                       if name.endswith('h5')])
+        return sorted(
+            [int(name.split(".")[0]) for name in tar.getnames() if name.endswith("h5")]
+        )
 
     def _get_E(self):
-        vac_E = [self._get_E_from_out(self._get_file(name, 'vac.orca'))
-                 for name in self.names]
-        pc_E = [self._get_E_from_out(self._get_file(name, 'pc.orca'))
-                for name in self.names]
+        vac_E = [
+            self._get_E_from_out(self._get_file(name, "vac.orca"))
+            for name in self.names
+        ]
+        pc_E = [
+            self._get_E_from_out(self._get_file(name, "pc.orca")) for name in self.names
+        ]
         return _np.array(vac_E), _np.array(pc_E)
 
     def _get_E_from_out(self, f):
-        E_prefix = b'FINAL SINGLE POINT ENERGY'
+        E_prefix = b"FINAL SINGLE POINT ENERGY"
         E_line = next(line for line in f if line.startswith(E_prefix))
         return float(E_line.split()[-1]) * HARTREE_TO_KCALMOL
 
@@ -104,43 +112,50 @@ class ORCAParser:
         return result * HARTREE_TO_KCALMOL
 
     def _get_vpot(self):
-        return [self._get_vpot_from_file(self._get_file(name, 'vpot'))
-                for name in self.names]
+        return [
+            self._get_vpot_from_file(self._get_file(name, "vpot"))
+            for name in self.names
+        ]
 
     @staticmethod
     def _get_vpot_from_file(f):
         return _np.loadtxt(f, skiprows=1)[:, 3]
 
     def _get_pc(self):
-        return [self._get_pc_from_file(self._get_file(name, 'pc'))
-                for name in self.names]
+        return [
+            self._get_pc_from_file(self._get_file(name, "pc")) for name in self.names
+        ]
 
     @staticmethod
     def _get_pc_from_file(f):
         return _np.loadtxt(f, skiprows=1)[:, 0]
 
     def _get_alpha(self):
-        alpha = [self._get_alpha_from_out(self._get_file(name, 'vac.orca'))
-                 for name in self.names]
+        alpha = [
+            self._get_alpha_from_out(self._get_file(name, "vac.orca"))
+            for name in self.names
+        ]
         return _np.array(alpha)
 
     @staticmethod
     def _get_alpha_from_out(f):
-        while next(f) != b'THE POLARIZABILITY TENSOR\n':
+        while next(f) != b"THE POLARIZABILITY TENSOR\n":
             pass
         for i in range(3):
             next(f)
         return _np.array([list(map(float, next(f).split())) for _ in range(3)])
 
     def _get_z_xyz(self):
-        mol_data = [self._get_z_xyz_from_out(self._get_file(name, 'vac.orca'))
-                    for name in self.names]
+        mol_data = [
+            self._get_z_xyz_from_out(self._get_file(name, "vac.orca"))
+            for name in self.names
+        ]
         z, xyz = zip(*mol_data)
         return pad_to_max(z, -1), pad_to_max(xyz)
 
     @staticmethod
     def _get_z_xyz_from_out(f):
-        while next(f) != b'CARTESIAN COORDINATES (ANGSTROEM)\n':
+        while next(f) != b"CARTESIAN COORDINATES (ANGSTROEM)\n":
             pass
         next(f)
         z, xyz = [], []
@@ -154,8 +169,9 @@ class ORCAParser:
         return _np.array(ase.symbols.symbols2numbers(z)), _np.array(xyz)
 
     def _parse_horton(self):
-        data = [self._parse_horton_out(self._get_file(name, 'h5'))
-                for name in self.names]
+        data = [
+            self._parse_horton_out(self._get_file(name, "h5")) for name in self.names
+        ]
         if len(data) == 0:
             raise ValueError
         return {k: pad_to_max([_[k] for _ in data]) for k in data[0].keys()}
@@ -163,12 +179,14 @@ class ORCAParser:
     def _parse_horton_out(self, f):
         h5f = h5py.File(f)
         data = {key: h5f[key][:] for key in self.HORTON_KEYS}
-        q = data['core_charges'] + data['valence_charges']
+        q = data["core_charges"] + data["valence_charges"]
         q_shift = (_np.round(q) - q) / len(q)
-        return {'s': data['valence_widths'],
-                'q_core': data['core_charges'],
-                'q_val': data['valence_charges'] + q_shift,
-                'mu': data['cartesian_multipoles'][:, 1:4]}
+        return {
+            "s": data["valence_widths"],
+            "q_core": data["core_charges"],
+            "q_val": data["valence_charges"] + q_shift,
+            "mu": data["cartesian_multipoles"][:, 1:4],
+        }
 
     def _get_file(self, name, suffix):
-        return self.tar.extractfile(f'{name}.{suffix}')
+        return self.tar.extractfile(f"{name}.{suffix}")

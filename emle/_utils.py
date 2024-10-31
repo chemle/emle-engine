@@ -1,5 +1,6 @@
 import numpy as _np
 
+
 def pad_to_shape(array, shape, value=0):
     pad = [(0, n_max - n) for n_max, n in zip(shape, array.shape)]
     return _np.pad(array, pad, constant_values=value)
