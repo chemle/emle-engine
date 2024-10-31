@@ -182,9 +182,9 @@ class EMLETrainer:
         sigma=1e-3,
         ivm_thr=0.2,
         epochs=1000,
-        lr_qeq=0.001,
-        lr_thole=0.001,
-        lr_sqrtk=0.001,
+        lr_qeq=0.002,
+        lr_thole=0.002,
+        lr_sqrtk=0.002,
         model_filename="emle_model.mat",
         device=_torch.device("cuda"),
         dtype=_torch.float64,
@@ -285,7 +285,7 @@ class EMLETrainer:
 
         # Perform IVM
         ivm_mol_atom_ids_padded, aev_ivm_allz = IVM.perform_ivm(
-            aev_mols, z, atom_ids, species, ivm_thr
+            aev_mols, z, atom_ids, species, ivm_thr, sigma
         )
 
         ref_features = pad_to_max(aev_ivm_allz)
@@ -300,9 +300,9 @@ class EMLETrainer:
 
         # Initial guess for the model parameters
         params = {
-            "a_QEq": _torch.ones(1, dtype=dtype, device=device) * 1.85,
-            "a_Thole": _torch.ones(1, dtype=dtype, device=device) * 1.36,
-            "ref_values_s": ref_values_s.to(device),
+            "a_QEq": _torch.Tensor([1.85]).to(device=device, dtype=dtype),
+            "a_Thole": _torch.Tensor([1.35]).to(device=device, dtype=dtype),
+            "ref_values_s": ref_values_s.to(device=device, dtype=dtype),
             "ref_values_chi": _torch.zeros(
                 *ref_values_s.shape,
                 dtype=ref_values_s.dtype,
@@ -319,10 +319,6 @@ class EMLETrainer:
             else None,
         }
 
-        for k, v in params.items():
-            if v is not None:
-                print(f"{k}: {v.dtype}")
-
         # Create the EMLE base instance
         emle_base = self._emle_base(
             params=params,
@@ -337,7 +333,6 @@ class EMLETrainer:
         )
 
         # Fit chi, a_QEq (QEq over chi predicted with GPR)
-
         print("Fitting chi, a_QEq")
         self._train_model(
             loss_class=self._qeq_loss,
