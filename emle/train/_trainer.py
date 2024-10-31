@@ -57,7 +57,7 @@ class EMLETrainer:
 
         # Deatch the tensors, convert to numpy arrays and save the model
         emle_model = {
-            k: v.detach().numpy()
+            k: v.cpu().detach().numpy()
             for k, v in emle_model.items()
             if isinstance(v, _torch.Tensor)
         }
@@ -178,10 +178,10 @@ class EMLETrainer:
         q,
         alpha,
         train_mask,
-        alpha_mode="reference",
+        alpha_mode="species",
         sigma=1e-3,
         ivm_thr=0.2,
-        epochs=100,
+        epochs=1000,
         lr_qeq=0.001,
         lr_thole=0.001,
         lr_sqrtk=0.001,
@@ -295,17 +295,21 @@ class EMLETrainer:
         # Fit s (pure GPR, no fancy optimization needed)
         ref_values_s = self._train_s(s, z, zid, aev_mols, aev_ivm_allz, species, sigma)
 
+        # Good for debugging
+        # _torch.autograd.set_detect_anomaly(True) 
+
         # Initial guess for the model parameters
         params = {
-            "a_QEq": _torch.ones(1, dtype=dtype, device=_torch.device(device)),
-            "a_Thole": _torch.zeros(1, dtype=dtype, device=_torch.device(device)),
+            "a_QEq": _torch.ones(1, dtype=dtype, device=device) * 1.85,
+            "a_Thole": _torch.ones(1, dtype=dtype, device=device) * 1.36,
             "ref_values_s": ref_values_s.to(device),
             "ref_values_chi": _torch.zeros(
                 *ref_values_s.shape,
                 dtype=ref_values_s.dtype,
-                device=_torch.device(device),
+                device=device,
             ),
-            "k_Z": _torch.ones(len(species), dtype=dtype, device=_torch.device(device)),
+            #"k_Z": _torch.ones(len(species), dtype=dtype, device=_torch.device(device)),
+            "k_Z": _torch.Tensor([0.922, 0.173, 0.195, 0.192, 0.216]).to(device=device, dtype=dtype),
             "sqrtk_ref": _torch.ones(
                 *ref_values_s.shape,
                 dtype=ref_values_s.dtype,
@@ -333,6 +337,7 @@ class EMLETrainer:
         )
 
         # Fit chi, a_QEq (QEq over chi predicted with GPR)
+
         print("Fitting chi, a_QEq")
         self._train_model(
             loss_class=self._qeq_loss,
@@ -345,7 +350,9 @@ class EMLETrainer:
             q_mol=q_mol,
             q_target=q,
         )
-
+        
+        print("a_QEq:", emle_base.a_QEq)
+     
         # Fit a_Thole, k_Z (uses volumes predicted by QEq model)
         print("Fitting a_Thole, k_Z")
         self._train_model(
@@ -360,6 +367,7 @@ class EMLETrainer:
             alpha_mol_target=alpha,
         )
 
+        print("a_Thole:", emle_base.a_Thole)
         # Fit sqrtk_ref ( alpha = sqrtk ** 2 * k_Z * v)
         if alpha_mode == "reference":
             print("Fitting ref_values_sqrtk")
@@ -384,7 +392,7 @@ class EMLETrainer:
             "ref_values_s": emle_base.ref_values_s,
             "ref_values_chi": emle_base.ref_values_chi,
             "k_Z": emle_base.k_Z,
-            "sqrtk_ref": emle_base.ref_values_sqrtk,
+            "sqrtk_ref": emle_base.ref_values_sqrtk if alpha_mode == "reference" else None,
             "species": species,
             "alpha_mode": alpha_mode,
             "n_ref": n_ref,
@@ -396,12 +404,4 @@ class EMLETrainer:
             self.write_model_to_file(emle_model, model_filename)
 
         return emle_model
-
-
-def main():
-    # Parse CLI args, read the files and run emle_train
-    pass
-
-
-if __name__ == "__main__":
-    main()
+    
