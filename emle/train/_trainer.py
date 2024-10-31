@@ -180,11 +180,11 @@ class EMLETrainer:
         train_mask,
         alpha_mode="species",
         sigma=1e-3,
-        ivm_thr=0.2,
-        epochs=1000,
+        ivm_thr=0.05,
+        epochs=100,
         lr_qeq=0.002,
-        lr_thole=0.002,
-        lr_sqrtk=0.002,
+        lr_thole=0.01,
+        lr_sqrtk=0.01,
         model_filename="emle_model.mat",
         device=_torch.device("cuda"),
         dtype=_torch.float64,
@@ -216,6 +216,12 @@ class EMLETrainer:
             IVM threshold.
         epochs: int
             Number of training epochs.
+        lr_qeq: float
+            Learning rate for QEq model.
+        lr_thole: float
+            Learning rate for Thole model.
+        lr_sqrtk: float
+            Learning rate for sqrtk.
         model_filename: str or None
             Filename to save the trained model. If None, the model is not saved.
         device: torch.device
@@ -300,8 +306,8 @@ class EMLETrainer:
 
         # Initial guess for the model parameters
         params = {
-            "a_QEq": _torch.Tensor([1.85]).to(device=device, dtype=dtype),
-            "a_Thole": _torch.Tensor([1.35]).to(device=device, dtype=dtype),
+            "a_QEq": _torch.Tensor([1.]).to(device=device, dtype=dtype),
+            "a_Thole": _torch.Tensor([2.]).to(device=device, dtype=dtype),
             "ref_values_s": ref_values_s.to(device=device, dtype=dtype),
             "ref_values_chi": _torch.zeros(
                 *ref_values_s.shape,
