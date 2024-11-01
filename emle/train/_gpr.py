@@ -58,7 +58,7 @@ class GPR:
         return y_ref + y0
 
     @staticmethod
-    def get_gpr_kernels(aev_mols, zid_mols, aev_ivm_allz):
+    def get_gpr_kernels(aev_mols, zid_mols, aev_ivm_allz, n_ref):
         """
         Get kernels for performing GPR.
 
@@ -72,26 +72,29 @@ class GPR:
             AEV features for all reference atoms.
         species : _torch.Tensor(N_SPECIES)
             Unique species in the dataset.
+        n_ref: (N_SPECIES,)
+            Number of IVM references for each specie
         """
         n_species = len(aev_ivm_allz)
         aev_allz = [aev_mols[zid_mols == i] for i in range(n_species)]
 
         K_ref_ref = [
-            GPR._aev_kernel(aev_ivm_z, aev_ivm_z) for aev_ivm_z in aev_ivm_allz
+            GPR._aev_kernel(aev_ivm_z[:n_ref_z,:], aev_ivm_z[:n_ref_z,:])
+            for aev_ivm_z, n_ref_z in zip(aev_ivm_allz, n_ref)
         ]
 
         K_ref_ref_padded = pad_to_max(K_ref_ref)
 
         K_ivm_allz = [
-            GPR._aev_kernel(aev_z, aev_ivm_z)
-            for aev_z, aev_ivm_z in zip(aev_allz, aev_ivm_allz)
+            GPR._aev_kernel(aev_z, aev_ivm_z[:n_ref_z,:])
+            for aev_z, aev_ivm_z, n_ref_z in zip(aev_allz, aev_ivm_allz, n_ref)
         ]
         K_mols_ref = GPR._get_K_mols_ref(K_ivm_allz, zid_mols)
 
         return K_ref_ref_padded, K_mols_ref
 
     @staticmethod
-    def fit_atomic_sparse_gpr(values, K_mols_ref, K_ref_ref, zid, sigma):
+    def fit_atomic_sparse_gpr(values, K_mols_ref, K_ref_ref, zid, sigma, n_ref):
         """
         Fits GPR atomic values to given samples.
 
@@ -112,6 +115,9 @@ class GPR:
         sigma: float
             GPR sigma value.
 
+        n_ref: (N_SPECIES,)
+            Number of IVM references for each specie
+
         Returns
         -------
         torch.Tensor(N_SPECIES, MAX_N_REF)
@@ -124,9 +130,10 @@ class GPR:
         n_species, max_n_ref = K_ref_ref.shape[:2]
 
         result = _torch.zeros((n_species, max_n_ref), dtype=values.dtype)
-        for i in range(n_species):
+        for i, n_ref_z in enumerate(n_ref):
             z_mask = zid == i
-            result[i, :max_n_ref] = GPR._fit_sparse_gpr(
-                values[z_mask], K_mols_ref[z_mask], K_ref_ref[i], sigma
+            result[i, :n_ref_z] = GPR._fit_sparse_gpr(
+                values[z_mask], K_mols_ref[z_mask][:, :n_ref_z],
+                K_ref_ref[i, :n_ref_z, :n_ref_z], sigma
             )
         return result

@@ -86,12 +86,14 @@ class EMLETrainer:
         torch.Tensor(N_BATCH, N_ATOMS)
             Atomic widths.
         """
+        n_ref = _torch.tensor([_.shape[0] for _ in aev_ivm_allz],
+                              device=s.device)
         K_ref_ref_padded, K_mols_ref = GPR.get_gpr_kernels(
-            aev_mols, zid, aev_ivm_allz
+            aev_mols, zid, aev_ivm_allz, n_ref
         )
 
         ref_values_s = GPR.fit_atomic_sparse_gpr(
-            s, K_mols_ref, K_ref_ref_padded, zid, sigma
+            s, K_mols_ref, K_ref_ref_padded, zid, sigma, n_ref
         )
 
         return pad_to_max(ref_values_s)

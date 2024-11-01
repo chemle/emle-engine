@@ -467,7 +467,7 @@ class EMLEBase(_torch.nn.Module):
 
         mask = _torch.arange(ref.shape[1], device=n_ref.device) < n_ref[:, None]
         ref_mean = _torch.sum(ref * mask, dim=1) / n_ref
-        ref_shifted = ref - ref_mean[:, None]
+        ref_shifted = (ref - ref_mean[:, None]) * mask
         return ref_mean, (Kinv @ ref_shifted[:, :, None]).squeeze()
 
     def _gpr(self, mol_features, ref_mean, c, zid):
