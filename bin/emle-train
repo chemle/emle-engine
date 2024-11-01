@@ -1,0 +1,33 @@
+#!/usr/bin/env python
+
+import argparse
+
+parser = argparse.ArgumentParser(
+    description="EMLE training script"
+)
+
+parser.add_argument("--orca-tarball", type=str,
+                    metavar='name.tar',
+                    required=True,
+                    help="ORCA tarball")
+parser.add_argument("output", type=str,
+                    help="Output model file")
+args = parser.parse_args()
+
+
+import scipy.io
+
+from emle._orca_parser import ORCAParser
+from emle.train import EMLETrainer
+
+parser = ORCAParser(args.orca_tarball, decompose=False, alpha=True)
+
+trainer = EMLETrainer()
+trainer.train(z=parser.z,
+              xyz=parser.xyz,
+              s=parser.mbis['s'],
+              q_core=parser.mbis['q_core'],
+              q=parser.mbis['q_core'] + parser.mbis['q_val'],
+              alpha=parser.alpha,
+              train_mask=None,
+              model_filename=args.output)
