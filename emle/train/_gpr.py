@@ -7,19 +7,8 @@ from ._utils import pad_to_max
 
 class GPR:
     @staticmethod
-    def _norm_aev_kernel(a, b):
-        # Compute the norms of a and b
-        norm_a = _torch.norm(a, dim=1, keepdim=True)
-        norm_b = _torch.norm(b, dim=1, keepdim=True)
-
-        # Compute the normalized kernel
-        result = (a @ b.T) / (norm_a * norm_b.T)
-
-        return result
-
-    @staticmethod
-    def _sq_aev_kernel(a, b):
-        return GPR._norm_aev_kernel(a, b) ** 2
+    def _aev_kernel(a, b):
+        return (a @ b.T) ** 2
 
     @staticmethod
     def _get_K_mols_ref(K_ivm_allz, z_mols, species):
@@ -87,13 +76,13 @@ class GPR:
         aev_allz = [aev_mols[z_mols == z] for z in species]
 
         K_ref_ref = [
-            GPR._norm_aev_kernel(aev_ivm_z, aev_ivm_z) for aev_ivm_z in aev_ivm_allz
+            GPR._aev_kernel(aev_ivm_z, aev_ivm_z) for aev_ivm_z in aev_ivm_allz
         ]
 
         K_ref_ref_padded = pad_to_max(K_ref_ref)
 
         K_ivm_allz = [
-            GPR._norm_aev_kernel(aev_z, aev_ivm_z)
+            GPR._aev_kernel(aev_z, aev_ivm_z)
             for aev_z, aev_ivm_z in zip(aev_allz, aev_ivm_allz)
         ]
         K_mols_ref = GPR._get_K_mols_ref(K_ivm_allz, z_mols, species)
