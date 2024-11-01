@@ -34,11 +34,11 @@ __all__ = ["ANI2xBackend", "DeepMDBackend", "EMLEAnalyzer"]
 
 from abc import ABC as _ABC
 from abc import abstractmethod as _abstractmethod
-import os as _os
 
+import ase as _ase
+import os as _os
 import numpy as _np
 import torch as _torch
-import ase as _ase
 
 from ._utils import pad_to_max as _pad_to_max
 from .models._emle_pc import EMLEPC as _EMLEPC
