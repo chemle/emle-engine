@@ -172,9 +172,9 @@ class TholeLoss(_torch.nn.Module):
         _, _, _, A_thole = self._emle_base(atomic_numbers, xyz, q_mol)
         alpha_mol = self._get_alpha_mol(A_thole, atomic_numbers > 0)
 
-        triu_idx = _torch.triu_indices(3, 3, offset=0)
-        alpha_mol_triu = alpha_mol[:, *triu_idx]
-        alpha_mol_target_triu = alpha_mol_target[:, *triu_idx]
+        triu_row, triu_col = _torch.triu_indices(3, 3, offset=0)
+        alpha_mol_triu = alpha_mol[:, triu_row, triu_col]
+        alpha_mol_target_triu = alpha_mol_target[:, triu_row, triu_col]
 
         loss = self._loss(alpha_mol_triu, alpha_mol_target_triu)
 
