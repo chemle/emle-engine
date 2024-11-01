@@ -1,12 +1,44 @@
-import tarfile
+######################################################################
+# EMLE-Engine: https://github.com/chemle/emle-engine
+#
+# Copyright: 2023-2024
+#
+# Authors: Lester Hedges   <lester.hedges@gmail.com>
+#          Kirill Zinovjev <kzinovjev@gmail.com>
+#
+# EMLE-Engine is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+#
+# EMLE-Engine is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with EMLE-Engine If not, see <http://www.gnu.org/licenses/>.
+######################################################################
 
+# Note that this file is empty since EMLECalculator and Socket should
+# be directly imported from their respective sub-modules. This is to
+# avoid severe module import overheads when running the client code,
+# which requires no EMLE functionality.
+
+"""
+Parser for ORCA and horton outputs.
+"""
+
+__all__ = ["ORCAParser"]
+
+import ase as _ase
+import h5py as _h5py
 import numpy as _np
-import h5py
-import ase
+import tarfile as _tarfile
 
 from ._utils import pad_to_max
 
-HARTREE_TO_KCALMOL = 627.509
+_HARTREE_TO_KCALMOL = 627.509
 
 
 class ORCAParser:
@@ -65,7 +97,7 @@ class ORCAParser:
             E_induced: induced embedding energies (decompose=True)
         """
 
-        with tarfile.open(filename, "r") as tar:
+        with _tarfile.open(filename, "r") as tar:
 
             self.tar = tar
             self.names = self._get_names(tar)
@@ -103,13 +135,13 @@ class ORCAParser:
     def _get_E_from_out(self, f):
         E_prefix = b"FINAL SINGLE POINT ENERGY"
         E_line = next(line for line in f if line.startswith(E_prefix))
-        return float(E_line.split()[-1]) * HARTREE_TO_KCALMOL
+        return float(E_line.split()[-1]) * _HARTREE_TO_KCALMOL
 
     def _get_E_static(self):
         vpot_all = self._get_vpot()
         pc_all = self._get_pc()
         result = _np.array([(vpot @ pc) for vpot, pc in zip(vpot_all, pc_all)])
-        return result * HARTREE_TO_KCALMOL
+        return result * _HARTREE_TO_KCALMOL
 
     def _get_vpot(self):
         return [
@@ -166,7 +198,7 @@ class ORCAParser:
                 xyz.append([float(x) for x in raw_atom_xyz])
         except ValueError:
             pass
-        return _np.array(ase.symbols.symbols2numbers(z)), _np.array(xyz)
+        return _np.array(_ase.symbols.symbols2numbers(z)), _np.array(xyz)
 
     def _parse_horton(self):
         data = [
@@ -177,7 +209,7 @@ class ORCAParser:
         return {k: pad_to_max([_[k] for _ in data]) for k in data[0].keys()}
 
     def _parse_horton_out(self, f):
-        h5f = h5py.File(f)
+        h5f = _h5py.File(f)
         data = {key: h5f[key][:] for key in self.HORTON_KEYS}
         q = data["core_charges"] + data["valence_charges"]
         q_shift = (_np.round(q) - q) / len(q)
