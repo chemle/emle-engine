@@ -63,7 +63,9 @@ class EMLEBase(_torch.nn.Module):
         n_ref,
         ref_features,
         q_core,
-        emle_aev_computer,
+        emle_aev_computer=None,
+        aev_mask=None,
+        aev_mean=None,
         species=None,
         alpha_mode="species",
         device=None,
@@ -97,6 +99,9 @@ class EMLEBase(_torch.nn.Module):
 
         emle_aev_computer: EMLEAEVComputer
             EMLE AEV computer instance used to compute AEVs (masked and normalized).
+
+        aev_mean: torch.Tensor
+            Mean values to be subtracted from features
 
         species: List[int], Tuple[int], numpy.ndarray, torch.Tensor
             List of species (atomic numbers) supported by the EMLE model.
@@ -185,6 +190,11 @@ class EMLEBase(_torch.nn.Module):
                 raise TypeError("'dtype' must be of type 'torch.dtype'")
         else:
             dtype = _torch.get_default_dtype()
+        self._dtype = dtype
+
+        self._aev_mean = None
+        if aev_mean is not None:
+            self._aev_mean = _torch.tensor(aev_mean, dtype=dtype, device=device)
 
         # Store model parameters as tensors.
         self.a_QEq = _torch.nn.Parameter(params["a_QEq"])
@@ -243,6 +253,7 @@ class EMLEBase(_torch.nn.Module):
 
         # Register constants as buffers.
         self.register_buffer("_species_map", species_map)
+        self.register_buffer("_aev_mask", aev_mask)
         self.register_buffer("_Kinv", Kinv)
         self.register_buffer("_q_core", q_core)
         self.register_buffer("_ref_features", ref_features)
@@ -263,6 +274,7 @@ class EMLEBase(_torch.nn.Module):
         self._emle_aev_computer = self._emle_aev_computer.to(*args, **kwargs)
         self._species_map = self._species_map.to(*args, **kwargs)
         self._Kinv = self._Kinv.to(*args, **kwargs)
+        self._aev_mask = self._aev_mask.to(*args, **kwargs)
         self._q_core = self._q_core.to(*args, **kwargs)
         self._ref_features = self._ref_features.to(*args, **kwargs)
         self._n_ref = self._n_ref.to(*args, **kwargs)
@@ -288,6 +300,7 @@ class EMLEBase(_torch.nn.Module):
         self._emle_aev_computer = self._emle_aev_computer.cuda(**kwargs)
         self._species_map = self._species_map.cuda(**kwargs)
         self._Kinv = self._Kinv.cuda(**kwargs)
+        self._aev_mask = self._aev_mask.cuda(**kwargs)
         self._q_core = self._q_core.cuda(**kwargs)
         self._ref_features = self._ref_features.cuda(**kwargs)
         self._n_ref = self._n_ref.cuda(**kwargs)
@@ -311,6 +324,7 @@ class EMLEBase(_torch.nn.Module):
         self._emle_aev_computer = self._emle_aev_computer.cpu(**kwargs)
         self._species_map = self._species_map.cpu(**kwargs)
         self._Kinv = self._Kinv.cpu(**kwargs)
+        self._aev_mask = self._aev_mask.cpu(**kwargs)
         self._q_core = self._q_core.cpu(**kwargs)
         self._ref_features = self._ref_features.cpu(**kwargs)
         self._n_ref = self._n_ref.cpu(**kwargs)
@@ -386,6 +400,7 @@ class EMLEBase(_torch.nn.Module):
                  torch.Tensor (N_BATCH, N_QM_ATOMS * 3, N_QM_ATOMS * 3,))
             Valence widths, core charges, valence charges, A_thole tensor
         """
+
         # Mask for padded coordinates.
         mask = atomic_numbers > 0
 
@@ -599,7 +614,7 @@ class EMLEBase(_torch.nn.Module):
 
         result: torch.Tensor (N_BATCH, N_ATOMS + 1, N_ATOMS + 1)
         """
-        s_gauss = s * self.a_QEq  
+        s_gauss = s * self.a_QEq
         s2 = s_gauss**2
         s2_mat = s2[:, :, None] + s2[:, None, :]
         s_mat = _torch.where(s2_mat > 0, 1.0 / _torch.sqrt(s2_mat + 1e-16), 0)
@@ -700,7 +715,7 @@ class EMLEBase(_torch.nn.Module):
 
         A = -self._get_T2_thole(r_data[2], r_data[3], au32)
 
-        alpha3 = alpha.repeat_interleave(3, dim=1) 
+        alpha3 = alpha.repeat_interleave(3, dim=1)
         new_diag = _torch.where(alpha3 > 0, 1.0 / (alpha3 + 1e-16), 1.0)
         diag_ones = _torch.ones_like(new_diag, dtype=A.dtype, device=A.device)
         mask = _torch.diag_embed(diag_ones)
@@ -769,3 +784,243 @@ class EMLEBase(_torch.nn.Module):
         result: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
         """
         return 1 - (1 + au3) * _torch.exp(-au3)
+
+    @staticmethod
+    def get_static_energy(
+        q_core: Tensor,
+        q_val: Tensor,
+        charges_mm: Tensor,
+        mesh_data: Tuple[Tensor, Tensor, Tensor],
+    ) -> Tensor:
+        """
+        Calculate the static electrostatic energy.
+
+        Parameters
+        ----------
+
+        q_core: torch.Tensor (N_BATCH, N_QM_ATOMS,)
+            QM core charges.
+
+        q_val: torch.Tensor (N_BATCH, N_QM_ATOMS,)
+            QM valence charges.
+
+        charges_mm: torch.Tensor (N_BATCH, N_MM_ATOMS,)
+            MM charges.
+
+        mesh_data: mesh_data object (output of self._get_mesh_data)
+            Mesh data object.
+
+        Returns
+        -------
+
+        result: torch.Tensor (N_BATCH,)
+            Static electrostatic energy.
+        """
+
+        vpot_q_core = EMLEBase._get_vpot_q(q_core, mesh_data[0])
+        vpot_q_val = EMLEBase._get_vpot_q(q_val, mesh_data[1])
+        vpot_static = vpot_q_core + vpot_q_val
+        return _torch.sum(vpot_static * charges_mm, dim=1)
+
+    @staticmethod
+    def get_induced_energy(
+        A_thole: Tensor,
+        charges_mm: Tensor,
+        s: Tensor,
+        mesh_data: Tuple[Tensor, Tensor, Tensor],
+    ) -> Tensor:
+        """
+        Calculate the induced electrostatic energy.
+
+        Parameters
+        ----------
+
+        A_thole: torch.Tensor (N_BATCH, MAX_QM_ATOMS * 3, MAX_QM_ATOMS * 3)
+            The A matrix for induced dipoles prediction.
+
+        charges_mm: torch.Tensor (N_BATCH, MAX_MM_ATOMS,)
+            MM charges.
+
+        s: torch.Tensor (N_BATCH, MAX_QM_ATOMS,)
+            MBIS valence shell widths.
+
+        mesh_data: mesh_data object (output of self._get_mesh_data)
+            Mesh data object.
+
+        Returns
+        -------
+
+        result: torch.Tensor (N_BATCH,)
+            Induced electrostatic energy.
+        """
+        mu_ind = EMLEBase._get_mu_ind(A_thole, mesh_data, charges_mm, s)
+        vpot_ind = EMLEBase._get_vpot_mu(mu_ind, mesh_data[2])
+        return _torch.sum(vpot_ind * charges_mm, dim=1) * 0.5
+
+    @staticmethod
+    def _get_mu_ind(
+        A: Tensor,
+        mesh_data: Tuple[Tensor, Tensor, Tensor],
+        q: Tensor,
+        s: Tensor,
+    ) -> Tensor:
+        """
+        Internal method, calculates induced atomic dipoles
+        (Eq. 20 in 10.1021/acs.jctc.2c00914)
+
+        Parameters
+        ----------
+
+        A: torch.Tensor (N_BATCH, MAX_QM_ATOMS * 3, MAX_QM_ATOMS * 3)
+            The A matrix for induced dipoles prediction.
+
+        mesh_data: mesh_data object (output of self._get_mesh_data)
+
+        q: torch.Tensor (N_BATCH, MAX_MM_ATOMS,)
+            MM point charges.
+
+        s: torch.Tensor (N_BATCH, N_QM_ATOMS,)
+            MBIS valence shell widths.
+
+        q_val: torch.Tensor (N_BATCH, N_QM_ATOMS,)
+            MBIS valence charges.
+
+        Returns
+        -------
+
+        result: torch.Tensor (N_BATCH, MAX_QM_ATOMS, 3)
+            Array of induced dipoles
+        """
+
+        r = 1.0 / mesh_data[0]
+        f1 = EMLEBase._get_f1_slater(r, s[:, :, None] * 2.0)
+        fields = _torch.sum(
+            mesh_data[2] * f1[..., None] * q[:, None, :, None], dim=2
+        ).reshape(len(s), -1)
+
+        mu_ind = _torch.linalg.solve(A, fields)
+        return mu_ind.reshape((mu_ind.shape[0], -1, 3))
+
+    @staticmethod
+    def _get_vpot_q(q, T0):
+        """
+        Internal method to calculate the electrostatic potential.
+
+        Parameters
+        ----------
+
+        q: torch.Tensor (N_BATCH, MAX_QM_ATOMS,)
+            QM charges (q_core or q_val).
+
+        T0: torch.Tensor (N_BATCH, MAX_QM_ATOMS, MAX_MM_ATOMS)
+            T0 tensor for QM atoms over MM atom positions.
+
+        Returns
+        -------
+
+        result: torch.Tensor (N_BATCH, MAX_MM_ATOMS)
+            Electrostatic potential over MM atoms.
+        """
+        return _torch.sum(T0 * q[:, :, None], dim=1)
+
+    @staticmethod
+    def _get_vpot_mu(mu: Tensor, T1: Tensor) -> Tensor:
+        """
+        Internal method to calculate the electrostatic potential generated
+        by atomic dipoles.
+
+        Parameters
+        ----------
+
+        mu: torch.Tensor (N_BATCH, MAX_QM_ATOMS, 3)
+            Atomic dipoles.
+
+        T1: torch.Tensor (N_BATCH, MAX_QM_ATOMS, MAX_MM_ATOMS, 3)
+            T1 tensor for QM atoms over MM atom positions.
+
+        Returns
+        -------
+
+        result: torch.Tensor (N_BATCH, MAX_MM_ATOMS)
+            Electrostatic potential over MM atoms.
+        """
+        return _torch.einsum("ijkl,ijl->ik", T1, mu)
+
+    @staticmethod
+    def _get_mesh_data(
+        xyz: Tensor, xyz_mesh: Tensor, s: Tensor
+    ) -> Tuple[Tensor, Tensor, Tensor]:
+        """
+        Internal method, calculates mesh_data object.
+
+        Parameters
+        ----------
+
+        xyz: torch.Tensor (N_BATCH, MAX_QM_ATOMS, 3)
+            Atomic positions.
+
+        xyz_mesh: torch.Tensor (N_BATCH, MAX_MM_ATOMS, 3)
+            MM positions.
+
+        s: torch.Tensor (N_BATCH, MAX_QM_ATOMS,)
+            MBIS valence widths.
+
+        Returns
+        -------
+
+        result: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+            Tuple of mesh data objects.
+        """
+        rr = xyz_mesh[:, None, :, :] - xyz[:, :, None, :]
+        r = _torch.linalg.norm(rr, ord=2, dim=3)
+
+        return (
+            1.0 / r,
+            EMLEBase._get_T0_slater(r, s[:, :, None]),
+            -rr / r[..., None] ** 3,
+        )
+
+    @staticmethod
+    def _get_f1_slater(r: Tensor, s: Tensor) -> Tensor:
+        """
+        Internal method, calculates damping factors for Slater densities.
+
+        Parameters
+        ----------
+
+        r: torch.Tensor (N_BATCH, MAX_QM_ATOMS, MAX_MM_ATOMS)
+            Distances from QM to MM atoms.
+
+        s: torch.Tensor (N_BATCH, MAX_QM_ATOMS,)
+            MBIS valence widths.
+
+        Returns
+        -------
+
+        result: torch.Tensor (N_BATCH, MAX_QM_ATOMS, MAX_MM_ATOMS)
+        """
+        return (
+            EMLEBase._get_T0_slater(r, s) * r
+            - _torch.exp(-r / s) / s * (0.5 + r / (s * 2)) * r
+        )
+
+    @staticmethod
+    def _get_T0_slater(r: Tensor, s: Tensor) -> Tensor:
+        """
+        Internal method, calculates T0 tensor for Slater densities.
+
+        Parameters
+        ----------
+
+        r: torch.Tensor (N_BATCH, MAX_QM_ATOMS, MAX_MM_ATOMS)
+            Distances from QM to MM atoms.
+
+        s: torch.Tensor (N_BATCH, MAX_QM_ATOMS,)
+            MBIS valence widths.
+
+        Returns
+        -------
+
+        results: torch.Tensor (N_BATCH, MAX_QM_ATOMS, MAX_MM_ATOMS)
+        """
+        return (1 - (1 + r / (s * 2)) * _torch.exp(-r / s)) / r

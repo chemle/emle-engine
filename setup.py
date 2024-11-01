@@ -9,12 +9,7 @@ setup(
     author="Lester Hedges",
     author_email="lester.hedges@gmail.com",
     packages=find_packages(include=["emle", "emle.*", "bin/*"]),
-    scripts=["bin/emle-server", "bin/emle-stop", "bin/orca"],
-    entry_points={
-        "console_scripts": [
-            "emle-train=emle.train:main",
-        ]
-    },
+    scripts=["bin/emle-server", "bin/emle-stop", "bin/orca", "bin/emle-analyze"],
     include_package_data=True,
     url="https://github.com/chemle/emle-engine",
     license="GPLv2",
