@@ -11,19 +11,19 @@ class GPR:
         return (a @ b.T) ** 2
 
     @staticmethod
-    def _get_K_mols_ref(K_ivm_allz, z_mols, species):
+    def _get_K_mols_ref(K_ivm_allz, zid_mols):
         # K_ivm_allz: NSP x NZ x NIVMZ
-        # z_mols: NMOLS x ATOMS_MAX
+        # zid_mols: NMOLS x ATOMS_MAX
         # result: NMOLS x ATOMS_MAX x MAXIVMZ
         ivm_max = max([K_ivm_z.shape[1] for K_ivm_z in K_ivm_allz])
         result = _torch.zeros(
-            (*z_mols.shape, ivm_max),
+            (*zid_mols.shape, ivm_max),
             dtype=K_ivm_allz[0].dtype,
             device=K_ivm_allz[0].device,
         )
-        for z, K_ivm_z in zip(species, K_ivm_allz):
+        for i, K_ivm_z in enumerate(K_ivm_allz):
             pad = (0, ivm_max - K_ivm_z.shape[1])
-            result[z_mols == z] = _torch.nn.functional.pad(K_ivm_z, pad)
+            result[zid_mols == i] = _torch.nn.functional.pad(K_ivm_z, pad)
 
         return result
 
@@ -58,7 +58,7 @@ class GPR:
         return y_ref + y0
 
     @staticmethod
-    def get_gpr_kernels(aev_mols, z_mols, aev_ivm_allz, species):
+    def get_gpr_kernels(aev_mols, zid_mols, aev_ivm_allz):
         """
         Get kernels for performing GPR.
 
@@ -66,14 +66,15 @@ class GPR:
         ----------
         aev_mols : _torch.Tensor(N_BATCH, MAX_N_ATOMS, AEV_DIM)
             AEV features for all molecules.
-        z_mols : _torch.Tensor(N_BATCH, MAX_N_ATOMS)
-            Atomic numbers for all molecules.
+        zid_mols : _torch.Tensor(N_BATCH, MAX_N_ATOMS)
+            Species IDs for all molecules.
         aev_ivm_allz : _torch.Tensor(N_SPECIES, MAX_N_REF, AEV_DIM)
             AEV features for all reference atoms.
         species : _torch.Tensor(N_SPECIES)
             Unique species in the dataset.
         """
-        aev_allz = [aev_mols[z_mols == z] for z in species]
+        n_species = len(aev_ivm_allz)
+        aev_allz = [aev_mols[zid_mols == i] for i in range(n_species)]
 
         K_ref_ref = [
             GPR._aev_kernel(aev_ivm_z, aev_ivm_z) for aev_ivm_z in aev_ivm_allz
@@ -85,7 +86,7 @@ class GPR:
             GPR._aev_kernel(aev_z, aev_ivm_z)
             for aev_z, aev_ivm_z in zip(aev_allz, aev_ivm_allz)
         ]
-        K_mols_ref = GPR._get_K_mols_ref(K_ivm_allz, z_mols, species)
+        K_mols_ref = GPR._get_K_mols_ref(K_ivm_allz, zid_mols)
 
         return K_ref_ref_padded, K_mols_ref
 

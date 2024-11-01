@@ -64,7 +64,7 @@ class EMLETrainer:
         scipy.io.savemat(model_filename, emle_model)
 
     @staticmethod
-    def _train_s(s, z, zid, aev_mols, aev_ivm_allz, species, sigma):
+    def _train_s(s, zid, aev_mols, aev_ivm_allz, sigma):
         """
         Train the s model.
 
@@ -72,16 +72,12 @@ class EMLETrainer:
         ----------
         s: torch.Tensor(N_BATCH, N_ATOMS)
             Atomic widths.
-        z: torch.Tensor(N_BATCH, N_ATOMS)
-            Atomic numbers.
         zid: torch.Tensor(N_BATCH, N_ATOMS)
             Species IDs.
         aev_mols: torch.Tensor(N_BATCH, N_ATOMS, N_AEV)
             Atomic environment vectors.
         aev_ivm_allz: torch.Tensor(N_BATCH, N_ATOMS, N_AEV)
             Atomic environment vectors for all species.
-        species: torch.Tensor(N_SPECIES)
-            Species IDs.
         sigma: float
             GPR sigma value.
 
@@ -91,7 +87,7 @@ class EMLETrainer:
             Atomic widths.
         """
         K_ref_ref_padded, K_mols_ref = GPR.get_gpr_kernels(
-            aev_mols, z, aev_ivm_allz, species
+            aev_mols, zid, aev_ivm_allz
         )
 
         ref_values_s = GPR.fit_atomic_sparse_gpr(
@@ -293,7 +289,7 @@ class EMLETrainer:
         n_ref = _torch.sum(ref_mask, dim=1)
 
         # Fit s (pure GPR, no fancy optimization needed)
-        ref_values_s = self._train_s(s, z, zid, aev_mols, aev_ivm_allz, species, sigma)
+        ref_values_s = self._train_s(s, zid, aev_mols, aev_ivm_allz, sigma)
 
         # Initial guess for the model parameters
         params = {
