@@ -64,7 +64,6 @@ class EMLEBase(_torch.nn.Module):
         ref_features,
         q_core,
         emle_aev_computer=None,
-        aev_mask=None,
         aev_mean=None,
         species=None,
         alpha_mode="species",
@@ -253,7 +252,6 @@ class EMLEBase(_torch.nn.Module):
 
         # Register constants as buffers.
         self.register_buffer("_species_map", species_map)
-        self.register_buffer("_aev_mask", aev_mask)
         self.register_buffer("_Kinv", Kinv)
         self.register_buffer("_q_core", q_core)
         self.register_buffer("_ref_features", ref_features)
@@ -274,7 +272,6 @@ class EMLEBase(_torch.nn.Module):
         self._emle_aev_computer = self._emle_aev_computer.to(*args, **kwargs)
         self._species_map = self._species_map.to(*args, **kwargs)
         self._Kinv = self._Kinv.to(*args, **kwargs)
-        self._aev_mask = self._aev_mask.to(*args, **kwargs)
         self._q_core = self._q_core.to(*args, **kwargs)
         self._ref_features = self._ref_features.to(*args, **kwargs)
         self._n_ref = self._n_ref.to(*args, **kwargs)
@@ -300,7 +297,6 @@ class EMLEBase(_torch.nn.Module):
         self._emle_aev_computer = self._emle_aev_computer.cuda(**kwargs)
         self._species_map = self._species_map.cuda(**kwargs)
         self._Kinv = self._Kinv.cuda(**kwargs)
-        self._aev_mask = self._aev_mask.cuda(**kwargs)
         self._q_core = self._q_core.cuda(**kwargs)
         self._ref_features = self._ref_features.cuda(**kwargs)
         self._n_ref = self._n_ref.cuda(**kwargs)
@@ -324,7 +320,6 @@ class EMLEBase(_torch.nn.Module):
         self._emle_aev_computer = self._emle_aev_computer.cpu(**kwargs)
         self._species_map = self._species_map.cpu(**kwargs)
         self._Kinv = self._Kinv.cpu(**kwargs)
-        self._aev_mask = self._aev_mask.cpu(**kwargs)
         self._q_core = self._q_core.cpu(**kwargs)
         self._ref_features = self._ref_features.cpu(**kwargs)
         self._n_ref = self._n_ref.cpu(**kwargs)
