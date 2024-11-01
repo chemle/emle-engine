@@ -612,7 +612,7 @@ class EMLEBase(_torch.nn.Module):
         s_gauss = s * self.a_QEq
         s2 = s_gauss**2
         s2_mat = s2[:, :, None] + s2[:, None, :]
-        s_mat = _torch.where(s2_mat > 0, 1.0 / _torch.sqrt(s2_mat + 1e-16), 0)
+        s_mat = _torch.where(s2_mat > 0, _torch.sqrt(s2_mat + 1e-16), 0)
 
         device = r_data[0].device
         dtype = r_data[0].dtype
