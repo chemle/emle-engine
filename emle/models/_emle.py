@@ -450,9 +450,9 @@ class EMLE(_torch.nn.Module):
 
         # Compute the static energy.
         if self._method == "mm":
-            q_core = self._q_core_mm
+            q_core = self._q_core_mm[None, :]
             q_val = _torch.zeros_like(
-                q_core[0], dtype=charges_mm.dtype, device=self._device
+                q_core, dtype=charges_mm.dtype, device=self._device
             )
 
         mesh_data = self._emle_pc._get_mesh_data(
