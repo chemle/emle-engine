@@ -28,29 +28,88 @@ from torch import Tensor
 from typing import Optional, Tuple, List
 
 
+@_torch.jit.script
 class EMLEPC:
 
-    @classmethod
-    def get_E_static(cls, q_core, q_val, charges_mm, mesh_data):
-        vpot_q_core = cls._get_vpot_q(q_core, mesh_data[0])
-        vpot_q_val = cls._get_vpot_q(q_val, mesh_data[1])
+    def get_E_static(
+        self,
+        q_core: Tensor,
+        q_val: Tensor,
+        charges_mm: Tensor,
+        mesh_data: Tuple[Tensor, Tensor, Tensor],
+    ) -> Tensor:
+        """
+        Calculate the static electrostatic energy.
+
+        Parameters
+        ----------
+
+        q_core: torch.Tensor (N_BATCH, N_QM_ATOMS,)
+            QM core charges.
+
+        q_val: torch.Tensor (N_BATCH, N_QM_ATOMS,)
+            QM valence charges.
+
+        charges_mm: torch.Tensor (N_BATCH, N_MM_ATOMS,)
+            MM charges.
+
+        mesh_data: mesh_data object (output of self._get_mesh_data)
+            Mesh data object.
+
+        Returns
+        -------
+
+        result: torch.Tensor (N_BATCH,)
+            Static electrostatic energy.
+        """
+
+        vpot_q_core = self._get_vpot_q(q_core, mesh_data[0])
+        vpot_q_val = self._get_vpot_q(q_val, mesh_data[1])
         vpot_static = vpot_q_core + vpot_q_val
         return _torch.sum(vpot_static * charges_mm, dim=1)
 
-    @classmethod
-    def get_E_induced(cls, A_thole, charges_mm, s, mesh_data):
-        mu_ind = cls._get_mu_ind(A_thole, mesh_data, charges_mm, s)
-        vpot_ind = cls._get_vpot_mu(mu_ind, mesh_data[2])
+    def get_E_induced(
+        self,
+        A_thole: Tensor,
+        charges_mm: Tensor,
+        s: Tensor,
+        mesh_data: Tuple[Tensor, Tensor, Tensor],
+    ) -> Tensor:
+        """
+        Calculate the induced electrostatic energy.
+
+        Parameters
+        ----------
+
+        A_thole: torch.Tensor (N_BATCH, MAX_QM_ATOMS * 3, MAX_QM_ATOMS * 3)
+            The A matrix for induced dipoles prediction.
+
+        charges_mm: torch.Tensor (N_BATCH, MAX_MM_ATOMS,)
+            MM charges.
+
+        s: torch.Tensor (N_BATCH, MAX_QM_ATOMS,)
+            MBIS valence shell widths.
+
+        mesh_data: mesh_data object (output of self._get_mesh_data)
+            Mesh data object.
+
+        Returns
+        -------
+
+        result: torch.Tensor (N_BATCH,)
+            Induced electrostatic energy.
+        """
+        mu_ind = self._get_mu_ind(A_thole, mesh_data, charges_mm, s)
+        vpot_ind = self._get_vpot_mu(mu_ind, mesh_data[2])
         return _torch.sum(vpot_ind * charges_mm, dim=1) * 0.5
 
-    @classmethod
     def _get_mu_ind(
-        cls,
-        A,
+        self,
+        A: Tensor,
         mesh_data: Tuple[Tensor, Tensor, Tensor],
-        q,
-        s,
-    ):
+        q: Tensor,
+        s: Tensor,
+    ) -> Tensor:
         """
         Internal method, calculates induced atomic dipoles
         (Eq. 20 in 10.1021/acs.jctc.2c00914)
@@ -80,7 +139,7 @@ class EMLEPC:
         """
 
         r = 1.0 / mesh_data[0]
-        f1 = cls._get_f1_slater(r, s[:, :, None] * 2.0)
+        f1 = self._get_f1_slater(r, s[:, :, None] * 2.0)
         fields = _torch.sum(
             mesh_data[2] * f1[..., None] * q[:, None, :, None], dim=2
         ).reshape(len(s), -1)
@@ -88,8 +147,7 @@ class EMLEPC:
         mu_ind = _torch.linalg.solve(A, fields)
         return mu_ind.reshape((mu_ind.shape[0], -1, 3))
 
-    @staticmethod
-    def _get_vpot_q(q, T0):
+    def _get_vpot_q(self, q, T0):
         """
         Internal method to calculate the electrostatic potential.
 
@@ -110,8 +168,7 @@ class EMLEPC:
         """
         return _torch.sum(T0 * q[:, :, None], dim=1)
 
-    @staticmethod
-    def _get_vpot_mu(mu, T1):
+    def _get_vpot_mu(self, mu: Tensor, T1: Tensor) -> Tensor:
         """
         Internal method to calculate the electrostatic potential generated
         by atomic dipoles.
@@ -133,8 +190,9 @@ class EMLEPC:
         """
         return _torch.einsum("ijkl,ijl->ik", T1, mu)
 
-    @classmethod
-    def _get_mesh_data(cls, xyz, xyz_mesh, s):
+    def _get_mesh_data(
+        self, xyz: Tensor, xyz_mesh: Tensor, s: Tensor
+    ) -> Tuple[Tensor, Tensor, Tensor]:
         """
         Internal method, calculates mesh_data object.
 
@@ -149,14 +207,19 @@ class EMLEPC:
 
         s: torch.Tensor (N_BATCH, MAX_QM_ATOMS,)
             MBIS valence widths.
+
+        Returns
+        -------
+
+        result: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+            Tuple of mesh data objects.
         """
         rr = xyz_mesh[:, None, :, :] - xyz[:, :, None, :]
         r = _torch.linalg.norm(rr, ord=2, dim=3)
 
-        return 1.0 / r, cls._get_T0_slater(r, s[:, :, None]), -rr / r[..., None] ** 3
+        return 1.0 / r, self._get_T0_slater(r, s[:, :, None]), -rr / r[..., None] ** 3
 
-    @classmethod
-    def _get_f1_slater(cls, r, s):
+    def _get_f1_slater(self, r: Tensor, s: Tensor) -> Tensor:
         """
         Internal method, calculates damping factors for Slater densities.
 
@@ -175,12 +238,11 @@ class EMLEPC:
         result: torch.Tensor (N_BATCH, MAX_QM_ATOMS, MAX_MM_ATOMS)
         """
         return (
-            cls._get_T0_slater(r, s) * r
+            self._get_T0_slater(r, s) * r
             - _torch.exp(-r / s) / s * (0.5 + r / (s * 2)) * r
         )
 
-    @staticmethod
-    def _get_T0_slater(r, s):
+    def _get_T0_slater(self, r: Tensor, s: Tensor) -> Tensor:
         """
         Internal method, calculates T0 tensor for Slater densities.
 

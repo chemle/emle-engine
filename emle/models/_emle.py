@@ -332,6 +332,9 @@ class EMLE(_torch.nn.Module):
             dtype=dtype,
         )
 
+        # Create the EMLEPC module.
+        self._emle_pc = _EMLEPC()
+
     def to(self, *args, **kwargs):
         """
         Performs Tensor dtype and/or device conversion on the model.
@@ -452,7 +455,7 @@ class EMLE(_torch.nn.Module):
                 q_core[0], dtype=charges_mm.dtype, device=self._device
             )
 
-        mesh_data = _EMLEPC._get_mesh_data(
+        mesh_data = self._emle_pc._get_mesh_data(
             xyz_qm_bohr[None, :, :], xyz_mm_bohr[None, :, :], s
         )
 
@@ -461,13 +464,15 @@ class EMLE(_torch.nn.Module):
             q_val = _torch.zeros_like(
                 q_core, dtype=charges_mm.dtype, device=self._device
             )
-        E_static = _EMLEPC.get_E_static(q_core, q_val, charges_mm[None, :], mesh_data)[
-            0
-        ]
+        E_static = self._emle_pc.get_E_static(
+            q_core, q_val, charges_mm[None, :], mesh_data
+        )[0]
 
         # Compute the induced energy.
         if self._method == "electrostatic":
-            E_ind = _EMLEPC.get_E_induced(A_thole, charges_mm[None, :], s, mesh_data)[0]
+            E_ind = self._emle_pc.get_E_induced(
+                A_thole, charges_mm[None, :], s, mesh_data
+            )[0]
         else:
             E_ind = _torch.tensor(0.0, dtype=charges_mm.dtype, device=self._device)
 
