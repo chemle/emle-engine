@@ -20,11 +20,6 @@
 # along with EMLE-Engine If not, see <http://www.gnu.org/licenses/>.
 ######################################################################
 
-# Note that this file is empty since EMLECalculator and Socket should
-# be directly imported from their respective sub-modules. This is to
-# avoid severe module import overheads when running the client code,
-# which requires no EMLE functionality.
-
 """
 Analyser for EMLE simulation output.
 """
@@ -41,7 +36,7 @@ import numpy as _np
 import torch as _torch
 
 from ._utils import pad_to_max as _pad_to_max
-from .models._emle_pc import EMLEPC as _EMLEPC
+from .models import EMLEBase as _EMLEBase
 
 
 class BaseBackend(_ABC):
@@ -152,9 +147,6 @@ class EMLEAnalyzer:
         dtype = emle_base._dtype
         device = emle_base._device
 
-        # Create the point charge utility class.
-        emle_pc = _EMLEPC()
-
         atomic_numbers, qm_xyz = self._parse_qm_xyz(qm_xyz_filename)
         pc_charges, pc_xyz = self._parse_pc_xyz(pc_xyz_filename)
 
@@ -175,11 +167,11 @@ class EMLEAnalyzer:
         )
         self.alpha = self._get_mol_alpha(self.A_thole, self.atomic_numbers)
 
-        mesh_data = emle_pc._get_mesh_data(self.qm_xyz, self.pc_xyz, self.s)
-        self.e_static = emle_pc.get_E_static(
+        mesh_data = _EMLEBase._get_mesh_data(self.qm_xyz, self.pc_xyz, self.s)
+        self.e_static = _EMLEBase.get_static_energy(
             self.q_core, self.q_val, self.pc_charges, mesh_data
         )
-        self.e_induced = emle_pc.get_E_induced(
+        self.e_induced = _EMLEBase.get_induced_energy(
             self.A_thole, self.pc_charges, self.s, mesh_data
         )
 

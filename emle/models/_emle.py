@@ -39,8 +39,6 @@ from typing import Optional, Tuple, List
 from . import _patches
 from . import EMLEBase as _EMLEBase
 
-from . import EMLEPC as _EMLEPC
-
 # Monkey-patch the TorchANI BuiltInModel and BuiltinEnsemble classes so that
 # they call self.aev_computer using args only to allow forward hooks to work
 # with TorchScript.
@@ -332,9 +330,6 @@ class EMLE(_torch.nn.Module):
             dtype=dtype,
         )
 
-        # Create the EMLEPC module.
-        self._emle_pc = _EMLEPC()
-
     def to(self, *args, **kwargs):
         """
         Performs Tensor dtype and/or device conversion on the model.
@@ -455,7 +450,7 @@ class EMLE(_torch.nn.Module):
                 q_core, dtype=charges_mm.dtype, device=self._device
             )
 
-        mesh_data = self._emle_pc._get_mesh_data(
+        mesh_data = self._emle_base._get_mesh_data(
             xyz_qm_bohr[None, :, :], xyz_mm_bohr[None, :, :], s
         )
 
@@ -464,13 +459,13 @@ class EMLE(_torch.nn.Module):
             q_val = _torch.zeros_like(
                 q_core, dtype=charges_mm.dtype, device=self._device
             )
-        E_static = self._emle_pc.get_E_static(
+        E_static = self._emle_base.get_static_energy(
             q_core, q_val, charges_mm[None, :], mesh_data
         )[0]
 
         # Compute the induced energy.
         if self._method == "electrostatic":
-            E_ind = self._emle_pc.get_E_induced(
+            E_ind = self._emle_base.get_induced_energy(
                 A_thole, charges_mm[None, :], s, mesh_data
             )[0]
         else:
