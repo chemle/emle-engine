@@ -149,10 +149,12 @@ class EMLETrainer:
             for epoch in range(epochs):
                 loss_instance.train()
                 optimizer.zero_grad()
-                loss = loss_instance(*args, **kwargs)
+                loss, rmse, max_error = loss_instance(*args, **kwargs)
                 loss.backward(retain_graph=True)
                 optimizer.step()
-                print(f"Epoch {epoch}: Loss = {loss.item()}")
+                print(f"Epoch {epoch}: Loss ={loss.item():9.4f}    "
+                      f"RMSE ={rmse.item():9.4f}    "
+                      f"Max Error ={max_error.item():9.4f}")
 
             return loss
 

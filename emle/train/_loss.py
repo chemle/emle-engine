@@ -3,6 +3,14 @@
 import torch as _torch
 
 
+def get_rmse(values, target):
+    return _torch.sqrt(_torch.mean((values - target) ** 2))
+
+
+def get_max_error(values, target):
+    return _torch.max(_torch.abs(values - target))
+
+
 class QEqLoss(_torch.nn.Module):
     """
     Loss function for the charge equilibration (QEq). Used to train ref_values_chi, a_QEq.
@@ -51,8 +59,14 @@ class QEqLoss(_torch.nn.Module):
         # Calculate q_core and q_val
         _, q_core, q_val, _ = self._emle_base(atomic_numbers, xyz, q_mol)
 
-        return self._loss(q_core + q_val, q_target)
- 
+        mask = atomic_numbers > 0
+        target = q_target[mask]
+        values = (q_core + q_val)[mask]
+
+        return (self._loss(values, target),
+                get_rmse(values, target),
+                get_max_error(values, target))
+
 
 class TholeLoss(_torch.nn.Module):
     """
@@ -178,4 +192,6 @@ class TholeLoss(_torch.nn.Module):
                 / _torch.sum(self._emle_base._n_ref)
             )
 
-        return loss
+        return (loss,
+                get_rmse(alpha_mol_triu, alpha_mol_target_triu),
+                get_max_error(alpha_mol_triu, alpha_mol_target_triu))
