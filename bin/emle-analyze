@@ -1,0 +1,89 @@
+#!/usr/bin/env python
+
+import argparse
+
+parser = argparse.ArgumentParser(
+    description="Analysis tool for ML(EMLE)/MM simulations"
+)
+parser.add_argument(
+    "--orca-tarball", type=str, metavar="name.tar", required=True, help="ORCA tarball"
+)
+parser.add_argument(
+    "--emle-model", type=str, metavar="name.mat", required=True, help="EMLE model file"
+)
+parser.add_argument(
+    "--backend",
+    type=str,
+    choices=["deepmd", "ani2x"],
+    help="Gas phase ML backend ('deepmd' or 'ani2x')",
+)
+parser.add_argument(
+    "--deepmd-model",
+    type=str,
+    metavar="name.pb",
+    help="Deepmd model file (for backend='deepmd')",
+)
+parser.add_argument(
+    "--qm-xyz", type=str, metavar="name.xyz", required=True, help="QM xyz file"
+)
+parser.add_argument(
+    "--pc-xyz",
+    type=str,
+    metavar="name.pc",
+    required=True,
+    help="Point charges xyz file",
+)
+parser.add_argument(
+    "-q", type=int, metavar="charge", default=0, help="Total charge of the ML region"
+)
+parser.add_argument(
+    "--alpha", action="store_true", help="Extract molecular dipolar polarizabilities"
+)
+parser.add_argument("output", type=str, help="Output mat file")
+args = parser.parse_args()
+
+
+import scipy.io
+
+from emle.models._emle import EMLE
+from emle._orca_parser import ORCAParser
+from emle._analyzer import EMLEAnalyzer, ANI2xBackend, DeepMDBackend
+
+
+if args.backend == "deepmd" and not args.deepmd_model:
+    parser.error("--deepmd-model is required when backend='deepmd'")
+
+backend = None
+if args.backend == "ani2x":
+    backend = ANI2xBackend()
+elif args.backend == "deepmd":
+    backend = DeepMDBackend(args.deepmd_model)
+
+emle_base = EMLE(model=args.emle_model)._emle_base
+
+analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz, args.q, emle_base, backend)
+
+parser = ORCAParser(args.orca_tarball, decompose=True, alpha=args.alpha)
+
+result = {
+    "z": parser.z,
+    "xyz": parser.xyz,
+    "E_vac_qm": parser.vac_E,
+    "E_static_qm": parser.E_static,
+    "E_induced_qm": parser.E_induced,
+    "s_qm": parser.mbis["s"],
+    "q_core_qm": parser.mbis["q_core"],
+    "q_val_qm": parser.mbis["q_val"],
+    "E_static_emle": analyzer.e_static,
+    "E_induced_emle": analyzer.e_induced,
+    "s_emle": analyzer.s,
+    "q_core_emle": analyzer.q_core,
+    "q_val_emle": analyzer.q_val,
+    "alpha_emle": analyzer.alpha,
+}
+if args.backend:
+    result["E_vac_emle"] = analyzer.e_backend
+if args.alpha:
+    result["alpha_qm"] = parser.alpha
+
+scipy.io.savemat(args.output, result)

@@ -20,11 +20,6 @@
 # along with EMLE-Engine If not, see <http://www.gnu.org/licenses/>.
 ######################################################################
 
-# Note that this file is empty since EMLECalculator and Socket should
-# be directly imported from their respective sub-modules. This is to
-# avoid severe module import overheads when running the client code,
-# which requires no EMLE functionality.
-
 """
 Torch modules for EMLE calculations.
 """
