@@ -57,7 +57,7 @@ class EMLETrainer:
 
         # Deatch the tensors, convert to numpy arrays and save the model
         emle_model = {
-            k: v.detach().numpy()
+            k: v.detach().cpu().numpy()
             for k, v in emle_model.items()
             if isinstance(v, _torch.Tensor)
         }
