@@ -671,7 +671,7 @@ class EMLEBase(_torch.nn.Module):
         results: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS)
         """
         sqrt2 = _torch.sqrt(_torch.tensor([2.0], dtype=r.dtype, device=r.device))
-        return t01 * _torch.where(s_mat > 0, _torch.erf(r / (s_mat * sqrt2)), 0.0)
+        return t01 * _torch.where(s_mat > 0, _torch.erf(r / ((s_mat + 1e-16) * sqrt2)), 0.0)
 
     def _get_A_thole(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, q_val, k):
         """

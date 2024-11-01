@@ -1,6 +1,7 @@
 """Informative Vector Machine (IVM) for selecting representative feature vectors."""
 
 import torch as _torch
+
 from ._gpr import GPR
 from ._utils import pad_to_max
 
@@ -9,7 +10,7 @@ class IVM:
     """Implements IVM (Informative Vector Machine) to select representative feature vectors."""
 
     @staticmethod
-    def _ivm(aev_0, thr=0.02, n_max=None):
+    def _ivm(aev_0, sigma, thr=0.02, n_max=None):
         n_samples = len(aev_0)
         selected = [0]
         n_max = min(n_max or n_samples, n_samples)
@@ -22,7 +23,9 @@ class IVM:
             K_sel = GPR._aev_kernel(aev_sel, aev_sel)
             K_sel_inv = _torch.linalg.inv(
                 K_sel
-            )  # K_sel_inv = torch.linalg.inv(K_sel + torch.eye(len(aev_sel)) * SIGMA ** 2)
+                + _torch.eye(len(aev_sel), dtype=K_sel.dtype, device=K_sel.device)
+                * sigma**2
+            )
 
             if k_old is None:
                 k = GPR._aev_kernel(aev_pen, aev_sel)
@@ -45,7 +48,7 @@ class IVM:
         return selected
 
     @staticmethod
-    def perform_ivm(aev_mols, z_mols, atom_ids, species, thr):
+    def perform_ivm(aev_mols, z_mols, atom_ids, species, thr, sigma):
         """
         Calculate representative feature vectors for each species.
 
@@ -61,6 +64,8 @@ class IVM:
             Unique species in the dataset.
         thr: float
             Threshold for IVM selection.
+        sigma: float
+            Kernel width.
 
         Returns
         -------
@@ -68,7 +73,7 @@ class IVM:
 
         """
         aev_allz = [aev_mols[z_mols == z] for z in species]
-        ivm_idx = [IVM._ivm(aev_z, thr) for aev_z in aev_allz]
+        ivm_idx = [IVM._ivm(aev_z, sigma, thr) for aev_z in aev_allz]
 
         ivm_mol_atom_ids = [
             atom_ids[z_mols == z][z_ivm_idx] for z, z_ivm_idx in zip(species, ivm_idx)

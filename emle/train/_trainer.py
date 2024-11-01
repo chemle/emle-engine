@@ -57,7 +57,7 @@ class EMLETrainer:
 
         # Deatch the tensors, convert to numpy arrays and save the model
         emle_model = {
-            k: v.detach().cpu().numpy()
+            k: v.cpu().detach().numpy()
             for k, v in emle_model.items()
             if isinstance(v, _torch.Tensor)
         }
@@ -176,13 +176,13 @@ class EMLETrainer:
         q,
         alpha,
         train_mask,
-        alpha_mode="reference",
+        alpha_mode="species",
         sigma=1e-3,
-        ivm_thr=0.2,
+        ivm_thr=0.05,
         epochs=100,
-        lr_qeq=0.001,
-        lr_thole=0.001,
-        lr_sqrtk=0.001,
+        lr_qeq=0.002,
+        lr_thole=0.01,
+        lr_sqrtk=0.01,
         model_filename="emle_model.mat",
         device=_torch.device("cuda"),
         dtype=_torch.float64,
@@ -214,6 +214,12 @@ class EMLETrainer:
             IVM threshold.
         epochs: int
             Number of training epochs.
+        lr_qeq: float
+            Learning rate for QEq model.
+        lr_thole: float
+            Learning rate for Thole model.
+        lr_sqrtk: float
+            Learning rate for sqrtk.
         model_filename: str or None
             Filename to save the trained model. If None, the model is not saved.
         device: torch.device
@@ -283,7 +289,7 @@ class EMLETrainer:
 
         # Perform IVM
         ivm_mol_atom_ids_padded, aev_ivm_allz = IVM.perform_ivm(
-            aev_mols, z, atom_ids, species, ivm_thr
+            aev_mols, z, atom_ids, species, ivm_thr, sigma
         )
 
         ref_features = pad_to_max(aev_ivm_allz)
@@ -293,17 +299,21 @@ class EMLETrainer:
         # Fit s (pure GPR, no fancy optimization needed)
         ref_values_s = self._train_s(s, zid, aev_mols, aev_ivm_allz, sigma)
 
+        # Good for debugging
+        # _torch.autograd.set_detect_anomaly(True)
+
         # Initial guess for the model parameters
         params = {
-            "a_QEq": _torch.ones(1, dtype=dtype, device=_torch.device(device)),
-            "a_Thole": _torch.zeros(1, dtype=dtype, device=_torch.device(device)),
-            "ref_values_s": ref_values_s.to(device),
+            "a_QEq": _torch.Tensor([1.]).to(device=device, dtype=dtype),
+            "a_Thole": _torch.Tensor([2.]).to(device=device, dtype=dtype),
+            "ref_values_s": ref_values_s.to(device=device, dtype=dtype),
             "ref_values_chi": _torch.zeros(
                 *ref_values_s.shape,
                 dtype=ref_values_s.dtype,
-                device=_torch.device(device),
+                device=device,
             ),
-            "k_Z": _torch.ones(len(species), dtype=dtype, device=_torch.device(device)),
+            #"k_Z": _torch.ones(len(species), dtype=dtype, device=_torch.device(device)),
+            "k_Z": _torch.Tensor([0.922, 0.173, 0.195, 0.192, 0.216]).to(device=device, dtype=dtype),
             "sqrtk_ref": _torch.ones(
                 *ref_values_s.shape,
                 dtype=ref_values_s.dtype,
@@ -312,10 +322,6 @@ class EMLETrainer:
             if alpha_mode == "reference"
             else None,
         }
-
-        for k, v in params.items():
-            if v is not None:
-                print(f"{k}: {v.dtype}")
 
         # Create the EMLE base instance
         emle_base = self._emle_base(
@@ -344,6 +350,8 @@ class EMLETrainer:
             q_target=q,
         )
 
+        print("a_QEq:", emle_base.a_QEq)
+
         # Fit a_Thole, k_Z (uses volumes predicted by QEq model)
         print("Fitting a_Thole, k_Z")
         self._train_model(
@@ -358,6 +366,7 @@ class EMLETrainer:
             alpha_mol_target=alpha,
         )
 
+        print("a_Thole:", emle_base.a_Thole)
         # Fit sqrtk_ref ( alpha = sqrtk ** 2 * k_Z * v)
         if alpha_mode == "reference":
             print("Fitting ref_values_sqrtk")
@@ -382,7 +391,7 @@ class EMLETrainer:
             "ref_values_s": emle_base.ref_values_s,
             "ref_values_chi": emle_base.ref_values_chi,
             "k_Z": emle_base.k_Z,
-            "sqrtk_ref": emle_base.ref_values_sqrtk,
+            "sqrtk_ref": emle_base.ref_values_sqrtk if alpha_mode == "reference" else None,
             "species": species,
             "alpha_mode": alpha_mode,
             "n_ref": n_ref,
@@ -395,11 +404,3 @@ class EMLETrainer:
 
         return emle_model
 
-
-def main():
-    # Parse CLI args, read the files and run emle_train
-    pass
-
-
-if __name__ == "__main__":
-    main()
