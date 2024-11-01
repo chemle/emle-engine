@@ -36,7 +36,6 @@ import numpy as _np
 import torch as _torch
 
 from ._utils import pad_to_max as _pad_to_max
-from .models import EMLEBase as _EMLEBase
 
 
 class BaseBackend(_ABC):
@@ -167,11 +166,11 @@ class EMLEAnalyzer:
         )
         self.alpha = self._get_mol_alpha(self.A_thole, self.atomic_numbers)
 
-        mesh_data = _EMLEBase._get_mesh_data(self.qm_xyz, self.pc_xyz, self.s)
-        self.e_static = _EMLEBase.get_static_energy(
+        mesh_data = emle_base._get_mesh_data(self.qm_xyz, self.pc_xyz, self.s)
+        self.e_static = emle_base.get_static_energy(
             self.q_core, self.q_val, self.pc_charges, mesh_data
         )
-        self.e_induced = _EMLEBase.get_induced_energy(
+        self.e_induced = emle_base.get_induced_energy(
             self.A_thole, self.pc_charges, self.s, mesh_data
         )
 
