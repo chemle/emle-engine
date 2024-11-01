@@ -20,7 +20,7 @@
 # along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
 #####################################################################
 
-"""EMLE utilities."""
+"""Resource handling utilities for EMLE."""
 
 __author__ = "Lester Hedges"
 __email__ = "lester.hedges@gmail.com"
