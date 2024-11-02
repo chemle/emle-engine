@@ -246,7 +246,7 @@ class EMLETrainer:
             raise ValueError("'alpha_mode' must be 'species' or 'reference'")
 
         if train_mask is None:
-            train_mask = _torch.zeros(len(z), dtype=_torch.bool)
+            train_mask = _torch.ones(len(z), dtype=_torch.bool)
 
         # Prepare batch data
         q_mol = _torch.Tensor([q_m.sum() for q_m in q])[train_mask]
