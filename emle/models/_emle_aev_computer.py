@@ -65,6 +65,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         num_species=7,
         hypers=None,
         mask=None,
+        aev_mean=None,
         external=False,
         zid_map=None,
         device=None,
@@ -77,6 +78,8 @@ class EMLEAEVComputer(_torch.nn.Module):
             hyperparameters for wrapped AEVComputer
         mask: torch.BoolTensor
             mask for the features returned from wrapped AEVComputer
+        aev_mean: torch.Tensor
+            Mean values to be subtracted from features
         external: bool
             Whether the features are calculated externally
         zid_map: dict
@@ -107,6 +110,10 @@ class EMLEAEVComputer(_torch.nn.Module):
                 raise ValueError("'mask' must have dtype 'torch.bool'")
         self._mask = mask
 
+        self._aev_mean = None
+        if aev_mean is not None:
+            self._aev_mean = _torch.tensor(aev_mean, dtype=dtype, device=device)
+
         self._aev = None
 
         if not external:
@@ -130,9 +137,17 @@ class EMLEAEVComputer(_torch.nn.Module):
             zid_aev = self._zid_map[zid]
             self._aev = self._aev_computer((zid_aev, xyz))[1]
 
-        norm = _torch.linalg.norm(self._aev, dim=2, keepdims=True)
-        return _torch.where(zid[:, :, None] > -1,
-                            self._apply_mask(self._aev / norm), 0.)
+        aev = self._aev
+        norm = _torch.linalg.norm(aev, dim=2, keepdims=True)
+
+        aev = self._apply_mask(
+            _torch.where(zid[:, :, None] > -1, aev / norm, 0.)
+        )
+
+        if self._aev_mean:
+            aev = aev - self._aev_mean[None, None, :]
+
+        return aev
 
     def _apply_mask(self, aev):
         return aev[:, :, self._mask] if self._mask is not None else aev

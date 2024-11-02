@@ -319,7 +319,9 @@ class EMLE(_torch.nn.Module):
                         "Unable to create optimised AEVComputer using NNPOps."
                     ) from e
         else:
-            emle_aev_computer = EMLEAEVComputer(external=True, mask=aev_mask,
+            emle_aev_computer = EMLEAEVComputer(external=True,
+                                                mask=aev_mask,
+                                                aev_mean=params.get("aev_mean"),
                                                 device=device)
 
         # Create the base EMLE model.
@@ -329,7 +331,6 @@ class EMLE(_torch.nn.Module):
             ref_features,
             q_core,
             emle_aev_computer=emle_aev_computer,
-            aev_mean=params.get("aev_mean"),
             alpha_mode=self._alpha_mode,
             species=params.get("species", self._species),
             device=device,

@@ -64,7 +64,6 @@ class EMLEBase(_torch.nn.Module):
         ref_features,
         q_core,
         emle_aev_computer=None,
-        aev_mean=None,
         species=None,
         alpha_mode="species",
         device=None,
@@ -98,9 +97,6 @@ class EMLEBase(_torch.nn.Module):
 
         emle_aev_computer: EMLEAEVComputer
             EMLE AEV computer instance used to compute AEVs (masked and normalized).
-
-        aev_mean: torch.Tensor
-            Mean values to be subtracted from features
 
         species: List[int], Tuple[int], numpy.ndarray, torch.Tensor
             List of species (atomic numbers) supported by the EMLE model.
@@ -190,10 +186,6 @@ class EMLEBase(_torch.nn.Module):
         else:
             dtype = _torch.get_default_dtype()
         self._dtype = dtype
-
-        self._aev_mean = None
-        if aev_mean is not None:
-            self._aev_mean = _torch.tensor(aev_mean, dtype=dtype, device=device)
 
         # Store model parameters as tensors.
         self.a_QEq = _torch.nn.Parameter(params["a_QEq"])
