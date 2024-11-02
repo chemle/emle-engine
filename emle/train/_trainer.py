@@ -181,9 +181,9 @@ class EMLETrainer:
         sigma=1e-3,
         ivm_thr=0.05,
         epochs=100,
-        lr_qeq=0.02,
-        lr_thole=0.01,
-        lr_sqrtk=0.01,
+        lr_qeq=0.05,
+        lr_thole=0.05,
+        lr_sqrtk=0.05,
         model_filename="emle_model.mat",
         device=_torch.device("cuda"),
         dtype=_torch.float64,
@@ -246,7 +246,8 @@ class EMLETrainer:
             raise ValueError("'alpha_mode' must be 'species' or 'reference'")
 
         if train_mask is None:
-            train_mask = _torch.ones(len(z), dtype=_torch.bool)
+            train_mask = _torch.zeros(len(z), dtype=_torch.bool)
+        train_mask[::5] = True
 
         # Prepare batch data
         q_mol = _torch.Tensor([q_m.sum() for q_m in q])[train_mask]
