@@ -56,9 +56,8 @@ class EMLETrainer:
 
         # Deatch the tensors, convert to numpy arrays and save the model
         emle_model = {
-            k: v.cpu().detach().numpy()
+            k: v.cpu().detach().numpy() if isinstance(v, _torch.Tensor) else v
             for k, v in emle_model.items()
-            if isinstance(v, _torch.Tensor)
         }
         scipy.io.savemat(model_filename, emle_model)
 
