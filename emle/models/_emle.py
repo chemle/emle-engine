@@ -293,8 +293,9 @@ class EMLE(_torch.nn.Module):
         from . import EMLEAEVComputer
 
         if create_aev_calculator:
+            num_species = params.get("computer_n_species", len(n_ref))
             emle_aev_computer = EMLEAEVComputer(mask=aev_mask,
-                                                num_species=len(n_ref),
+                                                num_species=num_species,
                                                 device=device,
                                                 dtype=dtype)
 

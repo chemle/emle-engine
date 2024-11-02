@@ -416,7 +416,8 @@ class EMLETrainer:
             "n_ref": n_ref,
             "ref_aev": ref_features,
             "aev_mask": aev_mask,
-            "zid_map": emle_aev_computer._zid_map
+            "zid_map": emle_aev_computer._zid_map,
+            "computer_n_species": computer_n_species
         }
 
         if model_filename is not None:
