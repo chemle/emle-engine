@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import numpy as np
 
 parser = argparse.ArgumentParser(
     description="EMLE training script"
@@ -10,6 +11,9 @@ parser.add_argument("--orca-tarball", type=str,
                     metavar='name.tar',
                     required=True,
                     help="ORCA tarball")
+parser.add_argument("--train-mask", type=str,
+                    metavar='mask.dat',
+                    help="Mask for training set")
 parser.add_argument("output", type=str,
                     help="Output model file")
 args = parser.parse_args()
@@ -22,6 +26,10 @@ from emle.train import EMLETrainer
 
 parser = ORCAParser(args.orca_tarball, decompose=False, alpha=True)
 
+train_mask = None
+if args.train_mask:
+    train_mask = np.loadtxt(args.train_mask, dtype=bool)
+
 trainer = EMLETrainer()
 trainer.train(z=parser.z,
               xyz=parser.xyz,
@@ -29,5 +37,5 @@ trainer.train(z=parser.z,
               q_core=parser.mbis['q_core'],
               q=parser.mbis['q_core'] + parser.mbis['q_val'],
               alpha=parser.alpha,
-              train_mask=None,
+              train_mask=train_mask,
               model_filename=args.output)
