@@ -33,12 +33,11 @@ class EMLETrainer:
         torch.Tensor
             Species ID mapping.
         """
-        zid_mapping = _torch.zeros(
+        zid_mapping = _torch.ones(
             max(species) + 1, dtype=_torch.int, device=species.device
-        )
+        ) * -1
         for i, z in enumerate(species):
             zid_mapping[z] = i
-        zid_mapping[0] = -1
         return zid_mapping
 
     @staticmethod
