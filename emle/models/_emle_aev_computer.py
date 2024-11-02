@@ -79,7 +79,7 @@ class EMLEAEVComputer(_torch.nn.Module):
             mask for the features returned from wrapped AEVComputer
         external: bool
             Whether the features are calculated externally
-        zid_map: dict
+        zid_map: dict or torch.tensor
             map from zid provided here to the ones passed to AEVComputer
         device: torch.device
             The device on which to run the model.
@@ -117,7 +117,10 @@ class EMLEAEVComputer(_torch.nn.Module):
 
         if not zid_map:
             zid_map = {i: i for i in range(num_species)}
-        self._zid_map = -_torch.ones(num_species + 1, dtype=_torch.int, device=device)
+        if type(zid_map) is dict:
+            self._zid_map = -_torch.ones(num_species + 1, dtype=_torch.int, device=device)
+        else:
+            self._zid_map = zid_map
         for self_atom_zid, aev_atom_zid in zid_map.items():
             self._zid_map[self_atom_zid] = aev_atom_zid
 

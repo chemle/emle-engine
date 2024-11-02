@@ -294,9 +294,7 @@ class EMLE(_torch.nn.Module):
 
         if create_aev_calculator:
             emle_aev_computer = EMLEAEVComputer(mask=aev_mask,
-                                                # TODO: wrong mask, update default model
-                                                # num_species=len(n_ref),
-                                                zid_map=params.get('zid_map', None),
+                                                num_species=len(n_ref),
                                                 device=device,
                                                 dtype=dtype)
 
@@ -321,6 +319,7 @@ class EMLE(_torch.nn.Module):
         else:
             emle_aev_computer = EMLEAEVComputer(external=True,
                                                 mask=aev_mask,
+                                                zid_map=params.get('zid_map'),
                                                 device=device)
 
         # Create the base EMLE model.

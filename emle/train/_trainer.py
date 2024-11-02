@@ -184,6 +184,8 @@ class EMLETrainer:
         lr_qeq=0.05,
         lr_thole=0.05,
         lr_sqrtk=0.05,
+        computer_n_species=None,
+        computer_zid_map=None,
         model_filename="emle_model.mat",
         device=_torch.device("cuda"),
         dtype=_torch.float64,
@@ -221,6 +223,10 @@ class EMLETrainer:
             Learning rate for Thole model.
         lr_sqrtk: float
             Learning rate for sqrtk.
+        computer_n_species: int
+            Number of species supported by calculator (for ani2x backend)
+        computer_zid_map: dict ({emle_zid: calculator_zid})
+            Map between EMLE and calculator zid values (for ani2x backend)
         model_filename: str or None
             Filename to save the trained model. If None, the model is not saved.
         device: torch.device
@@ -272,13 +278,18 @@ class EMLETrainer:
         zid_mapping = self._get_zid_mapping(species)
         zid = zid_mapping[z]
 
+        if computer_n_species is None:
+            computer_n_species = len(species)
+
         # Calculate AEVs
         emle_aev_computer = EMLEAEVComputer(
-            num_species=len(species), dtype=dtype, device=device
+            num_species=computer_n_species, zid_map=computer_zid_map,
+            dtype=dtype, device=device
         )
         aev_mols = emle_aev_computer(zid, xyz)
-        aev_mask = torch.sum(aev_mols.reshape(-1, aev_mols.shape[-1]) ** 2, axis=0) > 0
-        aev_mask = aev_mask.cpu().numpy()
+        aev_mask = _torch.sum(aev_mols.reshape(-1, aev_mols.shape[-1]) ** 2,
+                              dim=0) > 0
+        aev_mask = aev_mask
 
         # "Fit" q_core (just take averages over the entire training set)
         q_core = mean_by_z(q_core, zid)
@@ -404,6 +415,7 @@ class EMLETrainer:
             "n_ref": n_ref,
             "ref_aev": ref_features,
             "aev_mask": aev_mask,
+            "zid_map": emle_aev_computer._zid_map
         }
 
         if model_filename is not None:
