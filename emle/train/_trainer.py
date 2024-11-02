@@ -247,7 +247,6 @@ class EMLETrainer:
 
         if train_mask is None:
             train_mask = _torch.zeros(len(z), dtype=_torch.bool)
-        train_mask[::5] = True
 
         # Prepare batch data
         q_mol = _torch.Tensor([q_m.sum() for q_m in q])[train_mask]
