@@ -281,6 +281,7 @@ class EMLETrainer:
         # "Fit" q_core (just take averages over the entire training set)
         q_core = mean_by_z(q_core, zid)
 
+        print("Perform IVM...")
         # Create an array of (molecule_id, atom_id) pairs (as in the full dataset) for the training set.
         # This is needed to be able to locate atoms/molecules in the original dataset that were picked by IVM.
         n_mols, max_atoms = q.shape
@@ -296,6 +297,9 @@ class EMLETrainer:
         ref_features = pad_to_max(aev_ivm_allz)
         ref_mask = ivm_mol_atom_ids_padded[:, :, 0] > -1
         n_ref = _torch.sum(ref_mask, dim=1)
+        print('Done. Number of reference environments selected:')
+        for atom_z, n in zip(species, n_ref):
+            print(f'{atom_z:2d}: {n:5d}')
 
         # Fit s (pure GPR, no fancy optimization needed)
         ref_values_s = self._train_s(s, zid, aev_mols, aev_ivm_allz, sigma)
