@@ -289,7 +289,7 @@ class EMLETrainer:
         aev_mols = emle_aev_computer(zid, xyz)
         aev_mask = _torch.sum(aev_mols.reshape(-1, aev_mols.shape[-1]) ** 2,
                               dim=0) > 0
-        aev_mask = aev_mask
+        aev_mols = aev_mols[:, :, aev_mask]
 
         # "Fit" q_core (just take averages over the entire training set)
         q_core = mean_by_z(q_core, zid)
