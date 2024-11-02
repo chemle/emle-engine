@@ -321,7 +321,6 @@ class EMLE(_torch.nn.Module):
         else:
             emle_aev_computer = EMLEAEVComputer(external=True,
                                                 mask=aev_mask,
-                                                aev_mean=params.get("aev_mean"),
                                                 device=device)
 
         # Create the base EMLE model.
