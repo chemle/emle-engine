@@ -178,7 +178,7 @@ class ORCAParser:
             for name in self.names
         ]
         z, xyz = zip(*mol_data)
-        return pad_to_max(z, -1), pad_to_max(xyz)
+        return pad_to_max(z, 0), pad_to_max(xyz)
 
     @staticmethod
     def _get_z_xyz_from_out(f):
