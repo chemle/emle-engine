@@ -277,6 +277,8 @@ class EMLETrainer:
             num_species=len(species), dtype=dtype, device=device
         )
         aev_mols = emle_aev_computer(zid, xyz)
+        aev_mask = torch.sum(aev_mols.reshape(-1, aev_mols.shape[-1]) ** 2, axis=0) > 0
+        aev_mask = aev_mask.cpu().numpy()
 
         # "Fit" q_core (just take averages over the entire training set)
         q_core = mean_by_z(q_core, zid)
@@ -401,7 +403,7 @@ class EMLETrainer:
             "alpha_mode": alpha_mode,
             "n_ref": n_ref,
             "aev_ref": ref_features,
-            "aev_mask": ref_mask,
+            "aev_mask": aev_mask,
         }
 
         if model_filename is not None:
