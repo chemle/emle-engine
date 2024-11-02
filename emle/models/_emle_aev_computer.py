@@ -131,7 +131,8 @@ class EMLEAEVComputer(_torch.nn.Module):
             self._aev = self._aev_computer((zid_aev, xyz))[1]
 
         norm = _torch.linalg.norm(self._aev, dim=2, keepdims=True)
-        return self._apply_mask(self._aev / norm)
+        return _torch.where(zid[:, :, None] > -1,
+                            self._apply_mask(self._aev / norm), 0.)
 
     def _apply_mask(self, aev):
         return aev[:, :, self._mask] if self._mask is not None else aev
