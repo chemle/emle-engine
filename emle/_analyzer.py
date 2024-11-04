@@ -31,6 +31,7 @@ from abc import ABC as _ABC
 from abc import abstractmethod as _abstractmethod
 
 import ase as _ase
+import ase.io as _ase_io
 import os as _os
 import numpy as _np
 import torch as _torch
@@ -179,7 +180,7 @@ class EMLEAnalyzer:
 
     @staticmethod
     def _parse_qm_xyz(qm_xyz_filename):
-        atoms = _ase.io.read(qm_xyz_filename, index=":")
+        atoms = _ase_io.read(qm_xyz_filename, index=":")
         atomic_numbers = _pad_to_max([_.get_atomic_numbers() for _ in atoms], -1)
         xyz = _np.array([_.get_positions() for _ in atoms])
         return atomic_numbers, xyz
