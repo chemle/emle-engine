@@ -428,7 +428,7 @@ class EMLETrainer:
 
         # Create the final model
         emle_model = {
-            "q_core": q_core,
+            "q_core": q_core_z,
             "a_QEq": emle_base.a_QEq,
             "a_Thole": emle_base.a_Thole,
             "s_ref": emle_base.ref_values_s,
