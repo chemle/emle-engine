@@ -4,7 +4,7 @@ import numpy as _np
 import torch as _torch
 import torchani as _torchani
 
-# From ANI-2x
+# Default hyperparameters for AEVComputer. Taken from ANI2x.
 _DEFAULT_HYPERS_DICT = {
     "Rcr": 5.1000e00,
     "Rca": 3.5000e00,
