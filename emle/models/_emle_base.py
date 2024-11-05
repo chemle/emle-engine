@@ -162,12 +162,13 @@ class EMLEBase(_torch.nn.Module):
 
         # Validate the AEV computer.
         if emle_aev_computer is not None:
-            allowed_types = [_torchani.AEVComputer]
+            from ._emle_aev_computer import EMLEAEVComputer
+            allowed_types = [EMLEAEVComputer, _torchani.AEVComputer]
             if _has_nnpops:
                 allowed_types.append(
                     _NNPOps.SymmetryFunctions.TorchANISymmetryFunctions
                 )
-            if not isinstance(emle_aev_computer._aev_computer, tuple(allowed_types)):
+            if not isinstance(emle_aev_computer, tuple(allowed_types)):
                 raise TypeError(
                     "'aev_computer' must be of type 'torchani.AEVComputer' or "
                     "'NNPOps.SymmetryFunctions.TorchANISymmetryFunctions'"
@@ -254,11 +255,6 @@ class EMLEBase(_torch.nn.Module):
         self.register_buffer("_c_s", c_s)
         self.register_buffer("_c_chi", c_chi)
         self.register_buffer("_c_sqrtk", c_sqrtk)
-
-        # Initalise an empty AEV tensor to use to store the AEVs in parent models.
-        # If AEVs are computed externally, then this tensor will be set by the
-        # parent.
-        self._aev = _torch.empty(0, dtype=dtype, device=device)
 
     def to(self, *args, **kwargs):
         self._emle_aev_computer = self._emle_aev_computer.to(*args, **kwargs)
