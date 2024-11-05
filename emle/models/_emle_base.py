@@ -418,7 +418,7 @@ class EMLEBase(_torch.nn.Module):
             )
             k = k_scale * k
 
-        A_thole = self._get_A_thole(r_data, s, q_val, k)
+        A_thole = self._get_A_thole(r_data, s, q_val, k, self.a_Thole)
 
         return s, q_core, q_val, A_thole
 
@@ -664,7 +664,10 @@ class EMLEBase(_torch.nn.Module):
             s_mat > 0, _torch.erf(r / ((s_mat + 1e-16) * sqrt2)), 0.0
         )
 
-    def _get_A_thole(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, q_val, k):
+    @classmethod
+    def _get_A_thole(
+        cls, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, q_val, k, a_Thole
+    ):
         """
         Internal method, generates A matrix for induced dipoles prediction
         (Eq. 20 in 10.1021/acs.jctc.2c00914)
@@ -683,6 +686,9 @@ class EMLEBase(_torch.nn.Module):
         k: torch.Tensor (N_BATCH, N_ATOMS,)
             Scaling factors for polarizabilities.
 
+        a_Thole: float
+            Thole damping factor
+
         Returns
         -------
 
@@ -692,7 +698,7 @@ class EMLEBase(_torch.nn.Module):
         v = -60 * q_val * s**3
         alpha = v * k
 
-        alphap = alpha * self.a_Thole
+        alphap = alpha * a_Thole
         alphap_mat = alphap[:, :, None] * alphap[:, None, :]
 
         au3 = _torch.where(
@@ -701,7 +707,7 @@ class EMLEBase(_torch.nn.Module):
         au31 = au3.repeat_interleave(3, dim=2)
         au32 = au31.repeat_interleave(3, dim=1)
 
-        A = -self._get_T2_thole(r_data[2], r_data[3], au32)
+        A = -cls._get_T2_thole(r_data[2], r_data[3], au32)
 
         alpha3 = alpha.repeat_interleave(3, dim=1)
         new_diag = _torch.where(alpha3 > 0, 1.0 / (alpha3 + 1e-16), 1.0)
