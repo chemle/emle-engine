@@ -96,28 +96,41 @@ class EMLEAEVComputer(_torch.nn.Module):
         num_species=7,
         hypers=None,
         mask=None,
-        external=False,
+        is_external=False,
         zid_map=None,
         device=None,
         dtype=None,
     ):
         """
+        Constructor.
+
+        Parameters
+        ----------
+
         num_species: int
-            number of supported species
-        Hypers: dict
-            hyperparameters for wrapped AEVComputer
+            Number of supported species.
+
+        hypers: dict
+            Hyperparameters for the wrapped AEVComputer.
+
         mask: torch.BoolTensor
-            mask for the features returned from wrapped AEVComputer
-        external: bool
-            Whether the features are calculated externally
+            Mask for the features returned from wrapped AEVComputer.
+
+        is_external: bool
+            Whether the features are calculated externally.
+
         zid_map: dict or torch.tensor
-            map from zid provided here to the ones passed to AEVComputer
+            Map from zid provided here to the ones passed to AEVComputer.
+
         device: torch.device
             The device on which to run the model.
+
         dtype: torch.dtype
             The data type to use for the models floating point tensors.
         """
         super().__init__()
+
+        # Validate the input.
 
         if device is not None:
             if not isinstance(device, _torch.device):
@@ -126,9 +139,12 @@ class EMLEAEVComputer(_torch.nn.Module):
             device = _torch.get_default_device()
         self._device = device
 
-        self._external = external
+        if dtype is not None:
+            if not isinstance(dtype, _torch.dtype):
+                raise TypeError("'dtype' must be of type 'torch.dtype'")
+        else:
+            dtype = _torch.get_default_dtype()
 
-        # Validate the AEV mask.
         if mask is not None:
             if not isinstance(mask, _torch.Tensor):
                 raise TypeError("'mask' must be of type 'torch.Tensor'")
@@ -138,10 +154,23 @@ class EMLEAEVComputer(_torch.nn.Module):
                 raise ValueError("'mask' must have dtype 'torch.bool'")
         self._mask = mask
 
+        if not isinstance(is_external, bool):
+            raise TypeError("'is_external' must be of type 'bool'")
+        self._is_external = is_external
+
         # Initalise an empty AEV tensor to use to store the AEVs in parent models.
         # If AEVs are computed externally, then this tensor will be set by the
         # parent.
         self._aev = _torch.empty(0, dtype=dtype, device=device)
+
+        if not isinstance(num_species, int):
+            raise TypeError("'num_species' must be of type 'int'")
+        if num_species < 1:
+            raise ValueError("'num_species' must be greater than 0")
+
+        if hypers is not None:
+            if not isinstance(hypers, dict):
+                raise TypeError("'hypers' must be of type 'dict' or None")
 
         # Create the AEV computer.
         hypers = hypers or get_default_hypers(device, dtype)
@@ -174,10 +203,24 @@ class EMLEAEVComputer(_torch.nn.Module):
 
     def forward(self, zid, xyz):
         """
-        zid: (N_BATCH, MAX_N_ATOMS)
-        xyz: (N_BATCH, MAX_N_ATOMS, 3)
+        Evaluate the AEVs.
+
+        Parameters
+        ----------
+
+        zid: torch.Tensor (N_BATCH, MAX_N_ATOMS)
+            The species indices.
+
+        xyz: torch.Tensor (N_BATCH, MAX_N_ATOMS, 3)
+            The atomic coordinates.
+
+        Returns
+        -------
+
+        aevs: torch.Tensor (N_BATCH, MAX_N_ATOMS, N_AEV_COMPONENTS)
+            The atomic environment vectors.
         """
-        if not self._external:
+        if not self._is_external:
             zid_aev = self._zid_map[zid]
             aev = self._aev_computer((zid_aev, xyz))[1]
         else:
@@ -190,17 +233,45 @@ class EMLEAEVComputer(_torch.nn.Module):
         return aev
 
     def _apply_mask(self, aev):
+        """
+        Apply the mask to the AEVs.
+
+        Parameters
+        ----------
+
+        aev: torch.Tensor
+            The AEVs to mask.
+
+        Returns
+        -------
+
+        aev: torch.Tensor
+            The masked AEVs.
+        """
         return aev[:, :, self._mask] if self._mask is not None else aev
 
     def to(self, *args, **kwargs):
+        """
+        Performs Tensor dtype and/or device conversion on the model.
+        """
         if self._aev_computer:
             self._aev_computer = self._aev_computer.to(*args, **kwargs)
         if self._mask:
             self._mask = self._mask.to(*args, **kwargs)
         self._zid_map = self._zid_map.to(*args, **kwargs)
+
+        # Check for a device type in args and update the device attribute.
+        for arg in args:
+            if isinstance(arg, _torch.device):
+                self._device = arg
+                break
+
         return self
 
     def cuda(self, **kwargs):
+        """
+        Move all model parameters and buffers to CUDA memory.
+        """
         if self._aev_computer:
             self._aev_computer = self._aev_computer.cuda(**kwargs)
         if self._mask:
@@ -209,6 +280,9 @@ class EMLEAEVComputer(_torch.nn.Module):
         return self
 
     def cpu(self, **kwargs):
+        """
+        Move all model parameters and buffers to CPU memory.
+        """
         if self._aev_computer:
             self._aev_computer = self._aev_computer.cpu(**kwargs)
         if self._mask:
@@ -217,11 +291,17 @@ class EMLEAEVComputer(_torch.nn.Module):
         return self
 
     def double(self):
+        """
+        Casts all floating point model parameters and buffers to float64 precision.
+        """
         if self._aev_computer:
             self._aev_computer = self._aev_computer.double()
         return self
 
     def float(self):
+        """
+        Casts all floating point model parameters and buffers to float32 precision.
+        """
         if self._aev_computer:
             self._aev_computer = self._aev_computer.float()
         return self

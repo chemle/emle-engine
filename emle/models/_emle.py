@@ -318,7 +318,7 @@ class EMLE(_torch.nn.Module):
                     ) from e
         else:
             emle_aev_computer = EMLEAEVComputer(
-                external=True,
+                is_external=True,
                 mask=aev_mask,
                 zid_map=params.get("zid_map"),
                 device=device,
