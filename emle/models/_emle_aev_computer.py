@@ -256,7 +256,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if self._aev_computer:
             self._aev_computer = self._aev_computer.to(*args, **kwargs)
-        if self._mask:
+        if self._mask is not None:
             self._mask = self._mask.to(*args, **kwargs)
         self._zid_map = self._zid_map.to(*args, **kwargs)
 
@@ -274,7 +274,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if self._aev_computer:
             self._aev_computer = self._aev_computer.cuda(**kwargs)
-        if self._mask:
+        if self._mask is not None:
             self._mask = self._mask.cuda(**kwargs)
         self._zid_map = self._zid_map.cuda(**kwargs)
         return self
@@ -285,7 +285,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if self._aev_computer:
             self._aev_computer = self._aev_computer.cpu(**kwargs)
-        if self._mask:
+        if self._mask is not None:
             self._mask = self._mask.cpu(**kwargs)
         self._zid_map = self._zid_map.cpu(**kwargs)
         return self
