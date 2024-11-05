@@ -113,32 +113,39 @@ class EMLEAEVComputer(_torch.nn.Module):
                 raise ValueError("'mask' must have dtype 'torch.bool'")
         self._mask = mask
 
-        self._aev = None
+        # Initalise an empty AEV tensor to use to store the AEVs in parent models.
+        # If AEVs are computed externally, then this tensor will be set by the
+        # parent.
+        self._aev = _torch.empty(0, dtype=dtype, device=device)
 
-        if not external:
-            hypers = hypers or get_default_hypers(device, dtype)
-            self._aev_computer = _torchani.AEVComputer(
-                hypers["Rcr"],
-                hypers["Rca"],
-                hypers["EtaR"],
-                hypers["ShfR"],
-                hypers["EtaA"],
-                hypers["ShfA"],
-                hypers["Zeta"],
-                hypers["ShfZ"],
-                num_species=num_species
-            ).to(device=device, dtype=dtype)
+        # Create the AEV computer.
+        hypers = hypers or get_default_hypers(device, dtype)
+        self._aev_computer = _torchani.AEVComputer(
+            hypers["Rcr"],
+            hypers["Rca"],
+            hypers["EtaR"],
+            hypers["ShfR"],
+            hypers["EtaA"],
+            hypers["ShfA"],
+            hypers["Zeta"],
+            hypers["ShfZ"],
+            num_species=num_species,
+        ).to(device=device, dtype=dtype)
 
-        if not zid_map:
+        if zid_map is None:
             zid_map = {i: i for i in range(num_species)}
-        if type(zid_map) is dict:
+        if isinstance(zid_map, dict):
             self._zid_map = -_torch.ones(
                 num_species + 1, dtype=_torch.int, device=device
             )
-        else:
+            for self_atom_zid, aev_atom_zid in zid_map.items():
+                self._zid_map[self_atom_zid] = aev_atom_zid
+        elif isinstance(zid_map, _torch.Tensor):
             self._zid_map = zid_map
-        for self_atom_zid, aev_atom_zid in zid_map.items():
-            self._zid_map[self_atom_zid] = aev_atom_zid
+        elif isinstance(zid_map, (list, tuple, _np.ndarray)):
+            self._zid_map = _torch.tensor(zid_map, dtype=_torch.int64, device=device)
+        else:
+            raise ValueError("zid_map must be a dict, torch.Tensor, list or tuple")
 
     def forward(self, zid, xyz):
         """
@@ -147,10 +154,11 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if not self._external:
             zid_aev = self._zid_map[zid]
-            self._aev = self._aev_computer((zid_aev, xyz))[1]
+            aev = self._aev_computer((zid_aev, xyz))[1]
+        else:
+            aev = self._aev
 
-        aev = self._aev
-        norm = _torch.linalg.norm(aev, dim=2, keepdims=True)
+        norm = _torch.linalg.norm(aev, dim=2, keepdim=True)
 
         aev = self._apply_mask(_torch.where(zid[:, :, None] > -1, aev / norm, 0.0))
 

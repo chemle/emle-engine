@@ -290,7 +290,7 @@ class EMLE(_torch.nn.Module):
             raise TypeError("'create_aev_calculator' must be of type 'bool'")
 
         # Create an AEV calculator to perform the feature calculations.
-        from . import EMLEAEVComputer
+        from ._emle_aev_computer import EMLEAEVComputer
 
         if create_aev_calculator:
             num_species = params.get("computer_n_species", len(n_ref))

@@ -163,6 +163,7 @@ class EMLEBase(_torch.nn.Module):
         # Validate the AEV computer.
         if emle_aev_computer is not None:
             from ._emle_aev_computer import EMLEAEVComputer
+
             allowed_types = [EMLEAEVComputer, _torchani.AEVComputer]
             if _has_nnpops:
                 allowed_types.append(
