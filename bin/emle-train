@@ -6,50 +6,58 @@ import numpy as np
 
 parser = argparse.ArgumentParser(
     description="EMLE training script",
-    formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 
-parser.add_argument("--orca-tarball", type=str,
-                    metavar='name.tar',
-                    required=True,
-                    help="ORCA tarball")
-parser.add_argument("--train-mask", type=str,
-                    metavar='',
-                    help="Mask for training set")
-parser.add_argument("--sigma", type=float,
-                    metavar='',
-                    default=0.001,
-                    help="Sigma value for GPR")
-parser.add_argument("--ivm-thr", type=float,
-                    metavar='',
-                    default=0.05,
-                    help="IVM threshold")
-parser.add_argument("--epochs", type=int,
-                    metavar='',
-                    default=100,
-                    help="Number of training epochs")
-parser.add_argument("--lr-qeq", type=float,
-                    metavar='',
-                    default=0.05,
-                    help="Learning rate for QEq params (a_QEq, chi_ref)")
-parser.add_argument("--lr-thole", type=float,
-                    metavar='',
-                    default=0.05,
-                    help="Learning rate for Thole model params (a_Thole, k_Z)")
-parser.add_argument("--lr-sqrtk", type=float,
-                    metavar='',
-                    default=0.05,
-                    help="Learning rate for polarizability scaling factors (sqrtk_ref)")
-parser.add_argument("--computer-n-species", type=int,
-                    metavar='',
-                    default=None,
-                    help="Number of species supported by AEV computer")
-parser.add_argument("--computer-zid-map", type=str,
-                    metavar='',
-                    default=None,
-                    help="Map between EMLE and AEV computer zid values")
-parser.add_argument("output", type=str,
-                    help="Output model file")
+parser.add_argument(
+    "--orca-tarball", type=str, metavar="name.tar", required=True, help="ORCA tarball"
+)
+parser.add_argument("--train-mask", type=str, metavar="", help="Mask for training set")
+parser.add_argument(
+    "--sigma", type=float, metavar="", default=0.001, help="Sigma value for GPR"
+)
+parser.add_argument(
+    "--ivm-thr", type=float, metavar="", default=0.05, help="IVM threshold"
+)
+parser.add_argument(
+    "--epochs", type=int, metavar="", default=100, help="Number of training epochs"
+)
+parser.add_argument(
+    "--lr-qeq",
+    type=float,
+    metavar="",
+    default=0.05,
+    help="Learning rate for QEq params (a_QEq, chi_ref)",
+)
+parser.add_argument(
+    "--lr-thole",
+    type=float,
+    metavar="",
+    default=0.05,
+    help="Learning rate for Thole model params (a_Thole, k_Z)",
+)
+parser.add_argument(
+    "--lr-sqrtk",
+    type=float,
+    metavar="",
+    default=0.05,
+    help="Learning rate for polarizability scaling factors (sqrtk_ref)",
+)
+parser.add_argument(
+    "--computer-n-species",
+    type=int,
+    metavar="",
+    default=None,
+    help="Number of species supported by AEV computer",
+)
+parser.add_argument(
+    "--computer-zid-map",
+    type=str,
+    metavar="",
+    default=None,
+    help="Map between EMLE and AEV computer zid values",
+)
+parser.add_argument("output", type=str, help="Output model file")
 args = parser.parse_args()
 
 
@@ -67,19 +75,21 @@ if args.train_mask:
     train_mask = np.loadtxt(args.train_mask, dtype=bool)
 
 trainer = EMLETrainer()
-trainer.train(z=parser.z,
-              xyz=parser.xyz,
-              s=parser.mbis['s'],
-              q_core=parser.mbis['q_core'],
-              q=parser.mbis['q_core'] + parser.mbis['q_val'],
-              alpha=parser.alpha,
-              sigma=args.sigma,
-              ivm_thr=args.ivm_thr,
-              epochs=args.epochs,
-              lr_qeq=args.lr_qeq,
-              lr_thole=args.lr_thole,
-              lr_sqrtk=args.lr_sqrtk,
-              computer_n_species=args.computer_n_species,
-              computer_zid_map=zid_map,
-              train_mask=train_mask,
-              model_filename=args.output)
+trainer.train(
+    z=parser.z,
+    xyz=parser.xyz,
+    s=parser.mbis["s"],
+    q_core=parser.mbis["q_core"],
+    q=parser.mbis["q_core"] + parser.mbis["q_val"],
+    alpha=parser.alpha,
+    sigma=args.sigma,
+    ivm_thr=args.ivm_thr,
+    epochs=args.epochs,
+    lr_qeq=args.lr_qeq,
+    lr_thole=args.lr_thole,
+    lr_sqrtk=args.lr_sqrtk,
+    computer_n_species=args.computer_n_species,
+    computer_zid_map=zid_map,
+    train_mask=train_mask,
+    model_filename=args.output,
+)

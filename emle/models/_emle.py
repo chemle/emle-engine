@@ -294,10 +294,9 @@ class EMLE(_torch.nn.Module):
 
         if create_aev_calculator:
             num_species = params.get("computer_n_species", len(n_ref))
-            emle_aev_computer = EMLEAEVComputer(mask=aev_mask,
-                                                num_species=num_species,
-                                                device=device,
-                                                dtype=dtype)
+            emle_aev_computer = EMLEAEVComputer(
+                mask=aev_mask, num_species=num_species, device=device, dtype=dtype
+            )
 
             # Optimise the AEV computer using NNPOps if available.
             if _has_nnpops and atomic_numbers is not None:
@@ -318,10 +317,12 @@ class EMLE(_torch.nn.Module):
                         "Unable to create optimised AEVComputer using NNPOps."
                     ) from e
         else:
-            emle_aev_computer = EMLEAEVComputer(external=True,
-                                                mask=aev_mask,
-                                                zid_map=params.get('zid_map'),
-                                                device=device)
+            emle_aev_computer = EMLEAEVComputer(
+                external=True,
+                mask=aev_mask,
+                zid_map=params.get("zid_map"),
+                device=device,
+            )
 
         # Create the base EMLE model.
         self._emle_base = _EMLEBase(

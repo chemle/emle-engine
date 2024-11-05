@@ -14,7 +14,7 @@ def get_max_error(values, target):
 class QEqLoss(_torch.nn.Module):
     """
     Loss function for the charge equilibration (QEq). Used to train ref_values_chi, a_QEq.
-    
+
     Parameters
     ----------
     emle_base: EMLEBase
@@ -29,6 +29,7 @@ class QEqLoss(_torch.nn.Module):
     _loss: torch.nn.Module
         Loss function.
     """
+
     def __init__(self, emle_base, loss=_torch.nn.MSELoss()):
         super().__init__()
         self._emle_base = emle_base
@@ -63,15 +64,17 @@ class QEqLoss(_torch.nn.Module):
         target = q_target[mask]
         values = (q_core + q_val)[mask]
 
-        return (self._loss(values, target),
-                get_rmse(values, target),
-                get_max_error(values, target))
+        return (
+            self._loss(values, target),
+            get_rmse(values, target),
+            get_max_error(values, target),
+        )
 
 
 class TholeLoss(_torch.nn.Module):
     """
     Loss function for the Thole model. Used to train a_Thole, k_Z, ref_values_sqrtk.
-    
+
     Parameters
     ----------
     emle_base: EMLEBase
@@ -192,6 +195,8 @@ class TholeLoss(_torch.nn.Module):
                 / _torch.sum(self._emle_base._n_ref)
             )
 
-        return (loss,
-                get_rmse(alpha_mol_triu, alpha_mol_target_triu),
-                get_max_error(alpha_mol_triu, alpha_mol_target_triu))
+        return (
+            loss,
+            get_rmse(alpha_mol_triu, alpha_mol_target_triu),
+            get_max_error(alpha_mol_triu, alpha_mol_target_triu),
+        )

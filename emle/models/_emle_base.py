@@ -663,7 +663,9 @@ class EMLEBase(_torch.nn.Module):
         results: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS)
         """
         sqrt2 = _torch.sqrt(_torch.tensor([2.0], dtype=r.dtype, device=r.device))
-        return t01 * _torch.where(s_mat > 0, _torch.erf(r / ((s_mat + 1e-16) * sqrt2)), 0.0)
+        return t01 * _torch.where(
+            s_mat > 0, _torch.erf(r / ((s_mat + 1e-16) * sqrt2)), 0.0
+        )
 
     def _get_A_thole(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, q_val, k):
         """
@@ -696,7 +698,9 @@ class EMLEBase(_torch.nn.Module):
         alphap = alpha * self.a_Thole
         alphap_mat = alphap[:, :, None] * alphap[:, None, :]
 
-        au3 = _torch.where(alphap_mat > 0, r_data[0] ** 3 / _torch.sqrt(alphap_mat + 1e-16), 0)
+        au3 = _torch.where(
+            alphap_mat > 0, r_data[0] ** 3 / _torch.sqrt(alphap_mat + 1e-16), 0
+        )
         au31 = au3.repeat_interleave(3, dim=2)
         au32 = au31.repeat_interleave(3, dim=1)
 

@@ -33,9 +33,9 @@ class EMLETrainer:
         torch.Tensor
             Species ID mapping.
         """
-        zid_mapping = _torch.ones(
-            max(species) + 1, dtype=_torch.int, device=species.device
-        ) * -1
+        zid_mapping = (
+            _torch.ones(max(species) + 1, dtype=_torch.int, device=species.device) * -1
+        )
         for i, z in enumerate(species):
             zid_mapping[z] = i
         return zid_mapping
@@ -84,8 +84,7 @@ class EMLETrainer:
         torch.Tensor(N_BATCH, N_ATOMS)
             Atomic widths.
         """
-        n_ref = _torch.tensor([_.shape[0] for _ in aev_ivm_allz],
-                              device=s.device)
+        n_ref = _torch.tensor([_.shape[0] for _ in aev_ivm_allz], device=s.device)
         K_ref_ref_padded, K_mols_ref = GPR.get_gpr_kernels(
             aev_mols, zid, aev_ivm_allz, n_ref
         )
@@ -150,9 +149,11 @@ class EMLETrainer:
                 loss, rmse, max_error = loss_instance(*args, **kwargs)
                 loss.backward(retain_graph=True)
                 optimizer.step()
-                print(f"Epoch {epoch}: Loss ={loss.item():9.4f}    "
-                      f"RMSE ={rmse.item():9.4f}    "
-                      f"Max Error ={max_error.item():9.4f}")
+                print(
+                    f"Epoch {epoch}: Loss ={loss.item():9.4f}    "
+                    f"RMSE ={rmse.item():9.4f}    "
+                    f"Max Error ={max_error.item():9.4f}"
+                )
 
             return loss
 
@@ -282,17 +283,21 @@ class EMLETrainer:
 
         # Calculate AEVs
         emle_aev_computer = EMLEAEVComputer(
-            num_species=computer_n_species, zid_map=computer_zid_map,
-            dtype=dtype, device=device
+            num_species=computer_n_species,
+            zid_map=computer_zid_map,
+            dtype=dtype,
+            device=device,
         )
         aev_mols = emle_aev_computer(zid, xyz)
-        aev_mask = _torch.sum(aev_mols.reshape(-1, aev_mols.shape[-1]) ** 2,
-                              dim=0) > 0
+        aev_mask = _torch.sum(aev_mols.reshape(-1, aev_mols.shape[-1]) ** 2, dim=0) > 0
 
         aev_mols = aev_mols[:, :, aev_mask]
         emle_aev_computer = EMLEAEVComputer(
-            num_species=computer_n_species, zid_map=computer_zid_map,
-            mask=aev_mask, dtype=dtype, device=device
+            num_species=computer_n_species,
+            zid_map=computer_zid_map,
+            mask=aev_mask,
+            dtype=dtype,
+            device=device,
         )
 
         # "Fit" q_core (just take averages over the entire training set)
@@ -314,9 +319,9 @@ class EMLETrainer:
         ref_features = pad_to_max(aev_ivm_allz)
         ref_mask = ivm_mol_atom_ids_padded[:, :, 0] > -1
         n_ref = _torch.sum(ref_mask, dim=1)
-        print('Done. Number of reference environments selected:')
+        print("Done. Number of reference environments selected:")
         for atom_z, n in zip(species, n_ref):
-            print(f'{atom_z:2d}: {n:5d}')
+            print(f"{atom_z:2d}: {n:5d}")
 
         # Fit s (pure GPR, no fancy optimization needed)
         ref_values_s = self._train_s(s, zid, aev_mols, aev_ivm_allz, sigma)
@@ -326,23 +331,27 @@ class EMLETrainer:
 
         # Initial guess for the model parameters
         params = {
-            "a_QEq": _torch.Tensor([1.]).to(device=device, dtype=dtype),
-            "a_Thole": _torch.Tensor([2.]).to(device=device, dtype=dtype),
+            "a_QEq": _torch.Tensor([1.0]).to(device=device, dtype=dtype),
+            "a_Thole": _torch.Tensor([2.0]).to(device=device, dtype=dtype),
             "ref_values_s": ref_values_s.to(device=device, dtype=dtype),
             "ref_values_chi": _torch.zeros(
                 *ref_values_s.shape,
                 dtype=ref_values_s.dtype,
                 device=device,
             ),
-            #"k_Z": _torch.ones(len(species), dtype=dtype, device=_torch.device(device)),
-            "k_Z": _torch.Tensor([0.922, 0.173, 0.195, 0.192, 0.216]).to(device=device, dtype=dtype),
-            "sqrtk_ref": _torch.ones(
-                *ref_values_s.shape,
-                dtype=ref_values_s.dtype,
-                device=_torch.device(device),
-            )
-            if alpha_mode == "reference"
-            else None,
+            # "k_Z": _torch.ones(len(species), dtype=dtype, device=_torch.device(device)),
+            "k_Z": _torch.Tensor([0.922, 0.173, 0.195, 0.192, 0.216]).to(
+                device=device, dtype=dtype
+            ),
+            "sqrtk_ref": (
+                _torch.ones(
+                    *ref_values_s.shape,
+                    dtype=ref_values_s.dtype,
+                    device=_torch.device(device),
+                )
+                if alpha_mode == "reference"
+                else None
+            ),
         }
 
         # Create the EMLE base instance
@@ -414,18 +423,19 @@ class EMLETrainer:
             "s_ref": emle_base.ref_values_s,
             "chi_ref": emle_base.ref_values_chi,
             "k_Z": emle_base.k_Z,
-            "sqrtk_ref": emle_base.ref_values_sqrtk if alpha_mode == "reference" else None,
+            "sqrtk_ref": (
+                emle_base.ref_values_sqrtk if alpha_mode == "reference" else None
+            ),
             "species": species,
             "alpha_mode": alpha_mode,
             "n_ref": n_ref,
             "ref_aev": ref_features,
             "aev_mask": aev_mask,
             "zid_map": emle_aev_computer._zid_map,
-            "computer_n_species": computer_n_species
+            "computer_n_species": computer_n_species,
         }
 
         if model_filename is not None:
             self.write_model_to_file(emle_model, model_filename)
 
         return emle_model
-

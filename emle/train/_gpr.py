@@ -79,14 +79,14 @@ class GPR:
         aev_allz = [aev_mols[zid_mols == i] for i in range(n_species)]
 
         K_ref_ref = [
-            GPR._aev_kernel(aev_ivm_z[:n_ref_z,:], aev_ivm_z[:n_ref_z,:])
+            GPR._aev_kernel(aev_ivm_z[:n_ref_z, :], aev_ivm_z[:n_ref_z, :])
             for aev_ivm_z, n_ref_z in zip(aev_ivm_allz, n_ref)
         ]
 
         K_ref_ref_padded = pad_to_max(K_ref_ref)
 
         K_ivm_allz = [
-            GPR._aev_kernel(aev_z, aev_ivm_z[:n_ref_z,:])
+            GPR._aev_kernel(aev_z, aev_ivm_z[:n_ref_z, :])
             for aev_z, aev_ivm_z, n_ref_z in zip(aev_allz, aev_ivm_allz, n_ref)
         ]
         K_mols_ref = GPR._get_K_mols_ref(K_ivm_allz, zid_mols)
@@ -133,7 +133,9 @@ class GPR:
         for i, n_ref_z in enumerate(n_ref):
             z_mask = zid == i
             result[i, :n_ref_z] = GPR._fit_sparse_gpr(
-                values[z_mask], K_mols_ref[z_mask][:, :n_ref_z],
-                K_ref_ref[i, :n_ref_z, :n_ref_z], sigma
+                values[z_mask],
+                K_mols_ref[z_mask][:, :n_ref_z],
+                K_ref_ref[i, :n_ref_z, :n_ref_z],
+                sigma,
             )
         return result

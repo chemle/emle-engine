@@ -118,7 +118,9 @@ class EMLEAEVComputer(_torch.nn.Module):
         if not zid_map:
             zid_map = {i: i for i in range(num_species)}
         if type(zid_map) is dict:
-            self._zid_map = -_torch.ones(num_species + 1, dtype=_torch.int, device=device)
+            self._zid_map = -_torch.ones(
+                num_species + 1, dtype=_torch.int, device=device
+            )
         else:
             self._zid_map = zid_map
         for self_atom_zid, aev_atom_zid in zid_map.items():
@@ -136,9 +138,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         aev = self._aev
         norm = _torch.linalg.norm(aev, dim=2, keepdims=True)
 
-        aev = self._apply_mask(
-            _torch.where(zid[:, :, None] > -1, aev / norm, 0.)
-        )
+        aev = self._apply_mask(_torch.where(zid[:, :, None] > -1, aev / norm, 0.0))
 
         return aev
 
