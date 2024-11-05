@@ -1,18 +1,43 @@
+#######################################################################
+# EMLE-Engine: https://github.com/chemle/emle-engine
+#
+# Copyright: 2023-2024
+#
+# Authors: Lester Hedges   <lester.hedges@gmail.com>
+#          Kirill Zinovjev <kzinovjev@gmail.com>
+#
+# EMLE-Engine is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+#
+# EMLE-Engine is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
+#####################################################################
+
 import torch as _torch
 
-from ..models import EMLEAEVComputer, EMLEBase
-from ._gpr import GPR
-from ._ivm import IVM
-from ._loss import QEqLoss, TholeLoss
-from ._utils import mean_by_z, pad_to_max
+from ..models import EMLEAEVComputer as _EMLEAEVComputer
+from ..models import EMLEBase as _EMLEBase
+from ._gpr import GPR as _GPR
+from ._ivm import IVM as _IVM
+from ._loss import QEqLoss as _QEqLoss
+from ._loss import TholeLoss as _TholeLoss
+from ._utils import pad_to_max as _pad_to_max
+from ._utils import mean_by_z as _mean_by_z
 
 
 class EMLETrainer:
     def __init__(
         self,
-        emle_base=EMLEBase,
-        qeq_loss=QEqLoss,
-        thole_loss=TholeLoss,
+        emle_base=_EMLEBase,
+        qeq_loss=_QEqLoss,
+        thole_loss=_TholeLoss,
     ):
         self._emle_base = emle_base
         self._qeq_loss = qeq_loss
@@ -85,15 +110,15 @@ class EMLETrainer:
             Atomic widths.
         """
         n_ref = _torch.tensor([_.shape[0] for _ in aev_ivm_allz], device=s.device)
-        K_ref_ref_padded, K_mols_ref = GPR.get_gpr_kernels(
+        K_ref_ref_padded, K_mols_ref = _GPR.get_gpr_kernels(
             aev_mols, zid, aev_ivm_allz, n_ref
         )
 
-        ref_values_s = GPR.fit_atomic_sparse_gpr(
+        ref_values_s = _GPR.fit_atomic_sparse_gpr(
             s, K_mols_ref, K_ref_ref_padded, zid, sigma, n_ref
         )
 
-        return pad_to_max(ref_values_s)
+        return _pad_to_max(ref_values_s)
 
     @staticmethod
     def _train_model(
@@ -256,11 +281,11 @@ class EMLETrainer:
 
         # Prepare batch data
         q_mol = _torch.Tensor([q_m.sum() for q_m in q])[train_mask]
-        z = pad_to_max(z)[train_mask]
-        xyz = pad_to_max(xyz)[train_mask]
-        s = pad_to_max(s)[train_mask]
-        q_core = pad_to_max(q_core)[train_mask]
-        q = pad_to_max(q)[train_mask]
+        z = _pad_to_max(z)[train_mask]
+        xyz = _pad_to_max(xyz)[train_mask]
+        s = _pad_to_max(s)[train_mask]
+        q_core = _pad_to_max(q_core)[train_mask]
+        q = _pad_to_max(q)[train_mask]
         alpha = _torch.tensor(alpha)[train_mask]
         species = _torch.unique(z[z > 0])
 
@@ -282,7 +307,7 @@ class EMLETrainer:
             computer_n_species = len(species)
 
         # Calculate AEVs
-        emle_aev_computer = EMLEAEVComputer(
+        emle_aev_computer = _EMLEAEVComputer(
             num_species=computer_n_species,
             zid_map=computer_zid_map,
             dtype=dtype,
@@ -292,7 +317,7 @@ class EMLETrainer:
         aev_mask = _torch.sum(aev_mols.reshape(-1, aev_mols.shape[-1]) ** 2, dim=0) > 0
 
         aev_mols = aev_mols[:, :, aev_mask]
-        emle_aev_computer = EMLEAEVComputer(
+        emle_aev_computer = _EMLEAEVComputer(
             num_species=computer_n_species,
             zid_map=computer_zid_map,
             mask=aev_mask,
@@ -301,7 +326,7 @@ class EMLETrainer:
         )
 
         # "Fit" q_core (just take averages over the entire training set)
-        q_core = mean_by_z(q_core, zid)
+        q_core = _mean_by_z(q_core, zid)
 
         print("Perform IVM...")
         # Create an array of (molecule_id, atom_id) pairs (as in the full dataset) for the training set.
@@ -312,11 +337,11 @@ class EMLETrainer:
         ).to(device)
 
         # Perform IVM
-        ivm_mol_atom_ids_padded, aev_ivm_allz = IVM.perform_ivm(
+        ivm_mol_atom_ids_padded, aev_ivm_allz = _IVM.perform_ivm(
             aev_mols, z, atom_ids, species, ivm_thr, sigma
         )
 
-        ref_features = pad_to_max(aev_ivm_allz)
+        ref_features = _pad_to_max(aev_ivm_allz)
         ref_mask = ivm_mol_atom_ids_padded[:, :, 0] > -1
         n_ref = _torch.sum(ref_mask, dim=1)
         print("Done. Number of reference environments selected:")

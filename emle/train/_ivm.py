@@ -1,13 +1,38 @@
+#######################################################################
+# EMLE-Engine: https://github.com/chemle/emle-engine
+#
+# Copyright: 2023-2024
+#
+# Authors: Lester Hedges   <lester.hedges@gmail.com>
+#          Kirill Zinovjev <kzinovjev@gmail.com>
+#
+# EMLE-Engine is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+#
+# EMLE-Engine is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
+#####################################################################
+
 """Informative Vector Machine (IVM) for selecting representative feature vectors."""
 
 import torch as _torch
 
-from ._gpr import GPR
-from ._utils import pad_to_max
+from ._gpr import GPR as _GPR
+from ._utils import pad_to_max as _pad_to_max
 
 
 class IVM:
-    """Implements IVM (Informative Vector Machine) to select representative feature vectors."""
+    """
+    Implements IVM (Informative Vector Machine) to select representative
+    feature vectors.
+    """
 
     @staticmethod
     def _ivm(aev_0, sigma, thr=0.02, n_max=None):
@@ -20,7 +45,7 @@ class IVM:
         for i in range(1, n_max):
             pending = _torch.tensor([i for i in range(n_samples) if i not in selected])
             aev_sel, aev_pen = aev_0[selected], aev_0[pending]
-            K_sel = GPR._aev_kernel(aev_sel, aev_sel)
+            K_sel = _GPR._aev_kernel(aev_sel, aev_sel)
             K_sel_inv = _torch.linalg.inv(
                 K_sel
                 + _torch.eye(len(aev_sel), dtype=K_sel.dtype, device=K_sel.device)
@@ -28,9 +53,9 @@ class IVM:
             )
 
             if k_old is None:
-                k = GPR._aev_kernel(aev_pen, aev_sel)
+                k = _GPR._aev_kernel(aev_pen, aev_sel)
             else:
-                k_new = GPR._aev_kernel(aev_pen, aev_sel[-1:])
+                k_new = _GPR._aev_kernel(aev_pen, aev_sel[-1:])
                 k = _torch.hstack([k_old, k_new])
 
             var = _torch.ones(len(pending), device=k.device) - _torch.sum(
@@ -78,7 +103,7 @@ class IVM:
         ivm_mol_atom_ids = [
             atom_ids[z_mols == z][z_ivm_idx] for z, z_ivm_idx in zip(species, ivm_idx)
         ]
-        ivm_mol_atom_ids_padded = pad_to_max(ivm_mol_atom_ids, value=-1)
+        ivm_mol_atom_ids_padded = _pad_to_max(ivm_mol_atom_ids, value=-1)
 
         aev_ivm_allz = [aev_z[ivm_idx_z] for aev_z, ivm_idx_z in zip(aev_allz, ivm_idx)]
 
