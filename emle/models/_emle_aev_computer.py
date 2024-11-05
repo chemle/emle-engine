@@ -5,9 +5,9 @@ import torch as _torch
 import torchani as _torchani
 
 # From ANI-2x
-DEFAULT_HYPERS_DICT = {
-    "Rcr": _np.array(5.1000e00),
-    "Rca": _np.array(3.5000e00),
+_DEFAULT_HYPERS_DICT = {
+    "Rcr": 5.1000e00,
+    "Rca": 3.5000e00,
     "EtaR": _np.array([1.9700000e01]),
     "ShfR": _np.array(
         [
@@ -48,10 +48,16 @@ DEFAULT_HYPERS_DICT = {
 
 
 def get_default_hypers(device, dtype):
-    return {
-        k: _torch.tensor(v, device=device, dtype=dtype)
-        for k, v in DEFAULT_HYPERS_DICT.items()
-    }
+    """
+    Get default hyperparameters for AEVComputer
+    """
+    hypers = {}
+    for key, value in _DEFAULT_HYPERS_DICT.items():
+        if isinstance(value, _np.ndarray):
+            hypers[key] = _torch.tensor(value, device=device, dtype=dtype)
+        else:
+            hypers[key] = value
+    return hypers
 
 
 class EMLEAEVComputer(_torch.nn.Module):
@@ -112,7 +118,15 @@ class EMLEAEVComputer(_torch.nn.Module):
         if not external:
             hypers = hypers or get_default_hypers(device, dtype)
             self._aev_computer = _torchani.AEVComputer(
-                **hypers, num_species=num_species
+                hypers["Rcr"],
+                hypers["Rca"],
+                hypers["EtaR"],
+                hypers["ShfR"],
+                hypers["EtaA"],
+                hypers["ShfA"],
+                hypers["Zeta"],
+                hypers["ShfZ"],
+                num_species=num_species
             ).to(device=device, dtype=dtype)
 
         if not zid_map:
