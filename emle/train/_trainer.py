@@ -173,7 +173,7 @@ class EMLETrainer:
         xyz,
         s,
         q_core,
-        q,
+        q_val,
         alpha,
         train_mask,
         alpha_mode="reference",
@@ -186,6 +186,7 @@ class EMLETrainer:
         computer_n_species=None,
         computer_zid_map=None,
         model_filename="emle_model.mat",
+        plot_data_filename=None,
         device=_torch.device("cuda"),
         dtype=_torch.float64,
     ):
@@ -202,8 +203,8 @@ class EMLETrainer:
             Atomic widths.
         q_core: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS)
             Atomic core charges.
-        q: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS)
-            Total atomic charges.
+        q_val: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS)
+            Atomic valence charges.
         alpha: array or tensor or list of tensor/arrays of shape (N_BATCH, 3, 3)
             Atomic polarizabilities.
         train_mask: _torch.Tensor(N_BATCH,)
@@ -228,6 +229,8 @@ class EMLETrainer:
             Map between EMLE and calculator zid values (for ani2x backend)
         model_filename: str or None
             Filename to save the trained model. If None, the model is not saved.
+        plot_data_filename: str or None
+            Filename to write plotting data. If None, data is not written.
         device: torch.device
             Device to use for training.
         dtype: torch.dtype
@@ -240,7 +243,7 @@ class EMLETrainer:
         """
         # Check input data
         assert (
-            len(z) == len(xyz) == len(s) == len(q_core) == len(q) == len(alpha)
+            len(z) == len(xyz) == len(s) == len(q_core) == len(q_val) == len(alpha)
         ), "z, xyz, s, q_core, q, and alpha must have the same number of samples"
 
         # Checks for alpha_mode
@@ -253,29 +256,33 @@ class EMLETrainer:
         if train_mask is None:
             train_mask = _torch.ones(len(z), dtype=_torch.bool)
 
+        q = q_core + q_val
+        q_mol = _torch.tensor([q_m.sum() for q_m in q], device=device)
+
         # Prepare batch data
-        q_mol = _torch.Tensor([q_m.sum() for q_m in q])[train_mask]
-        z = pad_to_max(z)[train_mask]
-        xyz = pad_to_max(xyz)[train_mask]
-        s = pad_to_max(s)[train_mask]
-        q_core = pad_to_max(q_core)[train_mask]
-        q = pad_to_max(q)[train_mask]
-        alpha = _torch.tensor(alpha)[train_mask]
-        species = _torch.unique(z[z > 0])
+
+        q_mol_train = q_mol[train_mask]
+        z_train = pad_to_max(z)[train_mask]
+        xyz_train = pad_to_max(xyz)[train_mask]
+        s_train = pad_to_max(s)[train_mask]
+        q_core_train = pad_to_max(q_core)[train_mask]
+        q_train = pad_to_max(q)[train_mask]
+        alpha_train = _torch.tensor(alpha, device=device)[train_mask]
+        species = _torch.unique(_torch.tensor(z[z > 0], device=device))
 
         # Place on the correct device and set the data type
-        q_mol = q_mol.to(device=device, dtype=dtype)
-        z = z.to(device=device, dtype=_torch.int64)
-        xyz = xyz.to(device=device, dtype=dtype)
-        s = s.to(device=device, dtype=dtype)
-        q_core = q_core.to(device=device, dtype=dtype)
-        q = q.to(device=device, dtype=dtype)
-        alpha = alpha.to(device=device, dtype=dtype)
+        q_mol_train = q_mol_train.to(device=device, dtype=dtype)
+        z_train = z_train.to(device=device, dtype=_torch.int64)
+        xyz_train = xyz_train.to(device=device, dtype=dtype)
+        s_train = s_train.to(device=device, dtype=dtype)
+        q_core_train = q_core_train.to(device=device, dtype=dtype)
+        q_train = q_train.to(device=device, dtype=dtype)
+        alpha_train = alpha_train.to(device=device, dtype=dtype)
         species = species.to(device=device, dtype=_torch.int64)
 
         # Get zid mapping
         zid_mapping = self._get_zid_mapping(species)
-        zid = zid_mapping[z]
+        zid_train = zid_mapping[z_train]
 
         if computer_n_species is None:
             computer_n_species = len(species)
@@ -285,7 +292,7 @@ class EMLETrainer:
             num_species=computer_n_species, zid_map=computer_zid_map,
             dtype=dtype, device=device
         )
-        aev_mols = emle_aev_computer(zid, xyz)
+        aev_mols = emle_aev_computer(zid_train, xyz_train)
         aev_mask = _torch.sum(aev_mols.reshape(-1, aev_mols.shape[-1]) ** 2,
                               dim=0) > 0
 
@@ -296,19 +303,19 @@ class EMLETrainer:
         )
 
         # "Fit" q_core (just take averages over the entire training set)
-        q_core = mean_by_z(q_core, zid)
+        q_core_z = mean_by_z(q_core_train, zid_train)
 
         print("Perform IVM...")
         # Create an array of (molecule_id, atom_id) pairs (as in the full dataset) for the training set.
         # This is needed to be able to locate atoms/molecules in the original dataset that were picked by IVM.
-        n_mols, max_atoms = q.shape
+        n_mols, max_atoms = q_train.shape
         atom_ids = _torch.stack(
             _torch.meshgrid(_torch.arange(n_mols), _torch.arange(max_atoms)), dim=-1
         ).to(device)
 
         # Perform IVM
         ivm_mol_atom_ids_padded, aev_ivm_allz = IVM.perform_ivm(
-            aev_mols, z, atom_ids, species, ivm_thr, sigma
+            aev_mols, z_train, atom_ids, species, ivm_thr, sigma
         )
 
         ref_features = pad_to_max(aev_ivm_allz)
@@ -319,15 +326,15 @@ class EMLETrainer:
             print(f'{atom_z:2d}: {n:5d}')
 
         # Fit s (pure GPR, no fancy optimization needed)
-        ref_values_s = self._train_s(s, zid, aev_mols, aev_ivm_allz, sigma)
+        ref_values_s = self._train_s(s_train, zid_train, aev_mols, aev_ivm_allz, sigma)
 
         # Good for debugging
         # _torch.autograd.set_detect_anomaly(True)
 
         # Initial guess for the model parameters
         params = {
-            "a_QEq": _torch.Tensor([1.]).to(device=device, dtype=dtype),
-            "a_Thole": _torch.Tensor([2.]).to(device=device, dtype=dtype),
+            "a_QEq": _torch.tensor([1.]).to(device=device, dtype=dtype),
+            "a_Thole": _torch.tensor([2.]).to(device=device, dtype=dtype),
             "ref_values_s": ref_values_s.to(device=device, dtype=dtype),
             "ref_values_chi": _torch.zeros(
                 *ref_values_s.shape,
@@ -335,7 +342,7 @@ class EMLETrainer:
                 device=device,
             ),
             #"k_Z": _torch.ones(len(species), dtype=dtype, device=_torch.device(device)),
-            "k_Z": _torch.Tensor([0.922, 0.173, 0.195, 0.192, 0.216]).to(device=device, dtype=dtype),
+            "k_Z": _torch.tensor([0.922, 0.173, 0.195, 0.192, 0.216]).to(device=device, dtype=dtype),
             "sqrtk_ref": _torch.ones(
                 *ref_values_s.shape,
                 dtype=ref_values_s.dtype,
@@ -350,7 +357,7 @@ class EMLETrainer:
             params=params,
             n_ref=n_ref,
             ref_features=ref_features,
-            q_core=q_core,
+            q_core=q_core_z,
             emle_aev_computer=emle_aev_computer,
             species=species,
             alpha_mode=alpha_mode,
@@ -366,10 +373,10 @@ class EMLETrainer:
             lr=lr_qeq,
             epochs=epochs,
             emle_base=emle_base,
-            atomic_numbers=z,
-            xyz=xyz,
-            q_mol=q_mol,
-            q_target=q,
+            atomic_numbers=z_train,
+            xyz=xyz_train,
+            q_mol=q_mol_train,
+            q_target=q_train,
         )
 
         print("a_QEq:", emle_base.a_QEq)
@@ -382,10 +389,10 @@ class EMLETrainer:
             lr=lr_thole,
             epochs=epochs,
             emle_base=emle_base,
-            atomic_numbers=z,
-            xyz=xyz,
-            q_mol=q_mol,
-            alpha_mol_target=alpha,
+            atomic_numbers=z_train,
+            xyz=xyz_train,
+            q_mol=q_mol_train,
+            alpha_mol_target=alpha_train,
         )
 
         print("a_Thole:", emle_base.a_Thole)
@@ -398,10 +405,10 @@ class EMLETrainer:
                 lr=lr_sqrtk,
                 epochs=epochs,
                 emle_base=emle_base,
-                atomic_numbers=z,
-                xyz=xyz,
-                q_mol=q_mol,
-                alpha_mol_target=alpha,
+                atomic_numbers=z_train,
+                xyz=xyz_train,
+                q_mol=q_mol_train,
+                alpha_mol_target=alpha_train,
                 opt_sqrtk=True,
                 l2_reg=20.0,
             )
@@ -427,5 +434,28 @@ class EMLETrainer:
         if model_filename is not None:
             self.write_model_to_file(emle_model, model_filename)
 
-        return emle_model
+        if plot_data_filename is None:
+            return emle_model
 
+        s_pred, q_core_pred, q_val_pred, A_thole = emle_base(
+            _torch.tensor(z, device=device),
+            _torch.tensor(xyz, device=device),
+            q_mol
+        )
+        z_mask = _torch.tensor(z > 0, device=device)
+        plot_data = {
+            "s_emle": s_pred,
+            "q_core_emle": q_core_pred,
+            "q_val_emle": q_val_pred,
+            "alpha_emle": TholeLoss._get_alpha_mol(A_thole, z_mask)
+        }
+        plot_data = {
+            **{k: v.detach().cpu().numpy() for k, v in plot_data.items()},
+            "z": z,
+            "s_qm": s,
+            "q_core_qm": q_core,
+            "q_val_qm": q_val,
+            "alpha_qm": alpha
+        }
+
+        return emle_base, plot_data
