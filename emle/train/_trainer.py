@@ -98,7 +98,8 @@ class EMLETrainer:
 
     @staticmethod
     def _train_model(
-        loss_class, opt_param_names, lr, epochs, emle_base, *args, **kwargs
+        loss_class, opt_param_names, lr, epochs, emle_base, print_every=10,
+        *args, **kwargs
     ):
         """
         Train a model.
@@ -115,6 +116,8 @@ class EMLETrainer:
             Number of training epochs.
         emle_base: EMLEBase
             EMLEBase instance.
+        print_every: int
+            How often to print training progress
 
         Returns
         -------
@@ -122,7 +125,8 @@ class EMLETrainer:
             Trained model.
         """
 
-        def _train_loop(loss_instance, optimizer, epochs, *args, **kwargs):
+        def _train_loop(loss_instance, optimizer, epochs, print_every=10,
+                        *args, **kwargs):
             """
             Perform the training loop.
 
@@ -134,6 +138,8 @@ class EMLETrainer:
                 Optimizer.
             epochs: int
                 Number of training epochs.
+            print_every: int
+                How often to print training progress
             args: list
                 Positional arguments to pass to the forward method.
             kwargs: dict
@@ -150,9 +156,10 @@ class EMLETrainer:
                 loss, rmse, max_error = loss_instance(*args, **kwargs)
                 loss.backward(retain_graph=True)
                 optimizer.step()
-                print(f"Epoch {epoch}: Loss ={loss.item():9.4f}    "
-                      f"RMSE ={rmse.item():9.4f}    "
-                      f"Max Error ={max_error.item():9.4f}")
+                if (epoch+1) % print_every == 0:
+                    print(f"Epoch {epoch+1}: Loss ={loss.item():9.4f}    "
+                          f"RMSE ={rmse.item():9.4f}    "
+                          f"Max Error ={max_error.item():9.4f}")
 
             return loss
 
@@ -164,7 +171,7 @@ class EMLETrainer:
         ]
 
         optimizer = _torch.optim.Adam(opt_parameters, lr=lr)
-        _train_loop(model, optimizer, epochs, *args, **kwargs)
+        _train_loop(model, optimizer, epochs, print_every, *args, **kwargs)
         return model
 
     def train(
@@ -183,6 +190,7 @@ class EMLETrainer:
         lr_qeq=0.05,
         lr_thole=0.05,
         lr_sqrtk=0.05,
+        print_every=10,
         computer_n_species=None,
         computer_zid_map=None,
         model_filename="emle_model.mat",
@@ -223,6 +231,8 @@ class EMLETrainer:
             Learning rate for Thole model.
         lr_sqrtk: float
             Learning rate for sqrtk.
+        print_every: int
+            How often to print training progress
         computer_n_species: int
             Number of species supported by calculator (for ani2x backend)
         computer_zid_map: dict ({emle_zid: calculator_zid})
@@ -372,6 +382,7 @@ class EMLETrainer:
             opt_param_names=["a_QEq", "ref_values_chi"],
             lr=lr_qeq,
             epochs=epochs,
+            print_every=print_every,
             emle_base=emle_base,
             atomic_numbers=z_train,
             xyz=xyz_train,
@@ -388,6 +399,7 @@ class EMLETrainer:
             opt_param_names=["a_Thole", "k_Z"],
             lr=lr_thole,
             epochs=epochs,
+            print_every=print_every,
             emle_base=emle_base,
             atomic_numbers=z_train,
             xyz=xyz_train,
@@ -404,6 +416,7 @@ class EMLETrainer:
                 opt_param_names=["ref_values_sqrtk"],
                 lr=lr_sqrtk,
                 epochs=epochs,
+                print_every=print_every,
                 emle_base=emle_base,
                 atomic_numbers=z_train,
                 xyz=xyz_train,
