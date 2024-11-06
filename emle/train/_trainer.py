@@ -39,8 +39,16 @@ class EMLETrainer:
         qeq_loss=_QEqLoss,
         thole_loss=_TholeLoss,
     ):
+        if not isinstance(emle_base, _EMLEBase):
+            raise TypeError("emle_base must be an instance of EMLEBase")
         self._emle_base = emle_base
+
+        if not isinstance(qeq_loss, _QEqLoss):
+            raise TypeError("qeq_loss must be an instance of QEqLoss")
         self._qeq_loss = qeq_loss
+
+        if not isinstance(thole_loss, _TholeLoss):
+            raise TypeError("thole_loss must be an instance of TholeLoss")
         self._thole_loss = thole_loss
 
     @staticmethod
@@ -50,12 +58,14 @@ class EMLETrainer:
 
         Parameters
         ----------
+
         species: torch.Tensor(N_SPECIES)
             Species IDs.
 
         Returns
         -------
-        torch.Tensor
+
+        mapping: torch.Tensor
             Species ID mapping.
         """
         zid_mapping = (
@@ -66,20 +76,22 @@ class EMLETrainer:
         return zid_mapping
 
     @staticmethod
-    def write_model_to_file(emle_model, model_filename):
+    def _write_model_to_file(emle_model, model_filename):
         """
         Write the trained model to a file.
 
         Parameters
         ----------
+
         emle_model: dict
             Trained EMLE model.
+
         model_filename: str
             Filename to save the trained model.
         """
         import scipy.io
 
-        # Deatch the tensors, convert to numpy arrays and save the model
+        # Deatch the tensors, convert to numpy arrays and save the model.
         emle_model = {
             k: v.cpu().detach().numpy() if isinstance(v, _torch.Tensor) else v
             for k, v in emle_model.items()
@@ -93,19 +105,25 @@ class EMLETrainer:
 
         Parameters
         ----------
+
         s: torch.Tensor(N_BATCH, N_ATOMS)
             Atomic widths.
+
         zid: torch.Tensor(N_BATCH, N_ATOMS)
             Species IDs.
+
         aev_mols: torch.Tensor(N_BATCH, N_ATOMS, N_AEV)
             Atomic environment vectors.
+
         aev_ivm_allz: torch.Tensor(N_BATCH, N_ATOMS, N_AEV)
             Atomic environment vectors for all species.
+
         sigma: float
             GPR sigma value.
 
         Returns
         -------
+
         torch.Tensor(N_BATCH, N_ATOMS)
             Atomic widths.
         """
@@ -136,21 +154,28 @@ class EMLETrainer:
 
         Parameters
         ----------
+
         loss_class: class
             Loss class.
+
         opt_param_names: list of str
             List of parameter names to optimize.
+
         lr: float
             Learning rate.
+
         epochs: int
             Number of training epochs.
+
         emle_base: EMLEBase
             EMLEBase instance.
+
         print_every: int
             How often to print training progress
 
         Returns
         -------
+
         model
             Trained model.
         """
@@ -163,21 +188,28 @@ class EMLETrainer:
 
             Parameters
             ----------
+
             loss_instance: nn.Module
                 Loss instance.
+
             optimizer: torch.optim.Optimizer
                 Optimizer.
+
             epochs: int
                 Number of training epochs.
+
             print_every: int
                 How often to print training progress
+
             args: list
                 Positional arguments to pass to the forward method.
+
             kwargs: dict
                 Keyword arguments to pass to the forward method.
 
             Returns
             -------
+
             loss
                 Forward loss.
             """
@@ -236,60 +268,82 @@ class EMLETrainer:
 
         Parameters
         ----------
-        z: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS)
+
+        z: numpy.array, List[numpy.array], torch.Tensor, List[torch.Tensor] (N_BATCH, N_ATOMS)
             Atomic numbers.
-        xyz: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS, 3)
+
+        xyz: numpy.array, List[numpy.array], torch.Tensor, List[torch.Tensor] (N_BATCH, N_ATOM, 3
             Atomic coordinates.
-        s: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS)
+
+        s: numpy.array, List[numpy.array], torch.Tensor, List[torch.Tensor] (N_BATCH, N_ATOMS)
             Atomic widths.
-        q_core: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS)
+
+        q_core: numpy.array, List[numpy.array], torch.Tensor, List[torch.Tensor] (N_BATCH, N_ATOMS)
             Atomic core charges.
+
         q_val: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS)
             Atomic valence charges.
+
         alpha: array or tensor or list of tensor/arrays of shape (N_BATCH, 3, 3)
             Atomic polarizabilities.
-        train_mask: _torch.Tensor(N_BATCH,)
+
+        train_mask: torch.Tensor(N_BATCH,)
             Mask for training samples.
+
         alpha_mode: 'species' or 'reference'
-            Mode for polarizability model
+            Mode for polarizability model.
+
         sigma: float
             GPR sigma value.
+
         ivm_thr: float
             IVM threshold.
+
         epochs: int
             Number of training epochs.
+
         lr_qeq: float
             Learning rate for QEq model.
+
         lr_thole: float
             Learning rate for Thole model.
+
         lr_sqrtk: float
             Learning rate for sqrtk.
+
         print_every: int
-            How often to print training progress
+            How often to print training progress.
+
         computer_n_species: int
             Number of species supported by calculator (for ani2x backend)
+
         computer_zid_map: dict ({emle_zid: calculator_zid})
-            Map between EMLE and calculator zid values (for ani2x backend)
+            Map between EMLE and calculator zid values (for ANI2x backend).
+
         model_filename: str or None
             Filename to save the trained model. If None, the model is not saved.
+
         plot_data_filename: str or None
             Filename to write plotting data. If None, data is not written.
+
         device: torch.device
             Device to use for training.
+
         dtype: torch.dtype
             Data type to use for training. Default is torch.float64.
 
         Returns
         -------
+
         dict
             Trained EMLE model.
         """
-        # Check input data
+        # Check input data.
         assert (
             len(z) == len(xyz) == len(s) == len(q_core) == len(q_val) == len(alpha)
         ), "z, xyz, s, q_core, q, and alpha must have the same number of samples"
 
-        # Checks for alpha_mode
+        # Checks for alpha_mode.
         if not isinstance(alpha_mode, str):
             raise TypeError("'alpha_mode' must be of type 'str'")
         alpha_mode = alpha_mode.lower().replace(" ", "")
@@ -302,7 +356,7 @@ class EMLETrainer:
         q = q_core + q_val
         q_mol = _torch.tensor([q_m.sum() for q_m in q], device=device)
 
-        # Prepare batch data
+        # Prepare batch data.
         q_mol_train = q_mol[train_mask]
         z_train = pad_to_max(z)[train_mask]
         xyz_train = pad_to_max(xyz)[train_mask]
@@ -312,7 +366,7 @@ class EMLETrainer:
         alpha_train = _torch.tensor(alpha, device=device)[train_mask]
         species = _torch.unique(_torch.tensor(z[z > 0], device=device))
 
-        # Place on the correct device and set the data type
+        # Place on the correct device and set the data type.
         q_mol_train = q_mol_train.to(device=device, dtype=dtype)
         z_train = z_train.to(device=device, dtype=_torch.int64)
         xyz_train = xyz_train.to(device=device, dtype=dtype)
@@ -322,14 +376,14 @@ class EMLETrainer:
         alpha_train = alpha_train.to(device=device, dtype=dtype)
         species = species.to(device=device, dtype=_torch.int64)
 
-        # Get zid mapping
+        # Get zid mapping.
         zid_mapping = self._get_zid_mapping(species)
         zid_train = zid_mapping[z_train]
 
         if computer_n_species is None:
             computer_n_species = len(species)
 
-        # Calculate AEVs
+        # Calculate AEVs.
         emle_aev_computer = _EMLEAEVComputer(
             num_species=computer_n_species,
             zid_map=computer_zid_map,
@@ -348,18 +402,19 @@ class EMLETrainer:
             device=device,
         )
 
-        # "Fit" q_core (just take averages over the entire training set)
+        # "Fit" q_core (just take averages over the entire training set).
         q_core_z = mean_by_z(q_core_train, zid_train)
 
         print("Perform IVM...")
-        # Create an array of (molecule_id, atom_id) pairs (as in the full dataset) for the training set.
-        # This is needed to be able to locate atoms/molecules in the original dataset that were picked by IVM.
+        # Create an array of (molecule_id, atom_id) pairs (as in the full
+        # dataset) for the training set. This is needed to be able to locate
+        # atoms/molecules in the original dataset that were picked by IVM.
         n_mols, max_atoms = q_train.shape
         atom_ids = _torch.stack(
             _torch.meshgrid(_torch.arange(n_mols), _torch.arange(max_atoms)), dim=-1
         ).to(device)
 
-        # Perform IVM
+        # Perform IVM.
         ivm_mol_atom_ids_padded, aev_ivm_allz = IVM.perform_ivm(
             aev_mols, z_train, atom_ids, species, ivm_thr, sigma
         )
@@ -371,13 +426,13 @@ class EMLETrainer:
         for atom_z, n in zip(species, n_ref):
             print(f"{atom_z:2d}: {n:5d}")
 
-        # Fit s (pure GPR, no fancy optimization needed)
+        # Fit s (pure GPR, no fancy optimization needed).
         ref_values_s = self._train_s(s_train, zid_train, aev_mols, aev_ivm_allz, sigma)
 
         # Good for debugging
         # _torch.autograd.set_detect_anomaly(True)
 
-        # Initial guess for the model parameters
+        # Initial guess for the model parameters.
         params = {
             "a_QEq": _torch.tensor([1.0]).to(device=device, dtype=dtype),
             "a_Thole": _torch.tensor([2.0]).to(device=device, dtype=dtype),
@@ -402,7 +457,7 @@ class EMLETrainer:
             ),
         }
 
-        # Create the EMLE base instance
+        # Create the EMLE base instance.
         emle_base = self._emle_base(
             params=params,
             n_ref=n_ref,
@@ -415,7 +470,7 @@ class EMLETrainer:
             dtype=dtype,
         )
 
-        # Fit chi, a_QEq (QEq over chi predicted with GPR)
+        # Fit chi, a_QEq (QEq over chi predicted with GPR).
         print("Fitting chi, a_QEq")
         self._train_model(
             loss_class=self._qeq_loss,
@@ -432,7 +487,7 @@ class EMLETrainer:
 
         print("a_QEq:", emle_base.a_QEq)
 
-        # Fit a_Thole, k_Z (uses volumes predicted by QEq model)
+        # Fit a_Thole, k_Z (uses volumes predicted by QEq model).
         print("Fitting a_Thole, k_Z")
         self._train_model(
             loss_class=self._thole_loss,
@@ -448,7 +503,7 @@ class EMLETrainer:
         )
 
         print("a_Thole:", emle_base.a_Thole)
-        # Fit sqrtk_ref ( alpha = sqrtk ** 2 * k_Z * v)
+        # Fit sqrtk_ref ( alpha = sqrtk ** 2 * k_Z * v).
         if alpha_mode == "reference":
             print("Fitting ref_values_sqrtk")
             self._train_model(
@@ -466,7 +521,7 @@ class EMLETrainer:
                 l2_reg=20.0,
             )
 
-        # Create the final model
+        # Create the final model.
         emle_model = {
             "q_core": q_core_z,
             "a_QEq": emle_base.a_QEq,
@@ -487,7 +542,7 @@ class EMLETrainer:
         }
 
         if model_filename is not None:
-            self.write_model_to_file(emle_model, model_filename)
+            self._write_model_to_file(emle_model, model_filename)
 
         if plot_data_filename is None:
             return emle_base
@@ -507,6 +562,6 @@ class EMLETrainer:
             "q_val_qm": q_val,
             "alpha_qm": alpha,
         }
-        self.write_model_to_file(plot_data, plot_data_filename)
+        self._write_model_to_file(plot_data, plot_data_filename)
 
         return emle_base

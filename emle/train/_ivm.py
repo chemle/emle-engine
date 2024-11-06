@@ -36,6 +36,30 @@ class IVM:
 
     @staticmethod
     def _ivm(aev_0, sigma, thr=0.02, n_max=None):
+        """
+        Perform IVM selection.
+
+        Parameters
+        ----------
+
+        aev_0: torch.Tensor(N, AEV_DIM)
+            Atomic environment vectors.
+
+        sigma: float
+            Kernel width.
+
+        thr: float
+            Threshold for IVM selection.
+
+        n_max: int
+            Maximum number of reference atoms.
+
+        Returns
+        -------
+
+        selected: list
+            Selected indices.
+        """
         n_samples = len(aev_0)
         selected = [0]
         n_max = min(n_max or n_samples, n_samples)
@@ -79,23 +103,33 @@ class IVM:
 
         Parameters
         ----------
+
         aev_mols: torch.Tensor(N_BATCH, MAX_N_ATOMS, AEV_DIM)
             Atomic environment vectors.
+
         z_mols: torch.Tensor(N_BATCH, MAX_N_ATOMS)
             Atomic numbers.
+
         atom_ids: torch.Tensor(N_BATCH, MAX_N_ATOMS)
             Atom IDs.
+
         species: torch.Tensor(N_SPECIES)
             Unique species in the dataset.
+
         thr: float
             Threshold for IVM selection.
+
         sigma: float
             Kernel width.
 
         Returns
         -------
 
+        ivm_mol_atom_ids_padded: torch.Tensor(N_SPECIES, MAX_N_REF)
+            IVM selected atom IDs for reference atoms.
 
+        aev_ivm_allz: torch.Tensor(N_SPECIES, MAX_N_REF, AEV_DIM)
+            AEV features for reference atoms.
         """
         aev_allz = [aev_mols[z_mols == z] for z in species]
         ivm_idx = [IVM._ivm(aev_z, sigma, thr) for aev_z in aev_allz]

@@ -32,13 +32,16 @@ def pad_to_shape(tensor, shape, value=0):
 
     Parameters
     ----------
+
     tensor : torch.Tensor
         Input tensor.
+
     shape : tuple
         Desired shape.
 
     Returns
     -------
+
     torch.Tensor
         Padded tensor.
     """
@@ -55,15 +58,19 @@ def pad_to_max(arrays, value=0):
 
     Parameters
     ----------
+
     arrays : iterable of torch.Tensor or np.ndarray or list
         Iterable of data to be padded.
+
     value : float, optional, default=0
         Value to pad with.
+
     side : str, optional, default='right'
         The side to pad the sequences on.
 
     Returns
     -------
+
     list of torch.Tensor or np.ndarray or list
         Padded data.
     """
@@ -82,13 +89,16 @@ def mean_by_z(arr, zid):
 
     Parameters
     ----------
+
     arr : torch.Tensor(N_BATCH, MAX_N_ATOMS)
         Input array.
+
     zid : torch.Tensor(N_BATCH, MAX_N_ATOMS)
         Species indices.
 
     Returns
     -------
+
     torch.Tensor(N_SPECIES)
         Mean values by species.
     """

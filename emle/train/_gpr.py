@@ -28,15 +28,52 @@ from ._utils import pad_to_max as _pad_to_max
 
 
 class GPR:
+    """
+    Gaussian Process Regression (GPR) for EMLE training.
+    """
+
     @staticmethod
     def _aev_kernel(a, b):
+        """
+        Computes the kernel between two sets of AEV features.
+
+        Parameters
+        ----------
+
+        a: torch.Tensor(N, AEV_DIM)
+            First set of AEV features.
+
+        b: torch.Tensor(M, AEV_DIM)
+            Second set of AEV features.
+
+        Returns
+        -------
+
+        torch.Tensor(N, M)
+            Kernel matrix.
+        """
         return (a @ b.T) ** 2
 
     @staticmethod
     def _get_K_mols_ref(K_ivm_allz, zid_mols):
-        # K_ivm_allz: NSP x NZ x NIVMZ
-        # zid_mols: NMOLS x ATOMS_MAX
-        # result: NMOLS x ATOMS_MAX x MAXIVMZ
+        """
+        Get the molecule-reference kernel matrix.
+
+        Parameters
+        ----------
+
+        K_ivm_allz: list of torch.Tensor(N_SPECIES, N_Z, N_IVMZ)
+            List of molecule-reference kernel matrices.
+
+        zid_mols: torch.Tensor(N_MOLS, MAX_N_ATOMS)
+            Species IDs for all molecules.
+
+        Returns
+        -------
+
+        result: torch.Tensor(N_MOLS, MAX_N_ATOMS, MAX_N_IVMZ)
+            Molecule-reference kernel matrix.
+        """
         ivm_max = max([K_ivm_z.shape[1] for K_ivm_z in K_ivm_allz])
         result = _torch.zeros(
             (*zid_mols.shape, ivm_max),
@@ -54,17 +91,23 @@ class GPR:
         """
         Fits GPR reference values to given samples
 
-        y: (N_SAMPLES,)
-            sample values
+        y: torch.Tensor (N_SAMPLES,)
+            Sample values.
 
-        K_sample_ref: (N_SAMPLES, MAX_N_REF)
-            sample-reference kernel matrix
+        K_sample_ref: torch.Tensor (N_SAMPLES, MAX_N_REF)
+            Sample-reference kernel matrix.
 
-        K_ref_ref: (MAX_N_REF, MAX_N_REF)
-            reference-reference kernel matrix
+        K_ref_ref: torch.Tensor (MAX_N_REF, MAX_N_REF)
+            Reference-reference kernel matrix.
 
         sigma: float
-            GPR sigma value
+            GPR sigma value.
+
+        Returns
+        -------
+
+        torch.Tensor (MAX_N_REF,)
+            Fitted reference values.
         """
         K_ref_ref_sigma = K_ref_ref + sigma**2 * _torch.eye(
             len(K_ref_ref), device=K_ref_ref.device, dtype=K_ref_ref.dtype
@@ -86,16 +129,30 @@ class GPR:
 
         Parameters
         ----------
-        aev_mols : _torch.Tensor(N_BATCH, MAX_N_ATOMS, AEV_DIM)
+
+        aev_mols : torch.Tensor(N_BATCH, MAX_N_ATOMS, AEV_DIM)
             AEV features for all molecules.
-        zid_mols : _torch.Tensor(N_BATCH, MAX_N_ATOMS)
+
+        zid_mols : torch.Tensor(N_BATCH, MAX_N_ATOMS)
             Species IDs for all molecules.
-        aev_ivm_allz : _torch.Tensor(N_SPECIES, MAX_N_REF, AEV_DIM)
+
+        aev_ivm_allz : torch.Tensor(N_SPECIES, MAX_N_REF, AEV_DIM)
             AEV features for all reference atoms.
-        species : _torch.Tensor(N_SPECIES)
+
+        species : torch.Tensor(N_SPECIES)
             Unique species in the dataset.
+
         n_ref: (N_SPECIES,)
             Number of IVM references for each specie
+
+        Returns
+        -------
+
+        K_ref_ref_padded: torch.Tensor(N_SPECIES, MAX_N_REF, MAX_N_REF)
+            Reference-reference kernel matrices.
+
+        K_mols_ref: torch.Tensor(N_BATCH, MAX_N_ATOMS, MAX_N_REF)
+            Molecules-reference kernel matrices.
         """
         n_species = len(aev_ivm_allz)
         aev_allz = [aev_mols[zid_mols == i] for i in range(n_species)]
@@ -122,6 +179,7 @@ class GPR:
 
         Parameters
         ----------
+
         values: torch.Tensor(N_BATCH, MAX_N_ATOMS)
             Atomic properties to train on.
 
@@ -137,18 +195,21 @@ class GPR:
         sigma: float
             GPR sigma value.
 
-        n_ref: (N_SPECIES,)
+        n_ref: torch.Tensor (N_SPECIES,)
             Number of IVM references for each specie
 
         Returns
         -------
-        torch.Tensor(N_SPECIES, MAX_N_REF)
+
+        result: torch.Tensor(N_SPECIES, MAX_N_REF)
             Fitted atomic values.
 
         Notes
         -----
+
         Really only used for s, the rest are predicted by learning.
         """
+
         n_species, max_n_ref = K_ref_ref.shape[:2]
 
         result = _torch.zeros((n_species, max_n_ref), dtype=values.dtype)

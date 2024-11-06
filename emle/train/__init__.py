@@ -5,7 +5,6 @@
 #
 # Authors: Lester Hedges   <lester.hedges@gmail.com>
 #          Kirill Zinovjev <kzinovjev@gmail.com>
-#          Joao Morado     <joaomorado@gmail.com>
 #
 # EMLE-Engine is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,8 +20,9 @@
 # along with EMLE-Engine If not, see <http://www.gnu.org/licenses/>.
 ######################################################################
 
-# This subpackages contains routines for training EMLE models.
-
+"""
+EMLE training resources.
+"""
 
 from ._trainer import EMLETrainer
 
