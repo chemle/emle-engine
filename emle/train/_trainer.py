@@ -442,10 +442,8 @@ class EMLETrainer:
                 dtype=ref_values_s.dtype,
                 device=device,
             ),
-            # "k_Z": _torch.ones(len(species), dtype=dtype, device=_torch.device(device)),
-            "k_Z": _torch.tensor([0.922, 0.173, 0.195, 0.192, 0.216]).to(
-                device=device, dtype=dtype
-            ),
+            "k_Z": 0.5
+            * _torch.ones(len(species), dtype=dtype, device=_torch.device(device)),
             "sqrtk_ref": (
                 _torch.ones(
                     *ref_values_s.shape,
