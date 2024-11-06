@@ -33,6 +33,9 @@ def _fetch_resources():
     import pygit2 as _pygit2
     import sys
 
+    if _os.environ.get("EMLE_NO_RESOURCE_CHECK") is not None:
+        return
+
     # Create the name for the expected resources directory.
     resource_dir = _os.path.join(
         _os.path.dirname(_os.path.abspath(__file__)), "resources"
