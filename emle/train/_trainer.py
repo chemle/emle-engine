@@ -94,7 +94,7 @@ class EMLETrainer:
         # Deatch the tensors, convert to numpy arrays and save the model.
         emle_model = {
             k: v.cpu().detach().numpy() if isinstance(v, _torch.Tensor) else v
-            for k, v in emle_model.items()
+            for k, v in emle_model.items() if v is not None
         }
         scipy.io.savemat(model_filename, emle_model)
 
@@ -452,6 +452,8 @@ class EMLETrainer:
                     dtype=ref_values_s.dtype,
                     device=_torch.device(device),
                 )
+                if alpha_mode == "reference"
+                else None
             ),
         }
 
@@ -528,8 +530,7 @@ class EMLETrainer:
             "chi_ref": emle_base.ref_values_chi,
             "k_Z": emle_base.k_Z,
             "sqrtk_ref": (
-                emle_base.ref_values_sqrtk if alpha_mode == "reference" else 
-                _torch.tensor([])
+                emle_base.ref_values_sqrtk if alpha_mode == "reference" else None
             ),
             "species": species,
             "alpha_mode": alpha_mode,
