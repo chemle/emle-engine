@@ -39,16 +39,16 @@ class EMLETrainer:
         qeq_loss=_QEqLoss,
         thole_loss=_TholeLoss,
     ):
-        if not isinstance(emle_base, _EMLEBase):
-            raise TypeError("emle_base must be an instance of EMLEBase")
+        if emle_base is not _EMLEBase:
+            raise TypeError("emle_base must be a reference to EMLEBase")
         self._emle_base = emle_base
 
-        if not isinstance(qeq_loss, _QEqLoss):
-            raise TypeError("qeq_loss must be an instance of QEqLoss")
+        if qeq_loss is not _QEqLoss:
+            raise TypeError("qeq_loss must be a reference to QEqLoss")
         self._qeq_loss = qeq_loss
 
-        if not isinstance(thole_loss, _TholeLoss):
-            raise TypeError("thole_loss must be an instance of TholeLoss")
+        if thole_loss is not _TholeLoss:
+            raise TypeError("thole_loss must be a reference to TholeLoss")
         self._thole_loss = thole_loss
 
     @staticmethod
@@ -353,16 +353,15 @@ class EMLETrainer:
         if train_mask is None:
             train_mask = _torch.ones(len(z), dtype=_torch.bool)
 
-        q = q_core + q_val
-        q_mol = _torch.tensor([q_m.sum() for q_m in q], device=device)
-
         # Prepare batch data.
-        q_mol_train = q_mol[train_mask]
-        z_train = pad_to_max(z)[train_mask]
-        xyz_train = pad_to_max(xyz)[train_mask]
-        s_train = pad_to_max(s)[train_mask]
-        q_core_train = pad_to_max(q_core)[train_mask]
-        q_train = pad_to_max(q)[train_mask]
+        q_val_train = _pad_to_max(q_val)[train_mask].to(device=device, dtype=dtype)
+        q_core_train = _pad_to_max(q_core)[train_mask].to(device=device, dtype=dtype)
+        q_train = q_core_train + q_val_train
+        q_mol_train = _torch.sum(q_train, dim=1)
+
+        z_train = _pad_to_max(z)[train_mask]
+        xyz_train = _pad_to_max(xyz)[train_mask]
+        s_train = _pad_to_max(s)[train_mask]
         alpha_train = _torch.tensor(alpha, device=device)[train_mask]
         species = _torch.unique(_torch.tensor(z[z > 0], device=device))
 
@@ -403,7 +402,7 @@ class EMLETrainer:
         )
 
         # "Fit" q_core (just take averages over the entire training set).
-        q_core_z = mean_by_z(q_core_train, zid_train)
+        q_core_z = _mean_by_z(q_core_train, zid_train)
 
         print("Perform IVM...")
         # Create an array of (molecule_id, atom_id) pairs (as in the full
@@ -415,7 +414,7 @@ class EMLETrainer:
         ).to(device)
 
         # Perform IVM.
-        ivm_mol_atom_ids_padded, aev_ivm_allz = IVM.perform_ivm(
+        ivm_mol_atom_ids_padded, aev_ivm_allz = _IVM.perform_ivm(
             aev_mols, z_train, atom_ids, species, ivm_thr, sigma
         )
 
@@ -553,7 +552,7 @@ class EMLETrainer:
             "s_emle": s_pred,
             "q_core_emle": q_core_pred,
             "q_val_emle": q_val_pred,
-            "alpha_emle": TholeLoss._get_alpha_mol(A_thole, z_mask),
+            "alpha_emle": self._thole._get_alpha_mol(A_thole, z_mask),
             "z": z,
             "s_qm": s,
             "q_core_qm": q_core,
