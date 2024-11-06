@@ -554,7 +554,7 @@ class EMLETrainer:
             "s_emle": s_pred,
             "q_core_emle": q_core_pred,
             "q_val_emle": q_val_pred,
-            "alpha_emle": self._thole._get_alpha_mol(A_thole, z_mask),
+            "alpha_emle": self._thole_loss._get_alpha_mol(A_thole, z_mask),
             "z": z,
             "s_qm": s,
             "q_core_qm": q_core,
