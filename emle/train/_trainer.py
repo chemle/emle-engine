@@ -353,11 +353,14 @@ class EMLETrainer:
         if train_mask is None:
             train_mask = _torch.ones(len(z), dtype=_torch.bool)
 
+        q = q_core + q_val
+        q_mol = _torch.tensor([q_m.sum() for q_m in q], device=device)
+
         # Prepare batch data.
         q_val_train = _pad_to_max(q_val)[train_mask].to(device=device, dtype=dtype)
         q_core_train = _pad_to_max(q_core)[train_mask].to(device=device, dtype=dtype)
         q_train = q_core_train + q_val_train
-        q_mol_train = _torch.sum(q_train, dim=1)
+        q_mol_train = q_mol[train_mask]
 
         z_train = _pad_to_max(z)[train_mask]
         xyz_train = _pad_to_max(xyz)[train_mask]
