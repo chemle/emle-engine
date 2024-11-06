@@ -324,6 +324,12 @@ class EMLE(_torch.nn.Module):
                 device=device,
             )
 
+        # Create empty attributes to store the inputs to the forward method.
+        self._atomic_numbers = _torch.empty(0, dtype=_torch.int64, device=device)
+        self._charges_mm = _torch.empty(0, dtype=dtype, device=device)
+        self._xyz_qm = _torch.empty(0, 3, dtype=dtype, device=device)
+        self._xyz_mm = _torch.empty(0, 3, dtype=dtype, device=device)
+
         # Create the base EMLE model.
         self._emle_base = _EMLEBase(
             emle_params,
@@ -422,6 +428,12 @@ class EMLE(_torch.nn.Module):
         result: torch.Tensor (2,)
             The static and induced EMLE energy components in Hartree.
         """
+
+        # Store the inputs as internal attributes.
+        self._atomic_numbers = atomic_numbers
+        self._charges_mm = charges_mm
+        self._xyz_qm = xyz_qm
+        self._xyz_mm = xyz_mm
 
         # If there are no point charges, return zeros.
         if len(xyz_mm) == 0:
