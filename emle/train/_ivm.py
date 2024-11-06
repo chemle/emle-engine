@@ -22,6 +22,7 @@
 
 """Informative Vector Machine (IVM) for selecting representative feature vectors."""
 
+import numpy as _np
 import torch as _torch
 
 from ._gpr import GPR as _GPR
@@ -67,7 +68,7 @@ class IVM:
         k_old = None
 
         for i in range(1, n_max):
-            pending = _torch.tensor([i for i in range(n_samples) if i not in selected])
+            pending = _np.delete(range(n_samples), selected)
             aev_sel, aev_pen = aev_0[selected], aev_0[pending]
             K_sel = _GPR._aev_kernel(aev_sel, aev_sel)
             K_sel_inv = _torch.linalg.inv(
