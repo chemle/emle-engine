@@ -283,7 +283,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         Performs Tensor dtype and/or device conversion on the model.
         """
-        if self._aev_computer:
+        if not self._is_external:
             self._aev_computer = self._aev_computer.to(*args, **kwargs)
         if self._mask is not None:
             self._mask = self._mask.to(*args, **kwargs)
@@ -301,7 +301,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         Move all model parameters and buffers to CUDA memory.
         """
-        if self._aev_computer:
+        if not self._is_external:
             self._aev_computer = self._aev_computer.cuda(**kwargs)
         if self._mask is not None:
             self._mask = self._mask.cuda(**kwargs)
@@ -312,7 +312,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         Move all model parameters and buffers to CPU memory.
         """
-        if self._aev_computer:
+        if not self._is_external:
             self._aev_computer = self._aev_computer.cpu(**kwargs)
         if self._mask is not None:
             self._mask = self._mask.cpu(**kwargs)
@@ -323,7 +323,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         Casts all floating point model parameters and buffers to float64 precision.
         """
-        if self._aev_computer:
+        if not self._is_external:
             self._aev_computer = self._aev_computer.double()
         return self
 
@@ -331,6 +331,6 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         Casts all floating point model parameters and buffers to float32 precision.
         """
-        if self._aev_computer:
+        if not self._is_external:
             self._aev_computer = self._aev_computer.float()
         return self
