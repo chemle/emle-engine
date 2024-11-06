@@ -24,7 +24,12 @@
 
 import torch as _torch
 
-class BaseLoss(_torch.nn.Module):
+
+class _BaseLoss(_torch.nn.Module):
+    """
+    Base class for Losses. Implements methods for error estimation
+    """
+
     @staticmethod
     def _get_rmse(values, target):
         """
@@ -69,7 +74,12 @@ class BaseLoss(_torch.nn.Module):
         """
         return _torch.max(_torch.abs(values - target))
 
-class QEqLoss(BaseLoss):
+
+
+
+
+
+class QEqLoss(_BaseLoss):
     """
     Loss function for the charge equilibration (QEq). Used to train ref_values_chi, a_QEq.
 
@@ -145,7 +155,7 @@ class QEqLoss(BaseLoss):
         )
 
 
-class TholeLoss(BaseLoss):
+class TholeLoss(_BaseLoss):
     """
     Loss function for the Thole model. Used to train a_Thole, k_Z, ref_values_sqrtk.
 
