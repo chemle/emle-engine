@@ -24,8 +24,52 @@
 
 import torch as _torch
 
+class BaseLoss(_torch.nn.Module):
+    @staticmethod
+    def _get_rmse(values, target):
+        """
+        Calculate root mean squared error.
 
-class QEqLoss(_torch.nn.Module):
+        Parameters
+        ----------
+
+        values: torch.Tensor
+            Predicted values.
+
+        target: torch.Tensor
+            Target values.
+
+        Returns
+        -------
+
+        torch.Tensor
+            Root mean squared error.
+        """
+        return _torch.sqrt(_torch.mean((values - target) ** 2))
+
+    @staticmethod
+    def _get_max_error(values, target):
+        """
+        Calculate maximum error between values and target.
+
+        Parameters
+        ----------
+
+        values: torch.Tensor
+            Predicted values.
+
+        target: torch.Tensor
+            Target values.
+
+        Returns
+        -------
+
+        torch.Tensor
+            Maximum error.
+        """
+        return _torch.max(_torch.abs(values - target))
+
+class QEqLoss(BaseLoss):
     """
     Loss function for the charge equilibration (QEq). Used to train ref_values_chi, a_QEq.
 
@@ -101,7 +145,7 @@ class QEqLoss(_torch.nn.Module):
         )
 
 
-class TholeLoss(_torch.nn.Module):
+class TholeLoss(BaseLoss):
     """
     Loss function for the Thole model. Used to train a_Thole, k_Z, ref_values_sqrtk.
 
@@ -255,47 +299,3 @@ class TholeLoss(_torch.nn.Module):
             self._get_rmse(alpha_mol_triu, alpha_mol_target_triu),
             self._get_max_error(alpha_mol_triu, alpha_mol_target_triu),
         )
-
-    @staticmethod
-    def _get_rmse(values, target):
-        """
-        Calculate root mean squared error.
-
-        Parameters
-        ----------
-
-        values: torch.Tensor
-            Predicted values.
-
-        target: torch.Tensor
-            Target values.
-
-        Returns
-        -------
-
-        torch.Tensor
-            Root mean squared error.
-        """
-        return _torch.sqrt(_torch.mean((values - target) ** 2))
-
-    @staticmethod
-    def _get_max_error(values, target):
-        """
-        Calculate maximum error between values and target.
-
-        Parameters
-        ----------
-
-        values: torch.Tensor
-            Predicted values.
-
-        target: torch.Tensor
-            Target values.
-
-        Returns
-        -------
-
-        torch.Tensor
-            Maximum error.
-        """
-        return _torch.max(_torch.abs(values - target))
