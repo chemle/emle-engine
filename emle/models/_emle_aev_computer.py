@@ -184,8 +184,8 @@ class EMLEAEVComputer(_torch.nn.Module):
                 hypers["EtaR"],
                 hypers["ShfR"],
                 hypers["EtaA"],
-                hypers["ShfA"],
                 hypers["Zeta"],
+                hypers["ShfA"],
                 hypers["ShfZ"],
                 num_species=num_species,
             ).to(device=device, dtype=dtype)
