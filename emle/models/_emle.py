@@ -152,7 +152,8 @@ class EMLE(_torch.nn.Module):
         from .._resources import _fetch_resources
 
         # Fetch or update the resources.
-        _fetch_resources()
+        if model is None:
+            _fetch_resources()
 
         if method is None:
             method = "electrostatic"
