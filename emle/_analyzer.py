@@ -42,6 +42,12 @@ from ._utils import pad_to_max as _pad_to_max
 class BaseBackend(_ABC):
 
     def __init__(self, torch_device=None):
+
+        if torch_device is not None:
+            if not isinstance(torch_device, _torch.device):
+                raise ValueError("Invalid device type. Must be a torch.device.")
+        else:
+            torch_device = _torch.get_default_device()
         self._device = torch_device
 
     def __call__(self, atomic_numbers, xyz, gradient=False):
@@ -57,6 +63,19 @@ class BaseBackend(_ABC):
 
         Returns energy (and, optionally, gradient) as np.ndarrays
         """
+
+        if not isinstance(atomic_numbers, _np.ndarray):
+            raise ValueError("Invalid atomic_numbers type. Must be a numpy array.")
+        if atomic_numbers.ndim != 2:
+            raise ValueError(
+                "Invalid atomic_numbers shape. Must a two-dimensional array."
+            )
+
+        if not isinstance(xyz, _np.ndarray):
+            raise ValueError("Invalid xyz type. Must be a numpy array.")
+        if xyz.ndim != 3:
+            raise ValueError("Invalid xyz shape. Must a three-dimensional array.")
+
         if self._device:
             atomic_numbers = _torch.tensor(atomic_numbers, device=self._device)
             xyz = _torch.tensor(xyz, device=self._device)
@@ -70,6 +89,7 @@ class BaseBackend(_ABC):
             e = result[0].detach().cpu().numpy()
             f = result[1].detach().cpu().numpy()
             return e, f
+
         return result.detach().cpu().numpy()
 
     @_abstractmethod
@@ -95,6 +115,13 @@ class ANI2xBackend(BaseBackend):
         if device is None:
             cuda_available = _torch.cuda.is_available()
             device = _torch.device("cuda" if cuda_available else "cpu")
+        else:
+            if not isinstance(device, _torch.device):
+                raise ValueError("Invalid device type. Must be a torch.device.")
+
+        if ani2x_model_index is not None:
+            if not isinstance(ani2x_model_index, int):
+                raise ValueError("Invalid model index type. Must be an integer.")
 
         super().__init__(device)
 
@@ -138,17 +165,41 @@ class DeepMDBackend(BaseBackend):
 
 
 class EMLEAnalyzer:
+    """
+    Class for analyzing the output of an EMLE simulation.
+    """
 
     def __init__(
         self, qm_xyz_filename, pc_xyz_filename, q_total, emle_base, backend=None
     ):
 
+        if not isinstance(qm_xyz_filename, str):
+            raise ValueError("Invalid qm_xyz_filename type. Must be a string.")
+
+        if not isinstance(pc_xyz_filename, str):
+            raise ValueError("Invalid pc_xyz_filename type. Must be a string.")
+
+        if not isinstance(q_total, (int, float)):
+            raise ValueError("Invalid q_total type. Must be a number.")
+
+        from .models._emle_base import EMLEBase
+
+        if not isinstance(emle_base, EMLEBase):
+            raise ValueError("Invalid emle_base type. Must be an EMLEBase object.")
+
         self.q_total = q_total
         dtype = emle_base._dtype
         device = emle_base._device
 
-        atomic_numbers, qm_xyz = self._parse_qm_xyz(qm_xyz_filename)
-        pc_charges, pc_xyz = self._parse_pc_xyz(pc_xyz_filename)
+        try:
+            atomic_numbers, qm_xyz = self._parse_qm_xyz(qm_xyz_filename)
+        except Exception as e:
+            raise RuntimeError(f"Unable to parse QM xyz file: {e}")
+
+        try:
+            pc_charges, pc_xyz = self._parse_pc_xyz(pc_xyz_filename)
+        except Exception as e:
+            raise RuntimeError(f"Unable to parse PC xyz file: {e}")
 
         if backend:
             self.e_backend = backend(atomic_numbers, qm_xyz)
@@ -179,14 +230,51 @@ class EMLEAnalyzer:
             setattr(self, attr, getattr(self, attr).detach().cpu().numpy())
 
     @staticmethod
-    def _parse_qm_xyz(qm_xyz_filename):
-        atoms = _ase_io.read(qm_xyz_filename, index=":")
+    def _parse_qm_xyz(filename):
+        """
+        Parse the QM xyz file.
+
+        Parameters
+        ----------
+
+        filename: str
+            The path to the QM xyz file.
+
+        Returns
+        -------
+
+        atomic_numbers: np.ndarray
+            The atomic numbers of the atoms.
+
+        xyz: np.ndarray
+            The positions of the atoms.
+        """
+
+        atoms = _ase_io.read(filename, index=":")
         atomic_numbers = _pad_to_max([_.get_atomic_numbers() for _ in atoms], -1)
         xyz = _np.array([_.get_positions() for _ in atoms])
         return atomic_numbers, xyz
 
     @staticmethod
-    def _parse_pc_xyz(pc_xyz_filename):
+    def _parse_pc_xyz(filename):
+        """
+        Parse the PC xyz file.
+
+        Parameters
+        ----------
+
+        filename: str
+            The path to the PC xyz file.
+
+        Returns
+        -------
+
+        charges: np.ndarray
+            The charges of the atoms.
+
+        xyz: np.ndarray
+            The positions of the atoms.
+        """
         frames = []
         with open(pc_xyz_filename, "r") as file:
             while True:
@@ -201,6 +289,24 @@ class EMLEAnalyzer:
 
     @staticmethod
     def _get_mol_alpha(A_thole, atomic_numbers):
+        """
+        Calculate the molecular polarizability tensor.
+
+        Parameters
+        ----------
+
+        A_thole: torch.Tensor
+            The Thole tensor.
+
+        atomic_numbers: torch.Tensor
+            The atomic numbers of the atoms.
+
+        Returns
+        -------
+
+        alpha: torch.Tensor
+            The molecular polarizability tensor.
+        """
         mask = atomic_numbers > 0
         mask_mat = mask[:, :, None] * mask[:, None, :]
         mask_mat = mask_mat.repeat_interleave(3, dim=1)
