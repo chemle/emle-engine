@@ -353,15 +353,15 @@ class EMLETrainer:
         if train_mask is None:
             train_mask = _torch.ones(len(z), dtype=_torch.bool)
 
-        q = q_core + q_val
-        q_mol = _torch.tensor([q_m.sum() for q_m in q], device=device)
-
         # Prepare batch data.
-        q_val_train = _pad_to_max(q_val)[train_mask].to(device=device, dtype=dtype)
-        q_core_train = _pad_to_max(q_core)[train_mask].to(device=device, dtype=dtype)
-        q_train = q_core_train + q_val_train
-        q_mol_train = q_mol[train_mask]
+        q_val = _pad_to_max(q_val)
+        q_core = _pad_to_max(q_core)
+        q = q_core + q_val
+        q_mol = _torch.sum(q, dim=1)
 
+        q_core_train = q_core[train_mask]
+        q_mol_train = q_mol[train_mask]
+        q_train = q[train_mask]
         z_train = _pad_to_max(z)[train_mask]
         xyz_train = _pad_to_max(xyz)[train_mask]
         s_train = _pad_to_max(s)[train_mask]
@@ -548,7 +548,7 @@ class EMLETrainer:
             return emle_base
 
         s_pred, q_core_pred, q_val_pred, A_thole = emle_base(
-            _torch.tensor(z, device=device), _torch.tensor(xyz, device=device), q_mol_train
+            _torch.tensor(z, device=device), _torch.tensor(xyz, device=device), q_mol
         )
         z_mask = _torch.tensor(z > 0, device=device)
         plot_data = {
