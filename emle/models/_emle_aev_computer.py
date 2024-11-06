@@ -29,6 +29,9 @@ import numpy as _np
 import torch as _torch
 import torchani as _torchani
 
+from torch import Tensor
+from typing import Tuple
+
 # Default hyperparameters for AEVComputer. Taken from ANI2x.
 _DEFAULT_HYPERS_DICT = {
     "Rcr": 5.1000e00,
@@ -173,18 +176,22 @@ class EMLEAEVComputer(_torch.nn.Module):
                 raise TypeError("'hypers' must be of type 'dict' or None")
 
         # Create the AEV computer.
-        hypers = hypers or get_default_hypers(device, dtype)
-        self._aev_computer = _torchani.AEVComputer(
-            hypers["Rcr"],
-            hypers["Rca"],
-            hypers["EtaR"],
-            hypers["ShfR"],
-            hypers["EtaA"],
-            hypers["ShfA"],
-            hypers["Zeta"],
-            hypers["ShfZ"],
-            num_species=num_species,
-        ).to(device=device, dtype=dtype)
+        if not self._is_external:
+            hypers = hypers or get_default_hypers(device, dtype)
+            self._aev_computer = _torchani.AEVComputer(
+                hypers["Rcr"],
+                hypers["Rca"],
+                hypers["EtaR"],
+                hypers["ShfR"],
+                hypers["EtaA"],
+                hypers["ShfA"],
+                hypers["Zeta"],
+                hypers["ShfZ"],
+                num_species=num_species,
+            ).to(device=device, dtype=dtype)
+        # Create a dummy function to use in forward.
+        else:
+            self._aev_computer = self._dummy_aev_computer
 
         if zid_map is None:
             zid_map = {i: i for i in range(num_species)}
@@ -231,6 +238,28 @@ class EMLEAEVComputer(_torch.nn.Module):
         aev = self._apply_mask(_torch.where(zid[:, :, None] > -1, aev / norm, 0.0))
 
         return aev
+
+    @staticmethod
+    def _dummy_aev_computer(input: Tuple[Tensor, Tensor]) -> Tensor:
+        """
+        Dummy function to use in forward if AEVs are computed externally.
+
+        Parameters
+        ----------
+
+        zid: torch.Tensor (N_BATCH, MAX_N_ATOMS)
+            The species indices.
+
+        xyz: torch.Tensor (N_BATCH, MAX_N_ATOMS, 3)
+            The atomic coordinates.
+
+        Returns
+        -------
+
+        aevs: torch.Tensor (N_BATCH, MAX_N_ATOMS, N_AEV_COMPONENTS)
+            The atomic environment vectors.
+        """
+        return _torch.empty(0, dtype=_torch.float32)
 
     def _apply_mask(self, aev):
         """
