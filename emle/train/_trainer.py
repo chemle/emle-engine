@@ -362,8 +362,8 @@ class EMLETrainer:
         z_train = _pad_to_max(z)[train_mask]
         xyz_train = _pad_to_max(xyz)[train_mask]
         s_train = _pad_to_max(s)[train_mask]
-        alpha_train = _torch.tensor(alpha, device=device)[train_mask]
-        species = _torch.unique(_torch.tensor(z[z > 0], device=device))
+        alpha_train = _pad_to_max(alpha)[train_mask]
+        species = _torch.unique(_torch.tensor(z_train[z_train > 0], device=device))
 
         # Place on the correct device and set the data type.
         q_mol_train = q_mol_train.to(device=device, dtype=dtype)
@@ -449,8 +449,6 @@ class EMLETrainer:
                     dtype=ref_values_s.dtype,
                     device=_torch.device(device),
                 )
-                if alpha_mode == "reference"
-                else None
             ),
         }
 
@@ -527,7 +525,8 @@ class EMLETrainer:
             "chi_ref": emle_base.ref_values_chi,
             "k_Z": emle_base.k_Z,
             "sqrtk_ref": (
-                emle_base.ref_values_sqrtk if alpha_mode == "reference" else None
+                emle_base.ref_values_sqrtk if alpha_mode == "reference" else 
+                _torch.tensor([])
             ),
             "species": species,
             "alpha_mode": alpha_mode,
@@ -545,7 +544,7 @@ class EMLETrainer:
             return emle_base
 
         s_pred, q_core_pred, q_val_pred, A_thole = emle_base(
-            _torch.tensor(z, device=device), _torch.tensor(xyz, device=device), q_mol
+            _torch.tensor(z, device=device), _torch.tensor(xyz, device=device), q_mol_train
         )
         z_mask = _torch.tensor(z > 0, device=device)
         plot_data = {
