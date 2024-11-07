@@ -369,6 +369,7 @@ class EMLETrainer:
         species = _torch.unique(_torch.tensor(z_train[z_train > 0], device=device))
 
         # Place on the correct device and set the data type.
+        q_mol = q_mol.to(device=device, dtype=dtype)
         q_mol_train = q_mol_train.to(device=device, dtype=dtype)
         z_train = z_train.to(device=device, dtype=_torch.int64)
         xyz_train = xyz_train.to(device=device, dtype=dtype)
