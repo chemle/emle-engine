@@ -485,6 +485,9 @@ class EMLETrainer:
             q_mol=q_mol_train,
             q_target=q_train,
         )
+        # Update GPR constants for chi
+        # (now inconsistent since not updated after the last epoch)
+        self._qeq_loss._update_chi_gpr(emle_base)
 
         print("a_QEq:", emle_base.a_QEq)
 
@@ -521,6 +524,9 @@ class EMLETrainer:
                 opt_sqrtk=True,
                 l2_reg=20.0,
             )
+            # Update GPR constants for sqrtk
+            # (now inconsistent since not updated after the last epoch)
+            self._thole_loss._update_sqrtk_gpr(emle_base)
 
         # Create the final model.
         emle_model = {

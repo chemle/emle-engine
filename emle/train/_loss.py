@@ -135,11 +135,7 @@ class QEqLoss(_BaseLoss):
             Target atomic charges.
         """
         # Recalculate reference values for chi.
-        self._emle_base._ref_mean_chi, self._emle_base._c_chi = self._emle_base._get_c(
-            self._emle_base._n_ref,
-            self._emle_base.ref_values_chi,
-            self._emle_base._Kinv,
-        )
+        self._update_chi_gpr(self._emle_base)
 
         # Calculate q_core and q_val
         _, q_core, q_val, _ = self._emle_base(atomic_numbers, xyz, q_mol)
@@ -152,6 +148,14 @@ class QEqLoss(_BaseLoss):
             self._loss(values, target),
             self._get_rmse(values, target),
             self._get_max_error(values, target),
+        )
+
+    @staticmethod
+    def _update_chi_gpr(emle_base):
+        emle_base._ref_mean_chi, emle_base._c_chi = emle_base._get_c(
+            emle_base._n_ref,
+            emle_base.ref_values_chi,
+            emle_base._Kinv,
         )
 
 
@@ -272,13 +276,7 @@ class TholeLoss(_BaseLoss):
             L2 regularization coefficient. If None, no regularization is applied.
         """
         if opt_sqrtk:
-            self._emle_base._ref_mean_sqrtk, self._emle_base._c_sqrtk = (
-                self._emle_base._get_c(
-                    self._emle_base._n_ref,
-                    self._emle_base.ref_values_sqrtk,
-                    self._emle_base._Kinv,
-                )
-            )
+            self._update_sqrtk_gpr(self._emle_base)
 
         # Calculate A_thole and alpha_mol.
         _, _, _, A_thole = self._emle_base(atomic_numbers, xyz, q_mol)
@@ -308,4 +306,12 @@ class TholeLoss(_BaseLoss):
             loss,
             self._get_rmse(alpha_mol_triu, alpha_mol_target_triu),
             self._get_max_error(alpha_mol_triu, alpha_mol_target_triu),
+        )
+
+    @staticmethod
+    def _update_sqrtk_gpr(emle_base):
+        emle_base._ref_mean_sqrtk, emle_base._c_sqrtk = emle_base._get_c(
+            emle_base._n_ref,
+            emle_base.ref_values_sqrtk,
+            emle_base._Kinv,
         )
