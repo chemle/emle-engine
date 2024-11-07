@@ -224,7 +224,8 @@ class ORCAParser:
         h5f = _h5py.File(f)
         data = {key: h5f[key][:] for key in self._HORTON_KEYS}
         q = data["core_charges"] + data["valence_charges"]
-        q_shift = _np.sum((_np.round(q) - q)) / len(q)
+        q_total = _np.sum(q)
+        q_shift = (_np.round(q_total) - q_total) / len(q)
         return {
             "s": data["valence_widths"],
             "q_core": data["core_charges"],
