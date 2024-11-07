@@ -548,6 +548,7 @@ class EMLETrainer:
         if plot_data_filename is None:
             return emle_base
 
+        emle_base._alpha_mode = 'species'
         s_pred, q_core_pred, q_val_pred, A_thole = emle_base(
             _torch.tensor(z, device=device), _torch.tensor(xyz, device=device), q_mol
         )
@@ -556,13 +557,25 @@ class EMLETrainer:
             "s_emle": s_pred,
             "q_core_emle": q_core_pred,
             "q_val_emle": q_val_pred,
-            "alpha_emle": self._thole_loss._get_alpha_mol(A_thole, z_mask),
+            "alpha_species": self._thole_loss._get_alpha_mol(A_thole, z_mask),
             "z": z,
             "s_qm": s,
             "q_core_qm": q_core,
             "q_val_qm": q_val,
             "alpha_qm": alpha,
         }
+
+        if alpha_mode == "reference":
+            emle_base._alpha_mode = 'reference'
+            *_, A_thole = emle_base(
+                _torch.tensor(z, device=device),
+                _torch.tensor(xyz, device=device),
+                q_mol
+            )
+            plot_data["alpha_reference"] = self._thole_loss._get_alpha_mol(
+                A_thole, z_mask
+            )
+
         self._write_model_to_file(plot_data, plot_data_filename)
 
         return emle_base
