@@ -973,7 +973,7 @@ class EMLEBase(_torch.nn.Module):
         result: torch.Tensor (N_BATCH, MAX_MM_ATOMS)
             Electrostatic potential over MM atoms.
         """
-        return _torch.einsum("ijkl,ijl->ik", T1, mu)
+        return -_torch.einsum("ijkl,ijl->ik", T1, mu)
 
     @staticmethod
     def _get_mesh_data(
