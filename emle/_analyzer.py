@@ -276,7 +276,7 @@ class EMLEAnalyzer:
             The positions of the atoms.
         """
         frames = []
-        with open(pc_xyz_filename, "r") as file:
+        with open(filename, "r") as file:
             while True:
                 try:
                     n = int(file.readline().strip())
