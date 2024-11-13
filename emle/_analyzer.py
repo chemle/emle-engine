@@ -46,8 +46,6 @@ class BaseBackend(_ABC):
         if torch_device is not None:
             if not isinstance(torch_device, _torch.device):
                 raise ValueError("Invalid device type. Must be a torch.device.")
-        else:
-            torch_device = _torch.get_default_device()
         self._device = torch_device
 
     def __call__(self, atomic_numbers, xyz, gradient=False):
