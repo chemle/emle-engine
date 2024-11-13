@@ -86,11 +86,16 @@ class BaseBackend(_ABC):
             return result
 
         if gradient:
-            e = result[0].detach().cpu().numpy()
-            f = result[1].detach().cpu().numpy()
+            e, f = result
+            if self._device:
+                e = e.detach().cpu().numpy()
+                f = f.detach().cpu().numpy()
             return e, f
 
-        return result.detach().cpu().numpy()
+        e = result
+        if self._device:
+            e = e.detach().cpu().numpy()
+        return e
 
     @_abstractmethod
     def eval(self, atomic_numbers, xyz, gradient=False):
