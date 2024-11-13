@@ -38,6 +38,9 @@ import torch as _torch
 
 from ._utils import pad_to_max as _pad_to_max
 
+_EV_TO_KCALMOL = _ase.units.mol / _ase.units.kcal
+_HARTREE_TO_KCALMOL = _ase.units.Hartree * _EV_TO_KCALMOL
+
 
 class BaseBackend(_ABC):
 
@@ -48,7 +51,7 @@ class BaseBackend(_ABC):
                 raise ValueError("Invalid device type. Must be a torch.device.")
         self._device = torch_device
 
-    def __call__(self, atomic_numbers, xyz, gradient=False):
+    def __call__(self, atomic_numbers, xyz, forces=False):
         """
         atomic_numbers: np.ndarray (N_BATCH, N_QM_ATOMS,)
             The atomic numbers of the atoms.
@@ -56,10 +59,11 @@ class BaseBackend(_ABC):
         xyz: np.ndarray (N_BATCH, N_QM_ATOMS,)
             The positions of the atoms.
 
-        gradient: bool
-            Whether the gradient should be calculated
+        forces: bool
+            Whether the forces should be calculated
 
-        Returns energy (and, optionally, gradient) as np.ndarrays
+        Returns energy in kcal/mol (and, optionally, forces in kcal/mol/A)
+        as np.ndarrays
         """
 
         if not isinstance(atomic_numbers, _np.ndarray):
@@ -78,7 +82,7 @@ class BaseBackend(_ABC):
             atomic_numbers = _torch.tensor(atomic_numbers, device=self._device)
             xyz = _torch.tensor(xyz, device=self._device)
 
-        result = self.eval(atomic_numbers, xyz, gradient)
+        result = self.eval(atomic_numbers, xyz, forces)
 
         if not self._device:
             return result
@@ -96,7 +100,7 @@ class BaseBackend(_ABC):
         return e
 
     @_abstractmethod
-    def eval(self, atomic_numbers, xyz, gradient=False):
+    def eval(self, atomic_numbers, xyz, forces=False):
         """
         atomic_numbers: (N_BATCH, N_QM_ATOMS,)
             The atomic numbers of the atoms.
@@ -104,8 +108,11 @@ class BaseBackend(_ABC):
         xyz: (N_BATCH, N_QM_ATOMS,)
             The positions of the atoms.
 
-        gradient: bool
+        forces: bool
             Whether the gradient should be calculated
+
+        Returns energy in kcal/mol (and, optionally, forces in kcal/mol/A)
+        as either np.ndarrays or torch.Tensor
         """
         pass
 
@@ -132,12 +139,14 @@ class ANI2xBackend(BaseBackend):
             periodic_table_index=True, model_index=ani2x_model_index
         ).to(device)
 
-    def eval(self, atomic_numbers, xyz, do_gradient=False):
+    def eval(self, atomic_numbers, xyz, forces=False):
         energy = self._ani2x((atomic_numbers, xyz.float())).energies
-        if not do_gradient:
+        energy = energy * _HARTREE_TO_KCALMOL
+        if not forces:
             return energy
-        gradient = _torch.autograd.grad(energy.sum(), xyz)[0]
-        return energy, gradient
+        forces = - _torch.autograd.grad(energy.sum(), xyz)[0]
+        forces = forces * _HARTREE_TO_KCALMOL
+        return energy, forces
 
 
 class DeepMDBackend(BaseBackend):
@@ -159,12 +168,12 @@ class DeepMDBackend(BaseBackend):
         except Exception as e:
             raise RuntimeError(f"Unable to create the DeePMD potentials: {e}")
 
-    def eval(self, atomic_numbers, xyz, do_gradient=False):
+    def eval(self, atomic_numbers, xyz, forces=False):
         # Assuming all the frames are of the same system
         atom_types = [self._z_map[_ase.Atom(z).symbol] for z in atomic_numbers[0]]
         e, f, _ = self._dp.eval(xyz, cells=None, atom_types=atom_types)
-        e = e.flatten()
-        return (e, f) if do_gradient else e
+        e, f = e.flatten() * _EV_TO_KCALMOL, f * _EV_TO_KCALMOL
+        return (e, f) if forces else e
 
 
 class EMLEAnalyzer:
