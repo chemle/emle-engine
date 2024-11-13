@@ -21,6 +21,9 @@
 #####################################################################
 
 import torch as _torch
+from loguru import logger as _logger
+import os as _os
+import sys as _sys
 
 from ..models import EMLEAEVComputer as _EMLEAEVComputer
 from ..models import EMLEBase as _EMLEBase
@@ -38,6 +41,8 @@ class EMLETrainer:
         emle_base=_EMLEBase,
         qeq_loss=_QEqLoss,
         thole_loss=_TholeLoss,
+        log_level=None,
+        log_file=None,
     ):
         if emle_base is not _EMLEBase:
             raise TypeError("emle_base must be a reference to EMLEBase")
@@ -50,6 +55,46 @@ class EMLETrainer:
         if thole_loss is not _TholeLoss:
             raise TypeError("thole_loss must be a reference to TholeLoss")
         self._thole_loss = thole_loss
+
+        # First handle the logger.
+        if log_level is None:
+            log_level = "INFO"
+        else:
+            if not isinstance(log_level, str):
+                raise TypeError("'log_level' must be of type 'str'")
+
+            # Delete whitespace and convert to upper case.
+            log_level = log_level.upper().replace(" ", "")
+
+            # Validate the log level.
+            if not log_level in _logger._core.levels.keys():
+                raise ValueError(
+                    f"Unsupported logging level '{log_level}'. Options are: {', '.join(_logger._core.levels.keys())}"
+                )
+        self._log_level = log_level
+
+        # Validate the log file.
+
+        if log_file is not None:
+            if not isinstance(log_file, str):
+                raise TypeError("'log_file' must be of type 'str'")
+
+            # Try to create the directory.
+            dirname = _os.path.dirname(log_file)
+            if dirname != "":
+                try:
+                    _os.makedirs(dirname, exist_ok=True)
+                except:
+                    raise IOError(
+                        f"Unable to create directory for log file: {log_file}"
+                    )
+            self._log_file = _os.path.abspath(log_file)
+        else:
+            self._log_file = _sys.stdout
+
+        # Update the logger.
+        _logger.remove()
+        _logger.add(self._log_file, level=self._log_level)
 
     @staticmethod
     def _get_zid_mapping(species):
@@ -220,7 +265,7 @@ class EMLETrainer:
                 loss.backward(retain_graph=True)
                 optimizer.step()
                 if (epoch + 1) % print_every == 0:
-                    print(
+                    _logger.info(
                         f"Epoch {epoch+1}: Loss ={loss.item():9.4f}    "
                         f"RMSE ={rmse.item():9.4f}    "
                         f"Max Error ={max_error.item():9.4f}"
@@ -408,7 +453,7 @@ class EMLETrainer:
         # "Fit" q_core (just take averages over the entire training set).
         q_core_z = _mean_by_z(q_core_train, zid_train)
 
-        print("Perform IVM...")
+        _logger.info("Performing IVM...")
         # Create an array of (molecule_id, atom_id) pairs (as in the full
         # dataset) for the training set. This is needed to be able to locate
         # atoms/molecules in the original dataset that were picked by IVM.
@@ -425,9 +470,9 @@ class EMLETrainer:
         ref_features = _pad_to_max(aev_ivm_allz)
         ref_mask = ivm_mol_atom_ids_padded[:, :, 0] > -1
         n_ref = _torch.sum(ref_mask, dim=1)
-        print("Done. Number of reference environments selected:")
+        _logger.info("IVM done. Number of reference environments selected:")
         for atom_z, n in zip(species, n_ref):
-            print(f"{atom_z:2d}: {n:5d}")
+            _logger.info(f"{atom_z:2d}: {n:5d}")
 
         # Fit s (pure GPR, no fancy optimization needed).
         ref_values_s = self._train_s(s_train, zid_train, aev_mols, aev_ivm_allz, sigma)
@@ -472,7 +517,7 @@ class EMLETrainer:
         )
 
         # Fit chi, a_QEq (QEq over chi predicted with GPR).
-        print("Fitting chi, a_QEq")
+        _logger.info("Fitting a_QEq and chi values...")
         self._train_model(
             loss_class=self._qeq_loss,
             opt_param_names=["a_QEq", "ref_values_chi"],
@@ -489,10 +534,10 @@ class EMLETrainer:
         # (now inconsistent since not updated after the last epoch)
         self._qeq_loss._update_chi_gpr(emle_base)
 
-        print("a_QEq:", emle_base.a_QEq)
+        _logger.debug(f"Optimized a_QEq: {emle_base.a_QEq.data.item()}")
 
         # Fit a_Thole, k_Z (uses volumes predicted by QEq model).
-        print("Fitting a_Thole, k_Z")
+        _logger.info("Fitting a_Thole and k_Z values...")
         self._train_model(
             loss_class=self._thole_loss,
             opt_param_names=["a_Thole", "k_Z"],
@@ -506,10 +551,10 @@ class EMLETrainer:
             alpha_mol_target=alpha_train,
         )
 
-        print("a_Thole:", emle_base.a_Thole)
+        _logger.debug(f"Optimized a_Thole: {emle_base.a_Thole.data.item()}")
         # Fit sqrtk_ref ( alpha = sqrtk ** 2 * k_Z * v).
         if alpha_mode == "reference":
-            print("Fitting ref_values_sqrtk")
+            _logger.info("Fitting ref_values_sqrtk values...")
             self._train_model(
                 loss_class=self._thole_loss,
                 opt_param_names=["ref_values_sqrtk"],
