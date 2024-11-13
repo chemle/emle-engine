@@ -15,7 +15,7 @@ def wrapper():
 
     # Kill the EMLE server. We do this manually rather than using emle-stop
     # because there is sometimes a delay in the termination of the server,
-    # which causes the next test # to fail. This only seems to happen when
+    # which causes the next test to fail. This only seems to happen when
     # testing during CI.
     for conn in psutil.net_connections(kind="inet"):
         if conn.laddr.port == 10000:

@@ -46,8 +46,6 @@ class BaseBackend(_ABC):
         if torch_device is not None:
             if not isinstance(torch_device, _torch.device):
                 raise ValueError("Invalid device type. Must be a torch.device.")
-        else:
-            torch_device = _torch.get_default_device()
         self._device = torch_device
 
     def __call__(self, atomic_numbers, xyz, gradient=False):
@@ -86,11 +84,16 @@ class BaseBackend(_ABC):
             return result
 
         if gradient:
-            e = result[0].detach().cpu().numpy()
-            f = result[1].detach().cpu().numpy()
+            e, f = result
+            if self._device:
+                e = e.detach().cpu().numpy()
+                f = f.detach().cpu().numpy()
             return e, f
 
-        return result.detach().cpu().numpy()
+        e = result
+        if self._device:
+            e = e.detach().cpu().numpy()
+        return e
 
     @_abstractmethod
     def eval(self, atomic_numbers, xyz, gradient=False):
