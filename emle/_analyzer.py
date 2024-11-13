@@ -233,10 +233,10 @@ class EMLEAnalyzer:
         mesh_data = emle_base._get_mesh_data(self.qm_xyz, self.pc_xyz, self.s)
         self.e_static = emle_base.get_static_energy(
             self.q_core, self.q_val, self.pc_charges, mesh_data
-        )
+        ) * _HARTREE_TO_KCALMOL
         self.e_induced = emle_base.get_induced_energy(
             self.A_thole, self.pc_charges, self.s, mesh_data
-        )
+        ) * _HARTREE_TO_KCALMOL
 
         for attr in ("s", "q_core", "q_val", "alpha", "e_static", "e_induced"):
             setattr(self, attr, getattr(self, attr).detach().cpu().numpy())
