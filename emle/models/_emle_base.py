@@ -374,7 +374,7 @@ class EMLEBase(_torch.nn.Module):
         xyz_qm: torch.Tensor (N_BATCH, N_QM_ATOMS, 3)
             Positions of QM atoms in Angstrom.
 
-        q_total: torch.Tensor (1,)
+        q_total: torch.Tensor (N_BATCH,)
             Total charge.
 
         Returns
