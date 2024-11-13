@@ -183,7 +183,8 @@ class EMLEAnalyzer:
     """
 
     def __init__(
-        self, qm_xyz_filename, pc_xyz_filename, q_total, emle_base, backend=None
+        self, qm_xyz_filename, pc_xyz_filename, q_total, emle_base,
+        backend=None, parser=None
     ):
 
         if not isinstance(qm_xyz_filename, str):
@@ -242,8 +243,18 @@ class EMLEAnalyzer:
             self.A_thole, self.pc_charges, self.s, mesh_data
         ) * _HARTREE_TO_KCALMOL
 
-        for attr in ("s", "q_core", "q_val", "alpha", "e_static", "e_induced"):
-            setattr(self, attr, getattr(self, attr).detach().cpu().numpy())
+        if parser:
+            self.e_static_mbis = emle_base.get_static_energy(
+                _torch.tensor(parser.mbis['q_core'], dtype=dtype, device=device),
+                _torch.tensor(parser.mbis['q_val'], dtype=dtype, device=device),
+                self.pc_charges,
+                mesh_data
+            ) * _HARTREE_TO_KCALMOL
+
+        for attr in ("s", "q_core", "q_val", "alpha",
+                     "e_static", "e_induced", "e_static_mbis"):
+            if attr in self.__dict__:
+                setattr(self, attr, getattr(self, attr).detach().cpu().numpy())
 
     @staticmethod
     def _parse_qm_xyz(filename):
