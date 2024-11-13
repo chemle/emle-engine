@@ -403,12 +403,14 @@ class EMLETrainer:
         q_core = _pad_to_max(q_core)
         q = q_core + q_val
         q_mol = _torch.sum(q, dim=1)
+        z = _pad_to_max(z)
+        xyz = _pad_to_max(xyz)
 
         q_core_train = q_core[train_mask]
         q_mol_train = q_mol[train_mask]
         q_train = q[train_mask]
-        z_train = _pad_to_max(z)[train_mask]
-        xyz_train = _pad_to_max(xyz)[train_mask]
+        z_train = z[train_mask]
+        xyz_train = xyz[train_mask]
         s_train = _pad_to_max(s)[train_mask]
         alpha_train = _pad_to_max(alpha)[train_mask]
         species = _torch.unique(_torch.tensor(z_train[z_train > 0], device=device))
@@ -601,8 +603,8 @@ class EMLETrainer:
 
         emle_base._alpha_mode = 'species'
         s_pred, q_core_pred, q_val_pred, A_thole = emle_base(
-            _torch.tensor(z, device=device, dtype=_torch.int64), 
-            _torch.tensor(xyz, device=device, dtype=dtype), 
+            z.to(device=device, dtype=_torch.int64), 
+            xyz.to(device=device, dtype=dtype),
             q_mol
         )
         z_mask = _torch.tensor(z > 0, device=device)
@@ -621,8 +623,8 @@ class EMLETrainer:
         if alpha_mode == "reference":
             emle_base._alpha_mode = 'reference'
             *_, A_thole = emle_base(
-                _torch.tensor(z, device=device, dtype=_torch.int64),
-                _torch.tensor(xyz, device=device, dtype=dtype),
+                z.to(device=device, dtype=_torch.int64), 
+                xyz.to(device=device, dtype=dtype),
                 q_mol
             )
             plot_data["alpha_reference"] = self._thole_loss._get_alpha_mol(
