@@ -40,6 +40,7 @@ from ._utils import pad_to_max as _pad_to_max
 
 _EV_TO_KCALMOL = _ase.units.mol / _ase.units.kcal
 _HARTREE_TO_KCALMOL = _ase.units.Hartree * _EV_TO_KCALMOL
+_ANGSTROM_TO_BOHR = 1. / _ase.units.Bohr
 
 
 class BaseBackend(_ABC):
@@ -223,6 +224,9 @@ class EMLEAnalyzer:
         self.pc_charges = _torch.tensor(pc_charges, dtype=dtype, device=device)
         self.pc_xyz = _torch.tensor(pc_xyz, dtype=dtype, device=device)
 
+        qm_xyz_bohr = self.qm_xyz * _ANGSTROM_TO_BOHR
+        pc_xyz_bohr = self.pc_xyz * _ANGSTROM_TO_BOHR
+
         self.s, self.q_core, self.q_val, self.A_thole = emle_base(
             self.atomic_numbers,
             self.qm_xyz,
@@ -230,7 +234,7 @@ class EMLEAnalyzer:
         )
         self.alpha = self._get_mol_alpha(self.A_thole, self.atomic_numbers)
 
-        mesh_data = emle_base._get_mesh_data(self.qm_xyz, self.pc_xyz, self.s)
+        mesh_data = emle_base._get_mesh_data(qm_xyz_bohr, pc_xyz_bohr, self.s)
         self.e_static = emle_base.get_static_energy(
             self.q_core, self.q_val, self.pc_charges, mesh_data
         ) * _HARTREE_TO_KCALMOL
