@@ -22,6 +22,8 @@
 
 import torch as _torch
 from loguru import logger as _logger
+import os as _os
+import sys as _sys
 
 from ..models import EMLEAEVComputer as _EMLEAEVComputer
 from ..models import EMLEBase as _EMLEBase
@@ -39,6 +41,8 @@ class EMLETrainer:
         emle_base=_EMLEBase,
         qeq_loss=_QEqLoss,
         thole_loss=_TholeLoss,
+        log_level=None,
+        log_file=None,
     ):
         if emle_base is not _EMLEBase:
             raise TypeError("emle_base must be a reference to EMLEBase")
@@ -51,6 +55,46 @@ class EMLETrainer:
         if thole_loss is not _TholeLoss:
             raise TypeError("thole_loss must be a reference to TholeLoss")
         self._thole_loss = thole_loss
+
+        # First handle the logger.
+        if log_level is None:
+            log_level = "INFO"
+        else:
+            if not isinstance(log_level, str):
+                raise TypeError("'log_level' must be of type 'str'")
+
+            # Delete whitespace and convert to upper case.
+            log_level = log_level.upper().replace(" ", "")
+
+            # Validate the log level.
+            if not log_level in _logger._core.levels.keys():
+                raise ValueError(
+                    f"Unsupported logging level '{log_level}'. Options are: {', '.join(_logger._core.levels.keys())}"
+                )
+        self._log_level = log_level
+
+        # Validate the log file.
+
+        if log_file is not None:
+            if not isinstance(log_file, str):
+                raise TypeError("'log_file' must be of type 'str'")
+
+            # Try to create the directory.
+            dirname = _os.path.dirname(log_file)
+            if dirname != "":
+                try:
+                    _os.makedirs(dirname, exist_ok=True)
+                except:
+                    raise IOError(
+                        f"Unable to create directory for log file: {log_file}"
+                    )
+            self._log_file = _os.path.abspath(log_file)
+        else:
+            self._log_file = _sys.stdout
+
+        # Update the logger.
+        _logger.remove()
+        _logger.add(self._log_file, level=self._log_level)
 
     @staticmethod
     def _get_zid_mapping(species):
