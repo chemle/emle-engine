@@ -601,7 +601,9 @@ class EMLETrainer:
 
         emle_base._alpha_mode = 'species'
         s_pred, q_core_pred, q_val_pred, A_thole = emle_base(
-            _torch.tensor(z, device=device), _torch.tensor(xyz, device=device), q_mol
+            _torch.tensor(z, device=device, dtype=_torch.int64), 
+            _torch.tensor(xyz, device=device, dtype=dtype), 
+            q_mol
         )
         z_mask = _torch.tensor(z > 0, device=device)
         plot_data = {
@@ -619,8 +621,8 @@ class EMLETrainer:
         if alpha_mode == "reference":
             emle_base._alpha_mode = 'reference'
             *_, A_thole = emle_base(
-                _torch.tensor(z, device=device),
-                _torch.tensor(xyz, device=device),
+                _torch.tensor(z, device=device, dtype=_torch.int64),
+                _torch.tensor(xyz, device=device, dtype=dtype),
                 q_mol
             )
             plot_data["alpha_reference"] = self._thole_loss._get_alpha_mol(
