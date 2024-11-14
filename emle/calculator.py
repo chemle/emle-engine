@@ -1132,7 +1132,7 @@ class EMLECalculator:
 
             # No backend.
             else:
-                E_vac, grad_vac = 0.0, _np.zeros_like(xyz_qm)
+                E_vac, grad_vac = 0.0, _np.zeros_like(xyz_qm.detatch().cpu())
 
         # External backend.
         else:
@@ -1179,11 +1179,11 @@ class EMLECalculator:
         # Compute energy and gradients.
         try:
             E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-            dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
+            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
                 E.sum(), (xyz_qm, xyz_mm)
             )
-            dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
-            dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
+            dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
+            dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
         except Exception as e:
             msg = f"Failed to compute EMLE energies and gradients: {e}"
             _logger.error(msg)
@@ -1210,11 +1210,11 @@ class EMLECalculator:
 
             # Compute the embedding contributions.
             E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-            dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
+            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
                 E.sum(), (xyz_qm, xyz_mm)
             )
-            dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
-            dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
+            dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
+            dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
 
             # Store the the MM and EMLE energies. The MM energy is an approximation.
             E_mm = E_mm_qm_vac + E.sum().detach().cpu().numpy()
@@ -1571,11 +1571,11 @@ class EMLECalculator:
         # Compute energy and gradients.
         try:
             E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-            dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
+            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
                 E.sum(), (xyz_qm, xyz_mm)
             )
-            dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
-            dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
+            dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
+            dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
         except Exception as e:
             msg = f"Failed to compute EMLE energies and gradients: {e}"
             _logger.error(msg)
@@ -1590,7 +1590,7 @@ class EMLECalculator:
         if self._is_interpolate:
             # Create the ASE atoms object if it wasn't already created by the backend.
             if atoms is None:
-                atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+                atoms = _ase.Atoms(positions=xyz_qm.detach().cpu(), numbers=atomic_numbers.cpu())
 
             # Compute the in vacuo MM energy and gradients for the QM region.
             if self._backend != None:
@@ -1602,15 +1602,15 @@ class EMLECalculator:
 
             # If no backend is specified, then the MM energy and gradients are zero.
             else:
-                E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm)
+                E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm.detach().cpu())
 
             # Compute the embedding contributions.
             E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-            dE_dxyz_qm_bohr, dE_dxyz_mm_bohr = _torch.autograd.grad(
+            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
                 E.sum(), (xyz_qm, xyz_mm)
             )
-            dE_dxyz_qm_bohr = dE_dxyz_qm_bohr.cpu().numpy()
-            dE_dxyz_mm_bohr = dE_dxyz_mm_bohr.cpu().numpy()
+            dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
+            dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
 
             # Store the the MM and EMLE energies. The MM energy is an approximation.
             E_mm = E_mm_qm_vac + E.sum().detach().cpu().numpy()
