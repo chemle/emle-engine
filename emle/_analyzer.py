@@ -282,10 +282,10 @@ class EMLEAnalyzer:
         Returns
         -------
 
-        atomic_numbers: np.ndarray
+        atomic_numbers: np.ndarray (N_BATCH, N_QM_ATOMS)
             The atomic numbers of the atoms.
 
-        xyz: np.ndarray
+        xyz: np.ndarray (N_BATCH, N_QM_ATOMS, 3)
             The positions of the atoms.
         """
 
@@ -308,11 +308,11 @@ class EMLEAnalyzer:
         Returns
         -------
 
-        charges: np.ndarray
-            The charges of the atoms.
+        charges: np.ndarray (N_BATCH, MAX_N_PC)
+            The charges of the point charges.
 
-        xyz: np.ndarray
-            The positions of the atoms.
+        xyz: np.ndarray (N_BATCH, MAX_N_PC, 3)
+            The positions of the point charges.
         """
         frames = []
         with open(filename, "r") as file:
@@ -334,16 +334,16 @@ class EMLEAnalyzer:
         Parameters
         ----------
 
-        A_thole: torch.Tensor
+        A_thole: torch.Tensor (N_BATCH, N_ATOMS * 3, N_ATOMS * 3)
             The Thole tensor.
 
-        atomic_numbers: torch.Tensor
+        atomic_numbers: torch.Tensor (N_BATCH, N_ATOMS)
             The atomic numbers of the atoms.
 
         Returns
         -------
 
-        alpha: torch.Tensor
+        alpha: torch.Tensor (N_BATCH, 3, 3)
             The molecular polarizability tensor.
         """
         mask = atomic_numbers > 0
