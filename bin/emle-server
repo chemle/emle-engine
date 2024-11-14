@@ -274,6 +274,12 @@ parser.add_argument(
     required=False,
 )
 parser.add_argument(
+    "--pc-xyz-file",
+    type=str,
+    help="path to a file to write the MM region coordinates and charges",
+    required=False,
+)
+parser.add_argument(
     "--qm-xyz-frequency",
     type=int,
     help="the frequency of writing the QM region coordinates to file (0 to disable)",
