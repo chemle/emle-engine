@@ -279,6 +279,26 @@ log level is set to `ERROR`.
         10     -495.714580371718     -495.712799072266
 ```
 
+The xyz coordinates of the QM (ML) and MM regions can be logged by providing the
+`--qm-xyz-frequency` command-line argument or by setting the `EMLE_QM_XYZ_FREQUENCY` 
+environment variable (default is 0, indicating no logging). This generates a 
+`qm.xyz` file (can be changed by `--qm-xyz-file` argument or the `EMLE_QM_XYZ_FILE` 
+environment variable) as an XYZ trajectory for the QM region, and a `pc.xyz` file 
+(controlled by `--pc-xyz-file` argument or the `EMLE_PC_XYZ_FILE` environment 
+variable) with the following format:
+```
+<number of point charges in frame1>
+charge_1 x y z
+charge_2 x y z
+...
+charge_n x y z
+<number of point charges in frame2>
+charge_1 x y z
+charge_2 x y z
+...
+```
+The `qm.xyz` and `pc.xyz` files can be used for error analysis as described below.
+
 ## Why do we need an EMLE server?
 
 The EMLE implementation uses several ML frameworks to predict energies
