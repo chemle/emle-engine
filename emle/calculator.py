@@ -1133,7 +1133,7 @@ class EMLECalculator:
 
             # No backend.
             else:
-                E_vac, grad_vac = 0.0, _np.zeros_like(xyz_qm)
+                E_vac, grad_vac = 0.0, _np.zeros_like(xyz_qm.detatch().cpu())
 
         # External backend.
         else:
@@ -1591,7 +1591,7 @@ class EMLECalculator:
         if self._is_interpolate:
             # Create the ASE atoms object if it wasn't already created by the backend.
             if atoms is None:
-                atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+                atoms = _ase.Atoms(positions=xyz_qm.detach().cpu(), numbers=atomic_numbers.cpu())
 
             # Compute the in vacuo MM energy and gradients for the QM region.
             if self._backend != None:
@@ -1603,7 +1603,7 @@ class EMLECalculator:
 
             # If no backend is specified, then the MM energy and gradients are zero.
             else:
-                E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm)
+                E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm.detach().cpu())
 
             # Compute the embedding contributions.
             E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
