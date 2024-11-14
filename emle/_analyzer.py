@@ -40,7 +40,7 @@ from ._utils import pad_to_max as _pad_to_max
 
 _EV_TO_KCALMOL = _ase.units.mol / _ase.units.kcal
 _HARTREE_TO_KCALMOL = _ase.units.Hartree * _EV_TO_KCALMOL
-_ANGSTROM_TO_BOHR = 1. / _ase.units.Bohr
+_ANGSTROM_TO_BOHR = 1.0 / _ase.units.Bohr
 
 
 class BaseBackend(_ABC):
@@ -145,7 +145,7 @@ class ANI2xBackend(BaseBackend):
         energy = energy * _HARTREE_TO_KCALMOL
         if not forces:
             return energy
-        forces = - _torch.autograd.grad(energy.sum(), xyz)[0]
+        forces = -_torch.autograd.grad(energy.sum(), xyz)[0]
         forces = forces * _HARTREE_TO_KCALMOL
         return energy, forces
 
@@ -183,8 +183,13 @@ class EMLEAnalyzer:
     """
 
     def __init__(
-        self, qm_xyz_filename, pc_xyz_filename, emle_base,
-        backend=None, parser=None, q_total=None
+        self,
+        qm_xyz_filename,
+        pc_xyz_filename,
+        emle_base,
+        backend=None,
+        parser=None,
+        q_total=None,
     ):
 
         if not isinstance(qm_xyz_filename, str):
@@ -209,13 +214,17 @@ class EMLEAnalyzer:
 
         if parser:
             self.q_total = _torch.sum(
-                _torch.tensor(parser.mbis['q_core'] + parser.mbis['q_val'],
-                              device=device, dtype=dtype),
-                dim=1
+                _torch.tensor(
+                    parser.mbis["q_core"] + parser.mbis["q_val"],
+                    device=device,
+                    dtype=dtype,
+                ),
+                dim=1,
             )
         else:
-            self.q_total = _torch.ones(len(self.qm_xyz),
-                                       device=device, dtype=dtype) * self.q_total
+            self.q_total = (
+                _torch.ones(len(self.qm_xyz), device=device, dtype=dtype) * self.q_total
+            )
 
         try:
             atomic_numbers, qm_xyz = self._parse_qm_xyz(qm_xyz_filename)
@@ -248,23 +257,40 @@ class EMLEAnalyzer:
         self.alpha = self._get_mol_alpha(self.A_thole, self.atomic_numbers)
 
         mesh_data = emle_base._get_mesh_data(qm_xyz_bohr, pc_xyz_bohr, self.s)
-        self.e_static = emle_base.get_static_energy(
-            self.q_core, self.q_val, self.pc_charges, mesh_data
-        ) * _HARTREE_TO_KCALMOL
-        self.e_induced = emle_base.get_induced_energy(
-            self.A_thole, self.pc_charges, self.s, mesh_data
-        ) * _HARTREE_TO_KCALMOL
+        self.e_static = (
+            emle_base.get_static_energy(
+                self.q_core, self.q_val, self.pc_charges, mesh_data
+            )
+            * _HARTREE_TO_KCALMOL
+        )
+        self.e_induced = (
+            emle_base.get_induced_energy(
+                self.A_thole, self.pc_charges, self.s, mesh_data
+            )
+            * _HARTREE_TO_KCALMOL
+        )
 
         if parser:
-            self.e_static_mbis = emle_base.get_static_energy(
-                _torch.tensor(parser.mbis['q_core'], dtype=dtype, device=device),
-                _torch.tensor(parser.mbis['q_val'], dtype=dtype, device=device),
-                self.pc_charges,
-                mesh_data
-            ) * _HARTREE_TO_KCALMOL
+            self.e_static_mbis = (
+                emle_base.get_static_energy(
+                    _torch.tensor(parser.mbis["q_core"], dtype=dtype, device=device),
+                    _torch.tensor(parser.mbis["q_val"], dtype=dtype, device=device),
+                    self.pc_charges,
+                    mesh_data,
+                )
+                * _HARTREE_TO_KCALMOL
+            )
 
-        for attr in ("s", "q_core", "q_val", "q_total", "alpha",
-                     "e_static", "e_induced", "e_static_mbis"):
+        for attr in (
+            "s",
+            "q_core",
+            "q_val",
+            "q_total",
+            "alpha",
+            "e_static",
+            "e_induced",
+            "e_static_mbis",
+        ):
             if attr in self.__dict__:
                 setattr(self, attr, getattr(self, attr).detach().cpu().numpy())
 

@@ -75,10 +75,6 @@ class _BaseLoss(_torch.nn.Module):
         return _torch.max(_torch.abs(values - target))
 
 
-
-
-
-
 class QEqLoss(_BaseLoss):
     """
     Loss function for the charge equilibration (QEq). Used to train ref_values_chi, a_QEq.

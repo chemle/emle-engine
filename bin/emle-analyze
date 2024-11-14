@@ -82,8 +82,7 @@ emle_base = EMLE(model=args.emle_model)._emle_base
 
 parser = ORCAParser(args.orca_tarball, decompose=True, alpha=args.alpha)
 
-analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz,
-                        emle_base, backend, parser)
+analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz, emle_base, backend, parser)
 
 result = {
     "z": parser.z,

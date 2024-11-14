@@ -139,7 +139,8 @@ class EMLETrainer:
         # Deatch the tensors, convert to numpy arrays and save the model.
         emle_model = {
             k: v.cpu().detach().numpy() if isinstance(v, _torch.Tensor) else v
-            for k, v in emle_model.items() if v is not None
+            for k, v in emle_model.items()
+            if v is not None
         }
         scipy.io.savemat(model_filename, emle_model)
 
@@ -601,11 +602,11 @@ class EMLETrainer:
         if plot_data_filename is None:
             return emle_base
 
-        emle_base._alpha_mode = 'species'
+        emle_base._alpha_mode = "species"
         s_pred, q_core_pred, q_val_pred, A_thole = emle_base(
-            z.to(device=device, dtype=_torch.int64), 
+            z.to(device=device, dtype=_torch.int64),
             xyz.to(device=device, dtype=dtype),
-            q_mol
+            q_mol,
         )
         z_mask = _torch.tensor(z > 0, device=device)
         plot_data = {
@@ -621,11 +622,11 @@ class EMLETrainer:
         }
 
         if alpha_mode == "reference":
-            emle_base._alpha_mode = 'reference'
+            emle_base._alpha_mode = "reference"
             *_, A_thole = emle_base(
-                z.to(device=device, dtype=_torch.int64), 
+                z.to(device=device, dtype=_torch.int64),
                 xyz.to(device=device, dtype=dtype),
-                q_mol
+                q_mol,
             )
             plot_data["alpha_reference"] = self._thole_loss._get_alpha_mol(
                 A_thole, z_mask
