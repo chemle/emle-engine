@@ -20,10 +20,10 @@
 # along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
 #####################################################################
 
-import torch as _torch
 from loguru import logger as _logger
 import os as _os
 import sys as _sys
+import torch as _torch
 
 from ..models import EMLEAEVComputer as _EMLEAEVComputer
 from ..models import EMLEBase as _EMLEBase
