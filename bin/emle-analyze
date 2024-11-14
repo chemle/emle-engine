@@ -1,5 +1,27 @@
 #!/usr/bin/env python
 
+#######################################################################
+# EMLE-Engine: https://github.com/chemle/emle-engine
+#
+# Copyright: 2023-2024
+#
+# Authors: Lester Hedges   <lester.hedges@gmail.com>
+#          Kirill Zinovjev <kzinovjev@gmail.com>
+#
+# EMLE-Engine is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+#
+# EMLE-Engine is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
+#####################################################################
+
 import argparse
 
 parser = argparse.ArgumentParser(
@@ -34,9 +56,6 @@ parser.add_argument(
     help="Point charges xyz file",
 )
 parser.add_argument(
-    "-q", type=int, metavar="charge", default=0, help="Total charge of the ML region"
-)
-parser.add_argument(
     "--alpha", action="store_true", help="Extract molecular dipolar polarizabilities"
 )
 parser.add_argument("output", type=str, help="Output mat file")
@@ -61,9 +80,9 @@ elif args.backend == "deepmd":
 
 emle_base = EMLE(model=args.emle_model)._emle_base
 
-analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz, args.q, emle_base, backend)
-
 parser = ORCAParser(args.orca_tarball, decompose=True, alpha=args.alpha)
+
+analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz, emle_base, backend, parser)
 
 result = {
     "z": parser.z,
@@ -75,6 +94,7 @@ result = {
     "q_core_qm": parser.mbis["q_core"],
     "q_val_qm": parser.mbis["q_val"],
     "E_static_emle": analyzer.e_static,
+    "E_static_mbis": analyzer.e_static_mbis,
     "E_induced_emle": analyzer.e_induced,
     "s_emle": analyzer.s,
     "q_core_emle": analyzer.q_core,

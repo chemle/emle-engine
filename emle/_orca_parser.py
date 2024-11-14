@@ -28,6 +28,7 @@ __all__ = ["ORCAParser"]
 
 import ase as _ase
 import h5py as _h5py
+import os as _os
 import numpy as _np
 import tarfile as _tarfile
 
@@ -46,7 +47,7 @@ class ORCAParser:
     point charges).
     """
 
-    HORTON_KEYS = (
+    _HORTON_KEYS = (
         "cartesian_multipoles",
         "core_charges",
         "valence_charges",
@@ -92,24 +93,40 @@ class ORCAParser:
             E_induced: induced embedding energies (decompose=True)
         """
 
-        with _tarfile.open(filename, "r") as tar:
+        if not isinstance(filename, str):
+            raise ValueError("filename must be a string")
 
-            self.tar = tar
-            self.names = self._get_names(tar)
+        if not _os.path.exists(filename):
+            raise FileNotFoundError(f"{filename} does not exist")
 
-            self.mbis = self._parse_horton()
-            self.z, self.xyz = self._get_z_xyz()
+        if not isinstance(decompose, bool):
+            raise ValueError("decompose must be a boolean")
 
-            if decompose:
-                self.vac_E, self.pc_E = self._get_E()
-                self.E = self.pc_E - self.vac_E
-                self.E_static = self._get_E_static()
-                self.E_induced = self.E - self.E_static
+        if not isinstance(alpha, bool):
+            raise ValueError("alpha must be a boolean")
 
-            if alpha:
-                self.alpha = self._get_alpha()
+        try:
+            with _tarfile.open(filename, "r") as tar:
 
-        del self.tar
+                self._tar = tar
+                self.names = self._get_names(tar)
+
+                self.mbis = self._parse_horton()
+                self.z, self.xyz = self._get_z_xyz()
+
+                if decompose:
+                    self.vac_E, self.pc_E = self._get_E()
+                    self.E = self.pc_E - self.vac_E
+                    self.E_static = self._get_E_static()
+                    self.E_induced = self.E - self.E_static
+
+                if alpha:
+                    self.alpha = self._get_alpha()
+
+        except Exception as e:
+            raise ValueError(f"Failed to parse {filename}: {e}")
+
+        del self._tar
 
     @staticmethod
     def _get_names(tar):
@@ -178,7 +195,7 @@ class ORCAParser:
             for name in self.names
         ]
         z, xyz = zip(*mol_data)
-        return pad_to_max(z, -1), pad_to_max(xyz)
+        return pad_to_max(z, 0), pad_to_max(xyz)
 
     @staticmethod
     def _get_z_xyz_from_out(f):
@@ -205,9 +222,10 @@ class ORCAParser:
 
     def _parse_horton_out(self, f):
         h5f = _h5py.File(f)
-        data = {key: h5f[key][:] for key in self.HORTON_KEYS}
+        data = {key: h5f[key][:] for key in self._HORTON_KEYS}
         q = data["core_charges"] + data["valence_charges"]
-        q_shift = (_np.round(q) - q) / len(q)
+        q_total = _np.sum(q)
+        q_shift = (_np.round(q_total) - q_total) / len(q)
         return {
             "s": data["valence_widths"],
             "q_core": data["core_charges"],
@@ -216,4 +234,4 @@ class ORCAParser:
         }
 
     def _get_file(self, name, suffix):
-        return self.tar.extractfile(f"{name}.{suffix}")
+        return self._tar.extractfile(f"{name}.{suffix}")

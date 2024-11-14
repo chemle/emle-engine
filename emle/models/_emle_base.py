@@ -51,7 +51,7 @@ class EMLEBase(_torch.nn.Module):
     Base class for the EMLE model. This is used to compute valence shell
     widths, core charges, valence charges, and the A_thole tensor for a batch
     of QM systems, which in turn can be used to compute static and induced
-    electrostating embedding energies using the EMLE model.
+    electrostatic embedding energies using the EMLE model.
     """
 
     # Store the list of supported species.
@@ -63,9 +63,7 @@ class EMLEBase(_torch.nn.Module):
         n_ref,
         ref_features,
         q_core,
-        aev_computer=None,
-        aev_mask=None,
-        aev_mean=None,
+        emle_aev_computer=None,
         species=None,
         alpha_mode="species",
         device=None,
@@ -97,14 +95,8 @@ class EMLEBase(_torch.nn.Module):
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
 
-        aev_computer: torchani.AEVComputer
-            AEV computer instance used to compute AEVs.
-
-        aev_mask: torch.Tensor
-            Mask for features coming from aev_computer.
-
-        aev_mean: torch.Tensor
-            Mean values to be subtracted from features
+        emle_aev_computer: EMLEAEVComputer
+            EMLE AEV computer instance used to compute AEVs (masked and normalized).
 
         species: List[int], Tuple[int], numpy.ndarray, torch.Tensor
             List of species (atomic numbers) supported by the EMLE model.
@@ -169,31 +161,20 @@ class EMLEBase(_torch.nn.Module):
         self._alpha_mode = alpha_mode
 
         # Validate the AEV computer.
-        if aev_computer is not None:
-            allowed_types = [_torchani.AEVComputer]
+        if emle_aev_computer is not None:
+            from ._emle_aev_computer import EMLEAEVComputer
+
+            allowed_types = [EMLEAEVComputer, _torchani.AEVComputer]
             if _has_nnpops:
                 allowed_types.append(
                     _NNPOps.SymmetryFunctions.TorchANISymmetryFunctions
                 )
-            if not isinstance(aev_computer, tuple(allowed_types)):
+            if not isinstance(emle_aev_computer, tuple(allowed_types)):
                 raise TypeError(
                     "'aev_computer' must be of type 'torchani.AEVComputer' or "
                     "'NNPOps.SymmetryFunctions.TorchANISymmetryFunctions'"
                 )
-            self._aev_computer = aev_computer
-        else:
-            self._aev_computer = None
-
-        # Validate the AEV mask.
-        if aev_mask is not None:
-            if not isinstance(aev_mask, _torch.Tensor):
-                raise TypeError("'aev_mask' must be of type 'torch.Tensor'")
-            if len(aev_mask.shape) != 1:
-                raise ValueError("'aev_mask' must be a 1D tensor")
-            if not aev_mask.dtype == _torch.bool:
-                raise ValueError("'aev_mask' must have dtype 'torch.bool'")
-        else:
-            aev_mask = _torch.ones(ref_features.shape[2], dtype=_torch.bool)
+        self._emle_aev_computer = emle_aev_computer
 
         if device is not None:
             if not isinstance(device, _torch.device):
@@ -207,10 +188,6 @@ class EMLEBase(_torch.nn.Module):
         else:
             dtype = _torch.get_default_dtype()
         self._dtype = dtype
-
-        self._aev_mean = None
-        if aev_mean is not None:
-            self._aev_mean = _torch.tensor(aev_mean, dtype=dtype, device=device)
 
         # Store model parameters as tensors.
         self.a_QEq = _torch.nn.Parameter(params["a_QEq"])
@@ -269,7 +246,6 @@ class EMLEBase(_torch.nn.Module):
 
         # Register constants as buffers.
         self.register_buffer("_species_map", species_map)
-        self.register_buffer("_aev_mask", aev_mask)
         self.register_buffer("_Kinv", Kinv)
         self.register_buffer("_q_core", q_core)
         self.register_buffer("_ref_features", ref_features)
@@ -281,17 +257,10 @@ class EMLEBase(_torch.nn.Module):
         self.register_buffer("_c_chi", c_chi)
         self.register_buffer("_c_sqrtk", c_sqrtk)
 
-        # Initalise an empty AEV tensor to use to store the AEVs in parent models.
-        # If AEVs are computed externally, then this tensor will be set by the
-        # parent.
-        self._aev = _torch.empty(0, dtype=dtype, device=device)
-
     def to(self, *args, **kwargs):
-        if self._aev_computer is not None:
-            self._aev_computer = self._aev_computer.to(*args, **kwargs)
+        self._emle_aev_computer = self._emle_aev_computer.to(*args, **kwargs)
         self._species_map = self._species_map.to(*args, **kwargs)
         self._Kinv = self._Kinv.to(*args, **kwargs)
-        self._aev_mask = self._aev_mask.to(*args, **kwargs)
         self._q_core = self._q_core.to(*args, **kwargs)
         self._ref_features = self._ref_features.to(*args, **kwargs)
         self._n_ref = self._n_ref.to(*args, **kwargs)
@@ -301,6 +270,7 @@ class EMLEBase(_torch.nn.Module):
         self._c_s = self._c_s.to(*args, **kwargs)
         self._c_chi = self._c_chi.to(*args, **kwargs)
         self._c_sqrtk = self._c_sqrtk.to(*args, **kwargs)
+        self.k_Z = _torch.nn.Parameter(self.k_Z.to(*args, **kwargs))
 
         # Check for a device type in args and update the device attribute.
         for arg in args:
@@ -314,11 +284,9 @@ class EMLEBase(_torch.nn.Module):
         """
         Move all model parameters and buffers to CUDA memory.
         """
-        if self._aev_computer is not None:
-            self._aev_computer = self._aev_computer.cuda(**kwargs)
+        self._emle_aev_computer = self._emle_aev_computer.cuda(**kwargs)
         self._species_map = self._species_map.cuda(**kwargs)
         self._Kinv = self._Kinv.cuda(**kwargs)
-        self._aev_mask = self._aev_mask.cuda(**kwargs)
         self._q_core = self._q_core.cuda(**kwargs)
         self._ref_features = self._ref_features.cuda(**kwargs)
         self._n_ref = self._n_ref.cuda(**kwargs)
@@ -328,7 +296,7 @@ class EMLEBase(_torch.nn.Module):
         self._c_s = self._c_s.cuda(**kwargs)
         self._c_chi = self._c_chi.cuda(**kwargs)
         self._c_sqrtk = self._c_sqrtk.cuda(**kwargs)
-        self.k_Z = self.k_Z.cuda(**kwargs)
+        self.k_Z = _torch.nn.Parameter(self.k_Z.cuda(**kwargs))
 
         # Update the device attribute.
         self._device = self._species_map.device
@@ -339,11 +307,9 @@ class EMLEBase(_torch.nn.Module):
         """
         Move all model parameters and buffers to CPU memory.
         """
-        if self._aev_computer is not None:
-            self._aev_computer = self._aev_computer.cpu(**kwargs)
+        self._emle_aev_computer = self._emle_aev_computer.cpu(**kwargs)
         self._species_map = self._species_map.cpu(**kwargs)
         self._Kinv = self._Kinv.cpu(**kwargs)
-        self._aev_mask = self._aev_mask.cpu(**kwargs)
         self._q_core = self._q_core.cpu(**kwargs)
         self._ref_features = self._ref_features.cpu(**kwargs)
         self._n_ref = self._n_ref.cpu(**kwargs)
@@ -353,6 +319,7 @@ class EMLEBase(_torch.nn.Module):
         self._c_s = self._c_s.cpu(**kwargs)
         self._c_chi = self._c_chi.cpu(**kwargs)
         self._c_sqrtk = self._c_sqrtk.cpu(**kwargs)
+        self.k_Z = _torch.nn.Parameter(self.k_Z.cpu(**kwargs))
 
         # Update the device attribute.
         self._device = self._species_map.device
@@ -363,8 +330,7 @@ class EMLEBase(_torch.nn.Module):
         """
         Casts all floating point model parameters and buffers to float64 precision.
         """
-        if self._aev_computer is not None:
-            self._aev_computer = self._aev_computer.double()
+        self._emle_aev_computer = self._emle_aev_computer.double()
         self._Kinv = self._Kinv.double()
         self._q_core = self._q_core.double()
         self._ref_features = self._ref_features.double()
@@ -381,8 +347,7 @@ class EMLEBase(_torch.nn.Module):
         """
         Casts all floating point model parameters and buffers to float32 precision.
         """
-        if self._aev_computer is not None:
-            self._aev_computer = self._aev_computer.float()
+        self._emle_aev_computer = self._emle_aev_computer.float()
         self._Kinv = self._Kinv.float()
         self._q_core = self._q_core.float()
         self._ref_features = self._ref_features.float()
@@ -409,7 +374,7 @@ class EMLEBase(_torch.nn.Module):
         xyz_qm: torch.Tensor (N_BATCH, N_QM_ATOMS, 3)
             Positions of QM atoms in Angstrom.
 
-        q_total: torch.Tensor (1,)
+        q_total: torch.Tensor (N_BATCH,)
             Total charge.
 
         Returns
@@ -429,16 +394,7 @@ class EMLEBase(_torch.nn.Module):
         species_id = self._species_map[atomic_numbers]
 
         # Compute the AEVs.
-        if self._aev_computer is not None:
-            aev = self._aev_computer((species_id, xyz_qm))[1][:, :, self._aev_mask]
-        # The AEVs have been pre-computed by a parent model.
-        else:
-            aev = self._aev[:, :, self._aev_mask]
-
-        if self._aev_mean is not None:
-            aev = aev - self._aev_mean[None, None, :]
-
-        aev = aev / _torch.linalg.norm(aev, ord=2, dim=2, keepdim=True)
+        aev = self._emle_aev_computer(species_id, xyz_qm)
 
         # Compute the MBIS valence shell widths.
         s = self._gpr(aev, self._ref_mean_s, self._c_s, species_id)
@@ -464,7 +420,7 @@ class EMLEBase(_torch.nn.Module):
             )
             k = k_scale * k
 
-        A_thole = self._get_A_thole(r_data, s, q_val, k)
+        A_thole = self._get_A_thole(r_data, s, q_val, k, self.a_Thole)
 
         return s, q_core, q_val, A_thole
 
@@ -502,7 +458,7 @@ class EMLEBase(_torch.nn.Module):
 
         mask = _torch.arange(ref.shape[1], device=n_ref.device) < n_ref[:, None]
         ref_mean = _torch.sum(ref * mask, dim=1) / n_ref
-        ref_shifted = ref - ref_mean[:, None]
+        ref_shifted = (ref - ref_mean[:, None]) * mask
         return ref_mean, (Kinv @ ref_shifted[:, :, None]).squeeze()
 
     def _gpr(self, mol_features, ref_mean, c, zid):
@@ -646,7 +602,8 @@ class EMLEBase(_torch.nn.Module):
         """
         s_gauss = s * self.a_QEq
         s2 = s_gauss**2
-        s_mat = _torch.sqrt(s2[:, :, None] + s2[:, None, :])
+        s2_mat = s2[:, :, None] + s2[:, None, :]
+        s_mat = _torch.where(s2_mat > 0, _torch.sqrt(s2_mat + 1e-16), 0)
 
         device = r_data[0].device
         dtype = r_data[0].dtype
@@ -657,7 +614,7 @@ class EMLEBase(_torch.nn.Module):
             A.diagonal(dim1=-2, dim2=-1), dtype=dtype, device=device
         )
         pi = _torch.sqrt(_torch.tensor([_torch.pi], dtype=dtype, device=device))
-        new_diag = diag_ones * _torch.where(s > 0, 1.0 / (s_gauss * pi), 0)
+        new_diag = diag_ones * _torch.where(mask, 1.0 / ((s_gauss + 1e-16) * pi), 0)
 
         diag_mask = _torch.diag_embed(diag_ones)
         A = diag_mask * _torch.diag_embed(new_diag) + (1.0 - diag_mask) * A
@@ -705,9 +662,14 @@ class EMLEBase(_torch.nn.Module):
         results: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS)
         """
         sqrt2 = _torch.sqrt(_torch.tensor([2.0], dtype=r.dtype, device=r.device))
-        return t01 * _torch.where(s_mat > 0, _torch.erf(r / (s_mat * sqrt2)), 0.0)
+        return t01 * _torch.where(
+            s_mat > 0, _torch.erf(r / ((s_mat + 1e-16) * sqrt2)), 0.0
+        )
 
-    def _get_A_thole(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, q_val, k):
+    @classmethod
+    def _get_A_thole(
+        cls, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, q_val, k, a_Thole
+    ):
         """
         Internal method, generates A matrix for induced dipoles prediction
         (Eq. 20 in 10.1021/acs.jctc.2c00914)
@@ -726,6 +688,9 @@ class EMLEBase(_torch.nn.Module):
         k: torch.Tensor (N_BATCH, N_ATOMS,)
             Scaling factors for polarizabilities.
 
+        a_Thole: float
+            Thole damping factor
+
         Returns
         -------
 
@@ -735,17 +700,19 @@ class EMLEBase(_torch.nn.Module):
         v = -60 * q_val * s**3
         alpha = v * k
 
-        alphap = alpha * self.a_Thole
+        alphap = alpha * a_Thole
         alphap_mat = alphap[:, :, None] * alphap[:, None, :]
 
-        au3 = _torch.where(alphap_mat > 0, r_data[0] ** 3 / _torch.sqrt(alphap_mat), 0)
+        au3 = _torch.where(
+            alphap_mat > 0, r_data[0] ** 3 / _torch.sqrt(alphap_mat + 1e-16), 0
+        )
         au31 = au3.repeat_interleave(3, dim=2)
         au32 = au31.repeat_interleave(3, dim=1)
 
-        A = -self._get_T2_thole(r_data[2], r_data[3], au32)
+        A = -cls._get_T2_thole(r_data[2], r_data[3], au32)
 
         alpha3 = alpha.repeat_interleave(3, dim=1)
-        new_diag = _torch.where(alpha3 > 0, 1.0 / alpha3, 1.0)
+        new_diag = _torch.where(alpha3 > 0, 1.0 / (alpha3 + 1e-16), 1.0)
         diag_ones = _torch.ones_like(new_diag, dtype=A.dtype, device=A.device)
         mask = _torch.diag_embed(diag_ones)
         A = mask * _torch.diag_embed(new_diag) + (1.0 - mask) * A

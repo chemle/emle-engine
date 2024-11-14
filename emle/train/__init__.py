@@ -21,13 +21,9 @@
 ######################################################################
 
 """
-Torch modules for EMLE calculations.
+EMLE training resources.
 """
 
-from ._emle_base import EMLEBase
-from ._emle import EMLE
-from ._ani import ANI2xEMLE
-from ._mace import MACEEMLE
-from ._emle_aev_computer import EMLEAEVComputer
+from ._trainer import EMLETrainer
 
-__all__ = ["EMLEBase", "EMLE", "ANI2xEMLE", "MACEEMLE", "EMLEAEVComputer"]
+__all__ = ["EMLETrainer"]

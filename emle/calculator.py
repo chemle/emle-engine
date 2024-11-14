@@ -290,7 +290,8 @@ class EMLECalculator:
         from ._resources import _fetch_resources
 
         # Fetch or update the resources.
-        _fetch_resources()
+        if model is None:
+            _fetch_resources()
 
         # Validate input.
 
@@ -1179,9 +1180,7 @@ class EMLECalculator:
         # Compute energy and gradients.
         try:
             E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
-                E.sum(), (xyz_qm, xyz_mm)
-            )
+            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
             dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
             dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
         except Exception as e:
@@ -1210,9 +1209,7 @@ class EMLECalculator:
 
             # Compute the embedding contributions.
             E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
-                E.sum(), (xyz_qm, xyz_mm)
-            )
+            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
             dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
             dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
 
@@ -1571,9 +1568,7 @@ class EMLECalculator:
         # Compute energy and gradients.
         try:
             E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
-                E.sum(), (xyz_qm, xyz_mm)
-            )
+            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
             dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
             dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
         except Exception as e:
@@ -1590,7 +1585,9 @@ class EMLECalculator:
         if self._is_interpolate:
             # Create the ASE atoms object if it wasn't already created by the backend.
             if atoms is None:
-                atoms = _ase.Atoms(positions=xyz_qm.detach().cpu(), numbers=atomic_numbers.cpu())
+                atoms = _ase.Atoms(
+                    positions=xyz_qm.detach().cpu(), numbers=atomic_numbers.cpu()
+                )
 
             # Compute the in vacuo MM energy and gradients for the QM region.
             if self._backend != None:
@@ -1606,9 +1603,7 @@ class EMLECalculator:
 
             # Compute the embedding contributions.
             E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
-                E.sum(), (xyz_qm, xyz_mm)
-            )
+            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
             dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
             dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
 
