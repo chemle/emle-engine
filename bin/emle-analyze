@@ -83,9 +83,10 @@ elif args.backend == "deepmd":
 
 emle_base = EMLE(model=args.emle_model)._emle_base
 
-analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz, args.q, emle_base, backend)
-
 parser = ORCAParser(args.orca_tarball, decompose=True, alpha=args.alpha)
+
+analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz, args.q,
+                        emle_base, backend, parser)
 
 result = {
     "z": parser.z,
@@ -97,6 +98,7 @@ result = {
     "q_core_qm": parser.mbis["q_core"],
     "q_val_qm": parser.mbis["q_val"],
     "E_static_emle": analyzer.e_static,
+    "E_static_mbis": analyzer.e_static_mbis,
     "E_induced_emle": analyzer.e_induced,
     "s_emle": analyzer.s,
     "q_core_emle": analyzer.q_core,
