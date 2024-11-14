@@ -448,3 +448,96 @@ using the `EMLE_RETRIES` environment variable.
 
 When performing interpolation it is currently not possible to use AMBER force
 fields with CMAP terms due to a memory deallocation bug in `pysander`.
+
+## Error analysis
+`emle-engine` provides a CLI tool `emle-analyze` that facilitates analysis of
+the performance of EMLE-based simulations. It requires a set of single point
+reference calculations for a trajectory generated with `emle-server` (currently 
+only [ORCA](https://orcaforum.kofo.mpg.de) is supported). It also requires MBIS 
+decomposition of the in vacuo electronic density of the QM region with
+[horton](https://theochem.github.io/horton/2.1.1/index.html). Usage:
+```
+emle-analyze --qm-xyz qm.xyz \
+             --pc.xyz pc.xyz \
+             --emle-model model.mat \
+             --orca-tarball orca.tar \
+             --backend [deepmd, ani2x]
+             --alpha
+             --q 0
+             result.mat
+```
+`qm.xyz` and `pc.xyz` are the QM and MM XYZ trajectories written out by 
+`emle-server` (see above in the "Logging" section). 
+
+`model.mat` is the EMLE model
+used. 
+
+`orca.tar` is a tarball containing single point ORCA calculations and 
+corresponding horton outputs. All files should be named as `index.*` where index 
+is a numeric value identifying the snapshot (does not have to be consecutive) 
+and the extensions are:
+- `.vac.orca`: ORCA output for gas phase calculation. When `--alpha` argument is 
+               provided, must also include molecular dipolar polarizability 
+               (`%elprop Polar`)
+- `.h5`: horton output for gas phase calculation
+- `.pc.orca`: ORCA output for calculation with point charges
+- `.pc`: charges and positions of the point charges (the ones used for `.pc.orca` 
+         calculation)
+- `.vpot`: output of `orca_vpot`, electrostatic potential of gas phase system at 
+           the positions of the point charges
+
+Optional `--backend` argument allows to also extract the energies with the 
+in vacuo backend. Currently, only `deepmd` and `ani2x` backends are supported by 
+`emle-analyze`. When `deepmd` backend is used, the DeepMD model must be provided 
+with `--deepmd-model`. 
+
+`--q` provides the total charge of the system.
+
+
+## Training of custom EMLE models
+Training of custom EMLE models can be performed with `emle-train` tool. It
+requires a tarball with the reference QM calculations with the same naming
+convention as the one for `emle-analyze` script, with the difference that only
+gas phase calculations are required and dipolar polarizabilies must be present.
+Simple usage:
+```
+emle-train --orca-tarball orca.tar model.mat 
+```
+The resulting `model.mat` file can be directly used as `--emle-model` argument 
+for `emle-server`. A full list of argument and their default values can be 
+printed with `emle-train -h`:
+```
+usage: emle-train [-h] --orca-tarball name.tar [--train-mask] [--sigma] [--ivm-thr] [--epochs]
+                  [--lr-qeq] [--lr-thole] [--lr-sqrtk] [--print-every] [--computer-n-species]
+                  [--computer-zid-map] [--plot-data name.mat]
+                  output
+
+EMLE training script
+
+positional arguments:
+  output                Output model file
+
+options:
+  -h, --help            show this help message and exit
+  --orca-tarball name.tar
+                        ORCA tarball (default: None)
+  --train-mask          Mask for training set (default: None)
+  --sigma               Sigma value for GPR (default: 0.001)
+  --ivm-thr             IVM threshold (default: 0.05)
+  --epochs              Number of training epochs (default: 100)
+  --lr-qeq              Learning rate for QEq params (a_QEq, chi_ref) (default: 0.05)
+  --lr-thole            Learning rate for Thole model params (a_Thole, k_Z) (default: 0.05)
+  --lr-sqrtk            Learning rate for polarizability scaling factors (sqrtk_ref) (default: 0.05)
+  --print-every         How often to print training progress (default: 10)
+  --computer-n-species 
+                        Number of species supported by AEV computer (default: None)
+  --computer-zid-map    Map between EMLE and AEV computer zid values (default: None)
+  --plot-data name.mat  Data for plotting (default: None)
+```
+`train-mask` if a file containing 0's and 1's that defines the subset of the full
+training set (provided as `--orca-tarball`) that is used for training. Note that
+the values written to `--plot-data` are for the full training set, which allows to
+do prediction plots for train/test sets.
+
+The `--computer-n-species` and `--computer-zid-map` arguments are only needed when 
+using a common AEV computer for both gas phase backend and EMLE model.
