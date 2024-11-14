@@ -183,8 +183,8 @@ class EMLEAnalyzer:
     """
 
     def __init__(
-        self, qm_xyz_filename, pc_xyz_filename, q_total, emle_base,
-        backend=None, parser=None
+        self, qm_xyz_filename, pc_xyz_filename, emle_base,
+        backend=None, parser=None, q_total=None
     ):
 
         if not isinstance(qm_xyz_filename, str):
@@ -193,17 +193,29 @@ class EMLEAnalyzer:
         if not isinstance(pc_xyz_filename, str):
             raise ValueError("Invalid pc_xyz_filename type. Must be a string.")
 
-        if not isinstance(q_total, (int, float)):
+        if q_total is not None and not isinstance(q_total, (int, float)):
             raise ValueError("Invalid q_total type. Must be a number.")
+
+        if q_total is None and parser is None:
+            raise ValueError("Either parser or q_total must be provided")
 
         from .models._emle_base import EMLEBase
 
         if not isinstance(emle_base, EMLEBase):
             raise ValueError("Invalid emle_base type. Must be an EMLEBase object.")
 
-        self.q_total = q_total
         dtype = emle_base._dtype
         device = emle_base._device
+
+        if parser:
+            self.q_total = _torch.sum(
+                _torch.tensor(parser.mbis['q_core'] + parser.mbis['q_val'],
+                              device=device, dtype=dtype),
+                dim=1
+            )
+        else:
+            self.q_total = _torch.ones(len(self.qm_xyz),
+                                       device=device, dtype=dtype) * self.q_total
 
         try:
             atomic_numbers, qm_xyz = self._parse_qm_xyz(qm_xyz_filename)
@@ -231,7 +243,7 @@ class EMLEAnalyzer:
         self.s, self.q_core, self.q_val, self.A_thole = emle_base(
             self.atomic_numbers,
             self.qm_xyz,
-            _torch.ones(len(self.qm_xyz), device=device) * self.q_total,
+            self.q_total,
         )
         self.alpha = self._get_mol_alpha(self.A_thole, self.atomic_numbers)
 
@@ -251,7 +263,7 @@ class EMLEAnalyzer:
                 mesh_data
             ) * _HARTREE_TO_KCALMOL
 
-        for attr in ("s", "q_core", "q_val", "alpha",
+        for attr in ("s", "q_core", "q_val", "q_total", "alpha",
                      "e_static", "e_induced", "e_static_mbis"):
             if attr in self.__dict__:
                 setattr(self, attr, getattr(self, attr).detach().cpu().numpy())

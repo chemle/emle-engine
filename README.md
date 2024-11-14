@@ -463,7 +463,6 @@ emle-analyze --qm-xyz qm.xyz \
              --orca-tarball orca.tar \
              --backend [deepmd, ani2x]
              --alpha
-             --q 0
              result.mat
 ```
 `qm.xyz` and `pc.xyz` are the QM and MM XYZ trajectories written out by 
@@ -489,9 +488,7 @@ and the extensions are:
 Optional `--backend` argument allows to also extract the energies with the 
 in vacuo backend. Currently, only `deepmd` and `ani2x` backends are supported by 
 `emle-analyze`. When `deepmd` backend is used, the DeepMD model must be provided 
-with `--deepmd-model`. 
-
-`--q` provides the total charge of the system.
+with `--deepmd-model`.
 
 
 ## Training of custom EMLE models

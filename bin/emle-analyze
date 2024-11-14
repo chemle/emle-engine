@@ -56,9 +56,6 @@ parser.add_argument(
     help="Point charges xyz file",
 )
 parser.add_argument(
-    "-q", type=int, metavar="charge", default=0, help="Total charge of the ML region"
-)
-parser.add_argument(
     "--alpha", action="store_true", help="Extract molecular dipolar polarizabilities"
 )
 parser.add_argument("output", type=str, help="Output mat file")
@@ -85,7 +82,7 @@ emle_base = EMLE(model=args.emle_model)._emle_base
 
 parser = ORCAParser(args.orca_tarball, decompose=True, alpha=args.alpha)
 
-analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz, args.q,
+analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz,
                         emle_base, backend, parser)
 
 result = {
