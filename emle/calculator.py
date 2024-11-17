@@ -1179,7 +1179,7 @@ class EMLECalculator:
 
         # Compute energy and gradients.
         try:
-            E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+            E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
             dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
             dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
             dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
@@ -1567,7 +1567,8 @@ class EMLECalculator:
 
         # Compute energy and gradients.
         try:
-            E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+            charge = 0  # TODO: add support for charged systems
+            E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
             dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
             dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
             dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
@@ -1779,6 +1780,7 @@ class EMLECalculator:
         # Compute the energy and gradients. Don't use optimised execution to
         # avoid warmup costs.
         with _torch.jit.optimized_execution(False):
+            # ANI-2x systems are always neutral, so charge not needed here
             E = self._ani2x_emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
             dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
                 E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
