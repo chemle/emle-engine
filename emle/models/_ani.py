@@ -60,6 +60,7 @@ class ANI2xEMLE(_torch.nn.Module):
         emle_method="electrostatic",
         alpha_mode="species",
         mm_charges=None,
+        qm_charge=0,
         model_index=None,
         ani2x_model=None,
         atomic_numbers=None,
@@ -100,6 +101,10 @@ class ANI2xEMLE(_torch.nn.Module):
         mm_charges: List[float], Tuple[Float], numpy.ndarray, torch.Tensor
             List of MM charges for atoms in the QM region in units of mod
             electron charge. This is required if the 'mm' method is specified.
+
+        qm_charge: int
+            The charge on the QM region. This can also be passed when calling
+            the forward method. The non-default value will take precendence.
 
         model_index: int
             The index of the ANI2x model to use. If None, then the full 8 model
@@ -171,6 +176,7 @@ class ANI2xEMLE(_torch.nn.Module):
             alpha_mode=alpha_mode,
             atomic_numbers=(atomic_numbers if atomic_numbers is not None else None),
             mm_charges=mm_charges,
+            qm_charge=qm_charge,
             device=device,
             dtype=dtype,
             create_aev_calculator=False,
@@ -324,7 +330,14 @@ class ANI2xEMLE(_torch.nn.Module):
 
         return self
 
-    def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    def forward(
+        self,
+        atomic_numbers: Tensor,
+        charges_mm: Tensor,
+        xyz_qm: Tensor,
+        xyz_mm: Tensor,
+        qm_charge: int = 0,
+    ) -> Tensor:
         """
         Compute the the ANI2x and static and induced EMLE energy components.
 
@@ -342,6 +355,9 @@ class ANI2xEMLE(_torch.nn.Module):
 
         xyz_mm: torch.Tensor (N_MM_ATOMS, 3)
             Positions of MM atoms in Angstrom.
+
+        qm_charge: int
+            The charge on the QM region.
 
         Returns
         -------
@@ -370,7 +386,7 @@ class ANI2xEMLE(_torch.nn.Module):
         self._emle._emle_base._emle_aev_computer._aev = self._ani2x.aev_computer._aev
 
         # Get the EMLE energy components.
-        E_emle = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+        E_emle = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, qm_charge)
 
         # Return the ANI2x and EMLE energy components.
         return _torch.stack([E_vac, E_emle[0], E_emle[1]])

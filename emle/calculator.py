@@ -1208,7 +1208,7 @@ class EMLECalculator:
                 E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm)
 
             # Compute the embedding contributions.
-            E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+            E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
             dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
             dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
             dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
@@ -1567,8 +1567,7 @@ class EMLECalculator:
 
         # Compute energy and gradients.
         try:
-            charge = 0  # TODO: add support for charged systems
-            E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
+            E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
             dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
             dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
             dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
