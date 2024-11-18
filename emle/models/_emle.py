@@ -437,8 +437,9 @@ class EMLE(_torch.nn.Module):
         # These are returned as batched tensors, so we need to extract the
         # first element of each.
         s, q_core, q_val, A_thole = self._emle_base(
-            atomic_numbers[None, :], xyz_qm[None, :, :],
-            _torch.tensor([q_total], dtype=xyz_qm.dtype, device=xyz_qm.device)
+            atomic_numbers[None, :],
+            xyz_qm[None, :, :],
+            _torch.tensor([q_total], dtype=xyz_qm.dtype, device=xyz_qm.device),
         )
 
         # Convert coordinates to Bohr.
