@@ -93,6 +93,7 @@ class EMLECalculator:
         method="electrostatic",
         alpha_mode="species",
         atomic_numbers=None,
+        qm_charge=0,
         backend="torchani",
         external_backend=None,
         plugin_path=".",
@@ -160,6 +161,12 @@ class EMLECalculator:
             symmetry functions from the NNPOps package. Only use this option if
             you are using a fixed QM region, i.e. the same QM region for each
             call to the calculator.
+
+        qm_charge: int
+            The charge on the QM region. This is required when using an
+            EMLECalculator instance with the OpenMM interface. When using
+            the sander interface, the QM charge will be taken from the ORCA
+            input file.
 
         external_backend: str
             The name of an external backend to use to compute in vacuo energies.
@@ -415,6 +422,15 @@ class EMLECalculator:
         else:
             self._mm_charges = None
 
+        if qm_charge is not None:
+            try:
+                qm_charge = int(qm_charge)
+            except:
+                msg = "'qm_charge' must be of type 'int'"
+                _logger.error(msg)
+                raise TypeError(msg)
+            self._qm_charge = qm_charge
+
         # Create the EMLE model instance.
         self._emle = _EMLE(
             model=model,
@@ -422,6 +438,7 @@ class EMLECalculator:
             alpha_mode=alpha_mode,
             atomic_numbers=atomic_numbers,
             mm_charges=self._mm_charges,
+            qm_charge=self._qm_charge,
             device=self._device,
         )
 
@@ -962,6 +979,7 @@ class EMLECalculator:
             "method": self._method,
             "alpha_mode": self._alpha_mode,
             "atomic_numbers": None if atomic_numbers is None else atomic_numbers,
+            "qm_charge": self._qm_charge,
             "backend": self._backend,
             "external_backend": None if external_backend is None else external_backend,
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),
@@ -1179,7 +1197,7 @@ class EMLECalculator:
 
         # Compute energy and gradients.
         try:
-            E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+            E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
             dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
             dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
             dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
@@ -1208,7 +1226,7 @@ class EMLECalculator:
                 E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm)
 
             # Compute the embedding contributions.
-            E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+            E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
             dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
             dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
             dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
@@ -1767,6 +1785,7 @@ class EMLECalculator:
                 model_index=self._ani2x_model_index,
                 ani2x_model=self._torchani_model,
                 atomic_numbers=atomic_numbers,
+                qm_charge=self._qm_charge,
                 device=self._device,
             )
 
@@ -1779,6 +1798,7 @@ class EMLECalculator:
         # Compute the energy and gradients. Don't use optimised execution to
         # avoid warmup costs.
         with _torch.jit.optimized_execution(False):
+            # ANI-2x systems are always neutral, so charge not needed here
             E = self._ani2x_emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
             dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
                 E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused

@@ -85,6 +85,7 @@ class EMLE(_torch.nn.Module):
         method="electrostatic",
         alpha_mode="species",
         atomic_numbers=None,
+        qm_charge=0,
         mm_charges=None,
         device=None,
         dtype=None,
@@ -128,6 +129,10 @@ class EMLE(_torch.nn.Module):
             symmetry functions from the NNPOps package. Only use this option
             if you are using a fixed QM region, i.e. the same QM region for each
             evalulation of the module.
+
+        qm_charge: int
+            The charge on the QM region. This can also be passed when calling
+            the forward method. The non-default value will take precendence.
 
         mm_charges: List[float], Tuple[Float], numpy.ndarray, torch.Tensor
             List of MM charges for atoms in the QM region in units of mod
@@ -191,6 +196,10 @@ class EMLE(_torch.nn.Module):
                     "All elements of 'atomic_numbers' must be greater than zero"
                 )
         self._atomic_numbers = atomic_numbers
+
+        if not isinstance(qm_charge, int):
+            raise TypeError("'qm_charge' must be of type 'int'")
+        self._qm_charge = qm_charge
 
         if method == "mm":
             if mm_charges is None:
@@ -270,11 +279,6 @@ class EMLE(_torch.nn.Module):
             ),
         }
 
-        # Store the total charge.
-        q_total = _torch.tensor(
-            params.get("total_charge", 0), dtype=dtype, device=device
-        )
-
         if method == "mm":
             q_core_mm = _torch.tensor(mm_charges, dtype=dtype, device=device)
         else:
@@ -284,7 +288,6 @@ class EMLE(_torch.nn.Module):
         self._device = device
 
         # Register constants as buffers.
-        self.register_buffer("_q_total", q_total)
         self.register_buffer("_q_core_mm", q_core_mm)
 
         if not isinstance(create_aev_calculator, bool):
@@ -348,7 +351,6 @@ class EMLE(_torch.nn.Module):
         """
         Performs Tensor dtype and/or device conversion on the model.
         """
-        self._q_total = self._q_total.to(*args, **kwargs)
         self._q_core_mm = self._q_core_mm.to(*args, **kwargs)
         self._emle_base = self._emle_base.to(*args, **kwargs)
 
@@ -364,12 +366,11 @@ class EMLE(_torch.nn.Module):
         """
         Move all model parameters and buffers to CUDA memory.
         """
-        self._q_total = self._q_total.cuda(**kwargs)
         self._q_core_mm = self._q_core_mm.cuda(**kwargs)
         self._emle_base = self._emle_base.cuda(**kwargs)
 
         # Update the device attribute.
-        self._device = self._q_total.device
+        self._device = self._q_core_mm.device
 
         return self
 
@@ -377,12 +378,11 @@ class EMLE(_torch.nn.Module):
         """
         Move all model parameters and buffers to CPU memory.
         """
-        self._q_total = self._q_total.cpu(**kwargs)
         self._q_core_mm = self._q_core_mm.cpu(**kwargs)
         self._emle_base = self._emle_base.cpu()
 
         # Update the device attribute.
-        self._device = self._q_total.device
+        self._device = self._q_core_mm.device
 
         return self
 
@@ -390,7 +390,6 @@ class EMLE(_torch.nn.Module):
         """
         Casts all floating point model parameters and buffers to float64 precision.
         """
-        self._q_total = self._q_total.double()
         self._q_core_mm = self._q_core_mm.double()
         self._emle_base = self._emle_base.double()
         return self
@@ -399,12 +398,18 @@ class EMLE(_torch.nn.Module):
         """
         Casts all floating point model parameters and buffers to float32 precision.
         """
-        self._q_total = self._q_total.float()
         self._q_core_mm = self._q_core_mm.float()
         self._emle_base = self._emle_base.float()
         return self
 
-    def forward(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    def forward(
+        self,
+        atomic_numbers: Tensor,
+        charges_mm: Tensor,
+        xyz_qm: Tensor,
+        xyz_mm: Tensor,
+        qm_charge: int = 0,
+    ) -> Tensor:
         """
         Computes the static and induced EMLE energy components.
 
@@ -423,6 +428,9 @@ class EMLE(_torch.nn.Module):
         xyz_mm: torch.Tensor (N_MM_ATOMS, 3)
             Positions of MM atoms in Angstrom.
 
+        qm_charge: int
+            The charge on the QM region.
+
         Returns
         -------
 
@@ -430,11 +438,17 @@ class EMLE(_torch.nn.Module):
             The static and induced EMLE energy components in Hartree.
         """
 
+        # If the QM charge is a non-default value in the constructor, then
+        # use this value when qm_charge is zero.
+        if self._qm_charge != 0 and qm_charge == 0:
+            qm_charge = self._qm_charge
+
         # Store the inputs as internal attributes.
         self._atomic_numbers = atomic_numbers
         self._charges_mm = charges_mm
         self._xyz_qm = xyz_qm
         self._xyz_mm = xyz_mm
+        self._qm_charge = qm_charge
 
         # If there are no point charges, return zeros.
         if len(xyz_mm) == 0:
@@ -445,7 +459,9 @@ class EMLE(_torch.nn.Module):
         # These are returned as batched tensors, so we need to extract the
         # first element of each.
         s, q_core, q_val, A_thole = self._emle_base(
-            atomic_numbers[None, :], xyz_qm[None, :, :], self._q_total[None]
+            atomic_numbers[None, :],
+            xyz_qm[None, :, :],
+            _torch.tensor([qm_charge], dtype=xyz_qm.dtype, device=xyz_qm.device),
         )
 
         # Convert coordinates to Bohr.
