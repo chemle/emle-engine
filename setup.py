@@ -10,11 +10,11 @@ setup(
     author_email="lester.hedges@gmail.com",
     packages=find_packages(include=["emle", "emle.*", "bin/*"]),
     scripts=[
+        "bin/emle-analyze",
         "bin/emle-server",
         "bin/emle-stop",
-        "bin/orca",
         "bin/emle-train",
-        "bin/emle-analyze",
+        "bin/orca",
     ],
     include_package_data=True,
     url="https://github.com/chemle/emle-engine",
