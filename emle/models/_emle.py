@@ -484,7 +484,7 @@ class EMLE(_torch.nn.Module):
                 q_core, dtype=self._charges_mm.dtype, device=self._device
             )
 
-        mask = self._atomic_numbers > 0
+        mask = (self._atomic_numbers > 0).unsqueeze(-1)
         mesh_data = self._emle_base._get_mesh_data(
             xyz_qm_bohr, xyz_mm_bohr, s, mask
         )
@@ -501,7 +501,7 @@ class EMLE(_torch.nn.Module):
         # Compute the induced energy.
         if self._method == "electrostatic":
             E_ind = self._emle_base.get_induced_energy(
-                A_thole, self._charges_mm, s, mesh_data
+                A_thole, self._charges_mm, s, mesh_data, mask
             )
         else:
             E_ind = _torch.zeros_like(E_static, dtype=self._charges_mm.dtype, device=self._device)
