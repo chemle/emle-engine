@@ -484,8 +484,9 @@ class EMLE(_torch.nn.Module):
                 q_core, dtype=self._charges_mm.dtype, device=self._device
             )
 
+        mask = self._atomic_numbers > 0
         mesh_data = self._emle_base._get_mesh_data(
-            xyz_qm_bohr, xyz_mm_bohr, s
+            xyz_qm_bohr, xyz_mm_bohr, s, mask
         )
 
         if self._method == "mechanical":
