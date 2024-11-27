@@ -429,12 +429,12 @@ class EMLE(_torch.nn.Module):
             Positions of MM atoms in Angstrom.
 
         qm_charge: int or torch.Tensor (BATCH,)
-            The charge on the QM region. 
+            The charge on the QM region.
 
         Returns
         -------
 
-        result: torch.Tensor (2,)
+        result: torch.Tensor (2,) or (2, BATCH)
             The static and induced EMLE energy components in Hartree.
         """
         # Store the inputs as internal attributes.
@@ -444,23 +444,30 @@ class EMLE(_torch.nn.Module):
         self._xyz_mm = xyz_mm
 
         if self._atomic_numbers.ndim == 1:
-            self._atomic_numbers = atomic_numbers.unsqueeze(0)
-            self._charges_mm = charges_mm.unsqueeze(0)
-            self._xyz_qm = xyz_qm.unsqueeze(0)
-            self._xyz_mm = xyz_mm.unsqueeze(0)
-        
+            self._atomic_numbers = self._atomic_numbers.unsqueeze(0)
+            self._charges_mm = self._charges_mm.unsqueeze(0)
+            self._xyz_qm = self._xyz_qm.unsqueeze(0)
+            self._xyz_mm = self._xyz_mm.unsqueeze(0)
+
         batch_size = self._atomic_numbers.shape[0]
 
         # Ensure qm_charge is a tensor and repeat for batch size if necessary
         if isinstance(qm_charge, int):
-            qm_charge = _torch.full((batch_size,), qm_charge if qm_charge != 0 else self._qm_charge, dtype=_torch.int64, device=self._device)
+            qm_charge = _torch.full(
+                (batch_size,),
+                qm_charge if qm_charge != 0 else self._qm_charge,
+                dtype=_torch.int64,
+                device=self._device,
+            )
         elif isinstance(qm_charge, _torch.Tensor):
             if qm_charge.ndim == 0:
                 qm_charge = qm_charge.repeat(batch_size).to(self._device)
 
         # If there are no point charges, return zeros.
         if xyz_mm.shape[1] == 0:
-            return _torch.zeros(2, batch_size, dtype=self._xyz_qm.dtype, device=self._xyz_qm.device)
+            return _torch.zeros(
+                2, batch_size, dtype=self._xyz_qm.dtype, device=self._xyz_qm.device
+            )
 
         # Get the parameters from the base model:
         #    valence widths, core charges, valence charges, A_thole tensor
@@ -468,7 +475,7 @@ class EMLE(_torch.nn.Module):
         # first element of each.
         s, q_core, q_val, A_thole = self._emle_base(
             self._atomic_numbers,
-            self._xyz_qm, 
+            self._xyz_qm,
             qm_charge,
         )
 
@@ -485,9 +492,7 @@ class EMLE(_torch.nn.Module):
             )
 
         mask = (self._atomic_numbers > 0).unsqueeze(-1)
-        mesh_data = self._emle_base._get_mesh_data(
-            xyz_qm_bohr, xyz_mm_bohr, s, mask
-        )
+        mesh_data = self._emle_base._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s, mask)
 
         if self._method == "mechanical":
             q_core = q_core + q_val
@@ -504,6 +509,8 @@ class EMLE(_torch.nn.Module):
                 A_thole, self._charges_mm, s, mesh_data, mask
             )
         else:
-            E_ind = _torch.zeros_like(E_static, dtype=self._charges_mm.dtype, device=self._device)
-  
+            E_ind = _torch.zeros_like(
+                E_static, dtype=self._charges_mm.dtype, device=self._device
+            )
+
         return _torch.stack((E_static, E_ind), dim=0)
