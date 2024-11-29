@@ -223,7 +223,9 @@ class ANI2xEMLE(_torch.nn.Module):
             # Optimise the ANI2x model if atomic_numbers are specified.
             if _has_nnpops and atomic_numbers is not None:
                 try:
-                    atomic_numbers = atomic_numbers.reshape(1, *atomic_numbers.shape)
+                    atomic_numbers = atomic_numbers.reshape(
+                        1, *atomic_numbers.shape
+                    ).to(self._device)
                     self._ani2x = _NNPOps.OptimizedTorchANI(
                         self._ani2x, atomic_numbers
                     ).to(device)
