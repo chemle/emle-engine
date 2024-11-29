@@ -92,6 +92,10 @@ try:
     ani2x_model_index = int(os.getenv("EMLE_ANI2X_MODEL_INDEX"))
 except:
     ani2x_model_index = None
+try:
+    mace_model = os.getenv("EMLE_MACE_MODEL")
+except:
+    mace_model = None
 rascal_model = os.getenv("EMLE_RASCAL_MODEL")
 parm7 = os.getenv("EMLE_PARM7")
 try:
@@ -147,6 +151,7 @@ env = {
     "pc_xyz_file": pc_xyz_file,
     "qm_xyz_frequency": qm_xyz_frequency,
     "ani2x_model_index": ani2x_model_index,
+    "macemodel": mace_model,
     "rascal_model": rascal_model,
     "lambda_interpolate": lambda_interpolate,
     "interpolate_steps": interpolate_steps,
@@ -226,7 +231,7 @@ parser.add_argument(
     "--backend",
     type=str,
     help="the in vacuo backend",
-    choices=["torchani", "deepmd", "orca", "sander", "sqm", "xtb"],
+    choices=["torchani", "mace", "deepmd", "orca", "sander", "sqm", "xtb"],
     required=False,
 )
 parser.add_argument(
@@ -246,6 +251,18 @@ parser.add_argument(
     type=str,
     help="the device to be used by PyTorch",
     choices=["cpu", "cuda"],
+    required=False,
+)
+parser.add_argument(
+    "--ani2x-model-index",
+    type=int,
+    help="the index of the ANI2x model to use",
+    required=False,
+)
+parser.add_argument(
+    "--mace-model",
+    type=str,
+    help="name of the MACE-OFF23 model, or path to the MACE model file",
     required=False,
 )
 parser.add_argument(

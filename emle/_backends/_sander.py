@@ -20,18 +20,17 @@
 # along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
 #####################################################################
 
-"""ASE sander calculator implementation."""
+"""Sander in-vacuo backend implementation."""
 
-__author__ = "Lester Hedges"
-__email__ = "lester.hedges@gmail.com"
-
-__all__ = ["SanderCalculator"]
+__all__ = ["calculate_sander"]
 
 import ase as _ase
 from ase.calculators.calculator import Calculator as _Calculator
 from ase.calculators.calculator import all_changes as _all_changes
 import numpy as _np
 import sander as _sander
+
+from .._constants import _KCAL_MOL_TO_HARTREE, _BOHR_TO_ANGSTROM
 
 
 class SanderCalculator(_Calculator):
@@ -95,8 +94,6 @@ class SanderCalculator(_Calculator):
         # Update the positions.
         _sander.set_positions(positions)
 
-        from .calculator import _KCAL_MOL_TO_HARTREE, _BOHR_TO_ANGSTROM
-
         # Compute the energy and forces.
         energy, forces = _sander.energy_forces()
         self.results = {
@@ -112,3 +109,60 @@ class SanderCalculator(_Calculator):
             return None
         else:
             return atoms.get_cell().cellpar()
+
+
+def calculate_sander(atoms, parm7, is_gas=True, gradient=True):
+    """
+    Internal function to compute in vacuo energies and gradients using
+    pysander.
+
+    Parameters
+    ----------
+
+    atoms: ase.Atoms
+        The atoms in the QM region.
+
+    parm7: str
+        The path to the AMBER topology file.
+
+    bool: is_gas
+        Whether this is a gas phase calculation.
+
+    gradient: bool
+        Whether to return the gradient.
+
+    Returns
+    -------
+
+    energy: float
+        The in vacuo MM energy in Eh.
+
+    gradients: numpy.array
+        The in vacuo MM gradient in Eh/Bohr.
+    """
+
+    if not isinstance(atoms, _ase.Atoms):
+        raise TypeError("'atoms' must be of type 'ase.Atoms'")
+
+    if not isinstance(parm7, str):
+        raise TypeError("'parm7' must be of type 'str'")
+
+    if not isinstance(is_gas, bool):
+        raise TypeError("'is_gas' must be of type 'bool'")
+
+    # Instantiate a SanderCalculator.
+    sander_calculator = SanderCalculator(atoms, parm7, is_gas)
+
+    # Run the calculation.
+    sander_calculator.calculate(atoms)
+
+    # Get the energy.
+    energy = sander_calculator.results["energy"]
+
+    if not gradient:
+        return energy
+
+    # Get the gradient.
+    gradient = -sander_calculator.results["forces"]
+
+    return energy, gradient
