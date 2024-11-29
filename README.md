@@ -21,6 +21,8 @@ information and data can be found [here](https://github.com/chemle/emle-engine-p
 the original theory behind EMLE, please refer to [this](https://pubs.acs.org/doi/10.1021/acs.jctc.2c00914)
 publication.
 
+We thank EPSRC for funding (grant code EP/V011421/1).
+
 ## Installation
 
 First create a conda environment with all of the required dependencies:
