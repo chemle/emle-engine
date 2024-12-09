@@ -1209,7 +1209,7 @@ class EMLECalculator:
         # Write out the QM region to the xyz trajectory file.
         if self._qm_xyz_frequency > 0 and self._step % self._qm_xyz_frequency == 0:
             atoms = _ase.Atoms(positions=xyz_qm_np, numbers=atomic_numbers_np)
-            if hasattr(self, "_max_f_std"):
+            if hasattr(self._backend, "_max_f_std"):
                 atoms.info = {"max_f_std": self._max_f_std}
             _ase_io.write(self._qm_xyz_file, atoms, append=True)
 
