@@ -22,60 +22,142 @@
 
 """Rascal in-vacuo backend implementation."""
 
-__all__ = ["calculate_rascal"]
+__all__ = ["Rascal"]
 
+import ase as _ase
+import os as _os
+import pickle as _pickle
 import numpy as _np
 
-from .._constants import _EV_TO_HARTREE, _BOHR_TO_ANGSTROM
+from .._units import _EV_TO_HARTREE, _BOHR_TO_ANGSTROM
+
+from ._backend import Backend as _Backend
 
 
-def calculate_rascal(calculator, atoms, gradient=True):
+class Rascal(_Backend):
     """
-    Internal function to compute delta-learning corrections using Rascal.
-
-    Parameters
-    ----------
-
-    calculator: :class:`emle.calculator.EMLECalculator`
-        The EMLECalculator instance.
-
-    atoms: ase.Atoms
-        The atoms in the QM region.
-
-    gradient: bool
-        Whether to return the gradient
-
-    Returns
-    -------
-
-    energy: float
-        The in vacuo MM energy in Eh.
-
-    gradients: numpy.array
-        The in vacuo MM gradient in Eh/Bohr.
+    Rascal in-vacuo backend implementation.
     """
 
-    if not isinstance(atoms, _ase.Atoms):
-        raise TypeError("'atoms' must be of type 'ase.Atoms'")
+    def __init__(self, model):
+        """
+        Constructor.
 
-    # Rascal requires periodic box information so we translate the atoms so that
-    # the lowest (x, y, z) position is zero, then set the cell to the maximum
-    # position.
-    atoms.positions -= _np.min(atoms.positions, axis=0)
-    atoms.cell = _np.max(atoms.positions, axis=0)
+        Parameters
+        ----------
 
-    # Run the calculation.
-    calculator._rascal_calc.calculate(atoms)
+        model: str
+            The path to the Rascal model file.
+        """
 
-    # Get the energy.
-    energy = calculator._rascal_calc.results["energy"][0] * _EV_TO_HARTREE
+        if not isinstance(model, str):
+            raise TypeError("'model' must be of type 'str'")
 
-    if not gradient:
-        return energy
+        # Convert to an absolute path.
+        abs_model = _os.path.abspath(model)
 
-    # Get the gradient.
-    gradient = (
-        -calculator._rascal_calc.results["forces"] * _EV_TO_HARTREE * _BOHR_TO_ANGSTROM
-    )
+        # Make sure the model file exists.
+        if not _os.path.isfile(abs_model):
+            raise IOError(f"Unable to locate Rascal model file: '{model}'")
 
-    return energy, gradient
+        # Load the model.
+        try:
+            self._model = _pickle.load(open(abs_model, "rb"))
+        except:
+            raise IOError(f"Unable to load Rascal model file: '{model}'")
+
+        # Try to get the SOAP parameters from the model.
+        try:
+            soap = self._model.get_representation_calculator()
+        except:
+            raise ValueError("Unable to extract SOAP parameters from Rascal model!")
+
+        # Create the Rascal calculator.
+        try:
+            from rascal.models.asemd import ASEMLCalculator as _ASEMLCalculator
+
+            self._calculator = _ASEMLCalculator(self._model, soap)
+        except:
+            raise RuntimeError("Unable to create Rascal calculator!")
+
+    def calculate(atomic_numbers, xyz, forces=True):
+        """
+        Compute the energy and forces.
+
+        Parameters
+        ----------
+
+        atomic_numbers: numpy.ndarray, (N_BATCH, N_QM_ATOMS,)
+            The atomic numbers of the atoms in the QM region.
+
+        xyz: numpy.ndarray, (N_BATCH, N_QM_ATOMS, 3)
+            The coordinates of the atoms in the QM region in Angstrom.
+
+        forces: bool
+            Whether to calculate and return forces.
+
+        Returns
+        -------
+
+        energy: float
+            The in-vacuo energy in Eh.
+
+        forces: numpy.ndarray
+            The in-vacuo forces in Eh/Bohr.
+        """
+
+        if not isinstance(atomic_numbers, _np.ndarray):
+            raise TypeError("'atomic_numbers' must be of type 'numpy.ndarray'")
+        if not isinstance(xyz, _np.ndarray):
+            raise TypeError("'xyz' must be of type 'numpy.ndarray'")
+
+        if len(atomic_numbers) != len(xyz):
+            raise ValueError(
+                f"Length of 'atomic_numbers' ({len(atomic_numbers)}) does not "
+                f"match length of 'xyz' ({len(xyz)})"
+            )
+
+        # Lists to store results.
+        results_energy = []
+        results_forces = []
+
+        # Loop over batches.
+        for i, (atomic_numbers_i, xyz_i) in enumerate(zip(atomic_numbers, xyz)):
+            if len(atomic_numbers_i) != len(xyz_i):
+                raise ValueError(
+                    f"Length of 'atomic_numbers' ({len(atomic_numbers_i)}) does not "
+                    f"match length of 'xyz' ({len(xyz_i)}) for index {i}"
+                )
+
+            # Create an ASE atoms object.
+            atoms = _ase.Atoms(
+                numbers=atomic_numbers_i,
+                positions=xyz_i,
+            )
+
+            # Rascal requires periodic box information so we translate the atoms so that
+            # the lowest (x, y, z) position is zero, then set the cell to the maximum
+            # position.
+            atoms.positions -= _np.min(atoms.positions, axis=0)
+            atoms.cell = _np.max(atoms.positions, axis=0)
+
+            # Run the calculation.
+            self._calculator.calculate(atoms)
+
+            # Get the energy.
+            results_energy.append(
+                self._calculator.results["energy"][0] * _EV_TO_HARTREE
+            )
+
+            if forces:
+                results_forces.append(
+                    self._calculator.results["forces"]
+                    * _EV_TO_HARTREE
+                    * _BOHR_TO_ANGSTROM
+                )
+
+        # Convert to NumPy arrays.
+        results_energy = _np.array(results_energy)
+        results_forces = _np.array(results_forces)
+
+        return results_energy, results_forces if forces else results_energy

@@ -22,15 +22,18 @@
 
 """Sander in-vacuo backend implementation."""
 
-__all__ = ["calculate_sander"]
+__all__ = ["Sander"]
 
 import ase as _ase
 from ase.calculators.calculator import Calculator as _Calculator
 from ase.calculators.calculator import all_changes as _all_changes
+import os as _os
 import numpy as _np
 import sander as _sander
 
-from .._constants import _KCAL_MOL_TO_HARTREE, _BOHR_TO_ANGSTROM
+from .._units import _KCAL_MOL_TO_HARTREE, _BOHR_TO_ANGSTROM
+
+from ._backend import Backend as _Backend
 
 
 class SanderCalculator(_Calculator):
@@ -111,58 +114,103 @@ class SanderCalculator(_Calculator):
             return atoms.get_cell().cellpar()
 
 
-def calculate_sander(atoms, parm7, is_gas=True, gradient=True):
+class Sander(_Backend):
     """
-    Internal function to compute in vacuo energies and gradients using
-    pysander.
-
-    Parameters
-    ----------
-
-    atoms: ase.Atoms
-        The atoms in the QM region.
-
-    parm7: str
-        The path to the AMBER topology file.
-
-    bool: is_gas
-        Whether this is a gas phase calculation.
-
-    gradient: bool
-        Whether to return the gradient.
-
-    Returns
-    -------
-
-    energy: float
-        The in vacuo MM energy in Eh.
-
-    gradients: numpy.array
-        The in vacuo MM gradient in Eh/Bohr.
+    Class for in-vacuo calculations using the AMBER Sander molecular
+    dynamics engine.
     """
 
-    if not isinstance(atoms, _ase.Atoms):
-        raise TypeError("'atoms' must be of type 'ase.Atoms'")
+    def __init__(self, parm7, is_gas=True):
+        """
+        Constructor.
+        """
 
-    if not isinstance(parm7, str):
-        raise TypeError("'parm7' must be of type 'str'")
+        if not isinstance(parm7, str):
+            raise TypeError("'parm7' must be of type 'str'")
 
-    if not isinstance(is_gas, bool):
-        raise TypeError("'is_gas' must be of type 'bool'")
+        if not _os.path.isfile(parm7):
+            raise FileNotFoundError(f"Could not find AMBER topology file: '{parm7}'")
 
-    # Instantiate a SanderCalculator.
-    sander_calculator = SanderCalculator(atoms, parm7, is_gas)
+        if not isinstance(is_gas, bool):
+            raise TypeError("'is_gas' must be of type 'bool'")
 
-    # Run the calculation.
-    sander_calculator.calculate(atoms)
+        self._parm7 = parm7
+        self._is_gas = is_gas
 
-    # Get the energy.
-    energy = sander_calculator.results["energy"]
+    def calculate(self, atomic_numbers, xyz, forces=True):
+        """
+        Compute the energy and forces.
 
-    if not gradient:
-        return energy
+        Parameters
+        ----------
 
-    # Get the gradient.
-    gradient = -sander_calculator.results["forces"]
+        atomic_numbers: numpy.ndarray, (N_BATCH, N_QM_ATOMS,)
+            The atomic numbers of the atoms in the QM region.
 
-    return energy, gradient
+        xyz: numpy.ndarray, (N_BATCH, N_QM_ATOMS, 3)
+            The coordinates of the atoms in the QM region in Angstrom.
+
+        forces: bool
+            Whether to calculate and return forces.
+
+        Returns
+        -------
+
+        energy: float
+            The in-vacuo energy in Eh.
+
+        forces: numpy.ndarray
+            The in-vacuo forces in Eh/Bohr.
+        """
+
+        if not isinstance(atomic_numbers, _np.ndarray):
+            raise TypeError("'atomic_numbers' must be of type 'numpy.ndarray'")
+
+        if not isinstance(xyz, _np.ndarray):
+            raise TypeError("'xyz' must be of type 'numpy.ndarray'")
+
+        if len(atomic_numbers) != len(xyz):
+            raise ValueError(
+                f"Length of 'atomic_numbers' ({len(atomic_numbers)}) does not "
+                f"match length of 'xyz' ({len(xyz)})"
+            )
+
+        if not isinstance(forces, bool):
+            raise TypeError("'forces' must be of type 'bool'")
+
+        # Lists to store results.
+        results_energy = []
+        results_forces = []
+
+        # Loop over batches.
+        for i, (atomic_numbers_i, xyz_i) in enumerate(zip(atomic_numbers, xyz)):
+            if len(atomic_numbers_i) != len(xyz_i):
+                raise ValueError(
+                    f"Length of 'atomic_numbers' ({len(atomic_numbers_i)}) does not "
+                    f"match length of 'xyz' ({len(xyz_i)}) for index {i}"
+                )
+
+            # Create an ASE atoms object.
+            atoms = _ase.Atoms(
+                numbers=atomic_numbers_i,
+                positions=xyz_i,
+            )
+
+            # Instantiate a SanderCalculator.
+            sander_calculator = SanderCalculator(atoms, self._parm7, self._is_gas)
+
+            # Run the calculation.
+            sander_calculator.calculate(atoms)
+
+            # Get the energy.
+            results_energy.append(sander_calculator.results["energy"])
+
+            # Get the force.
+            if forces:
+                results_forces.append(sander_calculator.results["forces"])
+
+        # Convert the results to NumPy arrays.
+        results_energy = _np.array(results_energy)
+        results_forces = _np.array(results_forces)
+
+        return results_energy, results_forces if forces else results_energy

@@ -30,7 +30,6 @@ __all__ = ["EMLECalculator"]
 from loguru import logger as _logger
 
 import os as _os
-import pickle as _pickle
 import numpy as _np
 import sys as _sys
 import yaml as _yaml
@@ -42,7 +41,7 @@ import torch as _torch
 
 from .models import EMLE as _EMLE
 
-from emle._constants import (
+from emle._units import (
     _NANOMETER_TO_BOHR,
     _BOHR_TO_ANGSTROM,
     _HARTREE_TO_KJ_MOL,
@@ -539,81 +538,6 @@ class EMLECalculator:
 
             self._parm7 = abs_parm7
 
-        if deepmd_model is not None and backend == "deepmd":
-            # We support a str, or list/tuple of strings.
-            if not isinstance(deepmd_model, (str, list, tuple)):
-                msg = "'deepmd_model' must be of type 'str', or a list of 'str' types"
-                _logger.error(msg)
-                raise TypeError(msg)
-            else:
-                # Make sure all values are strings.
-                if isinstance(deepmd_model, (list, tuple)):
-                    for mod in deepmd_model:
-                        if not isinstance(mod, str):
-                            msg = "'deepmd_model' must be of type 'str', or a list of 'str' types"
-                            _logger.error(msg)
-                            raise TypeError(msg)
-                # Convert to a list.
-                else:
-                    deepmd_model = [deepmd_model]
-
-                # Make sure all of the model files exist.
-                for model in deepmd_model:
-                    if not _os.path.isfile(model):
-                        msg = f"Unable to locate DeePMD model file: '{model}'"
-                        _logger.error(msg)
-                        raise IOError(msg)
-
-                # Validate the deviation file.
-                if deepmd_deviation is not None:
-                    if not isinstance(deepmd_deviation, str):
-                        msg = "'deepmd_deviation' must be of type 'str'"
-                        _logger.error(msg)
-                        raise TypeError(msg)
-
-                    self._deepmd_deviation = deepmd_deviation
-
-                    if deepmd_deviation_threshold is not None:
-                        try:
-                            deepmd_deviation_threshold = float(
-                                deepmd_deviation_threshold
-                            )
-                        except:
-                            msg = "'deepmd_deviation_threshold' must be of type 'float'"
-                            _logger.error(msg)
-                            raise TypeError(msg)
-
-                    self._deepmd_deviation_threshold = deepmd_deviation_threshold
-
-                # Store the list of model files, removing any duplicates.
-                self._deepmd_model = list(set(deepmd_model))
-                if len(self._deepmd_model) == 1 and deepmd_deviation:
-                    msg = (
-                        "More that one DeePMD model needed to calculate the deviation!"
-                    )
-                    _logger.error(msg)
-                    raise IOError(msg)
-
-                # Initialise DeePMD backend attributes.
-                try:
-                    from deepmd.infer import DeepPot as _DeepPot
-
-                    self._deepmd_potential = [
-                        _DeepPot(model) for model in self._deepmd_model
-                    ]
-                except:
-                    msg = "Unable to create the DeePMD potentials!"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-        else:
-            if self._backend == "deepmd":
-                msg = "'deepmd_model' must be specified when using the DeePMD backend!"
-                _logger.error(msg)
-                raise ValueError(msg)
-
-            # Set the deviation file to None in case it was spuriously set.
-            self._deepmd_deviation = None
-
         # Validate the QM XYZ file options.
 
         if qm_xyz_file is None:
@@ -649,83 +573,128 @@ class EMLECalculator:
                 raise ValueError(msg)
         self._qm_xyz_frequency = qm_xyz_frequency
 
-        # Validate the QM method for SQM.
-        if backend == "sqm":
-            if sqm_theory is None:
-                sqm_theory = "DFTB3"
+        # Validate and create the backend.
 
-            if not isinstance(sqm_theory, str):
-                msg = "'sqm_theory' must be of type 'str'"
-                _logger.error(msg)
-                raise TypeError(msg)
+        if self._backend == "torchani":
+            from .models import ANI2xEMLE as _ANI2xEMLE
 
-            # Make sure a topology file has been set.
-            if parm7 is None:
-                msg = "'parm7' must be specified when using the SQM backend"
+            ani2x_emle = _ANI2xEMLE(
+                emle_model=model,
+                emle_method=method,
+                alpha_mode=alpha_mode,
+                mm_charges=self._mm_charges,
+                qm_charge=self._qm_charge,
+                model_index=ani2x_model_index,
+                atomic_numbers=atomic_numbers,
+                device=self._device,
+            )
+
+            # Convert to TorchScript.
+            self._ani2x_emle = _torch.jit.script(ani2x_emle).eval()
+
+            # Store the model index.
+            self._ani2x_model_index = ani2x_model_index
+
+        # Initialise the MACEMLE model.
+        elif self._backend == "mace":
+            from .models import MACEEMLE as _MACEEMLE
+
+            mace_emle = _MACEEMLE(
+                emle_model=model,
+                emle_method=method,
+                alpha_mode=alpha_mode,
+                mm_charges=self._mm_charges,
+                qm_charge=self._qm_charge,
+                mace_model=mace_model,
+                atomic_numbers=atomic_numbers,
+                device=self._device,
+            )
+
+            # Convert to TorchScript.
+            self._mace_emle = _torch.jit.script(mace_emle).eval()
+
+            # Store the MACE model.
+            self._mace_model = mace_model
+
+        # If the backend is ORCA, then try to find the executable.
+        elif self._backend == "orca":
+            if orca_path is None:
+                msg = "'orca_path' must be specified when using the ORCA backend"
                 _logger.error(msg)
                 raise ValueError(msg)
 
-            # Strip whitespace.
-            self._sqm_theory = sqm_theory.replace(" ", "")
-
-            try:
-                from sander import AmberParm as _AmberParm
-
-                amber_parm = _AmberParm(self._parm7)
-            except:
-                msg = f"Unable to load AMBER topology file: '{parm7}'"
-                _logger.error(msg)
-                raise IOError(msg)
-
-            # Store the atom names for the QM region.
-            self._sqm_atom_names = [atom.name for atom in amber_parm.atoms]
-
-        # Make sure a QM topology file is specified for the 'sander' backend.
-        elif backend == "sander":
-            if parm7 is None:
-                msg = "'parm7' must be specified when using the 'sander' backend"
-                _logger.error(msg)
-                raise ValueError(msg)
-
-        # Validate and load the Rascal model.
-        if rascal_model is not None:
-            if not isinstance(rascal_model, str):
-                msg = "'rascal_model' must be of type 'str'"
+            if not isinstance(orca_path, str):
+                msg = "'orca_path' must be of type 'str'"
                 _logger.error(msg)
                 raise TypeError(msg)
 
             # Convert to an absolute path.
-            abs_rascal_model = _os.path.abspath(rascal_model)
+            abs_orca_path = _os.path.abspath(orca_path)
 
-            # Make sure the model file exists.
-            if not _os.path.isfile(abs_rascal_model):
-                msg = f"Unable to locate Rascal model file: '{rascal_model}'"
+            if not _os.path.isfile(abs_orca_path):
+                msg = f"Unable to locate ORCA executable: '{orca_path}'"
                 _logger.error(msg)
                 raise IOError(msg)
 
-            # Load the model.
+            self._orca_path = abs_orca_path
+
+        elif backend == "deepmd":
             try:
-                self._rascal_model = _pickle.load(open(abs_rascal_model, "rb"))
-            except:
-                msg = f"Unable to load Rascal model file: '{rascal_model}'"
+                from ._backends import DeepMD
+
+                self._backend = DeepMD(
+                    model=deepmd_model,
+                    deviation=deepmd_deviation,
+                    deviation_threshold=deepmd_deviation_threshold,
+                )
+                self._deepmd_model = self._backend._model
+                self._deepmd_deviation = self._backend._deviation
+                self._deepmd_deviation_threshold = self._backend._deviation_threshold
+            except Exception as e:
+                msg = "Unable to create DeePMD backend: {e}"
                 _logger.error(msg)
-                raise IOError(msg)
+                raise RuntimeError(msg)
 
-            # Try to get the SOAP parameters from the model.
+        elif backend == "sqm":
             try:
-                soap = self._rascal_model.get_representation_calculator()
-            except:
-                msg = "Unable to extract SOAP parameters from Rascal model!"
+                from ._backends import SQM
+
+                self._backend = SQM(parm7, theory=sqm_theory)
+                self._sqm_theory = self._backend._theory
+            except Exception as e:
+                msg = "Unable to create SQM backend: {e}"
                 _logger.error(msg)
-                raise ValueError(msg)
+                raise RuntimeError(msg)
 
-            # Create the Rascal calculator.
+        elif backend == "xtb":
             try:
-                from rascal.models.asemd import ASEMLCalculator as _ASEMLCalculator
+                from ._backends import XTB
 
-                self._rascal_calc = _ASEMLCalculator(self._rascal_model, soap)
-            except:
-                msg = "Unable to create Rascal calculator!"
+                self._backend = XTB()
+            except Exception as e:
+                msg = "Unable to create XTB backend: {e}"
+                _logger.error(msg)
+                raise RuntimeError(msg)
+
+        # Make sure a QM topology file is specified for the 'sander' backend.
+        elif backend == "sander":
+            try:
+                from ._backends import Sander
+
+                self._backend = Sander(parm7)
+            except Exception as e:
+                msg = "Unable to create Sander backend: {e}"
+                _logger.error(msg)
+                raise RuntimeError(msg)
+
+        # Validate and load the Rascal model for delta-learning corrections.
+        if rascal_model is not None:
+            try:
+                from ._backends import Rascal
+
+                self._rascal_calc = Rascal(rascal_model)
+            except Exception as e:
+                msg = "Unable to create Rascal backend: {e}"
                 _logger.error(msg)
                 raise RuntimeError(msg)
 
@@ -891,70 +860,6 @@ class EMLECalculator:
         else:
             self._orca_template = None
 
-        # Initialise the ANI2xEMLE model.
-        if self._backend == "torchani":
-            from .models import ANI2xEMLE as _ANI2xEMLE
-
-            ani2x_emle = _ANI2xEMLE(
-                emle_model=model,
-                emle_method=method,
-                alpha_mode=alpha_mode,
-                mm_charges=self._mm_charges,
-                qm_charge=self._qm_charge,
-                model_index=ani2x_model_index,
-                atomic_numbers=atomic_numbers,
-                device=self._device,
-            )
-
-            # Convert to TorchScript.
-            self._ani2x_emle = _torch.jit.script(ani2x_emle).eval()
-
-            # Store the model index.
-            self._ani2x_model_index = ani2x_model_index
-
-        # Initialise the MACEMLE model.
-        elif self._backend == "mace":
-            from .models import MACEEMLE as _MACEEMLE
-
-            mace_emle = _MACEEMLE(
-                emle_model=model,
-                emle_method=method,
-                alpha_mode=alpha_mode,
-                mm_charges=self._mm_charges,
-                qm_charge=self._qm_charge,
-                mace_model=mace_model,
-                atomic_numbers=atomic_numbers,
-                device=self._device,
-            )
-
-            # Convert to TorchScript.
-            self._mace_emle = _torch.jit.script(mace_emle).eval()
-
-            # Store the MACE model.
-            self._mace_model = mace_model
-
-        # If the backend is ORCA, then try to find the executable.
-        elif self._backend == "orca":
-            if orca_path is None:
-                msg = "'orca_path' must be specified when using the ORCA backend"
-                _logger.error(msg)
-                raise ValueError(msg)
-
-            if not isinstance(orca_path, str):
-                msg = "'orca_path' must be of type 'str'"
-                _logger.error(msg)
-                raise TypeError(msg)
-
-            # Convert to an absolute path.
-            abs_orca_path = _os.path.abspath(orca_path)
-
-            if not _os.path.isfile(abs_orca_path):
-                msg = f"Unable to locate ORCA executable: '{orca_path}'"
-                _logger.error(msg)
-                raise IOError(msg)
-
-            self._orca_path = abs_orca_path
-
         # Intialise the maximum number of MM atoms that have been seen.
         self._max_mm_atoms = 0
 
@@ -1078,82 +983,28 @@ class EMLECalculator:
             xyz_mm = _np.append(xyz_mm, xyz_mm_pad, axis=0)
             charges_mm = _np.append(charges_mm, charges_mm_pad)
 
-        # Convert the QM atomic numbers to elements.
-        elements = []
-        for id in atomic_numbers:
-            elements.append(_ase.Atom(id).symbol)
-
         # First try to use the specified backend to compute in vacuo
         # energies and (optionally) gradients.
 
         # Internal backends.
         if not self._is_external_backend:
-            # TorchANI.
-            if self._backend == "torchani":
+            # Torch based backends.
+            if self._backend in ["torchani", "mace"]:
                 # In vacuo and embedding energies and gradients are computed in one go
-                # using the ANI2x EMLE model.
+                # using the EMLE Torch models.
                 pass
 
-            # DeePMD.
-            elif self._backend == "deepmd":
+            # Non-Torch backends.
+            elif backend is not None:
                 try:
-                    from ._backends import calculate_deepmd as _calculate_deepmd
-
-                    E_vac, grad_vac = _calculate_deepmd(self, xyz_qm, elements)
-                except Exception as e:
-                    msg = f"Failed to calculate in vacuo energies using DeePMD backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            # ORCA.
-            elif self._backend == "orca":
-                try:
-                    from ._backends import calculate_orca as _calculate_orca
-
-                    E_vac, grad_vac = _calculate_orca(self, orca_input, xyz_file_qm)
-                except Exception as e:
-                    msg = (
-                        f"Failed to calculate in vacuo energies using ORCA backend: {e}"
+                    energy, forces = self._backend(
+                        _np.expand_dims(atomic_numbers, axis=0),
+                        _np.expand_dims(xyz_qm, axis=0),
                     )
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            # Sander.
-            elif self._backend == "sander":
-                try:
-                    from ._backends import calculate_sander as _calculate_sander
-
-                    E_vac, grad_vac = _calculate_sander(atoms, self._parm7, is_gas=True)
+                    E_vac = energy[0]
+                    grad_vac = -forces[0]
                 except Exception as e:
-                    msg = f"Failed to calculate in vacuo energies using Sander backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            # SQM.
-            elif self._backend == "sqm":
-                try:
-                    from ._backends import calculate_sqm as _calculate_sqm
-
-                    E_vac, grad_vac = _calculate_sqm(
-                        self, xyz_qm, atomic_numbers, charge
-                    )
-                except Exception as e:
-                    msg = (
-                        f"Failed to calculate in vacuo energies using SQM backend: {e}"
-                    )
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            # XTB.
-            elif self._backend == "xtb":
-                try:
-                    from ._backends import calculate_xtb as _calculate_xtb
-
-                    E_vac, grad_vac = _calculate_xtb(atoms)
-                except Exception as e:
-                    msg = (
-                        f"Failed to calculate in vacuo energies using XTB backend: {e}"
-                    )
+                    msg = f"Failed to calculate in vacuo energies using {self._backend} backend: {e}"
                     _logger.error(msg)
                     raise RuntimeError(msg)
 
@@ -1175,9 +1026,12 @@ class EMLECalculator:
         # Apply delta-learning corrections using Rascal.
         if self._is_delta and self._backend is not None:
             try:
-                from ._backends import calculate_rascal as _calculate_rascal
-
-                delta_E, delta_grad = _calculate_rascal(self, atoms)
+                energy, forces = self._rascal_calc(
+                    _np.expand_dims(atomic_numbers, axis=0),
+                    _np.expand_dims(xyz_qm, axis=0),
+                )
+                delta_E = energy[0]
+                delta_grad = -forces[0]
             except Exception as e:
                 msg = f"Failed to compute delta-learning corrections using Rascal: {e}"
                 _logger.error(msg)
@@ -1260,13 +1114,18 @@ class EMLECalculator:
         if self._is_interpolate:
             # Compute the in vacuo MM energy and gradients for the QM region.
             if self._backend != None:
-                from ._backends import calculate_sander as _calculate_sander
+                from ._backends import Sander
 
-                E_mm_qm_vac, grad_mm_qm_vac = _calculate_sander(
-                    atoms=atoms,
-                    parm7=self._parm7,
-                    is_gas=True,
+                # Create a Sander backend instance.
+                backend = Sander(self._parm7)
+
+                # Compute the in vacuo MM energy and forces for the QM region.
+                energy, forces = backend.calculate(
+                    _np.expand_dims(atomic_numbers_np, axis=0),
+                    _np.expand_dims(xyz_qm_np, axis=0),
                 )
+                E_mm_qm_vac = energy[0]
+                grad_mm_qm_vac = -forces[0]
 
             # If no backend is specified, then the MM energy and gradients are zero.
             else:
@@ -1503,86 +1362,28 @@ class EMLECalculator:
             xyz_mm = _np.append(xyz_mm, xyz_mm_pad, axis=0)
             charges_mm = _np.append(charges_mm, charges_mm_pad)
 
-        # Convert the QM atomic numbers to elements.
-        elements = []
-        for id in atomic_numbers:
-            elements.append(_ase.Atom(id).symbol)
-
         # First try to use the specified backend to compute in vacuo
         # energies and (optionally) gradients.
 
         # Internal backends.
         if not self._is_external_backend:
-            # TorchANI.
-            if self._backend == "torchani":
+            # TorchANI and MACE.
+            if self._backend in ["torchani", "mace"]:
                 # In vacuo and embedding energies and gradients are computed in one go
-                # using the ANI2x EMLE model.
+                # using the EMLE Torch models.
                 pass
 
-            # DeePMD.
-            elif self._backend == "deepmd":
+            # Non-Torch backends.
+            elif self._backend is not None:
                 try:
-                    from ._backends import calculate_deepmd as _calculate_deepmd
-
-                    E_vac, grad_vac = _calculate_deepmd(self, xyz_qm, elements)
-                except Exception as e:
-                    msg = f"Failed to calculate in vacuo energies using DeePMD backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            # ORCA.
-            elif self._backend == "orca":
-                try:
-                    from ._backends import calculate_orca as _calculate_orca
-
-                    E_vac, grad_vac = _calculate_orca(
-                        self, elements=elements, xyz_qm=xyz_qm
+                    energy, forces = self._backend(
+                        _np.expand_dims(atomic_numbers, axis=0),
+                        _np.expand_dims(xyz_qm, axis=0),
                     )
+                    E_vac = energy[0]
+                    grad_vac = -forces[0]
                 except Exception as e:
-                    msg = (
-                        f"Failed to calculate in vacuo energies using ORCA backend: {e}"
-                    )
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            # Sander.
-            elif self._backend == "sander":
-                try:
-                    from ._backends import calculate_sander as _calculate_sander
-
-                    atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
-                    E_vac, grad_vac = _calculate_sander(atoms, self._parm7, is_gas=True)
-                except Exception as e:
-                    msg = f"Failed to calculate in vacuo energies using Sander backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            # SQM.
-            elif self._backend == "sqm":
-                try:
-                    from ._backends import calculate_sqm as _calculate_sqm
-
-                    E_vac, grad_vac = _calculate_sqm(
-                        self, xyz_qm, atomic_numbers, charge
-                    )
-                except Exception as e:
-                    msg = (
-                        f"Failed to calculate in vacuo energies using SQM backend: {e}"
-                    )
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            # XTB.
-            elif self._backend == "xtb":
-                try:
-                    from ._backends import calculate_xtb as _calculate_xtb
-
-                    atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
-                    E_vac, grad_vac = _calculate_xtb(atoms)
-                except Exception as e:
-                    msg = (
-                        f"Failed to calculate in vacuo energies using XTB backend: {e}"
-                    )
+                    msg = f"Failed to calculate in vacuo energies using {self._backend} backend: {e}"
                     _logger.error(msg)
                     raise RuntimeError(msg)
 
@@ -1605,11 +1406,12 @@ class EMLECalculator:
         # Apply delta-learning corrections using Rascal.
         if self._is_delta and self._backend is not None:
             try:
-                if atoms is None:
-                    atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
-                from ._backends import calculate_rascal as _calculate_rascal
-
-                delta_E, delta_grad = _calculate_rascal(self, atoms)
+                energy, forces = self._rascal_calc(
+                    _np.expand_dims(atomic_numbers, axis=0),
+                    _np.expand_dims(xyz_qm, axis=0),
+                )
+                delta_E = energy[0]
+                delta_grad = -forces[0]
             except Exception as e:
                 msg = f"Failed to compute delta-learning corrections using Rascal: {e}"
                 _logger.error(msg)
@@ -1626,6 +1428,10 @@ class EMLECalculator:
                 (-grad_vac * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_BOHR).tolist(),
                 [],
             )
+
+        # Store a copy of the atomic numbers and QM coordinates as NumPy arrays.
+        atomic_numbers_np = atomic_numbers
+        xyz_qm_np = xyz_qm
 
         # Convert inputs to Torch tensors.
         atomic_numbers = _torch.tensor(
@@ -1699,21 +1505,21 @@ class EMLECalculator:
 
         # Interpolate between the MM and ML/MM potential.
         if self._is_interpolate:
-            # Create the ASE atoms object if it wasn't already created by the backend.
-            if atoms is None:
-                atoms = _ase.Atoms(
-                    positions=xyz_qm.detach().cpu(), numbers=atomic_numbers.cpu()
-                )
-
             # Compute the in vacuo MM energy and gradients for the QM region.
             if self._backend != None:
-                from ._backends import calculate_sander as _calculate_sander
+                from ._backends import Sander
 
-                E_mm_qm_vac, grad_mm_qm_vac = _calculate_sander(
-                    atoms=atoms,
-                    parm7=self._parm7,
-                    is_gas=True,
+                # Create a Sander backend instance.
+                backend = Sander(self._parm7)
+
+                # Compute the in vacuo MM energy and forces for the QM region.
+                energy, forces = backend.calculate(
+                    _np.expand_dims(atomic_numbers_np, axis=0),
+                    _np.expand_dims(xyz_qm_np, axis=0),
                 )
+
+                E_mm_qm_vac = energy[0]
+                grad_mm_qm_vac = -forces[0]
 
             # If no backend is specified, then the MM energy and gradients are zero.
             else:

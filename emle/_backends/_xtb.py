@@ -22,50 +22,90 @@
 
 """XTB in-vacuo backend implementation."""
 
-__all__ = ["calculate_xtb"]
+__all__ = ["XTB"]
 
-from .._constants import _EV_TO_HARTREE, _BOHR_TO_ANGSTROM
+import ase as _ase
+import numpy as _np
+
+from .._units import _EV_TO_HARTREE, _BOHR_TO_ANGSTROM
+
+from ._backend import Backend as _Backend
 
 
-def calculate_xtb(atoms, gradient=True):
+class XTB(_Backend):
     """
-    Internal function to compute in vacuo energies and gradients using
-    the xtb-python interface. Currently only uses the "GFN2-xTB" method.
-
-    Parameters
-    ----------
-
-    atoms: ase.Atoms
-        The atoms in the QM region.
-
-    gradient: bool
-        Whether to return the gradient.
-
-    Returns
-    -------
-
-    energy: float
-        The in vacuo ML energy in Eh.
-
-    gradients: numpy.array
-        The in vacuo gradient in Eh/Bohr.
+    XTB in-vacuo backend implementation.
     """
 
-    if not isinstance(atoms, _ase.Atoms):
-        raise TypeError("'atoms' must be of type 'ase.Atoms'")
+    @staticmethod
+    def calculate(atomic_numbers, xyz, forces=True):
+        """
+        Compute the energy and forces.
 
-    from xtb.ase.calculator import XTB as _XTB
+        Parameters
+        ----------
 
-    # Create the calculator.
-    atoms.calc = _XTB(method="GFN2-xTB")
+        atomic_numbers: numpy.ndarray, (N_BATCH, N_QM_ATOMS,)
+            The atomic numbers of the atoms in the QM region.
 
-    # Get the energy.
-    energy = atoms.get_potential_energy() * _EV_TO_HARTREE
+        xyz: numpy.ndarray, (N_BATCH, N_QM_ATOMS, 3)
+            The coordinates of the atoms in the QM region in Angstrom.
 
-    if not gradient:
-        return energy
+        forces: bool
+            Whether to calculate and return forces.
 
-    # Get the gradient.
-    gradient = -atoms.get_forces() * _BOHR_TO_ANGSTROM
+        Returns
+        -------
 
-    return energy, gradient
+        energy: float
+            The in-vacuo energy in Eh.
+
+        forces: numpy.ndarray
+            The in-vacuo forces in Eh/Bohr.
+        """
+
+        if not isinstance(atomic_numbers, _np.ndarray):
+            raise TypeError("'atomic_numbers' must be of type 'numpy.ndarray'")
+        if not isinstance(xyz, _np.ndarray):
+            raise TypeError("'xyz' must be of type 'numpy.ndarray'")
+
+        if len(atomic_numbers) != len(xyz):
+            raise ValueError(
+                f"Length of 'atomic_numbers' ({len(atomic_numbers)}) does not "
+                f"match length of 'xyz' ({len(xyz)})"
+            )
+
+        from xtb.ase.calculator import XTB as _XTB
+
+        # Lists to store results.
+        results_energy = []
+        results_forces = []
+
+        # Loop over batches.
+        for i, (atomic_numbers_i, xyz_i) in enumerate(zip(atomic_numbers, xyz)):
+            if len(atomic_numbers_i) != len(xyz_i):
+                raise ValueError(
+                    f"Length of 'atomic_numbers' ({len(atomic_numbers_i)}) does not "
+                    f"match length of 'xyz' ({len(xyz_i)}) for index {i}"
+                )
+
+            # Create an ASE atoms object.
+            atoms = _ase.Atoms(
+                numbers=atomic_numbers_i,
+                positions=xyz_i,
+            )
+
+            # Create the calculator.
+            atoms.calc = _XTB(method="GFN2-xTB")
+
+            # Get the energy.
+            results_energy.append(atoms.get_potential_energy() * _EV_TO_HARTREE)
+
+            if forces:
+                results_forces.append(atoms.get_forces() * _BOHR_TO_ANGSTROM)
+
+        # Convert to NumPy arrays.
+        results_energy = _np.array(results_energy)
+        results_forces = _np.array(results_forces)
+
+        return results_energy, results_forces if forces else results_energy

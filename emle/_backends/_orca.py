@@ -22,8 +22,9 @@
 
 """ORCA in-vacuo backend implementation."""
 
-__all__ = ["calculate_orca"]
+__all__ = ["ORCA"]
 
+import ase as _ase
 import numpy as _np
 import os as _os
 import shlex as _shlex
@@ -31,144 +32,207 @@ import shutil as _shutil
 import subprocess as _subprocess
 import tempfile as _tempfile
 
+from ._backend import Backend as _Backend
 
-def calculate_orca(
-    calculator,
-    orca_input=None,
-    xyz_file_qm=None,
-    elements=None,
-    xyz_qm=None,
-    gradient=True,
-):
+
+class ORCA(_Backend):
     """
-    Internal function to compute in vacuo energies and gradients using
-    ORCA.
-
-    Parameters
-    ----------
-
-    calculator: :class:`emle.calculator.EMLECalculator`
-        The EMLECalculator instance.
-
-    orca_input: str
-        The path to the ORCA input file. (Used with the sander interface.)
-
-    xyz_file_qm: str
-        The path to the xyz coordinate file for the QM region. (Used with the
-        sander interface.)
-
-    elements: [str]
-        The list of elements. (Used with the Sire interface.)
-
-    xyz_qm: numpy.array
-        The coordinates of the QM region in Angstrom. (Used with the Sire
-        interface.)
-
-    gradient: bool
-        Whether to return the gradient.
-
-    Returns
-    -------
-
-    energy: float
-        The in vacuo QM energy in Eh.
-
-    gradients: numpy.array
-        The in vacuo QM gradient in Eh/Bohr.
+    ORCA in-vacuo backend implementation.
     """
 
-    if orca_input is not None and not isinstance(orca_input, str):
-        raise TypeError("'orca_input' must be of type 'str'.")
-    if orca_input is not None and not _os.path.isfile(orca_input):
-        raise IOError(f"Unable to locate the ORCA input file: {orca_input}")
+    def __init__(self, exe, template=None):
+        """
+        Constructor.
 
-    if xyz_file_qm is not None and not isinstance(xyz_file_qm, str):
-        raise TypeError("'xyz_file_qm' must be of type 'str'.")
-    if xyz_file_qm is not None and not _os.path.isfile(xyz_file_qm):
-        raise IOError(f"Unable to locate the ORCA QM xyz file: {xyz_file_qm}")
+        Parameters
+        ----------
 
-    if elements is not None and not isinstance(elements, (list, tuple)):
-        raise TypeError("'elements' must be of type 'list' or 'tuple'.")
-    if elements is not None and not all(
-        isinstance(element, str) for element in elements
-    ):
-        raise TypeError("'elements' must be a 'list' of 'str' types.")
+        exe: str
+            The path to the ORCA executable.
 
-    if xyz_qm is not None and not isinstance(xyz_qm, _np.ndarray):
-        raise TypeError("'xyz_qm' must be of type 'numpy.ndarray'")
-    if xyz_qm is not None and xyz_qm.dtype != _np.float64:
-        raise TypeError("'xyz_qm' must have dtype 'float64'.")
+        template: str
+            The path to the ORCA template file.
+        """
 
-    # ORCA input files take precedence.
-    is_orca_input = True
-    if orca_input is None or xyz_file_qm is None:
-        if elements is None:
-            raise ValueError("No elements specified!")
-        if xyz_qm is None:
-            raise ValueError("No QM coordinates specified!")
+        if not isinstance(exe, str):
+            raise TypeError("'exe' must be of type 'str'")
 
-        is_orca_input = False
+        if not _os.path.isfile(exe):
+            raise IOError(f"Unable to locate ORCA executable: '{exe}'")
 
-        if calculator._orca_template is None:
+        if template is not None:
+            if not isinstance(template, str):
+                raise TypeError("'template' must be of type 'str'")
+
+            if not _os.path.isfile(template):
+                raise IOError(f"Unable to locate ORCA template file: '{template}'")
+
+            # Read the ORCA template file to check for the presence of the
+            # '*xyzfile' directive. Also store the charge and spin multiplicity.
+            lines = []
+            with open(template, "r") as f:
+                for line in f:
+                    if "*xyzfile" in line:
+                        is_xyzfile = True
+                    else:
+                        lines.append(line)
+
+            if not is_xyzfile:
+                raise ValueError(
+                    "ORCA template file must contain '*xyzfile' directive!"
+                )
+
+            # Try to extract the charge and spin multiplicity from the line.
+            try:
+                _, charge, mult, _ = line.split()
+            except:
+                raise ValueError(
+                    "Unable to parse charge and spin multiplicity from ORCA template file!"
+                )
+
+            self._template_lines = lines
+            self._charge = int(charge)
+            self._mult = int(mult)
+
+        self._exe = exe
+        self._template = template
+
+    def calculate(self, atomic_numbers, xyz, forces=True):
+        """
+        Compute the energy and forces.
+
+        Parameters
+        ----------
+
+        atomic_numbers: numpy.ndarray, (N_BATCH, N_QM_ATOMS,)
+            The atomic numbers of the atoms in the QM region.
+
+        xyz: numpy.ndarray, (N_BATCH, N_QM_ATOMS, 3)
+            The coordinates of the atoms in the QM region in Angstrom.
+
+        forces: bool
+            Whether to calculate and return forces.
+
+        Returns
+        -------
+
+        energy: float
+            The in-vacuo energy in Eh.
+
+        forces: numpy.ndarray
+            The in-vacuo forces in Eh/Bohr.
+        """
+
+        if not isinstance(atomic_numbers, _np.ndarray):
+            raise TypeError("'atomic_numbers' must be of type 'numpy.ndarray'")
+        if atomic_numbers.dtype != _np.int64:
+            raise TypeError("'atomic_numbers' must have dtype 'int32'.")
+
+        if not isinstance(xyz, _np.ndarray):
+            raise TypeError("'xyz' must be of type 'numpy.ndarray'")
+        if xyz.dtype != _np.float64:
+            raise TypeError("'xyz' must have dtype 'float64'.")
+
+        if len(atomic_numbers) != len(xyz):
             raise ValueError(
-                "No ORCA template file specified. Use the 'orca_template' keyword."
+                f"Length of 'atomic_numbers' ({len(atomic_numbers)}) does not "
+                f"match length of 'xyz' ({len(xyz)})"
             )
 
-        fd_orca_input, orca_input = _tempfile.mkstemp(
-            prefix="orc_job_", suffix=".inp", text=True
-        )
-        fd_xyz_file_qm, xyz_file_qm = _tempfile.mkstemp(
-            prefix="inpfile_", suffix=".xyz", text=True
-        )
+        # Lists to store results.
+        results_energy = []
+        results_forces = []
 
-        # Parse the ORCA template file. Here we exclude the *xyzfile line,
-        # which will be replaced later using the correct path to the QM
-        # coordinate file that is written.
-        is_xyzfile = False
-        lines = []
-        with open(calculator._orca_template, "r") as f:
-            for line in f:
-                if "*xyzfile" in line:
-                    is_xyzfile = True
-                else:
-                    lines.append(line)
+        # Loop over batches.
+        for i, (atomic_numbers_i, xyz_i) in enumerate(zip(atomic_numbers, xyz)):
+            if len(atomic_numbers_i) != len(xyz_i):
+                raise ValueError(
+                    f"Length of 'atomic_numbers' ({len(atomic_numbers_i)}) does not "
+                    f"match length of 'xyz' ({len(xyz_i)}) for index {i}"
+                )
 
-        if not is_xyzfile:
-            raise ValueError("ORCA template file doesn't contain *xyzfile line!")
+            # Create a temporary working directory.
+            with _tempfile.TemporaryDirectory() as tmp:
+                # Workout the name of the input and xyz files.
+                inp_name = f"{tmp}/input.inp"
+                xyz_name = f"{tmp}/input.xyz"
 
-        # Try to extract the charge and spin multiplicity from the line.
-        try:
-            _, charge, mult, _ = line.split()
-        except:
-            raise ValueError(
-                "Unable to parse charge and spin multiplicity from ORCA template file!"
-            )
+                # Write the input file.
+                with open(inp_name, "w") as f:
+                    for line in self._template_lines:
+                        f.write(line)
+                    f.write(f"*xyzfile {self._charge} {self._mult} {xyz_name}\n")
 
-        # Write the ORCA input file.
-        with open(orca_input, "w") as f:
-            for line in lines:
-                f.write(line)
+                # Work out the elements.
+                elements = [_ase.Atom(id).symbol for id in atomic_numbers_i]
 
-        # Add the QM coordinate file path.
-        with open(orca_input, "a") as f:
-            f.write(f"*xyzfile {charge} {mult} {_os.path.basename(xyz_file_qm)}\n")
+                # Write the xyz file.
+                with open(xyz_name, "w") as f:
+                    f.write(f"{len(elements):5d}\n\n")
+                    for elem, pos in zip(elements, xyz_i):
+                        f.write(
+                            f"{elem:<3s} {pos[0]:20.16f} {pos[1]:20.16f} {pos[2]:20.16f}\n"
+                        )
 
-        # Write the xyz input file.
-        with open(xyz_file_qm, "w") as f:
-            f.write(f"{len(elements):5d}\n\n")
-            for elem, xyz in zip(elements, xyz_qm):
-                f.write(f"{elem:<3s} {xyz[0]:20.16f} {xyz[1]:20.16f} {xyz[2]:20.16f}\n")
+                # Run the ORCA calculation.
+                e, f = self.calculate_sander(xyz_name, inp_name, forces=forces)
 
-    # Create a temporary working directory.
-    with _tempfile.TemporaryDirectory() as tmp:
-        # Work out the name of the input files.
-        inp_name = f"{tmp}/{_os.path.basename(orca_input)}"
-        xyz_name = f"{tmp}/{_os.path.basename(xyz_file_qm)}"
+                # Store the results.
+                results_energy.append(e)
+                results_forces.append(f)
 
-        # Copy the files to the working directory.
-        if is_orca_input:
+        # Convert the results to NumPy arrays.
+        results_energy = _np.array(results_energy)
+        results_forces = _np.array(results_forces)
+
+        return results_energy, results_forces if forces else results_energy
+
+    def calculate_sander(self, xyz_file, orca_input, forces=True):
+        """
+        Internal function to compute in vacuo energies and forces using
+        ORCA via input written by sander.
+
+        Parameters
+        ----------
+
+        xyz_file: str
+            The path to the xyz coordinate file for the QM region.
+
+        orca_input: str
+            The path to the ORCA input file.
+
+        forces: bool
+            Whether to compute and return the forces.
+
+        Returns
+        -------
+
+        energy: float
+            The in vacuo QM energy in Eh.
+
+        forces: numpy.array
+            The in vacuo QM forces in Eh/Bohr.
+        """
+
+        if not isinstance(xyz_file, str):
+            raise TypeError("'xyz_file' must be of type 'str'")
+        if not _os.path.isfile(xyz_file):
+            raise IOError(f"Unable to locate the ORCA QM xyz file: {xyz_file}")
+
+        if not isinstance(orca_input, str):
+            raise TypeError("'orca_input' must be of type 'str'")
+        if not _os.path.isfile(orca_input):
+            raise IOError(f"Unable to locate the ORCA input file: {orca_input}")
+
+        # Create a temporary working directory.
+        with _tempfile.TemporaryDirectory() as tmp:
+            # Work out the name of the input files.
+            inp_name = f"{tmp}/{_os.path.basename(orca_input)}"
+            xyz_name = f"{tmp}/{_os.path.basename(xyz_file)}"
+
+            # Copy the files to the working directory.
             _shutil.copyfile(orca_input, inp_name)
-            _shutil.copyfile(xyz_file_qm, xyz_name)
+            _shutil.copyfile(xyz_file, xyz_name)
 
             # Edit the input file to remove the point charges.
             lines = []
@@ -179,83 +243,82 @@ def calculate_orca(
             with open(inp_name, "w") as f:
                 for line in lines:
                     f.write(line)
-        else:
-            _shutil.move(orca_input, inp_name)
-            _shutil.move(xyz_file_qm, xyz_name)
 
-        # Create the ORCA command.
-        command = f"{calculator._orca_path} {inp_name}"
+            # Create the ORCA command.
+            command = f"{self._exe} {inp_name}"
 
-        # Run the command as a sub-process.
-        proc = _subprocess.run(
-            _shlex.split(command),
-            cwd=tmp,
-            shell=False,
-            stdout=_subprocess.PIPE,
-            stderr=_subprocess.PIPE,
-        )
+            # Run the command as a sub-process.
+            proc = _subprocess.run(
+                _shlex.split(command),
+                cwd=tmp,
+                shell=False,
+                stdout=_subprocess.PIPE,
+                stderr=_subprocess.PIPE,
+            )
 
-        if proc.returncode != 0:
-            raise RuntimeError("ORCA job failed!")
+            if proc.returncode != 0:
+                raise RuntimeError("ORCA job failed!")
 
-        # Parse the output file for the energies and gradients.
-        engrad = f"{tmp}/{_os.path.splitext(_os.path.basename(orca_input))[0]}.engrad"
+            # Parse the output file for the energies and gradients.
+            engrad = (
+                f"{tmp}/{_os.path.splitext(_os.path.basename(orca_input))[0]}.engrad"
+            )
 
-        if not _os.path.isfile(engrad):
-            raise IOError(f"Unable to locate ORCA engrad file: {engrad}")
+            if not _os.path.isfile(engrad):
+                raise IOError(f"Unable to locate ORCA engrad file: {engrad}")
 
-        with open(engrad, "r") as f:
-            is_nrg = False
-            is_grad = False
-            gradient = []
-            for line in f:
-                if line.startswith("# The current total"):
-                    is_nrg = True
-                    count = 0
-                elif line.startswith("# The current gradient"):
-                    is_grad = True
-                    count = 0
-                else:
-                    # This is an energy record. These start two lines after
-                    # the header, following a comment. So we need to count
-                    # one line forward.
-                    if is_nrg and count == 1 and not line.startswith("#"):
-                        try:
-                            energy = float(line.strip())
-                        except:
-                            IOError("Unable to parse ORCA energy record!")
-                    # This is a gradient record. These start two lines after
-                    # the header, following a comment. So we need to count
-                    # one line forward.
-                    elif is_grad and count == 1 and not line.startswith("#"):
-                        try:
-                            gradient.append(float(line.strip()))
-                        except:
-                            IOError("Unable to parse ORCA gradient record!")
+            with open(engrad, "r") as f:
+                is_nrg = False
+                is_grad = False
+                gradient = []
+                for line in f:
+                    if line.startswith("# The current total"):
+                        is_nrg = True
+                        count = 0
+                    elif line.startswith("# The current gradient"):
+                        is_grad = True
+                        count = 0
                     else:
-                        if is_nrg:
-                            # We've hit the end of the records, abort.
-                            if count == 1:
-                                is_nrg = False
-                            # Increment the line count since the header.
-                            else:
-                                count += 1
-                        if is_grad:
-                            # We've hit the end of the records, abort.
-                            if count == 1:
-                                is_grad = False
-                            # Increment the line count since the header.
-                            else:
-                                count += 1
+                        # This is an energy record. These start two lines after
+                        # the header, following a comment. So we need to count
+                        # one line forward.
+                        if is_nrg and count == 1 and not line.startswith("#"):
+                            try:
+                                energy = float(line.strip())
+                            except:
+                                IOError("Unable to parse ORCA energy record!")
+                        # This is a gradient record. These start two lines after
+                        # the header, following a comment. So we need to count
+                        # one line forward.
+                        elif is_grad and count == 1 and not line.startswith("#"):
+                            try:
+                                gradient.append(float(line.strip()))
+                            except:
+                                IOError("Unable to parse ORCA gradient record!")
+                        else:
+                            if is_nrg:
+                                # We've hit the end of the records, abort.
+                                if count == 1:
+                                    is_nrg = False
+                                # Increment the line count since the header.
+                                else:
+                                    count += 1
+                            if is_grad:
+                                # We've hit the end of the records, abort.
+                                if count == 1:
+                                    is_grad = False
+                                # Increment the line count since the header.
+                                else:
+                                    count += 1
 
-    if not gradient:
-        return energy
+        if not forces:
+            return energy
 
-    # Convert the gradient to a NumPy array and reshape. (Read as a single
-    # column, convert to x, y, z components for each atom.)
-    try:
-        gradient = _np.array(gradient).reshape(int(len(gradient) / 3), 3)
-    except:
-        raise IOError("Number of ORCA gradient records isn't a multiple of 3!")
+        # Convert the gradient to a NumPy array and reshape. (Read as a single
+        # column, convert to x, y, z components for each atom.)
+        try:
+            gradient = _np.array(gradient).reshape(int(len(gradient) / 3), 3)
+        except:
+            raise IOError("Number of ORCA gradient records isn't a multiple of 3!")
 
-    return energy, gradient
+        return energy, -gradient
