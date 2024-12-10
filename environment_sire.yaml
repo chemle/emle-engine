@@ -21,4 +21,4 @@ dependencies:
   - torchani
   - xtb-python
   - pip:
-    - mace-torch < 0.3.9
+    - mace-torch
