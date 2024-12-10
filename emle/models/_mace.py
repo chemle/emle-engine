@@ -199,7 +199,9 @@ class MACEEMLE(_torch.nn.Module):
                         f"Unsupported MACE model: '{mace_model}'. Available MACE-OFF23 models are "
                         "'mace-off23-small', 'mace-off23-medium', 'mace-off23-large'"
                     )
-                source_model = _mace_off(model=size, device=device, return_raw_model=True)
+                source_model = _mace_off(
+                    model=size, device=device, return_raw_model=True
+                )
             else:
                 # Assuming that the model is a local model.
                 if _os.path.exists(mace_model):
@@ -208,7 +210,9 @@ class MACEEMLE(_torch.nn.Module):
                     raise FileNotFoundError(f"MACE model file not found: {mace_model}")
         else:
             # If no MACE model is provided, use the default MACE-OFF23(S) model.
-            source_model = _mace_off(model="small", device=device, return_raw_model=True)
+            source_model = _mace_off(
+                model="small", device=device, return_raw_model=True
+            )
 
         from mace.tools.scripts_utils import extract_config_mace_model
 
