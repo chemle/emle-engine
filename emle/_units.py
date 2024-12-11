@@ -24,9 +24,11 @@
 
 import ase as _ase
 
+_ANGSTROM_TO_BOHR = 1.0 / _ase.units.Bohr
 _NANOMETER_TO_BOHR = 10.0 / _ase.units.Bohr
 _BOHR_TO_ANGSTROM = _ase.units.Bohr
 _EV_TO_HARTREE = 1.0 / _ase.units.Hartree
 _KCAL_MOL_TO_HARTREE = 1.0 / _ase.units.Hartree * _ase.units.kcal / _ase.units.mol
+_HARTREE_TO_KCAL_MOL = _ase.units.Hartree / _ase.units.kcal * _ase.units.mol
 _HARTREE_TO_KJ_MOL = _ase.units.Hartree / _ase.units.kJ * _ase.units.mol
 _NANOMETER_TO_ANGSTROM = 10.0
