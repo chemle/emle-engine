@@ -32,6 +32,18 @@ emle is a package for the calculation of electrostatic interactions in
 molecular systems.
 """
 
+# List of supported backends.
+_supported_backends = [
+    "torchani",
+    "mace",
+    "deepmd",
+    "orca",
+    "rascal",
+    "sqm",
+    "sander",
+    "xtb",
+]
+
 from ._version import get_versions
 
 __version__ = get_versions()["version"]

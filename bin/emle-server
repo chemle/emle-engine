@@ -30,6 +30,7 @@ import time
 
 from glob import glob
 
+from emle import _supported_backends
 from emle._socket import Socket
 
 
@@ -231,7 +232,7 @@ parser.add_argument(
     "--backend",
     type=str,
     help="the in vacuo backend",
-    choices=["torchani", "mace", "deepmd", "orca", "sander", "sqm", "xtb"],
+    choices=_supported_backends,
     required=False,
 )
 parser.add_argument(
