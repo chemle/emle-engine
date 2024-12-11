@@ -231,6 +231,7 @@ parser.add_argument(
 parser.add_argument(
     "--backend",
     type=str,
+    nargs="*",
     help="the in vacuo backend",
     choices=_supported_backends,
     required=False,
