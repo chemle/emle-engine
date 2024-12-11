@@ -44,6 +44,33 @@ class Backend:
                 "'Backend' is an abstract class and should not be instantiated directly"
             )
 
+    def __call__(self, atomic_numbers, xyz, forces=True, **kwargs):
+        """
+        Compute the energy and forces.
+
+        Parameters
+        ----------
+
+        atomic_numbers: numpy.ndarray, (N_BATCH, N_QM_ATOMS,)
+            The atomic numbers of the atoms in the QM region.
+
+        xyz: numpy.ndarray, (N_BATCH, N_QM_ATOMS, 3)
+            The coordinates of the atoms in the QM region in Angstrom.
+
+        forces: bool
+            Whether to calculate and return forces.
+
+        Returns
+        -------
+
+        energy: float
+            The in-vacuo energy in Eh.
+
+        forces: numpy.ndarray
+            The in-vacuo forces in Eh/Bohr.
+        """
+        return self.calculate(atomic_numbers, xyz, forces, **kwargs)
+
     def calculate(self, atomic_numbers, xyz, forces=True):
         """
         Compute the energy and forces.

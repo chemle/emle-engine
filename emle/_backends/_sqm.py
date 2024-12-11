@@ -83,7 +83,7 @@ class SQM(_Backend):
             raise TypeError("'qm_charge' must be of type 'int'.")
         self._qm_charge = qm_charge
 
-    def calculate(self, atomic_numbers, xyz, qm_charge=None, forces=True):
+    def calculate(self, atomic_numbers, xyz, forces=True, qm_charge=None):
         """
         Compute the energy and forces.
 
@@ -98,6 +98,9 @@ class SQM(_Backend):
 
         forces: bool
             Whether to calculate and return forces.
+
+        qm_charge: int
+            The charge on the QM region.
 
         Returns
         -------
@@ -119,7 +122,6 @@ class SQM(_Backend):
 
         if qm_charge is None:
             qm_charge = self._qm_charge
-
         else:
             if not isinstance(qm_charge, int):
                 raise TypeError("'qm_charge' must be of type 'int'.")

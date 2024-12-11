@@ -1114,7 +1114,7 @@ class EMLECalculator:
                 backend = Sander(self._parm7)
 
                 # Compute the in vacuo MM energy and forces for the QM region.
-                energy, forces = backend.calculate(atomic_numbers_np, xyz_qm_np)
+                energy, forces = backend(atomic_numbers_np, xyz_qm_np)
                 E_mm_qm_vac = energy[0]
                 grad_mm_qm_vac = -forces[0]
 
@@ -1498,7 +1498,7 @@ class EMLECalculator:
                 backend = Sander(self._parm7)
 
                 # Compute the in vacuo MM energy and forces for the QM region.
-                energy, forces = backend.calculate(atomic_numbers_np, xyz_qm_np)
+                energy, forces = backend(atomic_numbers_np, xyz_qm_np)
 
                 E_mm_qm_vac = energy[0]
                 grad_mm_qm_vac = -forces[0]

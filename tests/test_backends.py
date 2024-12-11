@@ -36,7 +36,7 @@ def test_sqm(data):
     backend = SQM("tests/input/methane.prm7")
 
     # Calculate the energy and forces.
-    energy, forces = backend.calculate(atomic_numbers, xyz)
+    energy, forces = backend(atomic_numbers, xyz)
 
 
 def test_sander(data):
@@ -51,7 +51,7 @@ def test_sander(data):
     backend = Sander("tests/input/methane.prm7")
 
     # Calculate the energy and forces.
-    energy, forces = backend.calculate(atomic_numbers, xyz)
+    energy, forces = backend(atomic_numbers, xyz)
 
 
 def test_xtb(data):
@@ -66,7 +66,7 @@ def test_xtb(data):
     backend = XTB()
 
     # Calculate the energy and forces.
-    energy, forces = backend.calculate(atomic_numbers, xyz)
+    energy, forces = backend(atomic_numbers, xyz)
 
 
 @pytest.mark.skipif(
@@ -91,7 +91,7 @@ def test_orca(data):
     backend = ORCA(exe=f"{orca_path}/orca", template="tests/input/orc_job.inp")
 
     # Calculate the energy and forces.
-    energy, forces = backend.calculate(atomic_numbers, xyz)
+    energy, forces = backend(atomic_numbers, xyz)
 
 
 @pytest.mark.skipif(
@@ -117,7 +117,7 @@ def test_deepmd(data):
         backend = DeePMD(models, deviation=tmp.name)
 
         # Calculate the energy and forces.
-        energy, forces = backend.calculate(atomic_numbers, xyz)
+        energy, forces = backend(atomic_numbers, xyz)
 
         # Make sure the deviation is calculated.
         with open(tmp.name, "r") as f:
