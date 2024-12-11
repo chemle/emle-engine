@@ -117,6 +117,11 @@ class Rascal(_Backend):
                 f"match length of 'xyz' ({len(xyz)})"
             )
 
+        # Convert to batched NumPy arrays.
+        if len(atomic_numbers.shape) == 1:
+            atomic_numbers = _np.expand_dims(atomic_numbers, axis=0)
+            xyz = _np.expand_dims(xyz, axis=0)
+
         # Lists to store results.
         results_energy = []
         results_forces = []

@@ -997,10 +997,7 @@ class EMLECalculator:
             # Non-Torch backends.
             elif backend is not None:
                 try:
-                    energy, forces = self._backend(
-                        _np.expand_dims(atomic_numbers, axis=0),
-                        _np.expand_dims(xyz_qm, axis=0),
-                    )
+                    energy, forces = self._backend(atomic_numbers, xyz_qm)
                     E_vac = energy[0]
                     grad_vac = -forces[0]
                 except Exception as e:
@@ -1026,10 +1023,7 @@ class EMLECalculator:
         # Apply delta-learning corrections using Rascal.
         if self._is_delta and self._backend is not None:
             try:
-                energy, forces = self._rascal_calc(
-                    _np.expand_dims(atomic_numbers, axis=0),
-                    _np.expand_dims(xyz_qm, axis=0),
-                )
+                energy, forces = self._rascal_calc(atomic_numbers, xyz_qm)
                 delta_E = energy[0]
                 delta_grad = -forces[0]
             except Exception as e:
@@ -1120,10 +1114,7 @@ class EMLECalculator:
                 backend = Sander(self._parm7)
 
                 # Compute the in vacuo MM energy and forces for the QM region.
-                energy, forces = backend.calculate(
-                    _np.expand_dims(atomic_numbers_np, axis=0),
-                    _np.expand_dims(xyz_qm_np, axis=0),
-                )
+                energy, forces = backend.calculate(atomic_numbers_np, xyz_qm_np)
                 E_mm_qm_vac = energy[0]
                 grad_mm_qm_vac = -forces[0]
 
@@ -1376,10 +1367,7 @@ class EMLECalculator:
             # Non-Torch backends.
             elif self._backend is not None:
                 try:
-                    energy, forces = self._backend(
-                        _np.expand_dims(atomic_numbers, axis=0),
-                        _np.expand_dims(xyz_qm, axis=0),
-                    )
+                    energy, forces = self._backend(atomic_numbers, xyz_qm)
                     E_vac = energy[0]
                     grad_vac = -forces[0]
                 except Exception as e:
@@ -1406,10 +1394,7 @@ class EMLECalculator:
         # Apply delta-learning corrections using Rascal.
         if self._is_delta and self._backend is not None:
             try:
-                energy, forces = self._rascal_calc(
-                    _np.expand_dims(atomic_numbers, axis=0),
-                    _np.expand_dims(xyz_qm, axis=0),
-                )
+                energy, forces = self._rascal_calc(atomic_numbers, xyz_qm)
                 delta_E = energy[0]
                 delta_grad = -forces[0]
             except Exception as e:
@@ -1513,10 +1498,7 @@ class EMLECalculator:
                 backend = Sander(self._parm7)
 
                 # Compute the in vacuo MM energy and forces for the QM region.
-                energy, forces = backend.calculate(
-                    _np.expand_dims(atomic_numbers_np, axis=0),
-                    _np.expand_dims(xyz_qm_np, axis=0),
-                )
+                energy, forces = backend.calculate(atomic_numbers_np, xyz_qm_np)
 
                 E_mm_qm_vac = energy[0]
                 grad_mm_qm_vac = -forces[0]
