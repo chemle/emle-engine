@@ -131,7 +131,6 @@ def test_deepmd(data):
             deviation = float(f.read())
 
 
-@pytest.mark.xfail(reason="Model file is currently corrupted.")
 @pytest.mark.skipif(not has_rascal, reason="Rascal not installed.")
 @pytest.mark.skipif(
     socket.gethostname() != "porridge",

@@ -80,7 +80,7 @@ class Rascal(_Backend):
         except:
             raise RuntimeError("Unable to create Rascal calculator!")
 
-    def calculate(atomic_numbers, xyz, forces=True):
+    def calculate(self, atomic_numbers, xyz, forces=True):
         """
         Compute the energy and forces.
 
