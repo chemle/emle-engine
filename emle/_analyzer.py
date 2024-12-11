@@ -100,7 +100,12 @@ class EMLEAnalyzer:
                 backend = backend.to(device).to(dtype)
                 atomic_numbers = _torch.tensor(atomic_numbers, device=device)
                 qm_xyz = _torch.tensor(qm_xyz, dtype=dtype, device=device)
-            self.e_backend = backend(atomic_numbers, qm_xyz) * _HARTREE_TO_KCAL_MOL
+                charges_mm = _torch.empty((len(qm_xyz), 0), dtype=dtype, device=device)
+                mm_xyz = _torch.empty((len(qm_xyz), 0, 3), dtype=dtype, device=device)
+            self.e_backend = (
+                backend(atomic_numbers, charges_mm, qm_xyz, mm_xyz)
+                * _HARTREE_TO_KCAL_MOL
+            )
 
         self.atomic_numbers = _torch.tensor(
             atomic_numbers, dtype=_torch.int, device=device
