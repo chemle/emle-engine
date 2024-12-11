@@ -34,7 +34,7 @@ import torch as _torch
 import torchani as _torchani
 
 from torch import Tensor
-from typing import Optional, Tuple, List
+from typing import Union
 
 from . import _patches
 from . import EMLEBase as _EMLEBase
@@ -408,7 +408,7 @@ class EMLE(_torch.nn.Module):
         charges_mm: Tensor,
         xyz_qm: Tensor,
         xyz_mm: Tensor,
-        qm_charge: int = 0,
+        qm_charge: Union[int, Tensor] = 0,
     ) -> Tensor:
         """
         Computes the static and induced EMLE energy components.
@@ -416,85 +416,101 @@ class EMLE(_torch.nn.Module):
         Parameters
         ----------
 
-        atomic_numbers: torch.Tensor (N_QM_ATOMS,)
+        atomic_numbers: torch.Tensor (N_QM_ATOMS,) or (BATCH, N_QM_ATOMS)
             Atomic numbers of QM atoms.
 
-        charges_mm: torch.Tensor (max_mm_atoms,)
+        charges_mm: torch.Tensor (max_mm_atoms,) or (BATCH, max_mm_atoms)
             MM point charges in atomic units.
 
-        xyz_qm: torch.Tensor (N_QM_ATOMS, 3)
+        xyz_qm: torch.Tensor (N_QM_ATOMS, 3) or (BATCH, N_QM_ATOMS, 3)
             Positions of QM atoms in Angstrom.
 
-        xyz_mm: torch.Tensor (N_MM_ATOMS, 3)
+        xyz_mm: torch.Tensor (N_MM_ATOMS, 3) or (BATCH, N_MM_ATOMS, 3)
             Positions of MM atoms in Angstrom.
 
-        qm_charge: int
+        qm_charge: int or torch.Tensor (BATCH,)
             The charge on the QM region.
 
         Returns
         -------
 
-        result: torch.Tensor (2,)
+        result: torch.Tensor (2,) or (2, BATCH)
             The static and induced EMLE energy components in Hartree.
         """
-
-        # If the QM charge is a non-default value in the constructor, then
-        # use this value when qm_charge is zero.
-        if self._qm_charge != 0 and qm_charge == 0:
-            qm_charge = self._qm_charge
-
         # Store the inputs as internal attributes.
         self._atomic_numbers = atomic_numbers
         self._charges_mm = charges_mm
         self._xyz_qm = xyz_qm
         self._xyz_mm = xyz_mm
-        self._qm_charge = qm_charge
+
+        if self._atomic_numbers.ndim == 1:
+            self._atomic_numbers = self._atomic_numbers.unsqueeze(0)
+            self._charges_mm = self._charges_mm.unsqueeze(0)
+            self._xyz_qm = self._xyz_qm.unsqueeze(0)
+            self._xyz_mm = self._xyz_mm.unsqueeze(0)
+
+        batch_size = self._atomic_numbers.shape[0]
+
+        # Ensure qm_charge is a tensor and repeat for batch size if necessary
+        if isinstance(qm_charge, int):
+            qm_charge = _torch.full(
+                (batch_size,),
+                qm_charge if qm_charge != 0 else self._qm_charge,
+                dtype=_torch.int64,
+                device=self._device,
+            )
+        elif isinstance(qm_charge, _torch.Tensor):
+            if qm_charge.ndim == 0:
+                qm_charge = qm_charge.repeat(batch_size).to(self._device)
 
         # If there are no point charges, return zeros.
-        if len(xyz_mm) == 0:
-            return _torch.zeros(2, dtype=xyz_qm.dtype, device=xyz_qm.device)
+        if xyz_mm.shape[1] == 0:
+            return _torch.zeros(
+                2, batch_size, dtype=self._xyz_qm.dtype, device=self._xyz_qm.device
+            )
 
         # Get the parameters from the base model:
         #    valence widths, core charges, valence charges, A_thole tensor
         # These are returned as batched tensors, so we need to extract the
         # first element of each.
         s, q_core, q_val, A_thole = self._emle_base(
-            atomic_numbers[None, :],
-            xyz_qm[None, :, :],
-            _torch.tensor([qm_charge], dtype=xyz_qm.dtype, device=xyz_qm.device),
+            self._atomic_numbers,
+            self._xyz_qm,
+            qm_charge,
         )
 
         # Convert coordinates to Bohr.
         ANGSTROM_TO_BOHR = 1.8897261258369282
-        xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
-        xyz_mm_bohr = xyz_mm * ANGSTROM_TO_BOHR
+        xyz_qm_bohr = self._xyz_qm * ANGSTROM_TO_BOHR
+        xyz_mm_bohr = self._xyz_mm * ANGSTROM_TO_BOHR
 
         # Compute the static energy.
         if self._method == "mm":
-            q_core = self._q_core_mm[None, :]
+            q_core = self._q_core_mm.expand(batch_size, -1)
             q_val = _torch.zeros_like(
-                q_core, dtype=charges_mm.dtype, device=self._device
+                q_core, dtype=self._charges_mm.dtype, device=self._device
             )
 
-        mesh_data = self._emle_base._get_mesh_data(
-            xyz_qm_bohr[None, :, :], xyz_mm_bohr[None, :, :], s
-        )
+        mask = (self._atomic_numbers > 0).unsqueeze(-1)
+        mesh_data = self._emle_base._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s, mask)
 
         if self._method == "mechanical":
             q_core = q_core + q_val
             q_val = _torch.zeros_like(
-                q_core, dtype=charges_mm.dtype, device=self._device
+                q_core, dtype=self._charges_mm.dtype, device=self._device
             )
         E_static = self._emle_base.get_static_energy(
-            q_core, q_val, charges_mm[None, :], mesh_data
-        )[0]
+            q_core, q_val, self._charges_mm, mesh_data
+        )
 
         # Compute the induced energy.
         if self._method == "electrostatic":
             E_ind = self._emle_base.get_induced_energy(
-                A_thole, charges_mm[None, :], s, mesh_data
-            )[0]
+                A_thole, self._charges_mm, s, mesh_data, mask
+            )
         else:
-            E_ind = _torch.tensor(0.0, dtype=charges_mm.dtype, device=self._device)
+            E_ind = _torch.zeros_like(
+                E_static, dtype=self._charges_mm.dtype, device=self._device
+            )
 
-        return _torch.stack([E_static, E_ind])
+        return _torch.stack((E_static, E_ind), dim=0)

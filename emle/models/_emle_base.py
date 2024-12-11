@@ -824,6 +824,7 @@ class EMLEBase(_torch.nn.Module):
         charges_mm: Tensor,
         s: Tensor,
         mesh_data: Tuple[Tensor, Tensor, Tensor],
+        mask: Tensor,
     ) -> Tensor:
         """
         Calculate the induced electrostatic energy.
@@ -843,13 +844,16 @@ class EMLEBase(_torch.nn.Module):
         mesh_data: mesh_data object (output of self._get_mesh_data)
             Mesh data object.
 
+        mask: torch.Tensor (N_BATCH, MAX_QM_ATOMS)
+            Mask for padded coordinates.
+
         Returns
         -------
 
         result: torch.Tensor (N_BATCH,)
             Induced electrostatic energy.
         """
-        mu_ind = EMLEBase._get_mu_ind(A_thole, mesh_data, charges_mm, s)
+        mu_ind = EMLEBase._get_mu_ind(A_thole, mesh_data, charges_mm, s, mask)
         vpot_ind = EMLEBase._get_vpot_mu(mu_ind, mesh_data[2])
         return _torch.sum(vpot_ind * charges_mm, dim=1) * 0.5
 
@@ -859,6 +863,7 @@ class EMLEBase(_torch.nn.Module):
         mesh_data: Tuple[Tensor, Tensor, Tensor],
         q: Tensor,
         s: Tensor,
+        mask: Tensor,
     ) -> Tensor:
         """
         Internal method, calculates induced atomic dipoles
@@ -881,6 +886,9 @@ class EMLEBase(_torch.nn.Module):
         q_val: torch.Tensor (N_BATCH, N_QM_ATOMS,)
             MBIS valence charges.
 
+        mask: torch.Tensor (N_BATCH, N_QM_ATOMS)
+            Mask for padded coordinates.
+
         Returns
         -------
 
@@ -889,7 +897,7 @@ class EMLEBase(_torch.nn.Module):
         """
 
         r = 1.0 / mesh_data[0]
-        f1 = EMLEBase._get_f1_slater(r, s[:, :, None] * 2.0)
+        f1 = _torch.where(mask, EMLEBase._get_f1_slater(r, s[:, :, None] * 2.0), 0.0)
         fields = _torch.sum(
             mesh_data[2] * f1[..., None] * q[:, None, :, None], dim=2
         ).reshape(len(s), -1)
@@ -944,7 +952,7 @@ class EMLEBase(_torch.nn.Module):
 
     @staticmethod
     def _get_mesh_data(
-        xyz: Tensor, xyz_mesh: Tensor, s: Tensor
+        xyz: Tensor, xyz_mesh: Tensor, s: Tensor, mask: Tensor
     ) -> Tuple[Tensor, Tensor, Tensor]:
         """
         Internal method, calculates mesh_data object.
@@ -961,6 +969,9 @@ class EMLEBase(_torch.nn.Module):
         s: torch.Tensor (N_BATCH, MAX_QM_ATOMS,)
             MBIS valence widths.
 
+        mask: torch.Tensor (N_BATCH, MAX_QM_ATOMS)
+            Mask for padded coordinates.
+
         Returns
         -------
 
@@ -970,10 +981,14 @@ class EMLEBase(_torch.nn.Module):
         rr = xyz_mesh[:, None, :, :] - xyz[:, :, None, :]
         r = _torch.linalg.norm(rr, ord=2, dim=3)
 
+        # Mask for padded coordinates.
+        r_inv = _torch.where(mask, 1.0 / r, 0.0)
+        T0_slater = _torch.where(mask, EMLEBase._get_T0_slater(r, s[:, :, None]), 0.0)
+
         return (
-            1.0 / r,
-            EMLEBase._get_T0_slater(r, s[:, :, None]),
-            -rr / r[..., None] ** 3,
+            r_inv,
+            T0_slater,
+            -rr * r_inv[..., None] ** 3,
         )
 
     @staticmethod

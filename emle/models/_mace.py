@@ -472,4 +472,4 @@ class MACEEMLE(_torch.nn.Module):
         E_emle = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, qm_charge)
 
         # Return the MACE and EMLE energy components.
-        return _torch.stack([E_vac, E_emle[0], E_emle[1]])
+        return _torch.stack([E_vac, E_emle[0][0], E_emle[1][0]])
