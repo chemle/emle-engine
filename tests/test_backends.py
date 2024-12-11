@@ -6,6 +6,13 @@ import tempfile
 
 from emle._backends import *
 
+try:
+    import rascal
+
+    has_rascal = True
+except ImportError:
+    has_rascal = False
+
 
 @pytest.fixture(scope="module")
 def data():
@@ -122,3 +129,27 @@ def test_deepmd(data):
         # Make sure the deviation is calculated.
         with open(tmp.name, "r") as f:
             deviation = float(f.read())
+
+
+@pytest.mark.xfail(reason="Model file is currently corrupted.")
+@pytest.mark.skipif(not has_rascal, reason="Rascal not installed.")
+@pytest.mark.skipif(
+    socket.gethostname() != "porridge",
+    reason="Local test requiring a Rascal model file.",
+)
+def test_rascal(data):
+    """
+    Test the Rascal backend.
+    """
+
+    # Set up the data.
+    atomic_numbers, xyz = data
+
+    model = "tests/input/rascal/deltaL.sav"
+
+    with tempfile.NamedTemporaryFile() as tmp:
+        # Instantiate the Rascal backend.
+        backend = Rascal(model)
+
+        # Calculate the energy and forces.
+        energy, forces = backend(atomic_numbers, xyz)
