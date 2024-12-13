@@ -1000,6 +1000,10 @@ class EMLECalculator:
         base_model = None
         delta_model = None
 
+        # Zero the in vacuo energy and gradients.
+        E_vac = 0
+        grad_vac = _np.zeros_like(xyz_qm)
+
         # Internal backends.
         if not self._is_external_backend:
             if self._backend is not None:
@@ -1016,18 +1020,16 @@ class EMLECalculator:
                     # This is a non-Torch backend.
                     else:
                         try:
-                            energy, forces = backend(atomic_numbers, xyz_qm)
                             # Add the in vacuo energy and gradients to the total.
-                            try:
-                                E_vac += energy[0]
-                                grad_vac += -forces[0]
-                            except:
-                                E_vac = energy[0]
-                                grad_vac = -forces[0]
+                            energy, forces = backend(atomic_numbers, xyz_qm)
+                            E_vac += energy[0]
+                            grad_vac += -forces[0]
                         except Exception as e:
                             msg = f"Failed to calculate in vacuo energies using {self._backend[i]} backend: {e}"
                             _logger.error(msg)
                             raise RuntimeError(msg)
+
+                        _logger.error(f"{i}: Energy in vacuo: {E_vac}")
 
             # No backend.
             else:
@@ -1064,14 +1066,14 @@ class EMLECalculator:
 
         # Apply delta-learning corrections using an EMLE model.
         if delta_model is not None:
-            model = delta_model.__class__.__name__
+            model = delta_model.original_name
             try:
                 # Create null MM inputs.
                 null_charges_mm = _torch.zeros_like(charges_mm)
                 null_xyz_mm = _torch.zeros_like(xyz_mm)
 
                 # Compute the energy.
-                E = self._backends[1](
+                E = delta_model(
                     atomic_numbers, null_charges_mm, xyz_qm, null_xyz_mm, charge
                 )
 
@@ -1079,8 +1081,8 @@ class EMLECalculator:
                 dE_dxyz_qm = _torch.autograd.grad(E.sum(), xyz_qm)
 
                 # Compute the delta correction.
-                delta_E = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
-                delta_grad = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
+                delta_E = E.sum().detach().cpu().numpy()
+                delta_grad = dE_dxyz_qm[0].cpu().numpy() * _BOHR_TO_ANGSTROM
 
                 # Apply the correction.
                 E_vac += delta_E
@@ -1112,7 +1114,7 @@ class EMLECalculator:
         # Compute in vacuo and embedding energies and gradients in one go using
         # the EMLE Torch models
         else:
-            model = base_model.__class__.__name__
+            model = base_model.original_name
             try:
                 with _torch.jit.optimized_execution(False):
                     E = base_model(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
@@ -1120,9 +1122,9 @@ class EMLECalculator:
                         E.sum(), (xyz_qm, xyz_mm)
                     )
 
-                grad_qm = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
+                grad_qm = grad_vac + dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
                 grad_mm = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
-                E_tot = E.sum().detach().cpu().numpy()
+                E_tot = E_vac + E.sum().detach().cpu().numpy()
 
             except Exception as e:
                 msg = f"Failed to compute {model} energies and gradients: {e}"
@@ -1384,6 +1386,10 @@ class EMLECalculator:
         base_model = None
         delta_model = None
 
+        # Zero the in vacuo energy and gradients.
+        E_vac = 0.0
+        grad_vac = _np.zeros_like(xyz_qm)
+
         # Internal backends.
         if not self._is_external_backend:
             if self._backend is not None:
@@ -1400,14 +1406,10 @@ class EMLECalculator:
                     # This is a non-Torch backend.
                     else:
                         try:
-                            energy, forces = backend(atomic_numbers, xyz_qm)
                             # Add the in vacuo energy and gradients to the total.
-                            try:
-                                E_vac += energy[0]
-                                grad_vac += -forces[0]
-                            except:
-                                E_vac = energy[0]
-                                grad_vac = -forces[0]
+                            energy, forces = backend(atomic_numbers, xyz_qm)
+                            E_vac += energy[0]
+                            grad_vac += -forces[0]
                         except Exception as e:
                             msg = f"Failed to calculate in vacuo energies using {self._backend[i]} backend: {e}"
                             _logger.error(msg)
@@ -1448,14 +1450,14 @@ class EMLECalculator:
 
         # Apply delta-learning corrections using an EMLE model.
         if delta_model is not None:
-            model = delta_model.__class__.__name__
+            model = delta_model.original_name
             try:
                 # Create null MM inputs.
                 null_charges_mm = _torch.zeros_like(charges_mm)
                 null_xyz_mm = _torch.zeros_like(xyz_mm)
 
                 # Compute the energy.
-                E = self._backends[1](
+                E = delta_model(
                     atomic_numbers, null_charges_mm, xyz_qm, null_xyz_mm, charge
                 )
 
@@ -1463,8 +1465,8 @@ class EMLECalculator:
                 dE_dxyz_qm = _torch.autograd.grad(E.sum(), xyz_qm)
 
                 # Compute the delta correction.
-                delta_E = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
-                delta_grad = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
+                delta_E = E.sum().detach().cpu().numpy()
+                delta_grad = dE_dxyz_qm[0].cpu().numpy() * _BOHR_TO_ANGSTROM
 
                 # Apply the correction.
                 E_vac += delta_E
@@ -1504,7 +1506,7 @@ class EMLECalculator:
         # Compute in vacuo and embedding energies and gradients in one go using
         # the EMLE Torch models
         else:
-            model = base_model.__class__.__name__
+            model = base_model.original_name
             try:
                 with _torch.jit.optimized_execution(False):
                     E = base_model(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
@@ -1512,9 +1514,9 @@ class EMLECalculator:
                         E.sum(), (xyz_qm, xyz_mm)
                     )
 
-                grad_qm = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
+                grad_qm = grad_vac + dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
                 grad_mm = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
-                E_tot = E.sum().detach().cpu().numpy()
+                E_tot = E_vac + E.sum().detach().cpu().numpy()
 
             except Exception as e:
                 msg = f"Failed to compute {model} energies and gradients: {e}"
