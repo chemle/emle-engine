@@ -97,6 +97,10 @@ try:
     mace_model = os.getenv("EMLE_MACE_MODEL")
 except:
     mace_model = None
+try:
+    ace_model = os.getenv("EMLE_ACE_MODEL")
+except:
+    ace_model = None
 rascal_model = os.getenv("EMLE_RASCAL_MODEL")
 parm7 = os.getenv("EMLE_PARM7")
 try:
@@ -152,7 +156,8 @@ env = {
     "pc_xyz_file": pc_xyz_file,
     "qm_xyz_frequency": qm_xyz_frequency,
     "ani2x_model_index": ani2x_model_index,
-    "macemodel": mace_model,
+    "mace_model": mace_model,
+    "ace_model": ace_model,
     "rascal_model": rascal_model,
     "lambda_interpolate": lambda_interpolate,
     "interpolate_steps": interpolate_steps,
@@ -265,6 +270,12 @@ parser.add_argument(
     "--mace-model",
     type=str,
     help="name of the MACE-OFF23 model, or path to the MACE model file",
+    required=False,
+)
+parser.add_argument(
+    "--ace-model",
+    type=str,
+    help="path to the ACE model file",
     required=False,
 )
 parser.add_argument(

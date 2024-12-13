@@ -20,65 +20,53 @@
 # along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
 #####################################################################
 
-"""Rascal in-vacuo backend implementation."""
+"""ACE in-vacuo backend implementation."""
 
-__all__ = ["Rascal"]
+try:
+    import pyjulip as _pyjulip
+
+    __all__ = ["ACE"]
+except:
+    __all__ = []
 
 import ase as _ase
 import os as _os
-import pickle as _pickle
 import numpy as _np
+
 
 from .._units import _EV_TO_HARTREE, _BOHR_TO_ANGSTROM
 
 from ._backend import Backend as _Backend
 
 
-class Rascal(_Backend):
+class ACE(_Backend):
     """
-    Rascal in-vacuo backend implementation.
+    ACE in-vacuo backend implementation.
     """
 
     def __init__(self, model):
         """
-        Constructor.
+        Initialize the ACE in-vacuo backend.
 
         Parameters
         ----------
 
         model: str
-            The path to the Rascal model file.
+            The path to the ACE model.
         """
 
+        # Validate the model path.
         if not isinstance(model, str):
             raise TypeError("'model' must be of type 'str'")
+        if not _os.path.exists(model):
+            raise FileNotFoundError(f"Model file '{model}' not found")
 
-        # Convert to an absolute path.
-        abs_model = _os.path.abspath(model)
+        # Try to create the ACE calculator.
 
-        # Make sure the model file exists.
-        if not _os.path.isfile(abs_model):
-            raise IOError(f"Unable to locate Rascal model file: '{model}'")
-
-        # Load the model.
         try:
-            self._model = _pickle.load(open(abs_model, "rb"))
-        except:
-            raise IOError(f"Unable to load Rascal model file: '{model}'")
-
-        # Try to get the SOAP parameters from the model.
-        try:
-            soap = self._model.get_representation_calculator()
-        except:
-            raise ValueError("Unable to extract SOAP parameters from Rascal model!")
-
-        # Create the Rascal calculator.
-        try:
-            from rascal.models.asemd import ASEMLCalculator as _ASEMLCalculator
-
-            self._calculator = _ASEMLCalculator(self._model, soap)
-        except:
-            raise RuntimeError("Unable to create Rascal calculator!")
+            self._calculator = _pyjulip.ACE(model)
+        except Exception as e:
+            raise RuntimeError(f"Failed to create ACE calculator: {e}")
 
     def calculate(self, atomic_numbers, xyz, forces=True):
         """
@@ -146,19 +134,15 @@ class Rascal(_Backend):
             atoms.positions -= _np.min(atoms.positions, axis=0)
             atoms.cell = _np.max(atoms.positions, axis=0)
 
-            # Run the calculation.
-            self._calculator.calculate(atoms)
+            # Set the calculator.
+            atoms.calc = self._calculator
 
             # Get the energy.
-            results_energy.append(
-                self._calculator.results["energy"][0] * _EV_TO_HARTREE
-            )
+            results_energy.append(atoms.get_potential_energy() * _EV_TO_HARTREE)
 
             if forces:
                 results_forces.append(
-                    self._calculator.results["forces"]
-                    * _EV_TO_HARTREE
-                    * _BOHR_TO_ANGSTROM
+                    atoms.get_forces() * _EV_TO_HARTREE * _BOHR_TO_ANGSTROM
                 )
 
         # Convert to NumPy arrays.

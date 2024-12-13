@@ -63,6 +63,7 @@ class EMLECalculator:
     _supported_backends = [
         "torchani",
         "mace",
+        "ace",
         "deepmd",
         "orca",
         "rascal",
@@ -100,6 +101,7 @@ class EMLECalculator:
         qm_xyz_frequency=0,
         ani2x_model_index=None,
         mace_model=None,
+        ace_model=None,
         rascal_model=None,
         parm7=None,
         qm_indices=None,
@@ -215,6 +217,10 @@ class EMLECalculator:
             Available models are 'mace-off23-small', 'mace-off23-medium', 'mace-off23-large'.
             To use a locally trained MACE model, provide the path to the model file.
             If None, the MACE-OFF23(S) model will be used by default.
+
+        ace_model: str
+            Path to the ACE model file to use for in vacuo calculations. This
+            must be specified if 'ace' is the selected backend.
 
         rascal_model: str
             Path to the Rascal model file to use for in vacuo calculations. This
@@ -637,6 +643,16 @@ class EMLECalculator:
 
                 # Store the MACE model.
                 self._mace_model = mace_model
+
+            elif backend == "ace":
+                try:
+                    from ._backends import ACE
+
+                    b = ACE(ace_model)
+                except:
+                    msg = "Unable to create ACE backend. Please ensure PyJulip is installed."
+                    _logger.error(msg)
+                    raise RuntimeError(msg)
 
             elif backend == "orca":
                 try:
