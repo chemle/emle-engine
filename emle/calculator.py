@@ -637,7 +637,8 @@ class EMLECalculator:
 
             elif backend == "ace":
                 try:
-                    from ._backends import ACE
+                    # Import directly from module since the import is so slow.
+                    from ._backends._ace import ACE
 
                     b = ACE(ace_model)
                 except:

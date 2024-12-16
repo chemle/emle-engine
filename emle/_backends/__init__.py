@@ -24,7 +24,6 @@
 Backends for in-vacuo calculations.
 """
 
-from ._ace import *
 from ._deepmd import *
 from ._orca import *
 from ._rascal import *
