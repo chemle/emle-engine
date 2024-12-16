@@ -1495,7 +1495,7 @@ class EMLECalculator:
         # Compute embedding energy and gradients.
         if base_model is None:
             try:
-                E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
+                E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
                 dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
                 dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
                 dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
@@ -1516,7 +1516,7 @@ class EMLECalculator:
             model = base_model.original_name
             try:
                 with _torch.jit.optimized_execution(False):
-                    E = base_model(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
+                    E = base_model(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
                     dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
                         E.sum(), (xyz_qm, xyz_mm)
                     )
