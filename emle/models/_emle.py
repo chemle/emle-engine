@@ -305,14 +305,24 @@ class EMLE(_torch.nn.Module):
             # Optimise the AEV computer using NNPOps if available.
             if _has_nnpops and atomic_numbers is not None:
                 try:
+                    import ase
+                    from torchani import SpeciesConverter
+
+                    # Work out the species.
+                    species = [ase.Atom(i).symbol for i in atomic_numbers]
+
+                    # Create a species converter.
+                    species_converter = SpeciesConverter(species)
+
                     atomic_numbers = _torch.tensor(
                         atomic_numbers, dtype=_torch.int64, device=device
                     )
+
                     atomic_numbers = atomic_numbers.reshape(1, *atomic_numbers.shape)
                     emle_aev_computer._aev_computer = (
                         _NNPOps.SymmetryFunctions.TorchANISymmetryFunctions(
-                            emle_aev_computer._aev_computer.species_converter,
-                            emle_aev_computer._aev_computer.aev_computer,
+                            species_converter,
+                            emle_aev_computer._aev_computer,
                             atomic_numbers,
                         )
                     )
