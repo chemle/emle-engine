@@ -988,6 +988,133 @@ class EMLECalculator:
                 _logger.error(msg)
                 raise ValueError(msg)
 
+        # Compute the energy and gradients.
+        E_tot, grad_qm, grad_mm = self._calculate_energy_and_gradients(
+            atomic_numbers,
+            charges_mm,
+            xyz_qm,
+            xyz_mm,
+            atoms=atoms,
+            charge=charge,
+        )
+
+        # Create the file names for the ORCA format output.
+        filename = _os.path.splitext(orca_input)[0]
+        engrad = filename + ".engrad"
+        pcgrad = filename + ".pcgrad"
+
+        # Store the number of MM atoms.
+        num_mm_atoms = len(charges_mm)
+
+        with open(engrad, "w") as f:
+            # Write the energy.
+            f.write("# The current total energy in Eh\n")
+            f.write("#\n")
+            f.write(f"{E_tot:22.12f}\n")
+
+            # Write the QM gradients.
+            f.write("# The current gradient in Eh/bohr\n")
+            f.write("#\n")
+            for x, y, z in grad_qm:
+                f.write(f"{x:16.10f}\n{y:16.10f}\n{z:16.10f}\n")
+
+        with open(pcgrad, "w") as f:
+            # Write the number of MM atoms.
+            f.write(f"{num_mm_atoms}\n")
+            # Write the MM gradients.
+            for x, y, z in grad_mm[:num_mm_atoms]:
+                f.write(f"{x:17.12f}{y:17.12f}{z:17.12f}\n")
+
+        # Log energies to file.
+        if (
+            self._energy_frequency > 0
+            and not self._is_first_step
+            and self._step % self._energy_frequency == 0
+        ):
+            with open(self._energy_file, "a+") as f:
+                # Write the header.
+                if self._step == 0:
+                    if self._is_interpolate:
+                        f.write(
+                            f"#{'Step':>9}{'λ':>22}{'E(λ) (Eh)':>22}{'E(λ=0) (Eh)':>22}{'E(λ=1) (Eh)':>22}\n"
+                        )
+                    else:
+                        f.write(f"#{'Step':>9}{'E_vac (Eh)':>22}{'E_tot (Eh)':>22}\n")
+                # Write the record.
+                if self._is_interpolate:
+                    f.write(
+                        f"{self._step:>10}{lam:22.12f}{E_tot:22.12f}{E_mm:22.12f}{E_emle:22.12f}\n"
+                    )
+                else:
+                    f.write(f"{self._step:>10}{E_vac:22.12f}{E_tot:22.12f}\n")
+
+        # Write out the QM region to the xyz trajectory file.
+        if self._qm_xyz_frequency > 0 and self._step % self._qm_xyz_frequency == 0:
+            atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+            if hasattr(self._backend, "_max_f_std"):
+                atoms.info = {"max_f_std": self._max_f_std}
+            _ase_io.write(self._qm_xyz_file, atoms, append=True)
+
+            pc_data = _np.hstack((charges_mm[:, None], xyz_mm))
+            pc_data = pc_data[pc_data[:, 0] != 0]
+            with open(self._pc_xyz_file, "a") as f:
+                f.write(f"{len(pc_data)}\n")
+                _np.savetxt(f, pc_data, fmt="%14.6f")
+                f.write("\n")
+
+        # Increment the step counter.
+        if self._is_first_step:
+            self._is_first_step = False
+        else:
+            self._step += 1
+            _logger.error(f"Step: {self._step}")
+
+    def _calculate_energy_and_gradients(
+        self,
+        atomic_numbers,
+        charges_mm,
+        xyz_qm,
+        xyz_mm,
+        atoms=None,
+        charge=0,
+    ):
+        """
+        Calculate the energy and gradients.
+
+        Parameters
+        ----------
+
+        atomic_numbers: numpy.ndarray, (N_QM_ATOMS)
+            Atomic numbers for the QM region.
+
+        charges_mm: numpy.ndarray, (N_MM_ATOMS)
+            The charges on the MM atoms.
+
+        xyz_qm: numpy.ndarray, (N_QM_ATOMS, 3)
+            The QM coordinates.
+
+        xyz_mm: numpy.ndarray, (N_MM_ATOMS, 3)
+            The MM coordinates.
+
+        atoms: ase.Atoms
+            The atoms object for the QM region.
+
+        charge: int
+            The total charge of the QM region.
+
+        Returns
+        -------
+
+        E_tot: float
+            The total energy.
+
+        grad_qm: numpy.ndarray, (N_QM_ATOMS, 3)
+            The QM gradients.
+
+        grad_mm: numpy.ndarray, (N_MM_ATOMS, 3)
+            The MM gradients.
+        """
+
         # Update the maximum number of MM atoms if this is the largest seen.
         num_mm_atoms = len(charges_mm)
         if num_mm_atoms > self._max_mm_atoms:
@@ -1009,7 +1136,7 @@ class EMLECalculator:
         delta_model = None
 
         # Zero the in vacuo energy and gradients.
-        E_vac = 0
+        E_vac = 0.0
         grad_vac = _np.zeros_like(xyz_qm)
 
         # Internal backends.
@@ -1037,8 +1164,6 @@ class EMLECalculator:
                             _logger.error(msg)
                             raise RuntimeError(msg)
 
-                        _logger.error(f"{i}: Energy in vacuo: {E_vac}")
-
             # No backend.
             else:
                 E_vac, grad_vac = 0.0, _np.zeros_like(xyz_qm.detatch().cpu())
@@ -1046,6 +1171,8 @@ class EMLECalculator:
         # External backend.
         else:
             try:
+                if atoms is None:
+                    atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
                 E_vac, grad_vac = self._external_backend(atoms)
             except Exception as e:
                 msg = (
@@ -1191,74 +1318,7 @@ class EMLECalculator:
             grad_qm = lam * grad_qm + (1 - lam) * (grad_mm_qm_vac + dE_dxyz_qm_bohr)
             grad_mm = lam * grad_mm + (1 - lam) * dE_dxyz_mm_bohr
 
-        # Create the file names for the ORCA format output.
-        filename = _os.path.splitext(orca_input)[0]
-        engrad = filename + ".engrad"
-        pcgrad = filename + ".pcgrad"
-
-        with open(engrad, "w") as f:
-            # Write the energy.
-            f.write("# The current total energy in Eh\n")
-            f.write("#\n")
-            f.write(f"{E_tot:22.12f}\n")
-
-            # Write the QM gradients.
-            f.write("# The current gradient in Eh/bohr\n")
-            f.write("#\n")
-            for x, y, z in grad_qm:
-                f.write(f"{x:16.10f}\n{y:16.10f}\n{z:16.10f}\n")
-
-        with open(pcgrad, "w") as f:
-            # Write the number of MM atoms.
-            f.write(f"{num_mm_atoms}\n")
-            # Write the MM gradients.
-            for x, y, z in grad_mm[:num_mm_atoms]:
-                f.write(f"{x:17.12f}{y:17.12f}{z:17.12f}\n")
-
-        # Log energies to file.
-        if (
-            self._energy_frequency > 0
-            and not self._is_first_step
-            and self._step % self._energy_frequency == 0
-        ):
-            with open(self._energy_file, "a+") as f:
-                # Write the header.
-                if self._step == 0:
-                    if self._is_interpolate:
-                        f.write(
-                            f"#{'Step':>9}{'λ':>22}{'E(λ) (Eh)':>22}{'E(λ=0) (Eh)':>22}{'E(λ=1) (Eh)':>22}\n"
-                        )
-                    else:
-                        f.write(f"#{'Step':>9}{'E_vac (Eh)':>22}{'E_tot (Eh)':>22}\n")
-                # Write the record.
-                if self._is_interpolate:
-                    f.write(
-                        f"{self._step:>10}{lam:22.12f}{E_tot:22.12f}{E_mm:22.12f}{E_emle:22.12f}\n"
-                    )
-                else:
-                    f.write(f"{self._step:>10}{E_vac:22.12f}{E_tot:22.12f}\n")
-
-        # Write out the QM region to the xyz trajectory file.
-        if self._qm_xyz_frequency > 0 and self._step % self._qm_xyz_frequency == 0:
-            atoms = _ase.Atoms(positions=xyz_qm_np, numbers=atomic_numbers_np)
-            if hasattr(self._backend, "_max_f_std"):
-                atoms.info = {"max_f_std": self._max_f_std}
-            _ase_io.write(self._qm_xyz_file, atoms, append=True)
-
-            pc_data = _np.hstack(
-                (charges_mm[:, None].cpu().numpy(), xyz_mm.detach().cpu().numpy())
-            )
-            pc_data = pc_data[pc_data[:, 0] != 0]
-            with open(self._pc_xyz_file, "a") as f:
-                f.write(f"{len(pc_data)}\n")
-                _np.savetxt(f, pc_data, fmt="%14.6f")
-                f.write("\n")
-
-        # Increment the step counter.
-        if self._is_first_step:
-            self._is_first_step = False
-        else:
-            self._step += 1
+        return E_tot, grad_qm, grad_mm
 
     def set_lambda_interpolate(self, lambda_interpolate):
         """
@@ -1366,9 +1426,6 @@ class EMLECalculator:
         xyz_qm = _np.array(xyz_qm)
         xyz_mm = _np.array(xyz_mm)
 
-        # Initialise a null ASE atoms object.
-        atoms = None
-
         # Make sure that the number of QM atoms matches the number of MM charges
         # when using mm embedding.
         if self._method == "mm":
@@ -1381,216 +1438,16 @@ class EMLECalculator:
                 _logger.error(msg)
                 raise ValueError(msg)
 
-        # Update the maximum number of MM atoms if this is the largest seen.
+        # Compute the energy and gradients.
+        E_tot, grad_qm, grad_mm = self._calculate_energy_and_gradients(
+            atomic_numbers,
+            charges_mm,
+            xyz_qm,
+            xyz_mm,
+        )
+
+        # Store the number of MM atoms.
         num_mm_atoms = len(charges_mm)
-        if num_mm_atoms > self._max_mm_atoms:
-            self._max_mm_atoms = num_mm_atoms
-
-        # Pad the MM coordinates and charges arrays to avoid re-jitting.
-        if self._max_mm_atoms > num_mm_atoms:
-            num_pad = self._max_mm_atoms - num_mm_atoms
-            xyz_mm_pad = num_pad * [[0.0, 0.0, 0.0]]
-            charges_mm_pad = num_pad * [0.0]
-            xyz_mm = _np.append(xyz_mm, xyz_mm_pad, axis=0)
-            charges_mm = _np.append(charges_mm, charges_mm_pad)
-
-        # First try to use the specified backend to compute in vacuo
-        # energies and (optionally) gradients.
-
-        # Base and delta-learning correction models.
-        base_model = None
-        delta_model = None
-
-        # Zero the in vacuo energy and gradients.
-        E_vac = 0.0
-        grad_vac = _np.zeros_like(xyz_qm)
-
-        # Internal backends.
-        if not self._is_external_backend:
-            if self._backend is not None:
-                # Enumerate the backends.
-                for i, backend in enumerate(self._backends):
-                    # This is an EMLE Torch model.
-                    if isinstance(backend, _torch.nn.Module):
-                        # Base backend is an EMLE Torch model.
-                        if i == 0:
-                            base_model = backend
-                        # Delta-learning correction is applied using an EMLE Torch model.
-                        else:
-                            delta_model = backend
-                    # This is a non-Torch backend.
-                    else:
-                        try:
-                            # Add the in vacuo energy and gradients to the total.
-                            energy, forces = backend(atomic_numbers, xyz_qm)
-                            E_vac += energy[0]
-                            grad_vac += -forces[0]
-                        except Exception as e:
-                            msg = f"Failed to calculate in vacuo energies using {self._backend[i]} backend: {e}"
-                            _logger.error(msg)
-                            raise RuntimeError(msg)
-
-            # No backend.
-            else:
-                E_vac, grad_vac = 0.0, _np.zeros_like(xyz_qm.detatch().cpu())
-
-        # External backend.
-        else:
-            try:
-                E_vac, grad_vac = self._external_backend(atoms)
-            except Exception as e:
-                msg = (
-                    f"Failed to calculate in vacuo energies using external backend: {e}"
-                )
-                _logger.error(msg)
-                raise RuntimeError(msg)
-
-        # Store a copy of the atomic numbers and QM coordinates as NumPy arrays.
-        atomic_numbers_np = atomic_numbers
-        xyz_qm_np = xyz_qm
-
-        # Convert inputs to Torch tensors.
-        atomic_numbers = _torch.tensor(
-            atomic_numbers, dtype=_torch.int64, device=self._device
-        )
-        charges_mm = _torch.tensor(
-            charges_mm, dtype=_torch.float32, device=self._device
-        )
-        xyz_qm = _torch.tensor(
-            xyz_qm, dtype=_torch.float32, device=self._device, requires_grad=True
-        )
-        xyz_mm = _torch.tensor(
-            xyz_mm, dtype=_torch.float32, device=self._device, requires_grad=True
-        )
-
-        # Are there any MM atoms?
-        allow_unused = len(charges_mm) == 0
-
-        # Apply delta-learning corrections using an EMLE model.
-        if delta_model is not None:
-            model = delta_model.original_name
-            try:
-                # Create null MM inputs.
-                null_charges_mm = _torch.zeros_like(charges_mm)
-                null_xyz_mm = _torch.zeros_like(xyz_mm)
-
-                # Compute the energy.
-                E = delta_model(
-                    atomic_numbers, null_charges_mm, xyz_qm, null_xyz_mm, charge
-                )
-
-                # Compute the gradients.
-                dE_dxyz_qm = _torch.autograd.grad(E.sum(), xyz_qm)
-
-                # Compute the delta correction.
-                delta_E = E.sum().detach().cpu().numpy()
-                delta_grad = dE_dxyz_qm[0].cpu().numpy() * _BOHR_TO_ANGSTROM
-
-                # Apply the correction.
-                E_vac += delta_E
-                grad_vac += delta_grad
-
-            except Exception as e:
-                msg = f"Failed to apply delta-learning correction using {model} model: {e}"
-                _logger.error(msg)
-                raise RuntimeError(msg)
-
-        # If there are no point charges, then just return the in vacuo energy and forces.
-        if len(charges_mm) == 0:
-            return (
-                E_vac.item() * _HARTREE_TO_KJ_MOL,
-                (-grad_vac * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_BOHR).tolist(),
-                [],
-            )
-
-        # Compute embedding energy and gradients.
-        if base_model is None:
-            try:
-                E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-                dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
-                    E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
-                )
-                dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
-                dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
-
-                # Compute the total energy and gradients.
-                E_tot = E_vac + E.sum().detach().cpu().numpy()
-                grad_qm = dE_dxyz_qm_bohr + grad_vac
-                grad_mm = dE_dxyz_mm_bohr
-
-            except Exception as e:
-                msg = f"Failed to compute EMLE energies and gradients: {e}"
-                _logger.error(msg)
-                raise RuntimeError(msg)
-
-        # Compute in vacuo and embedding energies and gradients in one go using
-        # the EMLE Torch models
-        else:
-            model = base_model.original_name
-            try:
-                with _torch.jit.optimized_execution(False):
-                    E = base_model(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-                    dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
-                        E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
-                    )
-
-                grad_qm = grad_vac + dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
-                grad_mm = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
-                E_tot = E_vac + E.sum().detach().cpu().numpy()
-
-            except Exception as e:
-                msg = f"Failed to compute {model} energies and gradients: {e}"
-                _logger.error(msg)
-                raise RuntimeError(msg)
-
-        # Interpolate between the MM and ML/MM potential.
-        if self._is_interpolate:
-            # Compute the in vacuo MM energy and gradients for the QM region.
-            if self._backend != None:
-                from ._backends import Sander
-
-                # Create a Sander backend instance.
-                backend = Sander(self._parm7)
-
-                # Compute the in vacuo MM energy and forces for the QM region.
-                energy, forces = backend(atomic_numbers_np, xyz_qm_np)
-
-                E_mm_qm_vac = energy[0]
-                grad_mm_qm_vac = -forces[0]
-
-            # If no backend is specified, then the MM energy and gradients are zero.
-            else:
-                E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm.detach().cpu())
-
-            # Compute the embedding contributions.
-            E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
-                E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
-            )
-            dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
-            dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
-
-            # Store the the MM and EMLE energies. The MM energy is an approximation.
-            E_mm = E_mm_qm_vac + E.sum().detach().cpu().numpy()
-            E_emle = E_tot
-
-            # Work out the current value of lambda.
-            if len(self._lambda_interpolate) == 1:
-                lam = self._lambda_interpolate[0]
-            else:
-                offset = int(not self._restart)
-                lam = self._lambda_interpolate[0] + (
-                    (self._step / (self._interpolate_steps - offset))
-                ) * (self._lambda_interpolate[1] - self._lambda_interpolate[0])
-                if lam < 0.0:
-                    lam = 0.0
-                elif lam > 1.0:
-                    lam = 1.0
-
-            # Calculate the lambda weighted energy and gradients.
-            E_tot = lam * E_tot + (1 - lam) * E_mm
-            grad_qm = lam * grad_qm + (1 - lam) * (grad_mm_qm_vac + dE_dxyz_qm_bohr)
-            grad_mm = lam * grad_mm + (1 - lam) * dE_dxyz_mm_bohr
 
         # Log energies to file.
         if (
@@ -1763,9 +1620,6 @@ class EMLECalculator:
 
         xyz_file_qm: str
             The path to the QM xyz file.
-
-        atoms_mm: ase.Atoms
-            The atoms in the MM region.
         """
 
         if not isinstance(orca_input, str):
