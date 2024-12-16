@@ -312,7 +312,7 @@ class EMLE(_torch.nn.Module):
                     species = [ase.Atom(i).symbol for i in atomic_numbers]
 
                     # Create a species converter.
-                    species_converter = SpeciesConverter(species)
+                    species_converter = SpeciesConverter(species).to(device)
 
                     atomic_numbers = _torch.tensor(
                         atomic_numbers, dtype=_torch.int64, device=device
