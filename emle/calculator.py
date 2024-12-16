@@ -1071,6 +1071,9 @@ class EMLECalculator:
             xyz_mm, dtype=_torch.float32, device=self._device, requires_grad=True
         )
 
+        # Are there any MM atoms?
+        allow_unused = len(charges_mm) == 0
+
         # Apply delta-learning corrections using an EMLE model.
         if delta_model is not None:
             model = delta_model.original_name
@@ -1104,7 +1107,9 @@ class EMLECalculator:
         if base_model is None:
             try:
                 E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
-                dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
+                dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
+                    E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
+                )
                 dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
                 dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
 
@@ -1126,7 +1131,7 @@ class EMLECalculator:
                 with _torch.jit.optimized_execution(False):
                     E = base_model(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
                     dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
-                        E.sum(), (xyz_qm, xyz_mm)
+                        E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
                     )
 
                 grad_qm = grad_vac + dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
@@ -1157,7 +1162,9 @@ class EMLECalculator:
 
             # Compute the embedding contributions.
             E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
-            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
+            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
+                E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
+            )
             dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
             dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
 
@@ -1455,6 +1462,9 @@ class EMLECalculator:
             xyz_mm, dtype=_torch.float32, device=self._device, requires_grad=True
         )
 
+        # Are there any MM atoms?
+        allow_unused = len(charges_mm) == 0
+
         # Apply delta-learning corrections using an EMLE model.
         if delta_model is not None:
             model = delta_model.original_name
@@ -1496,7 +1506,9 @@ class EMLECalculator:
         if base_model is None:
             try:
                 E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-                dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
+                dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
+                    E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
+                )
                 dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
                 dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
 
@@ -1518,7 +1530,7 @@ class EMLECalculator:
                 with _torch.jit.optimized_execution(False):
                     E = base_model(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
                     dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
-                        E.sum(), (xyz_qm, xyz_mm)
+                        E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
                     )
 
                 grad_qm = grad_vac + dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
@@ -1551,7 +1563,9 @@ class EMLECalculator:
 
             # Compute the embedding contributions.
             E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(E.sum(), (xyz_qm, xyz_mm))
+            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
+                E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
+            )
             dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
             dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
 
@@ -1682,54 +1696,14 @@ class EMLECalculator:
             xyz_mm, dtype=_torch.float32, device=self._device, requires_grad=True
         )
 
-        # Create an internal ANI2xEMLE model if one doesn't already exist.
-        if self._ani2x_emle is None:
-            # Apply NNPOps optimisations if available.
-            try:
-                import NNPOps as _NNPOps
-
-                from .models._patches import (
-                    OptimizedTorchANI as _OptimizedTorchANI,
-                )
-
-                _NNPOps.OptimizedTorchANI = _OptimizedTorchANI
-
-                # Optimise the TorchANI model.
-                self._torchani_model = _NNPOps.OptimizedTorchANI(
-                    self._torchani_model,
-                    atomic_numbers.reshape(-1, *atomic_numbers.shape),
-                ).to(self._device)
-
-                # Flag that NNPOps is active.
-                self._nnpops_active = True
-            except:
-                pass
-
-            from .models import ANI2xEMLE as _ANI2xEMLE
-
-            # Create the model.
-            ani2x_emle = _ANI2xEMLE(
-                emle_model=self._model,
-                alpha_mode=self._alpha_mode,
-                mm_charges=self._mm_charges,
-                model_index=self._ani2x_model_index,
-                ani2x_model=self._torchani_model,
-                atomic_numbers=atomic_numbers,
-                qm_charge=self._qm_charge,
-                device=self._device,
-            )
-
-            # Convert to TorchScript.
-            self._ani2x_emle = _torch.jit.script(ani2x_emle).eval()
-
         # Are there any MM atoms?
         allow_unused = len(charges_mm) == 0
 
         # Compute the energy and gradients. Don't use optimised execution to
         # avoid warmup costs.
         with _torch.jit.optimized_execution(False):
-            # ANI-2x systems are always neutral, so charge not needed here
-            E = self._ani2x_emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+            # ANI-2x systems are always neutral, so charge not needed here.
+            E = self._backends[0](atomic_numbers, charges_mm, xyz_qm, xyz_mm)
             dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
                 E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
             )
