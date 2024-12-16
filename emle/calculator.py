@@ -1359,7 +1359,7 @@ class EMLECalculator:
 
         # For performance, we assume that the input is already validated.
 
-        # Convert to numpy arrays.
+        # Convert to NumPy arrays.
         atomic_numbers = _np.array(atomic_numbers)
         charges_mm = _np.array(charges_mm)
         xyz_qm = _np.array(xyz_qm)
@@ -1684,7 +1684,7 @@ class EMLECalculator:
             xyz_mm = _np.append(xyz_mm, xyz_mm_pad, axis=0)
             charges_mm = _np.append(charges_mm, charges_mm_pad)
 
-        # Convert to numpy arrays then Torch tensors.
+        # Convert to NumPy arrays then Torch tensors.
         atomic_numbers = _torch.tensor(atomic_numbers, device=self._device)
         charges_mm = _torch.tensor(
             charges_mm, dtype=_torch.float32, device=self._device
@@ -1708,7 +1708,7 @@ class EMLECalculator:
                 E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
             )
 
-        # Convert the energy and gradients to numpy arrays.
+        # Convert the energy and gradients to NumPy arrays.
         E = E.sum().item() * _HARTREE_TO_KJ_MOL
         force_qm = (
             -dE_dxyz_qm.cpu().numpy() * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_ANGSTROM
