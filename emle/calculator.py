@@ -57,21 +57,12 @@ class EMLECalculator:
     Supported backends are listed in the _supported_backends attribute below.
     """
 
+    from . import _supported_backends
+
     # Class attributes.
 
     # List of supported backends.
-    _supported_backends = [
-        "torchani",
-        "mace",
-        "ace",
-        "deepmd",
-        "orca",
-        "rascal",
-        "sander",
-        "sqm",
-        "xtb",
-        "external",
-    ]
+    _supported_backends = _supported_backends.copy() + ["external"]
 
     # List of supported devices.
     _supported_devices = ["cpu", "cuda"]
