@@ -43,7 +43,7 @@ parser.add_argument(
     "--deepmd-model",
     type=str,
     metavar="name.pb",
-    help="Deepmd model file (for backend='deepmd')",
+    help="DeePMD model file (for backend='deepmd')",
 )
 parser.add_argument(
     "--mace-model",
