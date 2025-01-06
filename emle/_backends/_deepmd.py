@@ -1,7 +1,7 @@
 #######################################################################
 # EMLE-Engine: https://github.com/chemle/emle-engine
 #
-# Copyright: 2023-2024
+# Copyright: 2023-2025
 #
 # Authors: Lester Hedges   <lester.hedges@gmail.com>
 #          Kirill Zinovjev <kzinovjev@gmail.com>
