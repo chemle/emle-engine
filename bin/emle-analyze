@@ -79,7 +79,7 @@ if args.backend == "mace" and not args.mace_model:
     parser.error("--mace-model is required when backend='mace'")
 
 backend = None
-if args.backend == "ani2x":
+if args.backend == "torchani":
     from emle._models import ANI2xEMLE
 
     backend = ANI2xEMLE()
