@@ -182,6 +182,9 @@ class ANI2xEMLE(_torch.nn.Module):
             create_aev_calculator=False,
         )
 
+        # Initialise the NNOps flag.
+        self._is_nnpops = False
+
         if ani2x_model is not None:
             # Add the base ANI2x model and ensemble.
             allowed_types = [
@@ -229,6 +232,9 @@ class ANI2xEMLE(_torch.nn.Module):
                     self._ani2x = _NNPOps.OptimizedTorchANI(
                         self._ani2x, atomic_numbers
                     ).to(device)
+
+                    # Flag that the model has been optimised with NNPOps.
+                    self._is_nnpops = True
                 except Exception as e:
                     raise RuntimeError(
                         "Failed to optimise the ANI2x model with NNPOps."
@@ -373,6 +379,10 @@ class ANI2xEMLE(_torch.nn.Module):
             xyz_qm = xyz_qm.unsqueeze(0)
             xyz_mm = xyz_mm.unsqueeze(0)
             charges_mm = charges_mm.unsqueeze(0)
+        elif self._is_nnpops:
+            raise RuntimeError(
+                "Batched inputs are not supported when using NNPOps optimised models."
+            )
 
         # Get the in vacuo energy.
         E_vac = self._ani2x((atomic_numbers, xyz_qm)).energies
