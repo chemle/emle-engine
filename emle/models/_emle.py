@@ -453,6 +453,7 @@ class EMLE(_torch.nn.Module):
         self._xyz_qm = xyz_qm
         self._xyz_mm = xyz_mm
 
+        # Batch the inputs if necessary.
         if self._atomic_numbers.ndim == 1:
             self._atomic_numbers = self._atomic_numbers.unsqueeze(0)
             self._charges_mm = self._charges_mm.unsqueeze(0)

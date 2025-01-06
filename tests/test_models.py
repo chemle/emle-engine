@@ -84,6 +84,14 @@ def test_emle(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     energy = model(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
     grad_qm, grad_mm = torch.autograd.grad(energy.sum(), (xyz_qm, xyz_mm))
 
+    # Test batched inputs.
+    energy = model(
+        atomic_numbers.unsqueeze(0).repeat(2, 1),
+        charges_mm.unsqueeze(0).repeat(2, 1),
+        xyz_qm.unsqueeze(0).repeat(2, 1, 1),
+        xyz_mm.unsqueeze(0).repeat(2, 1, 1),
+    )
+
 
 @pytest.mark.parametrize("alpha_mode", ["species", "reference"])
 def test_ani2x(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
@@ -112,6 +120,14 @@ def test_ani2x(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     energy = model(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
     grad_qm, grad_mm = torch.autograd.grad(energy.sum(), (xyz_qm, xyz_mm))
 
+    # Test batched inputs.
+    energy = model(
+        atomic_numbers.unsqueeze(0).repeat(2, 1),
+        charges_mm.unsqueeze(0).repeat(2, 1),
+        xyz_qm.unsqueeze(0).repeat(2, 1, 1),
+        xyz_mm.unsqueeze(0).repeat(2, 1, 1),
+    )
+
 
 @pytest.mark.skipif(not has_nnpops, reason="NNPOps not installed")
 @pytest.mark.parametrize("alpha_mode", ["species", "reference"])
@@ -129,6 +145,14 @@ def test_ani2x_nnpops(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     # Get the energy and gradients.
     energy = model(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
     grad_qm, grad_mm = torch.autograd.grad(energy.sum(), (xyz_qm, xyz_mm))
+
+    # Test batched inputs.
+    energy = model(
+        atomic_numbers.unsqueeze(0).repeat(2, 1),
+        charges_mm.unsqueeze(0).repeat(2, 1),
+        xyz_qm.unsqueeze(0).repeat(2, 1, 1),
+        xyz_mm.unsqueeze(0).repeat(2, 1, 1),
+    )
 
 
 @pytest.mark.skipif(not has_mace, reason="mace-torch not installed")
@@ -151,3 +175,11 @@ def test_mace(alpha_mode, mace_model, atomic_numbers, charges_mm, xyz_qm, xyz_mm
     # Get the energy and gradients.
     energy = model(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
     grad_qm, grad_mm = torch.autograd.grad(energy.sum(), (xyz_qm, xyz_mm))
+
+    # Test batched inputs.
+    energy = model(
+        atomic_numbers.unsqueeze(0).repeat(2, 1),
+        charges_mm.unsqueeze(0).repeat(2, 1),
+        xyz_qm.unsqueeze(0).repeat(2, 1, 1),
+        xyz_mm.unsqueeze(0).repeat(2, 1, 1),
+    )
