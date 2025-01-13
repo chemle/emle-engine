@@ -1,0 +1,16 @@
+# Run using SANDER file-based interface for Orca
+#
+%pal nprocs 1 end
+!BLYP 6-31G* verytightscf
+%method
+  grid 4
+  finalgrid 6
+end
+%scf
+  maxiter 100
+end
+%MaxCore 1024
+! ENGRAD
+! Angs NoUseSym
+%pointcharges "ptchrg.xyz"
+*xyzfile 0 1 inpfile.xyz

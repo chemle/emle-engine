@@ -8,3 +8,5 @@
 (Mascot courtesy [Nictrain123](https://www.deviantart.com/nictrain123/art/Simply-Emily-774815887) ![CC BY 3.0](https://licensebuttons.net/l/by/3.0/80x15.png).)
 
 See the [website](https://chemle.github.io/emle-engine) for full documentation.
+
+We thank EPSRC for funding (grant code EP/V011421/1).

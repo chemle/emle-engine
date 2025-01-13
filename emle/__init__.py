@@ -1,7 +1,7 @@
 ######################################################################
 # EMLE-Engine: https://github.com/chemle/emle-engine
 #
-# Copyright: 2023-2024
+# Copyright: 2023-2025
 #
 # Authors: Lester Hedges   <lester.hedges@gmail.com>
 #          Kirill Zinovjev <kzinovjev@gmail.com>
@@ -31,6 +31,19 @@ Electrostatic Machine-Learned Embedding.
 emle is a package for the calculation of electrostatic interactions in
 molecular systems.
 """
+
+# List of supported backends.
+_supported_backends = [
+    "torchani",
+    "mace",
+    "ace",
+    "deepmd",
+    "orca",
+    "rascal",
+    "sqm",
+    "sander",
+    "xtb",
+]
 
 from ._version import get_versions
 
