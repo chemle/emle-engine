@@ -13,6 +13,15 @@ def wrapper():
 
     yield
 
+    # Kill the EMLE server.
+    kill_server()
+
+
+def kill_server():
+    """
+    Helper function to kill the EMLE server.
+    """
+
     # Kill the EMLE server. We do this manually rather than using emle-stop
     # because there is sometimes a delay in the termination of the server,
     # which causes the next test to fail. This only seems to happen when

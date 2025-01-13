@@ -26,3 +26,7 @@ results/
 
 # VSCode config
 .vscode/
+
+# Local test input.
+tests/input/deepmd
+tests/input/rascal

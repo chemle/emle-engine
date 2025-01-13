@@ -1,6 +1,5 @@
 import math
 import os
-import pytest
 import shlex
 import shutil
 import subprocess

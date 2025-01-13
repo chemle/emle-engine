@@ -3,7 +3,7 @@
 #######################################################################
 # EMLE-Engine: https://github.com/chemle/emle-engine
 #
-# Copyright: 2023-2024
+# Copyright: 2023-2025
 #
 # Authors: Lester Hedges   <lester.hedges@gmail.com>
 #          Kirill Zinovjev <kzinovjev@gmail.com>
@@ -36,14 +36,19 @@ parser.add_argument(
 parser.add_argument(
     "--backend",
     type=str,
-    choices=["deepmd", "ani2x"],
-    help="Gas phase ML backend ('deepmd' or 'ani2x')",
+    choices=["torchani", "mace", "deepmd"],
+    help="Gas phase ML backend",
 )
 parser.add_argument(
     "--deepmd-model",
     type=str,
     metavar="name.pb",
-    help="Deepmd model file (for backend='deepmd')",
+    help="DeePMD model file (for backend='deepmd')",
+)
+parser.add_argument(
+    "--mace-model",
+    type=str,
+    help="MACE model file (for backend='mace')",
 )
 parser.add_argument(
     "--qm-xyz", type=str, metavar="name.xyz", required=True, help="QM xyz file"
@@ -64,19 +69,28 @@ args = parser.parse_args()
 
 import scipy.io
 
-from emle.models._emle import EMLE
+from emle.models import EMLE
+from emle._analyzer import EMLEAnalyzer
 from emle._orca_parser import ORCAParser
-from emle._analyzer import EMLEAnalyzer, ANI2xBackend, DeepMDBackend
-
 
 if args.backend == "deepmd" and not args.deepmd_model:
     parser.error("--deepmd-model is required when backend='deepmd'")
+if args.backend == "mace" and not args.mace_model:
+    parser.error("--mace-model is required when backend='mace'")
 
 backend = None
-if args.backend == "ani2x":
-    backend = ANI2xBackend()
+if args.backend == "torchani":
+    from emle._models import ANI2xEMLE
+
+    backend = ANI2xEMLE()
+elif args.backend == "mace":
+    from emle._models import MACEEMLE
+
+    backend = MACEEMLE(mace_model=args.mace_model)
 elif args.backend == "deepmd":
-    backend = DeepMDBackend(args.deepmd_model)
+    from emle._backends import DeepMD
+
+    backend = DeepMD(args.deepmd_model)
 
 emle_base = EMLE(model=args.emle_model)._emle_base
 
