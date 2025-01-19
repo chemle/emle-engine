@@ -80,11 +80,11 @@ if args.backend == "mace" and not args.mace_model:
 
 backend = None
 if args.backend == "torchani":
-    from emle._models import ANI2xEMLE
+    from emle.models import ANI2xEMLE
 
     backend = ANI2xEMLE()
 elif args.backend == "mace":
-    from emle._models import MACEEMLE
+    from emle.models import MACEEMLE
 
     backend = MACEEMLE(mace_model=args.mace_model)
 elif args.backend == "deepmd":
