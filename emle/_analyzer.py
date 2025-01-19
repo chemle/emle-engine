@@ -156,6 +156,7 @@ class EMLEAnalyzer:
             "q_val",
             "q_total",
             "alpha",
+            "e_backend"    
             "e_static",
             "e_induced",
             "e_static_mbis",
