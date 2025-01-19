@@ -427,7 +427,7 @@ decomposition of the in vacuo electronic density of the QM region with
 [horton](https://theochem.github.io/horton/2.1.1/index.html). Usage:
 ```
 emle-analyze --qm-xyz qm.xyz \
-             --pc.xyz pc.xyz \
+             --pc-xyz pc.xyz \
              --emle-model model.mat \
              --orca-tarball orca.tar \
              --backend [deepmd, ani2x]
@@ -464,7 +464,7 @@ with `--deepmd-model`.
 Training of custom EMLE models can be performed with `emle-train` tool. It
 requires a tarball with the reference QM calculations with the same naming
 convention as the one for `emle-analyze` script, with the difference that only
-gas phase calculations are required and dipolar polarizabilies must be present.
+gas phase calculations are required and dipolar polarizabilities must be present.
 Simple usage:
 ```
 emle-train --orca-tarball orca.tar model.mat
