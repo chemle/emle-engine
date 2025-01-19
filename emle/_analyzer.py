@@ -124,7 +124,8 @@ class EMLEAnalyzer:
         )
         self.alpha = self._get_mol_alpha(self.A_thole, self.atomic_numbers)
 
-        mesh_data = emle_base._get_mesh_data(qm_xyz_bohr, pc_xyz_bohr, self.s)
+        mask = (self.atomic_numbers > 0).unsqueeze(-1)
+        mesh_data = emle_base._get_mesh_data(qm_xyz_bohr, pc_xyz_bohr, self.s, mask)
         self.e_static = (
             emle_base.get_static_energy(
                 self.q_core, self.q_val, self.pc_charges, mesh_data
@@ -133,7 +134,7 @@ class EMLEAnalyzer:
         )
         self.e_induced = (
             emle_base.get_induced_energy(
-                self.A_thole, self.pc_charges, self.s, mesh_data
+                self.A_thole, self.pc_charges, self.s, mesh_data, mask
             )
             * _HARTREE_TO_KCAL_MOL
         )
