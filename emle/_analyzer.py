@@ -184,7 +184,7 @@ class EMLEAnalyzer:
         """
 
         atoms = _ase_io.read(filename, index=":")
-        atomic_numbers = _pad_to_max([_.get_atomic_numbers() for _ in atoms], -1)
+        atomic_numbers = _pad_to_max([_.get_atomic_numbers() for _ in atoms], 0)
         xyz = _np.array([_.get_positions() for _ in atoms])
         return atomic_numbers, xyz
 
