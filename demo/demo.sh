@@ -14,9 +14,11 @@ cd output
 # Job name.
 name=emle
 
+# Launch the emle-server in the background. (Sander will connect to this via ORCA.)
+emle-server &
+
 # Launch sander.
 sander -O -i ../$name.in -o $name.out -p ../$PARM -c ../$CRD -r $name.ncrst -x $name.nc
 
 # Stop any running emle-server processes.
-cd ..
 emle-stop

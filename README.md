@@ -84,9 +84,6 @@ Where `orca_input` is the path to a fully specified ORCA input file. In the
 examples given here, the `orca` executable will be called by `sander` when
 performing QM/MM, i.e. we are using a _fake_ ORCA as the QM backend.
 
-(Alternatively, just running `orca orca_input` will try to connect to an existing
-server and start one for you if a connection is not found.)
-
 The server and client should both connect to the same hostname and port. This
 can be specified in a script using the environment variables `EMLE_HOST` and
 `EMLE_PORT`. If not specified, then the _same_ default values will be used for
