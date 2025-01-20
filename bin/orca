@@ -40,18 +40,6 @@ orca_input = sys.argv[1]
 if not os.path.isfile(orca_input):
     raise ValueError(f"Couldn't locate ORCA input file: {orca_input}")
 
-# Try to start and EMLE server in the background. This will
-try:
-    print("Trying to start EMLE server...")
-    process = subprocess.Popen(
-        ["emle-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    )
-
-# The server is already running.
-except:
-    print("EMLE server already running!")
-    pass
-
 # Create a socket and connect.
 sock = Socket()
 
