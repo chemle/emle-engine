@@ -4,18 +4,17 @@ import shlex
 import shutil
 import subprocess
 import tempfile
-import time
 import yaml
 
+from conftest import start_server
 
-def test_delta_learning(backend="torchani,xtb"):
+
+def test_delta_learning():
     """
     Make sure that the server can run using two backends for the in vacuo
     vacuo calculation. The first is the "reference" backend, the second
     applies delta learning corrections.
     """
-
-    from conftest import kill_server
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Copy files to temporary directory.
@@ -29,6 +28,9 @@ def test_delta_learning(backend="torchani,xtb"):
         # Set environment variables.
         env["EMLE_BACKEND"] = "torchani,xtb"
         env["EMLE_ENERGY_FREQUENCY"] = "1"
+
+        # Start the server.
+        server = start_server(tmpdir, env=env)
 
         # Create the sander command.
         command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
@@ -60,10 +62,8 @@ def test_delta_learning(backend="torchani,xtb"):
                 + float(lines[-1].strip())
             )
 
-    # Kill the server. (Try twice, since there is sometimes a delay.)
-    kill_server()
-    time.sleep(1)
-    kill_server()
+        # Stop the server.
+        server.terminate()
 
     # Now swap the order of the backends.
 
@@ -79,6 +79,9 @@ def test_delta_learning(backend="torchani,xtb"):
         # Set environment variables.
         env["EMLE_BACKEND"] = "xtb,torchani"
         env["EMLE_ENERGY_FREQUENCY"] = "1"
+
+        # Start the server.
+        server = start_server(tmpdir, env=env)
 
         # Create the sander command.
         command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
@@ -108,6 +111,9 @@ def test_delta_learning(backend="torchani,xtb"):
                 + float(lines[5].strip())
                 + float(lines[-1].strip())
             )
+
+        # Stop the server.
+        server.terminate()
 
     # Make sure that the results are the same.
     assert math.isclose(result_ab, result_ba, rel_tol=1e-6)

@@ -4,6 +4,8 @@ import shutil
 import subprocess
 import tempfile
 
+from conftest import start_server
+
 
 def test_external_local_directory():
     """
@@ -25,6 +27,9 @@ def test_external_local_directory():
         env["EMLE_EXTERNAL_BACKEND"] = "external.run_external"
         env["EMLE_ENERGY_FREQUENCY"] = "1"
 
+        # Start the server.
+        server = start_server(tmpdir, env=env)
+
         # Create the sander command.
         command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
 
@@ -41,6 +46,9 @@ def test_external_local_directory():
 
         # Make sure that an energy file is written.
         assert os.path.isfile(tmpdir + "/emle_energy.txt")
+
+        # Stop the server.
+        server.terminate()
 
 
 def test_external_plugin_directory():
@@ -63,6 +71,9 @@ def test_external_plugin_directory():
         env["EMLE_PLUGIN_PATH"] = os.getcwd() + "/tests/input"
         env["EMLE_ENERGY_FREQUENCY"] = "1"
 
+        # Start the server.
+        server = start_server(tmpdir, env=env)
+
         # Create the sander command.
         command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
 
@@ -79,3 +90,6 @@ def test_external_plugin_directory():
 
         # Make sure that an energy file is written.
         assert os.path.isfile(tmpdir + "/emle_energy.txt")
+
+        # Stop the server.
+        server.terminate()

@@ -1,30 +1,32 @@
-import pytest
-import psutil
+import subprocess
 
 
-@pytest.fixture(autouse=True)
-def wrapper():
+def start_server(cwd, env=None):
     """
-    A wrapper function to stop the EMLE server after each test.
+    Start the EMLE server using the environment variables.
+
+    Parameters
+    ----------
+
+    cwd : str
+        The current working directory.
+
+    env : dict
+        The environment variables.
+
+    Returns
+    -------
+
+    process : subprocess.Popen
+        The EMLE server process object.
     """
 
-    yield
+    process = subprocess.Popen(
+        ["emle-server"],
+        cwd=cwd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
 
-    # Kill the EMLE server.
-    kill_server()
-
-
-def kill_server():
-    """
-    Helper function to kill the EMLE server.
-    """
-
-    # Kill the EMLE server. We do this manually rather than using emle-stop
-    # because there is sometimes a delay in the termination of the server,
-    # which causes the next test to fail. This only seems to happen when
-    # testing during CI.
-    for conn in psutil.net_connections(kind="inet"):
-        if conn.laddr.port == 10000:
-            process = psutil.Process(conn.pid)
-            process.terminate()
-            break
+    return process
