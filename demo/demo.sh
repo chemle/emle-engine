@@ -18,4 +18,5 @@ name=emle
 sander -O -i ../$name.in -o $name.out -p ../$PARM -c ../$CRD -r $name.ncrst -x $name.nc
 
 # Stop any running emle-server processes.
+cd ..
 emle-stop

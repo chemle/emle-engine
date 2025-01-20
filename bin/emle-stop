@@ -5,13 +5,17 @@ if [ -f "emle_pid.txt" ]; then
     # Get the PID.
     pid=$(cat emle_pid.txt)
 
+    # Try to kill the emle-server process.
     echo "Stopping emle-server: PID $pid"
     timeout -vk 5 10 kill $pid > /dev/null 2>&1
 
 else
     # Try to kill all of the emle-server processes.
     echo "Stopping all emle-server processes..."
-    timeout -vk 5 10 killall emle-server > /dev/null 2>&1
+    for pid in $(ps -ef | grep emle-server | grep -v grep | awk '{print $2}'); do
+        echo "Stopping emle-server: PID $pid"
+        timeout -vk 5 10 kill $pid > /dev/null 2>&1
+    done
 fi
 
 echo "Done!"
