@@ -1,8 +1,5 @@
-import os
 import pytest
 import psutil
-import shlex
-import subprocess
 
 
 @pytest.fixture(autouse=True)
