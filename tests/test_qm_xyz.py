@@ -4,6 +4,8 @@ import shutil
 import subprocess
 import tempfile
 
+from conftest import start_server
+
 
 def test_qm_xyz():
     """
@@ -21,6 +23,9 @@ def test_qm_xyz():
 
         # Set environment variables.
         env["EMLE_QM_XYZ_FREQUENCY"] = "2"
+
+        # Start the server.
+        server = start_server(tmpdir, env=env)
 
         # Create the sander command.
         command = "sander -O -i emle_prod.in -p adp.parm7 -c adp.rst7 -o emle.out"
@@ -46,3 +51,6 @@ def test_qm_xyz():
                 if line.startswith("22"):
                     num_frames += 1
         assert num_frames == 11
+
+        # Stop the server.
+        server.terminate()

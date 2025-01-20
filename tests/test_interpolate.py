@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import tempfile
 
+from conftest import start_server
+
 
 def parse_mdinfo(mdinfo_file):
     """
@@ -30,6 +32,9 @@ def test_interpolate():
         shutil.copyfile("tests/input/adp.rst7", tmpdir + "/adp.rst7")
         shutil.copyfile("tests/input/mm_sp.in", tmpdir + "/mm_sp.in")
 
+        # Start the server.
+        server = start_server(tmpdir)
+
         # Create the sander command.
         command = "sander -O -i mm_sp.in -p adp.parm7 -c adp.rst7"
 
@@ -49,6 +54,9 @@ def test_interpolate():
         nrg_mm = parse_mdinfo(tmpdir + "/mdinfo")
 
         assert math.isclose(nrg_ref, nrg_mm, rel_tol=1e-5)
+
+        # Stop the server.
+        server.terminate()
 
     # Now perform and interpolated EMLE simulation at lambda=0.
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -74,6 +82,9 @@ def test_interpolate():
         env["EMLE_QM_INDICES"] = "adp_qm_indices.txt"
         env["EMLE_ENERGY_FREQUENCY"] = "1"
 
+        # Start the server.
+        server = start_server(tmpdir, env=env)
+
         # Create the sander command.
         command = "sander -O -i emle_sp.in -p adp.parm7 -c adp.rst7 -o emle.out"
 
@@ -91,6 +102,9 @@ def test_interpolate():
         nrg_emle = parse_mdinfo(tmpdir + "/mdinfo")
 
         assert math.isclose(nrg_ref, nrg_emle, rel_tol=1e-4)
+
+        # Stop the server.
+        server.terminate()
 
 
 def test_interpolate_steps():
@@ -123,6 +137,9 @@ def test_interpolate_steps():
         env["EMLE_QM_INDICES"] = "adp_qm_indices.txt"
         env["EMLE_ENERGY_FREQUENCY"] = "1"
 
+        # Start the server.
+        server = start_server(tmpdir, env=env)
+
         # Create the sander command.
         command = "sander -O -i emle_prod.in -p adp.parm7 -c adp.rst7 -o emle.out"
 
@@ -146,6 +163,9 @@ def test_interpolate_steps():
                     nrg_lambda = data[2]
                     nrg_interp = lam * data[4] + (1 - lam) * data[3]
                     assert math.isclose(nrg_lambda, nrg_interp, rel_tol=1e-5)
+
+        # Stop the server.
+        server.terminate()
 
 
 def test_interpolate_steps_config():
@@ -168,6 +188,9 @@ def test_interpolate_steps_config():
         # Set environment variables.
         env["EMLE_CONFIG"] = "config.yaml"
 
+        # Start the server.
+        server = start_server(tmpdir, env=env)
+
         # Create the sander command.
         command = "sander -O -i emle_prod.in -p adp.parm7 -c adp.rst7 -o emle.out"
 
@@ -191,3 +214,6 @@ def test_interpolate_steps_config():
                     nrg_lambda = data[2]
                     nrg_interp = lam * data[4] + (1 - lam) * data[3]
                     assert math.isclose(nrg_lambda, nrg_interp, rel_tol=1e-5)
+
+        # Stop the server.
+        server.terminate()
