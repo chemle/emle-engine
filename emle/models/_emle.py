@@ -57,8 +57,7 @@ except:
 
 class EMLE(_torch.nn.Module):
     """
-    Predicts EMLE energies and gradients allowing QM/MM with ML electrostatic
-    embedding.
+    Torch model for predicting static and induced EMLE energy components.
     """
 
     # Class attributes.

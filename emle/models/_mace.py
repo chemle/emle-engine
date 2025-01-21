@@ -54,6 +54,10 @@ except:
 
 
 class MACEEMLE(_torch.nn.Module):
+    """
+    Combined MACE and EMLE model. Predicts the in vacuo MACE energy along with
+    static and induced EMLE energy components.
+    """
 
     # Class attributes.
 

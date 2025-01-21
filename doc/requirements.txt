@@ -1,0 +1,4 @@
+furo
+sphinx
+sphinxcontrib-programoutput
+sphinx-issues

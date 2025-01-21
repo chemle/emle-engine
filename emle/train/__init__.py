@@ -25,5 +25,3 @@ EMLE training resources.
 """
 
 from ._trainer import EMLETrainer
-
-__all__ = ["EMLETrainer"]

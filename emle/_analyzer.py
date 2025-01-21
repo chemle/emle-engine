@@ -49,6 +49,30 @@ class EMLEAnalyzer:
         parser=None,
         q_total=None,
     ):
+        """
+        Constructor.
+
+        Parameters
+        ----------
+
+        qm_xyz_filename: str
+            The path to the xyz trajectory file for the QM region.
+
+        pc_xyz_filename: str
+            The path to the xyz trajectory file for the point charges.
+
+        emle_base: :class:`EMLEBase <emle.models.EMLEBase>`
+            An EMLEBase model instance.
+
+        backend: :class:`torch.nn.Module`, :class:`Backend <emle._backends._backend.Backend>`
+            The backend for in vacuo calculations.
+
+        parser: :class:`ORCAParser <emle._orca_parser.ORCAParser>`
+            An ORCA parser instance.
+
+        q_total: int, float
+            The total charge of the QM region.
+        """
 
         if not isinstance(qm_xyz_filename, str):
             raise ValueError("Invalid qm_xyz_filename type. Must be a string.")

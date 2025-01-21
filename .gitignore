@@ -21,6 +21,11 @@ dist/
 build/
 emle_engine.egg-info/
 
+# Documetation build artifacts.
+doc/build
+doc/source/generated
+doc/source/api/generated
+
 # Results.
 results/
 
