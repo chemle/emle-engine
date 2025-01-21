@@ -20,6 +20,8 @@ publication.
 The general purpose embedding model currently supports HCNOS elements. We plan
 to add support for further elements in the near future.
 
+We thank EPSRC for funding (grant code EP/V011421/1).
+
 Installation
 ============
 

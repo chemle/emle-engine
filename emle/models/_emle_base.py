@@ -258,6 +258,9 @@ class EMLEBase(_torch.nn.Module):
         self.register_buffer("_c_sqrtk", c_sqrtk)
 
     def to(self, *args, **kwargs):
+        """
+        Performs Tensor dtype and/or device conversion on the model.
+        """
         self._emle_aev_computer = self._emle_aev_computer.to(*args, **kwargs)
         self._species_map = self._species_map.to(*args, **kwargs)
         self._Kinv = self._Kinv.to(*args, **kwargs)

@@ -208,5 +208,8 @@ autodoc_default_options = {
     "special-members": False,
     "exclude-members": "__dict__,__weakref__",
     "private-members": False,
-    "inherited-members": True,
+    "inherited-members": False,
+    "show-inheritance": False,
 }
+
+autoclass_content = "both"

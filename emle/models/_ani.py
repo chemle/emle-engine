@@ -46,6 +46,10 @@ except:
 
 
 class ANI2xEMLE(_torch.nn.Module):
+    """
+    Combined ANI2x and EMLE model. Predicts the in vacuo ANI2x energy along with
+    static and induced EMLE energy components.
+    """
 
     # Class attributes.
 

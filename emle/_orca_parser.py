@@ -21,7 +21,7 @@
 ######################################################################
 
 """
-Parser for ORCA and horton outputs.
+Parser for ORCA and HORTON outputs.
 """
 
 __all__ = ["ORCAParser"]
@@ -39,7 +39,7 @@ _HARTREE_TO_KCALMOL = 627.509
 
 class ORCAParser:
     """
-    Parses ORCA gas phase calculations and corresponding horton outputs.
+    Parses ORCA gas phase calculations and corresponding HORTON outputs.
     Optionally, extract molecular dipolar polarizability (needed for EMLE
     training) and does energy decomposition analysis for embedding energy. The
     latter requires additional calculation in presence of point charges and
@@ -56,23 +56,33 @@ class ORCAParser:
 
     def __init__(self, filename, decompose=False, alpha=False):
         """
+        Constructor.
+
+        Parameters
+        ----------
+
         filename : str
-            Tarball with ORCA and horton outputs. All the files must have
-            numeric names (same number for the same structure) and the following
-            extensions:
-
-                .h5: horton output
-                .vac.orca: ORCA output for gas phase calculation. If alpha=True,
-                           must contain molecular dipolar polarizability tensor
-                           as well.
-
+            Tarball with ORCA and HORTON outputs:
+                ".h5":
+                    HORTON output.
+                ".vac.orca":
+                    ORCA output for gas phase calculation. If alpha=True, must
+                    contain molecular dipolar polarizability tensor as well.
             The following files are required if decompose=True:
-
-                .pc.orca: ORCA output for calculation with point charges
-                .pc: charges and positions of the point charges (the ones used
-                     for .pc.orca calculation)
-                .vpot: output of orca_vpot, electrostatic potential of gas phase
-                       system at the positions of the point charges
+                ".pc.orca":
+                    ORCA output for calculation with point charges (PC).
+                ".pc":
+                    Charges and positions of the point charges (the ones used for
+                    .pc.orca calculation).
+                ".vpot":
+                    Output of orca_vpot, electrostatic potential of gas phase
+                    system at the positions of the point charges.
+                ".h5":
+                    HORTON output.
+                ".vac.orca":
+                    ORCA output for gas phase calculation. If alpha=True, must
+                    contain molecular dipolar polarizability tensor as well.
+            All files must have numeric names (same number for the same structure).
 
         decompose: bool
             Whether to do energy decomposition analysis
@@ -80,17 +90,25 @@ class ORCAParser:
         alpha: bool
             Whether to extract molecular dipolar polarizability tensor
 
-        Once the files are parsed, the following properties become available on
-        the class instance:
+        Notes
+        -----
 
-            z: (N_MOLS, MAX_N_ATOMS) atomic indices
-            xyz: (N_MOLS, MAX_N_ATOMS, 3) positions of atoms
-            mbis: a dictionary with MBIS properties (s, q_core, q_val, mu)
-            alpha: (N_MOLS, 3, 3) array of molecular dipolar polarizability
-                   tensors (alpha=True)
-            E: total embedding energies (decompose=True)
-            E_static: static embedding energies (decompose=True)
-            E_induced: induced embedding energies (decompose=True)
+        Once the files are parsed the following attributes are available:
+            z:
+                (N_MOLS, MAX_N_ATOMS) atomic indices.
+            xyz:
+                (N_MOLS, MAX_N_ATOMS, 3) positions of atoms
+            mbis:
+                a dictionary with MBIS properties (s, q_core, q_val, mu)
+            alpha:
+                (N_MOLS, 3, 3) array of molecular dipolar polarizability
+                tensors (alpha=True)
+            E:
+                total embedding energies (decompose=True)
+            E_static:
+                static embedding energies (decompose=True)
+            E_induced:
+                induced embedding energies (decompose=True)
         """
 
         if not isinstance(filename, str):

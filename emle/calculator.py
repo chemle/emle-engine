@@ -20,7 +20,9 @@
 # along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
 #####################################################################
 
-"""EMLE calculator implementation."""
+"""
+EMLE calculator implementation.
+"""
 
 __author__ = "Lester Hedges"
 __email__ = "lester.hedges@gmail.com"
@@ -111,6 +113,9 @@ class EMLECalculator:
     ):
         """
         Constructor
+
+        Parameters
+        ----------
 
         model: str
             Path to the EMLE embedding model parameter file. If None, then a
@@ -947,7 +952,7 @@ class EMLECalculator:
         ----------
 
         path: str
-            Path to the sander process.
+            Path to the working directory of the sander process.
         """
 
         if path is not None:

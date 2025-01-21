@@ -1,5 +1,4 @@
-# Makefile for Sphinx documentation
-#
+# Makefile for Sphinx documentation.
 
 SHELL := /bin/bash
 
