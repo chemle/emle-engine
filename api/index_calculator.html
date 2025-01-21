@@ -1,0 +1,536 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="emle.train" href="index_train.html" /><link rel="prev" title="emle.models" href="index_models.html" />
+
+    <link rel="shortcut icon" href="../_static/favicon.png"/><!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
+        <title>emle.calculator - emle-engine</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d8a2add5" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css?v=3ab3c30c" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #ffffff;
+  --color-code-foreground: black;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #272822;
+  --color-code-foreground: #f8f8f2;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #272822;
+  --color-code-foreground: #f8f8f2;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">emle-engine</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.jpg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul>
+<li class="toctree-l1"><a class="reference internal" href="../install.html">Installation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../dynamics.html">Dynamics</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../analysis.html">Error Analysis</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../training.html">Training</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">API Documentation</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of API Documentation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="index_models.html">emle.models</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">emle.calculator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index_train.html">emle.train</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index_backends.html">emle._backends</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index_analyzer.html">emle._analyzer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index_orca_parser.html">emle._orca_parser</a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../issues.html">Issues</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          
+
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="emle-calculator">
+<span id="ref-calculator"></span><h1>emle.calculator<a class="headerlink" href="#emle-calculator" title="Link to this heading">¶</a></h1>
+<p>The <em>calculator</em> module contains a calculator for computing energies and
+gradients. This is used by the <code class="docutils literal notranslate"><span class="pre">emle-engine</span></code> script to compute energies
+and gradients when interfacing with <a class="reference external" href="https://ambermd.org">sander</a>.
+The calculator can also be used by <a class="reference external" href="https://sire.openbiosim.org">Sire</a>
+to interface with <a class="reference external" href="http://openmm.org">OpenMM</a>.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="emle.calculator.EMLECalculator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">emle.calculator.</span></span><span class="sig-name descname"><span class="pre">EMLECalculator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'electrostatic'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'species'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atomic_numbers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qm_charge</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'torchani'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">external_backend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plugin_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'.'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mm_charges</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">box</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">deepmd_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">deepmd_deviation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">deepmd_deviation_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qm_xyz_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'qm.xyz'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pc_xyz_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'pc.xyz'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qm_xyz_frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ani2x_model_index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mace_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qbc_deviation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qbc_deviation_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ace_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rascal_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parm7</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qm_indices</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">orca_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sqm_theory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'DFTB3'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lambda_interpolate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">interpolate_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">restart</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">orca_template</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">energy_frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">energy_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'emle_energy.txt'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ERROR'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/calculator.html#EMLECalculator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.calculator.EMLECalculator" title="Link to this definition">¶</a></dt>
+<dd><p>Predicts EMLE energies and gradients allowing QM/MM with ML electrostatic
+embedding. Requires the use of a QM (or ML) engine to compute in vacuo
+energies and gradients, to which those from the EMLE model are added.
+Supported backends are listed in the _supported_backends attribute below.</p>
+<p>Constructor</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<em>str</em>) – Path to the EMLE embedding model parameter file. If None, then a
+default model will be used.</p></li>
+<li><p><strong>method</strong> (<em>str</em>) – <dl class="simple">
+<dt>The desired embedding method. Options are:</dt><dd><dl class="simple">
+<dt>”electrostatic”:</dt><dd><p>Full ML electrostatic embedding.</p>
+</dd>
+<dt>”mechanical”:</dt><dd><p>ML predicted charges for the core, but zero valence charge.</p>
+</dd>
+<dt>”nonpol”:</dt><dd><p>Non-polarisable ML embedding. Here the induced component of
+the potential is zeroed.</p>
+</dd>
+<dt>”mm”:</dt><dd><p>MM charges are used for the core charge and valence charges
+are set to zero. If this option is specified then the user
+should also specify the MM charges for atoms in the QM
+region.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>backend</strong> (<em>str</em><em>, </em><em>Tuple</em><em>[</em><em>str</em><em>]</em>) – The backend to use to compute in vacuo energies and gradients. If None,
+then no backend will be used, allowing you to obtain the electrostatic
+embedding energy and gradients only. If two backends are specified, then
+the second can be used to apply delta-learning corrections to the
+energies and gradients.</p></li>
+<li><p><strong>alpha_mode</strong> (<em>str</em>) – <dl class="simple">
+<dt>How atomic polarizabilities are calculated.</dt><dd><dl class="simple">
+<dt>”species”:</dt><dd><p>one volume scaling factor is used for each species</p>
+</dd>
+<dt>”reference”:</dt><dd><p>scaling factors are obtained with GPR using the values learned
+for each reference environment</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>atomic_numbers</strong> (<em>List</em><em>[</em><em>int</em><em>]</em><em>, </em><em>Tuple</em><em>[</em><em>int</em><em>]</em><em>, </em><em>numpy.ndarray</em>) – Atomic numbers for the QM region. This allows use of optimised AEV
+symmetry functions from the NNPOps package. Only use this option if
+you are using a fixed QM region, i.e. the same QM region for each
+call to the calculator.</p></li>
+<li><p><strong>qm_charge</strong> (<em>int</em>) – The charge on the QM region. This is required when using an
+EMLECalculator instance with the OpenMM interface. When using
+the sander interface, the QM charge will be taken from the ORCA
+input file.</p></li>
+<li><p><strong>external_backend</strong> (<em>str</em>) – The name of an external backend to use to compute in vacuo energies.
+This should be a callback function formatted as ‘module.function’.
+The function should take a single argument, which is an ASE Atoms
+object for the QM region, and return the energy in Hartree along with
+the gradients in Hartree/Bohr as a numpy.ndarray.</p></li>
+<li><p><strong>plugin_path</strong> (<em>str</em>) – The direcory containing any scripts used for external backends.</p></li>
+<li><p><strong>mm_charges</strong> (<em>List</em><em>, </em><em>Tuple</em><em>, </em><em>numpy.ndarray</em><em>, </em><em>str</em>) – An array of MM charges for atoms in the QM region. This is required
+when the embedding method is “mm”. Alternatively, pass the path to
+a file containing the charges. The file should contain a single
+column. Units are electron charge.</p></li>
+<li><p><strong>box</strong> (<em>List</em><em>, </em><em>Tuple</em><em>, </em><em>numpy.ndarray</em><em>, </em><em>(</em><em>3</em><em>,</em><em>)</em>) – PBC box. Only orthorhombic boxes are supported.
+(For now only works for DeePMD)</p></li>
+<li><p><strong>deepmd_model</strong> (<em>str</em>) – Path to the DeePMD model file to use for in vacuo calculations. This
+must be specified if “deepmd” is the selected backend. This can be
+one or more files, i.e. multiple models can be used to compute
+force deviations. When multiple models are specified, the first model
+will be used for the production energy and forces.</p></li>
+<li><p><strong>deepmd_deviation</strong> (<em>str</em>) – Path to a file to write the max deviation between forces predicted
+with the DeePMD models.</p></li>
+<li><p><strong>deepmd_deviation_threshold</strong> (<em>float</em>) – The threshold for the maximum deviation between forces predicted with
+the DeePMD models. If the deviation exceeds this value, a ValueError
+will be raised and the calculation will be terminated.</p></li>
+<li><p><strong>qm_xyz_file</strong> (<em>str</em>) – Path to an output file for writing the xyz trajectory of the QM
+region.</p></li>
+<li><p><strong>pc_xyz_file</strong> (<em>str</em>) – Path to an output file for writing the charges and positions of the
+MM point charges.</p></li>
+<li><p><strong>qm_xyz_frequency</strong> (<em>int</em>) – How often to write the xyz trajectory of the QM and MM regions. Zero
+turns off writing.</p></li>
+<li><p><strong>ani2x_model_index</strong> (<em>int</em>) – The index of the ANI model to use when using the TorchANI backend.
+If None, then the full 8 model ensemble is used.</p></li>
+<li><p><strong>mace_model</strong> (<em>str</em><em>, </em><em>list</em><em>[</em><em>str</em><em>]</em>) – Name of the MACE-OFF23 models to use.
+Available models are ‘mace-off23-small’, ‘mace-off23-medium’, ‘mace-off23-large’.
+To use a locally trained MACE model, provide the path to the model file.
+If a list of strings is provided, deviation between the models will be printed
+on each step to qbc_deviation.
+If None, the MACE-OFF23(S) model will be used by default.</p></li>
+<li><p><strong>qbc_deviation</strong> (<em>str</em>) – Path to a file to write the max deviation between forces predicted
+with the models (for Query-by-Committee).</p></li>
+<li><p><strong>qbc_deviation_threshold</strong> (<em>float</em>) – The threshold for the maximum deviation between forces.
+If the deviation exceeds this value, a ValueError
+will be raised and the calculation will be terminated.</p></li>
+<li><p><strong>ace_model</strong> (<em>str</em>) – Path to the ACE model file to use for in vacuo calculations. This
+must be specified if ‘ace’ is the selected backend.</p></li>
+<li><p><strong>rascal_model</strong> (<em>str</em>) – Path to the Rascal model file to use for in vacuo calculations. This
+must be specified if “rascal” is the selected backend.</p></li>
+<li><p><strong>lambda_interpolate</strong> (<em>float</em><em>, </em><em>[</em><em>float</em><em>, </em><em>float</em><em>]</em>) – The value of lambda to use for end-state correction calculations. This
+must be between 0 and 1, which is used to interpolate between a full MM
+and EMLE potential. If two lambda values are specified, the calculator
+will gradually interpolate between them when called multiple times. This
+must be used in conjunction with the ‘interpolate_steps’ argument.</p></li>
+<li><p><strong>interpolate_steps</strong> (<em>int</em>) – The number of steps over which lambda is linearly interpolated.</p></li>
+<li><p><strong>parm7</strong> (<em>str</em>) – The path to an AMBER parm7 file for the QM region. This is needed to
+compute in vacuo MM energies for the QM region when using the Rascal
+backend, or when interpolating.</p></li>
+<li><p><strong>qm_indices</strong> (<em>list</em><em>, </em><em>str</em>) – A list of atom indices for the QM region. This must be specified when
+interpolating. Alternatively, a path to a file containing the indices
+can be specified. The file should contain a single column with the
+indices being zero-based.</p></li>
+<li><p><strong>orca_path</strong> (<em>str</em>) – The path to the ORCA executable. This is required when using the ORCA
+backend.</p></li>
+<li><p><strong>sqm_theory</strong> (<em>str</em>) – The QM theory to use when using the SQM backend. See the AmberTools
+manual for the supported theory levels for your version of AmberTools.</p></li>
+<li><p><strong>restart</strong> (<em>bool</em>) – Whether this is a restart simulation with sander. If True, then energies
+are logged immediately.</p></li>
+<li><p><strong>device</strong> (<em>str</em>) – The name of the device to be used by PyTorch. Options are “cpu”
+or “cuda”.</p></li>
+<li><p><strong>orca_template</strong> (<em>str</em>) – <p>The path to a template ORCA input file. This is required when using
+the ORCA backend when using emle-engine with Sire. This should be a
+full template, including the charge and multiplicity of the QM region,
+along with a placeholder name for the xyz file that will be replaced
+with the file generated at runtime, e.g.:</p>
+<blockquote>
+<div><p>%pal nprocs 4 end
+!BLYP 6-31G* verytightscf
+%method
+grid 4
+finalgrid 6
+end
+%scf
+maxiter 100
+end
+%MaxCore 1024
+! ENGRAD
+! Angs NoUseSym
+<a href="#id1"><span class="problematic" id="id2">*</span></a>xyzfile 0 1 inpfile.xyz</p>
+</div></blockquote>
+</p></li>
+<li><p><strong>energy_frequency</strong> (<em>int</em>) – The frequency of logging energies to file. If 0, then no energies are
+logged.</p></li>
+<li><p><strong>energy_file</strong> (<em>str</em>) – The name of the file to which energies are logged.</p></li>
+<li><p><strong>log_level</strong> (<em>str</em>) – The logging level to use. Options are “TRACE”, “DEBUG”, “INFO”, “WARNING”,
+“ERROR”, and “CRITICAL”.</p></li>
+<li><p><strong>log_file</strong> (<em>str</em>) – The name of the file to which log messages are written.</p></li>
+<li><p><strong>save_settings</strong> (<em>bool</em>) – Whether to write a YAML file containing the settings used to initialise
+the calculator.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.calculator.EMLECalculator.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/calculator.html#EMLECalculator.run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.calculator.EMLECalculator.run" title="Link to this definition">¶</a></dt>
+<dd><p>Calculate the energy and gradients.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>path</strong> (<em>str</em>) – Path to the working directory of the sander process.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.calculator.EMLECalculator.set_lambda_interpolate">
+<span class="sig-name descname"><span class="pre">set_lambda_interpolate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lambda_interpolate</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/calculator.html#EMLECalculator.set_lambda_interpolate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.calculator.EMLECalculator.set_lambda_interpolate" title="Link to this definition">¶</a></dt>
+<dd><p>Set the value of the lambda interpolation parameter. Note the server must
+already be in ‘interpolation’ mode, i.e. the user must have specified an
+initial value for ‘lambda_interpolate’ in the constructor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>lambda_interpolate</strong> (<em>float</em><em>, </em><em>[</em><em>float</em><em>, </em><em>float</em><em>]</em>) – The value of lambda to use for interpolating between pure MM
+(lambda=0) and ML/MM (lambda=1) potentials.and. If two lambda
+values are specified, the calculator will gradually interpolate
+between them when called multiple times.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="index_train.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">emle.train</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="index_models.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">emle.models</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            Made with 
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Jul 23, 2025</div>
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">emle.calculator</a><ul>
+<li><a class="reference internal" href="#emle.calculator.EMLECalculator"><code class="docutils literal notranslate"><span class="pre">EMLECalculator</span></code></a><ul>
+<li><a class="reference internal" href="#emle.calculator.EMLECalculator.run"><code class="docutils literal notranslate"><span class="pre">EMLECalculator.run()</span></code></a></li>
+<li><a class="reference internal" href="#emle.calculator.EMLECalculator.set_lambda_interpolate"><code class="docutils literal notranslate"><span class="pre">EMLECalculator.set_lambda_interpolate()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/scripts/furo.js?v=5fa4622c"></script>
+    </body>
+</html>

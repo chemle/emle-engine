@@ -1,0 +1,946 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" />
+
+    <link rel="shortcut icon" href="../../../_static/favicon.png"/><!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
+        <title>emle.train._trainer - emle-engine</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d8a2add5" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css?v=3ab3c30c" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #ffffff;
+  --color-code-foreground: black;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #272822;
+  --color-code-foreground: #f8f8f2;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #272822;
+  --color-code-foreground: #f8f8f2;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../index.html"><div class="brand">emle-engine</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
+  
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../../../_static/logo.jpg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../install.html">Installation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../dynamics.html">Dynamics</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../analysis.html">Error Analysis</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../training.html">Training</a></li>
+</ul>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../api/index.html">API Documentation</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of API Documentation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/index_models.html">emle.models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/index_calculator.html">emle.calculator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/index_train.html">emle.train</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/index_backends.html">emle._backends</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/index_analyzer.html">emle._analyzer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/index_orca_parser.html">emle._orca_parser</a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../contributing.html">Contributing</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../changelog.html">Changelog</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../issues.html">Issues</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for emle.train._trainer</h1><div class="highlight"><pre>
+<span></span><span class="c1">#######################################################################</span>
+<span class="c1"># EMLE-Engine: https://github.com/chemle/emle-engine</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright: 2023-2025</span>
+<span class="c1">#</span>
+<span class="c1"># Authors: Lester Hedges   &lt;lester.hedges@gmail.com&gt;</span>
+<span class="c1">#          Kirill Zinovjev &lt;kzinovjev@gmail.com&gt;</span>
+<span class="c1">#</span>
+<span class="c1"># EMLE-Engine is free software: you can redistribute it and/or modify</span>
+<span class="c1"># it under the terms of the GNU General Public License as published by</span>
+<span class="c1"># the Free Software Foundation, either version 2 of the License, or</span>
+<span class="c1"># (at your option) any later version.</span>
+<span class="c1">#</span>
+<span class="c1"># EMLE-Engine is distributed in the hope that it will be useful,</span>
+<span class="c1"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c1"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the</span>
+<span class="c1"># GNU General Public License for more details.</span>
+<span class="c1">#</span>
+<span class="c1"># You should have received a copy of the GNU General Public License</span>
+<span class="c1"># along with EMLE-Engine. If not, see &lt;http://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#####################################################################</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">loguru</span><span class="w"> </span><span class="kn">import</span> <span class="n">logger</span> <span class="k">as</span> <span class="n">_logger</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sys</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_sys</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_torch</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">..models</span><span class="w"> </span><span class="kn">import</span> <span class="n">EMLEAEVComputer</span> <span class="k">as</span> <span class="n">_EMLEAEVComputer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..models</span><span class="w"> </span><span class="kn">import</span> <span class="n">EMLEBase</span> <span class="k">as</span> <span class="n">_EMLEBase</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">._gpr</span><span class="w"> </span><span class="kn">import</span> <span class="n">GPR</span> <span class="k">as</span> <span class="n">_GPR</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">._ivm</span><span class="w"> </span><span class="kn">import</span> <span class="n">IVM</span> <span class="k">as</span> <span class="n">_IVM</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">._loss</span><span class="w"> </span><span class="kn">import</span> <span class="n">QEqLoss</span> <span class="k">as</span> <span class="n">_QEqLoss</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">._loss</span><span class="w"> </span><span class="kn">import</span> <span class="n">TholeLoss</span> <span class="k">as</span> <span class="n">_TholeLoss</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">._utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">pad_to_max</span> <span class="k">as</span> <span class="n">_pad_to_max</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">._utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">mean_by_z</span> <span class="k">as</span> <span class="n">_mean_by_z</span>
+
+
+<div class="viewcode-block" id="EMLETrainer">
+<a class="viewcode-back" href="../../../api/index_train.html#emle.train.EMLETrainer">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">EMLETrainer</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">emle_base</span><span class="o">=</span><span class="n">_EMLEBase</span><span class="p">,</span>
+        <span class="n">qeq_loss</span><span class="o">=</span><span class="n">_QEqLoss</span><span class="p">,</span>
+        <span class="n">thole_loss</span><span class="o">=</span><span class="n">_TholeLoss</span><span class="p">,</span>
+        <span class="n">log_level</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">log_file</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="k">if</span> <span class="n">emle_base</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">_EMLEBase</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;emle_base must be a reference to EMLEBase&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_emle_base</span> <span class="o">=</span> <span class="n">emle_base</span>
+
+        <span class="k">if</span> <span class="n">qeq_loss</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">_QEqLoss</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;qeq_loss must be a reference to QEqLoss&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_qeq_loss</span> <span class="o">=</span> <span class="n">qeq_loss</span>
+
+        <span class="k">if</span> <span class="n">thole_loss</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">_TholeLoss</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;thole_loss must be a reference to TholeLoss&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_thole_loss</span> <span class="o">=</span> <span class="n">thole_loss</span>
+
+        <span class="c1"># First handle the logger.</span>
+        <span class="k">if</span> <span class="n">log_level</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">log_level</span> <span class="o">=</span> <span class="s2">&quot;INFO&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">log_level</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;&#39;log_level&#39; must be of type &#39;str&#39;&quot;</span><span class="p">)</span>
+
+            <span class="c1"># Delete whitespace and convert to upper case.</span>
+            <span class="n">log_level</span> <span class="o">=</span> <span class="n">log_level</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+            <span class="c1"># Validate the log level.</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">log_level</span> <span class="ow">in</span> <span class="n">_logger</span><span class="o">.</span><span class="n">_core</span><span class="o">.</span><span class="n">levels</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Unsupported logging level &#39;</span><span class="si">{</span><span class="n">log_level</span><span class="si">}</span><span class="s2">&#39;. Options are: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_logger</span><span class="o">.</span><span class="n">_core</span><span class="o">.</span><span class="n">levels</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_log_level</span> <span class="o">=</span> <span class="n">log_level</span>
+
+        <span class="c1"># Validate the log file.</span>
+
+        <span class="k">if</span> <span class="n">log_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">log_file</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;&#39;log_file&#39; must be of type &#39;str&#39;&quot;</span><span class="p">)</span>
+
+            <span class="c1"># Try to create the directory.</span>
+            <span class="n">dirname</span> <span class="o">=</span> <span class="n">_os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">log_file</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">dirname</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">_os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">dirname</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="k">except</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">IOError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Unable to create directory for log file: </span><span class="si">{</span><span class="n">log_file</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_log_file</span> <span class="o">=</span> <span class="n">_os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">log_file</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_log_file</span> <span class="o">=</span> <span class="n">_sys</span><span class="o">.</span><span class="n">stdout</span>
+
+        <span class="c1"># Update the logger.</span>
+        <span class="n">_logger</span><span class="o">.</span><span class="n">remove</span><span class="p">()</span>
+        <span class="n">_logger</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_log_file</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_log_level</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_zid_mapping</span><span class="p">(</span><span class="n">species</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Generate the species ID mapping.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        species: torch.Tensor(N_SPECIES)</span>
+<span class="sd">            Species IDs.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        mapping: torch.Tensor</span>
+<span class="sd">            Species ID mapping.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">zid_mapping</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">_torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">species</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">_torch</span><span class="o">.</span><span class="n">int</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">species</span><span class="o">.</span><span class="n">device</span><span class="p">)</span> <span class="o">*</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">z</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">species</span><span class="p">):</span>
+            <span class="n">zid_mapping</span><span class="p">[</span><span class="n">z</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span>
+        <span class="k">return</span> <span class="n">zid_mapping</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_write_model_to_file</span><span class="p">(</span><span class="n">emle_model</span><span class="p">,</span> <span class="n">model_filename</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Write the trained model to a file.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        emle_model: dict</span>
+<span class="sd">            Trained EMLE model.</span>
+
+<span class="sd">        model_filename: str</span>
+<span class="sd">            Filename to save the trained model.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">scipy.io</span>
+
+        <span class="c1"># Deatch the tensors, convert to numpy arrays and save the model.</span>
+        <span class="n">emle_model</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">_torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="k">else</span> <span class="n">v</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">emle_model</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="p">}</span>
+        <span class="n">scipy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">savemat</span><span class="p">(</span><span class="n">model_filename</span><span class="p">,</span> <span class="n">emle_model</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_train_s</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">zid</span><span class="p">,</span> <span class="n">aev_mols</span><span class="p">,</span> <span class="n">aev_ivm_allz</span><span class="p">,</span> <span class="n">sigma</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Train the s model.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        s: torch.Tensor(N_BATCH, N_ATOMS)</span>
+<span class="sd">            Atomic widths.</span>
+
+<span class="sd">        zid: torch.Tensor(N_BATCH, N_ATOMS)</span>
+<span class="sd">            Species IDs.</span>
+
+<span class="sd">        aev_mols: torch.Tensor(N_BATCH, N_ATOMS, N_AEV)</span>
+<span class="sd">            Atomic environment vectors.</span>
+
+<span class="sd">        aev_ivm_allz: torch.Tensor(N_BATCH, N_ATOMS, N_AEV)</span>
+<span class="sd">            Atomic environment vectors for all species.</span>
+
+<span class="sd">        sigma: float</span>
+<span class="sd">            GPR sigma value.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        torch.Tensor(N_BATCH, N_ATOMS)</span>
+<span class="sd">            Atomic widths.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">n_ref</span> <span class="o">=</span> <span class="n">_torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="n">_</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">aev_ivm_allz</span><span class="p">],</span> <span class="n">device</span><span class="o">=</span><span class="n">s</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">K_ref_ref_padded</span><span class="p">,</span> <span class="n">K_mols_ref</span> <span class="o">=</span> <span class="n">_GPR</span><span class="o">.</span><span class="n">get_gpr_kernels</span><span class="p">(</span>
+            <span class="n">aev_mols</span><span class="p">,</span> <span class="n">zid</span><span class="p">,</span> <span class="n">aev_ivm_allz</span><span class="p">,</span> <span class="n">n_ref</span>
+        <span class="p">)</span>
+
+        <span class="n">ref_values_s</span> <span class="o">=</span> <span class="n">_GPR</span><span class="o">.</span><span class="n">fit_atomic_sparse_gpr</span><span class="p">(</span>
+            <span class="n">s</span><span class="p">,</span> <span class="n">K_mols_ref</span><span class="p">,</span> <span class="n">K_ref_ref_padded</span><span class="p">,</span> <span class="n">zid</span><span class="p">,</span> <span class="n">sigma</span><span class="p">,</span> <span class="n">n_ref</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">_pad_to_max</span><span class="p">(</span><span class="n">ref_values_s</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_train_model</span><span class="p">(</span>
+        <span class="n">loss_class</span><span class="p">,</span>
+        <span class="n">opt_param_names</span><span class="p">,</span>
+        <span class="n">lr</span><span class="p">,</span>
+        <span class="n">epochs</span><span class="p">,</span>
+        <span class="n">emle_base</span><span class="p">,</span>
+        <span class="n">print_every</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+        <span class="o">*</span><span class="n">args</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Train a model.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        loss_class: class</span>
+<span class="sd">            Loss class.</span>
+
+<span class="sd">        opt_param_names: list of str</span>
+<span class="sd">            List of parameter names to optimize.</span>
+
+<span class="sd">        lr: float</span>
+<span class="sd">            Learning rate.</span>
+
+<span class="sd">        epochs: int</span>
+<span class="sd">            Number of training epochs.</span>
+
+<span class="sd">        emle_base: EMLEBase</span>
+<span class="sd">            EMLEBase instance.</span>
+
+<span class="sd">        print_every: int</span>
+<span class="sd">            How often to print training progress</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        model</span>
+<span class="sd">            Trained model.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_train_loop</span><span class="p">(</span>
+            <span class="n">loss_instance</span><span class="p">,</span> <span class="n">optimizer</span><span class="p">,</span> <span class="n">epochs</span><span class="p">,</span> <span class="n">print_every</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">):</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            Perform the training loop.</span>
+
+<span class="sd">            Parameters</span>
+<span class="sd">            ----------</span>
+
+<span class="sd">            loss_instance: nn.Module</span>
+<span class="sd">                Loss instance.</span>
+
+<span class="sd">            optimizer: torch.optim.Optimizer</span>
+<span class="sd">                Optimizer.</span>
+
+<span class="sd">            epochs: int</span>
+<span class="sd">                Number of training epochs.</span>
+
+<span class="sd">            print_every: int</span>
+<span class="sd">                How often to print training progress</span>
+
+<span class="sd">            args: list</span>
+<span class="sd">                Positional arguments to pass to the forward method.</span>
+
+<span class="sd">            kwargs: dict</span>
+<span class="sd">                Keyword arguments to pass to the forward method.</span>
+
+<span class="sd">            Returns</span>
+<span class="sd">            -------</span>
+
+<span class="sd">            loss</span>
+<span class="sd">                Forward loss.</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+            <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">epochs</span><span class="p">):</span>
+                <span class="n">loss_instance</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
+                <span class="n">optimizer</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
+                <span class="n">loss</span><span class="p">,</span> <span class="n">rmse</span><span class="p">,</span> <span class="n">max_error</span> <span class="o">=</span> <span class="n">loss_instance</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                <span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">(</span><span class="n">retain_graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="n">print_every</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Epoch </span><span class="si">{</span><span class="n">epoch</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">: Loss =</span><span class="si">{</span><span class="n">loss</span><span class="o">.</span><span class="n">item</span><span class="p">()</span><span class="si">:</span><span class="s2">9.4f</span><span class="si">}</span><span class="s2">    &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;RMSE =</span><span class="si">{</span><span class="n">rmse</span><span class="o">.</span><span class="n">item</span><span class="p">()</span><span class="si">:</span><span class="s2">9.4f</span><span class="si">}</span><span class="s2">    &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;Max Error =</span><span class="si">{</span><span class="n">max_error</span><span class="o">.</span><span class="n">item</span><span class="p">()</span><span class="si">:</span><span class="s2">9.4f</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="p">)</span>
+
+            <span class="k">return</span> <span class="n">loss</span>
+
+        <span class="n">model</span> <span class="o">=</span> <span class="n">loss_class</span><span class="p">(</span><span class="n">emle_base</span><span class="p">)</span>
+        <span class="n">opt_parameters</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">param</span>
+            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">named_parameters</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">in</span> <span class="n">opt_param_names</span>
+        <span class="p">]</span>
+
+        <span class="n">optimizer</span> <span class="o">=</span> <span class="n">_torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">opt_parameters</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="n">lr</span><span class="p">)</span>
+        <span class="n">_train_loop</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">optimizer</span><span class="p">,</span> <span class="n">epochs</span><span class="p">,</span> <span class="n">print_every</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">model</span>
+
+<div class="viewcode-block" id="EMLETrainer.train">
+<a class="viewcode-back" href="../../../api/index_train.html#emle.train.EMLETrainer.train">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">train</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">z</span><span class="p">,</span>
+        <span class="n">xyz</span><span class="p">,</span>
+        <span class="n">s</span><span class="p">,</span>
+        <span class="n">q_core</span><span class="p">,</span>
+        <span class="n">q_val</span><span class="p">,</span>
+        <span class="n">alpha</span><span class="p">,</span>
+        <span class="n">train_mask</span><span class="p">,</span>
+        <span class="n">alpha_mode</span><span class="o">=</span><span class="s2">&quot;reference&quot;</span><span class="p">,</span>
+        <span class="n">sigma</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">,</span>
+        <span class="n">ivm_thr</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+        <span class="n">epochs</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+        <span class="n">lr_qeq</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+        <span class="n">lr_thole</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+        <span class="n">lr_sqrtk</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+        <span class="n">print_every</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+        <span class="n">computer_n_species</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">computer_zid_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">model_filename</span><span class="o">=</span><span class="s2">&quot;emle_model.mat&quot;</span><span class="p">,</span>
+        <span class="n">plot_data_filename</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">device</span><span class="o">=</span><span class="n">_torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cuda&quot;</span><span class="p">),</span>
+        <span class="n">dtype</span><span class="o">=</span><span class="n">_torch</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Train an EMLE model.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        z: numpy.array, List[numpy.array], torch.Tensor, List[torch.Tensor] (N_BATCH, N_ATOMS)</span>
+<span class="sd">            Atomic numbers.</span>
+
+<span class="sd">        xyz: numpy.array, List[numpy.array], torch.Tensor, List[torch.Tensor] (N_BATCH, N_ATOM, 3</span>
+<span class="sd">            Atomic coordinates.</span>
+
+<span class="sd">        s: numpy.array, List[numpy.array], torch.Tensor, List[torch.Tensor] (N_BATCH, N_ATOMS)</span>
+<span class="sd">            Atomic widths.</span>
+
+<span class="sd">        q_core: numpy.array, List[numpy.array], torch.Tensor, List[torch.Tensor] (N_BATCH, N_ATOMS)</span>
+<span class="sd">            Atomic core charges.</span>
+
+<span class="sd">        q_val: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS)</span>
+<span class="sd">            Atomic valence charges.</span>
+
+<span class="sd">        alpha: array or tensor or list of tensor/arrays of shape (N_BATCH, 3, 3)</span>
+<span class="sd">            Atomic polarizabilities.</span>
+
+<span class="sd">        train_mask: torch.Tensor(N_BATCH,)</span>
+<span class="sd">            Mask for training samples.</span>
+
+<span class="sd">        alpha_mode: &#39;species&#39; or &#39;reference&#39;</span>
+<span class="sd">            Mode for polarizability model.</span>
+
+<span class="sd">        sigma: float</span>
+<span class="sd">            GPR sigma value.</span>
+
+<span class="sd">        ivm_thr: float</span>
+<span class="sd">            IVM threshold.</span>
+
+<span class="sd">        epochs: int</span>
+<span class="sd">            Number of training epochs.</span>
+
+<span class="sd">        lr_qeq: float</span>
+<span class="sd">            Learning rate for QEq model.</span>
+
+<span class="sd">        lr_thole: float</span>
+<span class="sd">            Learning rate for Thole model.</span>
+
+<span class="sd">        lr_sqrtk: float</span>
+<span class="sd">            Learning rate for sqrtk.</span>
+
+<span class="sd">        print_every: int</span>
+<span class="sd">            How often to print training progress.</span>
+
+<span class="sd">        computer_n_species: int</span>
+<span class="sd">            Number of species supported by calculator (for ani2x backend)</span>
+
+<span class="sd">        computer_zid_map: dict ({emle_zid: calculator_zid})</span>
+<span class="sd">            Map between EMLE and calculator zid values (for ANI2x backend).</span>
+
+<span class="sd">        model_filename: str or None</span>
+<span class="sd">            Filename to save the trained model. If None, the model is not saved.</span>
+
+<span class="sd">        plot_data_filename: str or None</span>
+<span class="sd">            Filename to write plotting data. If None, data is not written.</span>
+
+<span class="sd">        device: torch.device</span>
+<span class="sd">            Device to use for training.</span>
+
+<span class="sd">        dtype: torch.dtype</span>
+<span class="sd">            Data type to use for training. Default is torch.float64.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        dict</span>
+<span class="sd">            Trained EMLE model.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Check input data.</span>
+        <span class="k">assert</span> <span class="p">(</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">z</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">xyz</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">q_core</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">q_val</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">alpha</span><span class="p">)</span>
+        <span class="p">),</span> <span class="s2">&quot;z, xyz, s, q_core, q, and alpha must have the same number of samples&quot;</span>
+
+        <span class="c1"># Checks for alpha_mode.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">alpha_mode</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;&#39;alpha_mode&#39; must be of type &#39;str&#39;&quot;</span><span class="p">)</span>
+        <span class="n">alpha_mode</span> <span class="o">=</span> <span class="n">alpha_mode</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">alpha_mode</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;species&quot;</span><span class="p">,</span> <span class="s2">&quot;reference&quot;</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;alpha_mode&#39; must be &#39;species&#39; or &#39;reference&#39;&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">train_mask</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">train_mask</span> <span class="o">=</span> <span class="n">_torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">z</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">_torch</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span>
+
+        <span class="c1"># Prepare batch data.</span>
+        <span class="n">q_val</span> <span class="o">=</span> <span class="n">_pad_to_max</span><span class="p">(</span><span class="n">q_val</span><span class="p">)</span>
+        <span class="n">q_core</span> <span class="o">=</span> <span class="n">_pad_to_max</span><span class="p">(</span><span class="n">q_core</span><span class="p">)</span>
+        <span class="n">q</span> <span class="o">=</span> <span class="n">q_core</span> <span class="o">+</span> <span class="n">q_val</span>
+        <span class="n">q_mol</span> <span class="o">=</span> <span class="n">_torch</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">z</span> <span class="o">=</span> <span class="n">_pad_to_max</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+        <span class="n">xyz</span> <span class="o">=</span> <span class="n">_pad_to_max</span><span class="p">(</span><span class="n">xyz</span><span class="p">)</span>
+
+        <span class="n">q_core_train</span> <span class="o">=</span> <span class="n">q_core</span><span class="p">[</span><span class="n">train_mask</span><span class="p">]</span>
+        <span class="n">q_mol_train</span> <span class="o">=</span> <span class="n">q_mol</span><span class="p">[</span><span class="n">train_mask</span><span class="p">]</span>
+        <span class="n">q_train</span> <span class="o">=</span> <span class="n">q</span><span class="p">[</span><span class="n">train_mask</span><span class="p">]</span>
+        <span class="n">z_train</span> <span class="o">=</span> <span class="n">z</span><span class="p">[</span><span class="n">train_mask</span><span class="p">]</span>
+        <span class="n">xyz_train</span> <span class="o">=</span> <span class="n">xyz</span><span class="p">[</span><span class="n">train_mask</span><span class="p">]</span>
+        <span class="n">s_train</span> <span class="o">=</span> <span class="n">_pad_to_max</span><span class="p">(</span><span class="n">s</span><span class="p">)[</span><span class="n">train_mask</span><span class="p">]</span>
+        <span class="n">alpha_train</span> <span class="o">=</span> <span class="n">_pad_to_max</span><span class="p">(</span><span class="n">alpha</span><span class="p">)[</span><span class="n">train_mask</span><span class="p">]</span>
+        <span class="n">species</span> <span class="o">=</span> <span class="n">_torch</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">_torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">z_train</span><span class="p">[</span><span class="n">z_train</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">],</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">))</span>
+
+        <span class="c1"># Place on the correct device and set the data type.</span>
+        <span class="n">q_mol</span> <span class="o">=</span> <span class="n">q_mol</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="n">q_mol_train</span> <span class="o">=</span> <span class="n">q_mol_train</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="n">z_train</span> <span class="o">=</span> <span class="n">z_train</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">_torch</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+        <span class="n">xyz_train</span> <span class="o">=</span> <span class="n">xyz_train</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="n">s_train</span> <span class="o">=</span> <span class="n">s_train</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="n">q_core_train</span> <span class="o">=</span> <span class="n">q_core_train</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="n">q_train</span> <span class="o">=</span> <span class="n">q_train</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="n">alpha_train</span> <span class="o">=</span> <span class="n">alpha_train</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="n">species</span> <span class="o">=</span> <span class="n">species</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">_torch</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+
+        <span class="c1"># Get zid mapping.</span>
+        <span class="n">zid_mapping</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_zid_mapping</span><span class="p">(</span><span class="n">species</span><span class="p">)</span>
+        <span class="n">zid_train</span> <span class="o">=</span> <span class="n">zid_mapping</span><span class="p">[</span><span class="n">z_train</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">computer_n_species</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">computer_n_species</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">species</span><span class="p">)</span>
+
+        <span class="c1"># Calculate AEVs.</span>
+        <span class="n">emle_aev_computer</span> <span class="o">=</span> <span class="n">_EMLEAEVComputer</span><span class="p">(</span>
+            <span class="n">num_species</span><span class="o">=</span><span class="n">computer_n_species</span><span class="p">,</span>
+            <span class="n">zid_map</span><span class="o">=</span><span class="n">computer_zid_map</span><span class="p">,</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span>
+            <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">aev_mols</span> <span class="o">=</span> <span class="n">emle_aev_computer</span><span class="p">(</span><span class="n">zid_train</span><span class="p">,</span> <span class="n">xyz_train</span><span class="p">)</span>
+        <span class="n">aev_mask</span> <span class="o">=</span> <span class="n">_torch</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">aev_mols</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">aev_mols</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+
+        <span class="n">aev_mols</span> <span class="o">=</span> <span class="n">aev_mols</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">aev_mask</span><span class="p">]</span>
+        <span class="n">emle_aev_computer</span> <span class="o">=</span> <span class="n">_EMLEAEVComputer</span><span class="p">(</span>
+            <span class="n">num_species</span><span class="o">=</span><span class="n">computer_n_species</span><span class="p">,</span>
+            <span class="n">zid_map</span><span class="o">=</span><span class="n">computer_zid_map</span><span class="p">,</span>
+            <span class="n">mask</span><span class="o">=</span><span class="n">aev_mask</span><span class="p">,</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span>
+            <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># &quot;Fit&quot; q_core (just take averages over the entire training set).</span>
+        <span class="n">q_core_z</span> <span class="o">=</span> <span class="n">_mean_by_z</span><span class="p">(</span><span class="n">q_core_train</span><span class="p">,</span> <span class="n">zid_train</span><span class="p">)</span>
+
+        <span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Performing IVM...&quot;</span><span class="p">)</span>
+        <span class="c1"># Create an array of (molecule_id, atom_id) pairs (as in the full</span>
+        <span class="c1"># dataset) for the training set. This is needed to be able to locate</span>
+        <span class="c1"># atoms/molecules in the original dataset that were picked by IVM.</span>
+        <span class="n">n_mols</span><span class="p">,</span> <span class="n">max_atoms</span> <span class="o">=</span> <span class="n">q_train</span><span class="o">.</span><span class="n">shape</span>
+        <span class="n">atom_ids</span> <span class="o">=</span> <span class="n">_torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span>
+            <span class="n">_torch</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">_torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">n_mols</span><span class="p">),</span> <span class="n">_torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">max_atoms</span><span class="p">)),</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+
+        <span class="c1"># Perform IVM.</span>
+        <span class="n">ivm_mol_atom_ids_padded</span><span class="p">,</span> <span class="n">aev_ivm_allz</span> <span class="o">=</span> <span class="n">_IVM</span><span class="o">.</span><span class="n">perform_ivm</span><span class="p">(</span>
+            <span class="n">aev_mols</span><span class="p">,</span> <span class="n">z_train</span><span class="p">,</span> <span class="n">atom_ids</span><span class="p">,</span> <span class="n">species</span><span class="p">,</span> <span class="n">ivm_thr</span><span class="p">,</span> <span class="n">sigma</span>
+        <span class="p">)</span>
+
+        <span class="n">ref_features</span> <span class="o">=</span> <span class="n">_pad_to_max</span><span class="p">(</span><span class="n">aev_ivm_allz</span><span class="p">)</span>
+        <span class="n">ref_mask</span> <span class="o">=</span> <span class="n">ivm_mol_atom_ids_padded</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="n">n_ref</span> <span class="o">=</span> <span class="n">_torch</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">ref_mask</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;IVM done. Number of reference environments selected:&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">atom_z</span><span class="p">,</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">species</span><span class="p">,</span> <span class="n">n_ref</span><span class="p">):</span>
+            <span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">atom_z</span><span class="si">:</span><span class="s2">2d</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">n</span><span class="si">:</span><span class="s2">5d</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Fit s (pure GPR, no fancy optimization needed).</span>
+        <span class="n">ref_values_s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_train_s</span><span class="p">(</span><span class="n">s_train</span><span class="p">,</span> <span class="n">zid_train</span><span class="p">,</span> <span class="n">aev_mols</span><span class="p">,</span> <span class="n">aev_ivm_allz</span><span class="p">,</span> <span class="n">sigma</span><span class="p">)</span>
+
+        <span class="c1"># Good for debugging</span>
+        <span class="c1"># _torch.autograd.set_detect_anomaly(True)</span>
+
+        <span class="c1"># Initial guess for the model parameters.</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;a_QEq&quot;</span><span class="p">:</span> <span class="n">_torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="mf">1.0</span><span class="p">])</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">),</span>
+            <span class="s2">&quot;a_Thole&quot;</span><span class="p">:</span> <span class="n">_torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="mf">2.0</span><span class="p">])</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">),</span>
+            <span class="s2">&quot;ref_values_s&quot;</span><span class="p">:</span> <span class="n">ref_values_s</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">),</span>
+            <span class="s2">&quot;ref_values_chi&quot;</span><span class="p">:</span> <span class="n">_torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+                <span class="o">*</span><span class="n">ref_values_s</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+                <span class="n">dtype</span><span class="o">=</span><span class="n">ref_values_s</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+                <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="s2">&quot;k_Z&quot;</span><span class="p">:</span> <span class="mf">0.5</span>
+            <span class="o">*</span> <span class="n">_torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">species</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">_torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="n">device</span><span class="p">)),</span>
+            <span class="s2">&quot;sqrtk_ref&quot;</span><span class="p">:</span> <span class="p">(</span>
+                <span class="n">_torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span>
+                    <span class="o">*</span><span class="n">ref_values_s</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+                    <span class="n">dtype</span><span class="o">=</span><span class="n">ref_values_s</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+                    <span class="n">device</span><span class="o">=</span><span class="n">_torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="n">device</span><span class="p">),</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">alpha_mode</span> <span class="o">==</span> <span class="s2">&quot;reference&quot;</span>
+                <span class="k">else</span> <span class="kc">None</span>
+            <span class="p">),</span>
+        <span class="p">}</span>
+
+        <span class="c1"># Create the EMLE base instance.</span>
+        <span class="n">emle_base</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_emle_base</span><span class="p">(</span>
+            <span class="n">params</span><span class="o">=</span><span class="n">params</span><span class="p">,</span>
+            <span class="n">n_ref</span><span class="o">=</span><span class="n">n_ref</span><span class="p">,</span>
+            <span class="n">ref_features</span><span class="o">=</span><span class="n">ref_features</span><span class="p">,</span>
+            <span class="n">q_core</span><span class="o">=</span><span class="n">q_core_z</span><span class="p">,</span>
+            <span class="n">emle_aev_computer</span><span class="o">=</span><span class="n">emle_aev_computer</span><span class="p">,</span>
+            <span class="n">species</span><span class="o">=</span><span class="n">species</span><span class="p">,</span>
+            <span class="n">alpha_mode</span><span class="o">=</span><span class="n">alpha_mode</span><span class="p">,</span>
+            <span class="n">device</span><span class="o">=</span><span class="n">_torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="n">device</span><span class="p">),</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Fit chi, a_QEq (QEq over chi predicted with GPR).</span>
+        <span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Fitting a_QEq and chi values...&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_train_model</span><span class="p">(</span>
+            <span class="n">loss_class</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_qeq_loss</span><span class="p">,</span>
+            <span class="n">opt_param_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;a_QEq&quot;</span><span class="p">,</span> <span class="s2">&quot;ref_values_chi&quot;</span><span class="p">],</span>
+            <span class="n">lr</span><span class="o">=</span><span class="n">lr_qeq</span><span class="p">,</span>
+            <span class="n">epochs</span><span class="o">=</span><span class="n">epochs</span><span class="p">,</span>
+            <span class="n">print_every</span><span class="o">=</span><span class="n">print_every</span><span class="p">,</span>
+            <span class="n">emle_base</span><span class="o">=</span><span class="n">emle_base</span><span class="p">,</span>
+            <span class="n">atomic_numbers</span><span class="o">=</span><span class="n">z_train</span><span class="p">,</span>
+            <span class="n">xyz</span><span class="o">=</span><span class="n">xyz_train</span><span class="p">,</span>
+            <span class="n">q_mol</span><span class="o">=</span><span class="n">q_mol_train</span><span class="p">,</span>
+            <span class="n">q_target</span><span class="o">=</span><span class="n">q_train</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="c1"># Update GPR constants for chi</span>
+        <span class="c1"># (now inconsistent since not updated after the last epoch)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_qeq_loss</span><span class="o">.</span><span class="n">_update_chi_gpr</span><span class="p">(</span><span class="n">emle_base</span><span class="p">)</span>
+
+        <span class="n">_logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Optimized a_QEq: </span><span class="si">{</span><span class="n">emle_base</span><span class="o">.</span><span class="n">a_QEq</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">item</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Fit a_Thole, k_Z (uses volumes predicted by QEq model).</span>
+        <span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Fitting a_Thole and k_Z values...&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_train_model</span><span class="p">(</span>
+            <span class="n">loss_class</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_thole_loss</span><span class="p">,</span>
+            <span class="n">opt_param_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;a_Thole&quot;</span><span class="p">,</span> <span class="s2">&quot;k_Z&quot;</span><span class="p">],</span>
+            <span class="n">lr</span><span class="o">=</span><span class="n">lr_thole</span><span class="p">,</span>
+            <span class="n">epochs</span><span class="o">=</span><span class="n">epochs</span><span class="p">,</span>
+            <span class="n">print_every</span><span class="o">=</span><span class="n">print_every</span><span class="p">,</span>
+            <span class="n">emle_base</span><span class="o">=</span><span class="n">emle_base</span><span class="p">,</span>
+            <span class="n">atomic_numbers</span><span class="o">=</span><span class="n">z_train</span><span class="p">,</span>
+            <span class="n">xyz</span><span class="o">=</span><span class="n">xyz_train</span><span class="p">,</span>
+            <span class="n">q_mol</span><span class="o">=</span><span class="n">q_mol_train</span><span class="p">,</span>
+            <span class="n">alpha_mol_target</span><span class="o">=</span><span class="n">alpha_train</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">_logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Optimized a_Thole: </span><span class="si">{</span><span class="n">emle_base</span><span class="o">.</span><span class="n">a_Thole</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">item</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="c1"># Fit sqrtk_ref ( alpha = sqrtk ** 2 * k_Z * v).</span>
+        <span class="k">if</span> <span class="n">alpha_mode</span> <span class="o">==</span> <span class="s2">&quot;reference&quot;</span><span class="p">:</span>
+            <span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Fitting ref_values_sqrtk values...&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_train_model</span><span class="p">(</span>
+                <span class="n">loss_class</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_thole_loss</span><span class="p">,</span>
+                <span class="n">opt_param_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ref_values_sqrtk&quot;</span><span class="p">],</span>
+                <span class="n">lr</span><span class="o">=</span><span class="n">lr_sqrtk</span><span class="p">,</span>
+                <span class="n">epochs</span><span class="o">=</span><span class="n">epochs</span><span class="p">,</span>
+                <span class="n">print_every</span><span class="o">=</span><span class="n">print_every</span><span class="p">,</span>
+                <span class="n">emle_base</span><span class="o">=</span><span class="n">emle_base</span><span class="p">,</span>
+                <span class="n">atomic_numbers</span><span class="o">=</span><span class="n">z_train</span><span class="p">,</span>
+                <span class="n">xyz</span><span class="o">=</span><span class="n">xyz_train</span><span class="p">,</span>
+                <span class="n">q_mol</span><span class="o">=</span><span class="n">q_mol_train</span><span class="p">,</span>
+                <span class="n">alpha_mol_target</span><span class="o">=</span><span class="n">alpha_train</span><span class="p">,</span>
+                <span class="n">opt_sqrtk</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="n">l2_reg</span><span class="o">=</span><span class="mf">20.0</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="c1"># Update GPR constants for sqrtk</span>
+            <span class="c1"># (now inconsistent since not updated after the last epoch)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_thole_loss</span><span class="o">.</span><span class="n">_update_sqrtk_gpr</span><span class="p">(</span><span class="n">emle_base</span><span class="p">)</span>
+
+        <span class="c1"># Create the final model.</span>
+        <span class="n">emle_model</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;q_core&quot;</span><span class="p">:</span> <span class="n">q_core_z</span><span class="p">,</span>
+            <span class="s2">&quot;a_QEq&quot;</span><span class="p">:</span> <span class="n">emle_base</span><span class="o">.</span><span class="n">a_QEq</span><span class="p">,</span>
+            <span class="s2">&quot;a_Thole&quot;</span><span class="p">:</span> <span class="n">emle_base</span><span class="o">.</span><span class="n">a_Thole</span><span class="p">,</span>
+            <span class="s2">&quot;s_ref&quot;</span><span class="p">:</span> <span class="n">emle_base</span><span class="o">.</span><span class="n">ref_values_s</span><span class="p">,</span>
+            <span class="s2">&quot;chi_ref&quot;</span><span class="p">:</span> <span class="n">emle_base</span><span class="o">.</span><span class="n">ref_values_chi</span><span class="p">,</span>
+            <span class="s2">&quot;k_Z&quot;</span><span class="p">:</span> <span class="n">emle_base</span><span class="o">.</span><span class="n">k_Z</span><span class="p">,</span>
+            <span class="s2">&quot;sqrtk_ref&quot;</span><span class="p">:</span> <span class="p">(</span>
+                <span class="n">emle_base</span><span class="o">.</span><span class="n">ref_values_sqrtk</span> <span class="k">if</span> <span class="n">alpha_mode</span> <span class="o">==</span> <span class="s2">&quot;reference&quot;</span> <span class="k">else</span> <span class="kc">None</span>
+            <span class="p">),</span>
+            <span class="s2">&quot;species&quot;</span><span class="p">:</span> <span class="n">species</span><span class="p">,</span>
+            <span class="s2">&quot;alpha_mode&quot;</span><span class="p">:</span> <span class="n">alpha_mode</span><span class="p">,</span>
+            <span class="s2">&quot;n_ref&quot;</span><span class="p">:</span> <span class="n">n_ref</span><span class="p">,</span>
+            <span class="s2">&quot;ref_aev&quot;</span><span class="p">:</span> <span class="n">ref_features</span><span class="p">,</span>
+            <span class="s2">&quot;aev_mask&quot;</span><span class="p">:</span> <span class="n">aev_mask</span><span class="p">,</span>
+            <span class="s2">&quot;zid_map&quot;</span><span class="p">:</span> <span class="n">emle_aev_computer</span><span class="o">.</span><span class="n">_zid_map</span><span class="p">,</span>
+            <span class="s2">&quot;computer_n_species&quot;</span><span class="p">:</span> <span class="n">computer_n_species</span><span class="p">,</span>
+        <span class="p">}</span>
+
+        <span class="k">if</span> <span class="n">model_filename</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_write_model_to_file</span><span class="p">(</span><span class="n">emle_model</span><span class="p">,</span> <span class="n">model_filename</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">plot_data_filename</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">emle_base</span>
+
+        <span class="n">emle_base</span><span class="o">.</span><span class="n">_alpha_mode</span> <span class="o">=</span> <span class="s2">&quot;species&quot;</span>
+        <span class="n">s_pred</span><span class="p">,</span> <span class="n">q_core_pred</span><span class="p">,</span> <span class="n">q_val_pred</span><span class="p">,</span> <span class="n">A_thole</span> <span class="o">=</span> <span class="n">emle_base</span><span class="p">(</span>
+            <span class="n">z</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">_torch</span><span class="o">.</span><span class="n">int64</span><span class="p">),</span>
+            <span class="n">xyz</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">),</span>
+            <span class="n">q_mol</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">z_mask</span> <span class="o">=</span> <span class="n">_torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">z</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">plot_data</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;s_emle&quot;</span><span class="p">:</span> <span class="n">s_pred</span><span class="p">,</span>
+            <span class="s2">&quot;q_core_emle&quot;</span><span class="p">:</span> <span class="n">q_core_pred</span><span class="p">,</span>
+            <span class="s2">&quot;q_val_emle&quot;</span><span class="p">:</span> <span class="n">q_val_pred</span><span class="p">,</span>
+            <span class="s2">&quot;alpha_species&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_thole_loss</span><span class="o">.</span><span class="n">_get_alpha_mol</span><span class="p">(</span><span class="n">A_thole</span><span class="p">,</span> <span class="n">z_mask</span><span class="p">),</span>
+            <span class="s2">&quot;z&quot;</span><span class="p">:</span> <span class="n">z</span><span class="p">,</span>
+            <span class="s2">&quot;s_qm&quot;</span><span class="p">:</span> <span class="n">s</span><span class="p">,</span>
+            <span class="s2">&quot;q_core_qm&quot;</span><span class="p">:</span> <span class="n">q_core</span><span class="p">,</span>
+            <span class="s2">&quot;q_val_qm&quot;</span><span class="p">:</span> <span class="n">q_val</span><span class="p">,</span>
+            <span class="s2">&quot;alpha_qm&quot;</span><span class="p">:</span> <span class="n">alpha</span><span class="p">,</span>
+        <span class="p">}</span>
+
+        <span class="k">if</span> <span class="n">alpha_mode</span> <span class="o">==</span> <span class="s2">&quot;reference&quot;</span><span class="p">:</span>
+            <span class="n">emle_base</span><span class="o">.</span><span class="n">_alpha_mode</span> <span class="o">=</span> <span class="s2">&quot;reference&quot;</span>
+            <span class="o">*</span><span class="n">_</span><span class="p">,</span> <span class="n">A_thole</span> <span class="o">=</span> <span class="n">emle_base</span><span class="p">(</span>
+                <span class="n">z</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">_torch</span><span class="o">.</span><span class="n">int64</span><span class="p">),</span>
+                <span class="n">xyz</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">),</span>
+                <span class="n">q_mol</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">plot_data</span><span class="p">[</span><span class="s2">&quot;alpha_reference&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_thole_loss</span><span class="o">.</span><span class="n">_get_alpha_mol</span><span class="p">(</span>
+                <span class="n">A_thole</span><span class="p">,</span> <span class="n">z_mask</span>
+            <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_write_model_to_file</span><span class="p">(</span><span class="n">plot_data</span><span class="p">,</span> <span class="n">plot_data_filename</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">emle_base</span></div>
+</div>
+
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            Made with 
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Jul 23, 2025</div>
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>
+    </body>
+</html>

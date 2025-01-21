@@ -1,0 +1,933 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="emle.calculator" href="index_calculator.html" /><link rel="prev" title="API Documentation" href="index.html" />
+
+    <link rel="shortcut icon" href="../_static/favicon.png"/><!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
+        <title>emle.models - emle-engine</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d8a2add5" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css?v=3ab3c30c" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #ffffff;
+  --color-code-foreground: black;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #272822;
+  --color-code-foreground: #f8f8f2;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #272822;
+  --color-code-foreground: #f8f8f2;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">emle-engine</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.jpg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul>
+<li class="toctree-l1"><a class="reference internal" href="../install.html">Installation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../dynamics.html">Dynamics</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../analysis.html">Error Analysis</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../training.html">Training</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">API Documentation</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of API Documentation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">emle.models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index_calculator.html">emle.calculator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index_train.html">emle.train</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index_backends.html">emle._backends</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index_analyzer.html">emle._analyzer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index_orca_parser.html">emle._orca_parser</a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../issues.html">Issues</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          
+
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="emle-models">
+<span id="ref-models"></span><h1>emle.models<a class="headerlink" href="#emle-models" title="Link to this heading">¶</a></h1>
+<p>The <em>models</em> module contains Torch modules for creating EMLE models.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="emle.models.EMLEAEVComputer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">emle.models.</span></span><span class="sig-name descname"><span class="pre">EMLEAEVComputer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_species</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hypers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_external</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zid_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle_aev_computer.html#EMLEAEVComputer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEAEVComputer" title="Link to this definition">¶</a></dt>
+<dd><p>Wrapper for AEVCalculator from torchani
+(not a subclass to make sure it works with TorchScript)</p>
+<p>Constructor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>num_species</strong> (<em>int</em>) – Number of supported species.</p></li>
+<li><p><strong>hypers</strong> (<em>dict</em>) – Hyperparameters for the wrapped AEVComputer.</p></li>
+<li><p><strong>mask</strong> (<em>torch.BoolTensor</em>) – Mask for the features returned from wrapped AEVComputer.</p></li>
+<li><p><strong>is_external</strong> (<em>bool</em>) – Whether the features are calculated externally.</p></li>
+<li><p><strong>zid_map</strong> (<em>dict</em><em> or </em><em>torch.tensor</em>) – Map from zid provided here to the ones passed to AEVComputer.</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em>) – The device on which to run the model.</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em>) – The data type to use for the models floating point tensors.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLEAEVComputer.cpu">
+<span class="sig-name descname"><span class="pre">cpu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle_aev_computer.html#EMLEAEVComputer.cpu"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEAEVComputer.cpu" title="Link to this definition">¶</a></dt>
+<dd><p>Move all model parameters and buffers to CPU memory.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLEAEVComputer.cuda">
+<span class="sig-name descname"><span class="pre">cuda</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle_aev_computer.html#EMLEAEVComputer.cuda"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEAEVComputer.cuda" title="Link to this definition">¶</a></dt>
+<dd><p>Move all model parameters and buffers to CUDA memory.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLEAEVComputer.double">
+<span class="sig-name descname"><span class="pre">double</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle_aev_computer.html#EMLEAEVComputer.double"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEAEVComputer.double" title="Link to this definition">¶</a></dt>
+<dd><p>Casts all floating point model parameters and buffers to float64 precision.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLEAEVComputer.float">
+<span class="sig-name descname"><span class="pre">float</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle_aev_computer.html#EMLEAEVComputer.float"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEAEVComputer.float" title="Link to this definition">¶</a></dt>
+<dd><p>Casts all floating point model parameters and buffers to float32 precision.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLEAEVComputer.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">zid</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xyz</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle_aev_computer.html#EMLEAEVComputer.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEAEVComputer.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Evaluate the AEVs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>zid</strong> (<em>torch.Tensor</em><em> (</em><em>N_BATCH</em><em>, </em><em>MAX_N_ATOMS</em><em>)</em>) – The species indices.</p></li>
+<li><p><strong>xyz</strong> (<em>torch.Tensor</em><em> (</em><em>N_BATCH</em><em>, </em><em>MAX_N_ATOMS</em><em>, </em><em>3</em><em>)</em>) – The atomic coordinates.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>aevs</strong> – The atomic environment vectors.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor (N_BATCH, MAX_N_ATOMS, N_AEV_COMPONENTS)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLEAEVComputer.to">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle_aev_computer.html#EMLEAEVComputer.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEAEVComputer.to" title="Link to this definition">¶</a></dt>
+<dd><p>Performs Tensor dtype and/or device conversion on the model.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="emle.models.EMLEBase">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">emle.models.</span></span><span class="sig-name descname"><span class="pre">EMLEBase</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_ref</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ref_features</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">q_core</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">emle_aev_computer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">species</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'species'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle_base.html#EMLEBase"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEBase" title="Link to this definition">¶</a></dt>
+<dd><p>Base class for the EMLE model. This is used to compute valence shell
+widths, core charges, valence charges, and the A_thole tensor for a batch
+of QM systems, which in turn can be used to compute static and induced
+electrostatic embedding energies using the EMLE model.</p>
+<p>Constructor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>params</strong> (<em>dict</em>) – EMLE model parameters.</p></li>
+<li><p><strong>n_ref</strong> (<em>torch.Tensor</em>) – number of GPR references for each element in species list</p></li>
+<li><p><strong>ref_features</strong> (<em>torch.Tensor</em>) – Feature vectors for GPR references.</p></li>
+<li><p><strong>q_core</strong> (<em>torch.Tensor</em>) – Core charges for each element in species list.</p></li>
+<li><p><strong>alpha_mode</strong> (<em>str</em>) – <dl class="simple">
+<dt>How atomic polarizabilities are calculated.</dt><dd><dl class="simple">
+<dt>”species”:</dt><dd><p>one volume scaling factor is used for each species</p>
+</dd>
+<dt>”reference”:</dt><dd><p>scaling factors are obtained with GPR using the values learned
+for each reference environment</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>emle_aev_computer</strong> (<a class="reference internal" href="#emle.models.EMLEAEVComputer" title="emle.models.EMLEAEVComputer"><em>EMLEAEVComputer</em></a>) – EMLE AEV computer instance used to compute AEVs (masked and normalized).</p></li>
+<li><p><strong>species</strong> (<em>List</em><em>[</em><em>int</em><em>]</em><em>, </em><em>Tuple</em><em>[</em><em>int</em><em>]</em><em>, </em><em>numpy.ndarray</em><em>, </em><em>torch.Tensor</em>) – List of species (atomic numbers) supported by the EMLE model.</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em>) – The device on which to run the model.</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em>) – The data type to use for the models floating point tensors.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLEBase.cpu">
+<span class="sig-name descname"><span class="pre">cpu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle_base.html#EMLEBase.cpu"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEBase.cpu" title="Link to this definition">¶</a></dt>
+<dd><p>Move all model parameters and buffers to CPU memory.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLEBase.cuda">
+<span class="sig-name descname"><span class="pre">cuda</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle_base.html#EMLEBase.cuda"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEBase.cuda" title="Link to this definition">¶</a></dt>
+<dd><p>Move all model parameters and buffers to CUDA memory.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLEBase.double">
+<span class="sig-name descname"><span class="pre">double</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle_base.html#EMLEBase.double"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEBase.double" title="Link to this definition">¶</a></dt>
+<dd><p>Casts all floating point model parameters and buffers to float64 precision.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLEBase.float">
+<span class="sig-name descname"><span class="pre">float</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle_base.html#EMLEBase.float"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEBase.float" title="Link to this definition">¶</a></dt>
+<dd><p>Casts all floating point model parameters and buffers to float32 precision.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLEBase.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">atomic_numbers</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xyz_qm</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">q_total</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle_base.html#EMLEBase.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEBase.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the valence widths, core charges, valence charges, and
+A_thole tensor for a batch of QM systems.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>atomic_numbers</strong> (<em>torch.Tensor</em><em> (</em><em>N_BATCH</em><em>, </em><em>N_QM_ATOMS</em><em>,</em><em>)</em>) – Atomic numbers of QM atoms.</p></li>
+<li><p><strong>xyz_qm</strong> (<em>torch.Tensor</em><em> (</em><em>N_BATCH</em><em>, </em><em>N_QM_ATOMS</em><em>, </em><em>3</em><em>)</em>) – Positions of QM atoms in Angstrom.</p></li>
+<li><p><strong>q_total</strong> (<em>torch.Tensor</em><em> (</em><em>N_BATCH</em><em>,</em><em>)</em>) – Total charge.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt><strong>result</strong> –      torch.Tensor (N_BATCH, N_QM_ATOMS,),</dt><dd><p>torch.Tensor (N_BATCH, N_QM_ATOMS,),
+torch.Tensor (N_BATCH, N_QM_ATOMS * 3, N_QM_ATOMS * 3,))</p>
+</dd>
+</dl>
+<p>Valence widths, core charges, valence charges, A_thole tensor</p>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>(torch.Tensor (N_BATCH, N_QM_ATOMS,),</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLEBase.get_induced_energy">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_induced_energy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">A_thole</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">charges_mm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mesh_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../_modules/emle/models/_emle_base.html#EMLEBase.get_induced_energy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEBase.get_induced_energy" title="Link to this definition">¶</a></dt>
+<dd><p>Calculate the induced electrostatic energy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>A_thole</strong> (<em>torch.Tensor</em><em> (</em><em>N_BATCH</em><em>, </em><em>MAX_QM_ATOMS * 3</em><em>, </em><em>MAX_QM_ATOMS * 3</em><em>)</em>) – The A matrix for induced dipoles prediction.</p></li>
+<li><p><strong>charges_mm</strong> (<em>torch.Tensor</em><em> (</em><em>N_BATCH</em><em>, </em><em>MAX_MM_ATOMS</em><em>,</em><em>)</em>) – MM charges.</p></li>
+<li><p><strong>s</strong> (<em>torch.Tensor</em><em> (</em><em>N_BATCH</em><em>, </em><em>MAX_QM_ATOMS</em><em>,</em><em>)</em>) – MBIS valence shell widths.</p></li>
+<li><p><strong>mesh_data</strong> (<em>mesh_data object</em><em> (</em><em>output</em><em> of </em><em>self._get_mesh_data</em><em>)</em>) – Mesh data object.</p></li>
+<li><p><strong>mask</strong> (<em>torch.Tensor</em><em> (</em><em>N_BATCH</em><em>, </em><em>MAX_QM_ATOMS</em><em>)</em>) – Mask for padded coordinates.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>result</strong> – Induced electrostatic energy.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor (N_BATCH,)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLEBase.get_static_energy">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_static_energy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">q_core</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">q_val</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">charges_mm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mesh_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../_modules/emle/models/_emle_base.html#EMLEBase.get_static_energy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEBase.get_static_energy" title="Link to this definition">¶</a></dt>
+<dd><p>Calculate the static electrostatic energy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>q_core</strong> (<em>torch.Tensor</em><em> (</em><em>N_BATCH</em><em>, </em><em>N_QM_ATOMS</em><em>,</em><em>)</em>) – QM core charges.</p></li>
+<li><p><strong>q_val</strong> (<em>torch.Tensor</em><em> (</em><em>N_BATCH</em><em>, </em><em>N_QM_ATOMS</em><em>,</em><em>)</em>) – QM valence charges.</p></li>
+<li><p><strong>charges_mm</strong> (<em>torch.Tensor</em><em> (</em><em>N_BATCH</em><em>, </em><em>N_MM_ATOMS</em><em>,</em><em>)</em>) – MM charges.</p></li>
+<li><p><strong>mesh_data</strong> (<em>mesh_data object</em><em> (</em><em>output</em><em> of </em><em>self._get_mesh_data</em><em>)</em>) – Mesh data object.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>result</strong> – Static electrostatic energy.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor (N_BATCH,)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLEBase.to">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle_base.html#EMLEBase.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLEBase.to" title="Link to this definition">¶</a></dt>
+<dd><p>Performs Tensor dtype and/or device conversion on the model.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="emle.models.EMLE">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">emle.models.</span></span><span class="sig-name descname"><span class="pre">EMLE</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'electrostatic'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'species'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atomic_numbers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qm_charge</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mm_charges</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">create_aev_calculator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle.html#EMLE"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLE" title="Link to this definition">¶</a></dt>
+<dd><p>Torch model for predicting static and induced EMLE energy components.</p>
+<p>Constructor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<em>str</em>) – Path to a custom EMLE model parameter file. If None, then the
+default model for the specified ‘alpha_mode’ will be used.</p></li>
+<li><p><strong>method</strong> (<em>str</em>) – <dl class="simple">
+<dt>The desired embedding method. Options are:</dt><dd><dl class="simple">
+<dt>”electrostatic”:</dt><dd><p>Full ML electrostatic embedding.</p>
+</dd>
+<dt>”mechanical”:</dt><dd><p>ML predicted charges for the core, but zero valence charge.</p>
+</dd>
+<dt>”nonpol”:</dt><dd><p>Non-polarisable ML embedding. Here the induced component of
+the potential is zeroed.</p>
+</dd>
+<dt>”mm”:</dt><dd><p>MM charges are used for the core charge and valence charges
+are set to zero. If this option is specified then the user
+should also specify the MM charges for atoms in the QM
+region.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>alpha_mode</strong> (<em>str</em>) – <dl class="simple">
+<dt>How atomic polarizabilities are calculated.</dt><dd><dl class="simple">
+<dt>”species”:</dt><dd><p>one volume scaling factor is used for each species</p>
+</dd>
+<dt>”reference”:</dt><dd><p>scaling factors are obtained with GPR using the values learned
+for each reference environment</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>atomic_numbers</strong> (<em>List</em><em>[</em><em>int</em><em>]</em><em>, </em><em>Tuple</em><em>[</em><em>int</em><em>]</em><em>, </em><em>numpy.ndarray</em><em>, </em><em>torch.Tensor</em>) – Atomic numbers for the QM region. This allows use of optimised AEV
+symmetry functions from the NNPOps package. Only use this option
+if you are using a fixed QM region, i.e. the same QM region for each
+evalulation of the module.</p></li>
+<li><p><strong>qm_charge</strong> (<em>int</em>) – The charge on the QM region. This can also be passed when calling
+the forward method. The non-default value will take precendence.</p></li>
+<li><p><strong>mm_charges</strong> (<em>List</em><em>[</em><em>float</em><em>]</em><em>, </em><em>Tuple</em><em>[</em><em>Float</em><em>]</em><em>, </em><em>numpy.ndarray</em><em>, </em><em>torch.Tensor</em>) – List of MM charges for atoms in the QM region in units of mod
+electron charge. This is required if the ‘mm’ method is specified.</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em>) – The device on which to run the model.</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em>) – The data type to use for the models floating point tensors.</p></li>
+<li><p><strong>create_aev_calculator</strong> (<em>bool</em>) – Whether to create an AEV calculator instance. This can be set
+to False for derived classes that already have an AEV calculator,
+e.g. ANI2xEMLE. In that case, it’s possible to hook the AEV
+calculator to avoid duplicating the computation.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLE.cpu">
+<span class="sig-name descname"><span class="pre">cpu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle.html#EMLE.cpu"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLE.cpu" title="Link to this definition">¶</a></dt>
+<dd><p>Move all model parameters and buffers to CPU memory.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLE.cuda">
+<span class="sig-name descname"><span class="pre">cuda</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle.html#EMLE.cuda"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLE.cuda" title="Link to this definition">¶</a></dt>
+<dd><p>Move all model parameters and buffers to CUDA memory.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLE.double">
+<span class="sig-name descname"><span class="pre">double</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle.html#EMLE.double"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLE.double" title="Link to this definition">¶</a></dt>
+<dd><p>Casts all floating point model parameters and buffers to float64 precision.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLE.float">
+<span class="sig-name descname"><span class="pre">float</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle.html#EMLE.float"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLE.float" title="Link to this definition">¶</a></dt>
+<dd><p>Casts all floating point model parameters and buffers to float32 precision.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLE.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">atomic_numbers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">charges_mm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xyz_qm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xyz_mm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qm_charge</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Tensor</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../_modules/emle/models/_emle.html#EMLE.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLE.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Computes the static and induced EMLE energy components.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>atomic_numbers</strong> (<em>torch.Tensor</em><em> (</em><em>N_QM_ATOMS</em><em>,</em><em>) or </em><em>(</em><em>BATCH</em><em>, </em><em>N_QM_ATOMS</em><em>)</em>) – Atomic numbers of QM atoms.</p></li>
+<li><p><strong>charges_mm</strong> (<em>torch.Tensor</em><em> (</em><em>max_mm_atoms</em><em>,</em><em>) or </em><em>(</em><em>BATCH</em><em>, </em><em>max_mm_atoms</em><em>)</em>) – MM point charges in atomic units.</p></li>
+<li><p><strong>xyz_qm</strong> (<em>torch.Tensor</em><em> (</em><em>N_QM_ATOMS</em><em>, </em><em>3</em><em>) or </em><em>(</em><em>BATCH</em><em>, </em><em>N_QM_ATOMS</em><em>, </em><em>3</em><em>)</em>) – Positions of QM atoms in Angstrom.</p></li>
+<li><p><strong>xyz_mm</strong> (<em>torch.Tensor</em><em> (</em><em>N_MM_ATOMS</em><em>, </em><em>3</em><em>) or </em><em>(</em><em>BATCH</em><em>, </em><em>N_MM_ATOMS</em><em>, </em><em>3</em><em>)</em>) – Positions of MM atoms in Angstrom.</p></li>
+<li><p><strong>qm_charge</strong> (<em>int</em><em> or </em><em>torch.Tensor</em><em> (</em><em>BATCH</em><em>,</em><em>)</em>) – The charge on the QM region.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>result</strong> – The static and induced EMLE energy components in Hartree.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor (2,) or (2, BATCH)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.EMLE.to">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_emle.html#EMLE.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.EMLE.to" title="Link to this definition">¶</a></dt>
+<dd><p>Performs Tensor dtype and/or device conversion on the model.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="emle.models.ANI2xEMLE">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">emle.models.</span></span><span class="sig-name descname"><span class="pre">ANI2xEMLE</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">emle_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">emle_method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'electrostatic'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'species'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mm_charges</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qm_charge</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ani2x_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atomic_numbers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_ani.html#ANI2xEMLE"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.ANI2xEMLE" title="Link to this definition">¶</a></dt>
+<dd><p>Combined ANI2x and EMLE model. Predicts the in vacuo ANI2x energy along with
+static and induced EMLE energy components.</p>
+<p>Constructor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>emle_model</strong> (<em>str</em>) – Path to a custom EMLE model parameter file. If None, then the
+default model for the specified ‘alpha_mode’ will be used.</p></li>
+<li><p><strong>emle_method</strong> (<em>str</em>) – <dl class="simple">
+<dt>The desired embedding method. Options are:</dt><dd><dl class="simple">
+<dt>”electrostatic”:</dt><dd><p>Full ML electrostatic embedding.</p>
+</dd>
+<dt>”mechanical”:</dt><dd><p>ML predicted charges for the core, but zero valence charge.</p>
+</dd>
+<dt>”nonpol”:</dt><dd><p>Non-polarisable ML embedding. Here the induced component of
+the potential is zeroed.</p>
+</dd>
+<dt>”mm”:</dt><dd><p>MM charges are used for the core charge and valence charges
+are set to zero.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>alpha_mode</strong> (<em>str</em>) – <dl class="simple">
+<dt>How atomic polarizabilities are calculated.</dt><dd><dl class="simple">
+<dt>”species”:</dt><dd><p>one volume scaling factor is used for each species</p>
+</dd>
+<dt>”reference”:</dt><dd><p>scaling factors are obtained with GPR using the values learned
+for each reference environment</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>mm_charges</strong> (<em>List</em><em>[</em><em>float</em><em>]</em><em>, </em><em>Tuple</em><em>[</em><em>Float</em><em>]</em><em>, </em><em>numpy.ndarray</em><em>, </em><em>torch.Tensor</em>) – List of MM charges for atoms in the QM region in units of mod
+electron charge. This is required if the ‘mm’ method is specified.</p></li>
+<li><p><strong>qm_charge</strong> (<em>int</em>) – The charge on the QM region. This can also be passed when calling
+the forward method. The non-default value will take precendence.</p></li>
+<li><p><strong>model_index</strong> (<em>int</em>) – The index of the ANI2x model to use. If None, then the full 8 model
+ensemble will be used.</p></li>
+<li><p><strong>ani2x_model</strong> (<em>torchani.models.ANI2x</em><em>, </em><em>NNPOPS.OptimizedTorchANI</em>) – An existing ANI2x model to use. If None, a new ANI2x model will be
+created. If using an OptimizedTorchANI model, please ensure that
+the ANI2x model from which it derived was created using
+periodic_table_index=True.</p></li>
+<li><p><strong>atomic_numbers</strong> (<em>List</em><em>[</em><em>float</em><em>]</em><em>, </em><em>Tuple</em><em>[</em><em>float</em><em>]</em><em>, </em><em>numpy.ndarray</em><em>, </em><em>torch.Tensor</em><em> (</em><em>N_ATOMS</em><em>,</em><em>)</em>) – Atomic numbers for the QM region. This allows use of optimised AEV
+symmetry functions from the NNPOps package. Only use this option
+if you are using a fixed QM region, i.e. the same QM region for each
+evalulation of the module.</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em>) – The device on which to run the model.</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em>) – The data type to use for the models floating point tensors.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.ANI2xEMLE.cpu">
+<span class="sig-name descname"><span class="pre">cpu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_ani.html#ANI2xEMLE.cpu"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.ANI2xEMLE.cpu" title="Link to this definition">¶</a></dt>
+<dd><p>Move all model parameters and buffers to CPU memory.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.ANI2xEMLE.cuda">
+<span class="sig-name descname"><span class="pre">cuda</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_ani.html#ANI2xEMLE.cuda"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.ANI2xEMLE.cuda" title="Link to this definition">¶</a></dt>
+<dd><p>Move all model parameters and buffers to CUDA memory.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.ANI2xEMLE.double">
+<span class="sig-name descname"><span class="pre">double</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_ani.html#ANI2xEMLE.double"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.ANI2xEMLE.double" title="Link to this definition">¶</a></dt>
+<dd><p>Casts all model parameters and buffers to float64 precision.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.ANI2xEMLE.float">
+<span class="sig-name descname"><span class="pre">float</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_ani.html#ANI2xEMLE.float"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.ANI2xEMLE.float" title="Link to this definition">¶</a></dt>
+<dd><p>Casts all model parameters and buffers to float32 precision.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.ANI2xEMLE.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">atomic_numbers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">charges_mm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xyz_qm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xyz_mm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qm_charge</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../_modules/emle/models/_ani.html#ANI2xEMLE.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.ANI2xEMLE.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the the ANI2x and static and induced EMLE energy components.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>atomic_numbers</strong> (<em>torch.Tensor</em><em> (</em><em>N_QM_ATOMS</em><em>,</em><em>) or </em><em>(</em><em>BATCH</em><em>, </em><em>N_QM_ATOMS</em><em>)</em>) – Atomic numbers of QM atoms. A non-existent atom is represented by -1.</p></li>
+<li><p><strong>charges_mm</strong> (<em>torch.Tensor</em><em> (</em><em>max_mm_atoms</em><em>,</em><em>) or </em><em>(</em><em>BATCH</em><em>, </em><em>max_mm_atoms</em><em>)</em>) – MM point charges in atomic units.</p></li>
+<li><p><strong>xyz_qm</strong> (<em>torch.Tensor</em><em> (</em><em>N_QM_ATOMS</em><em>, </em><em>3</em><em>) or </em><em>(</em><em>BATCH</em><em>, </em><em>N_QM_ATOMS</em><em>, </em><em>3</em><em>)</em>) – Positions of QM atoms in Angstrom.</p></li>
+<li><p><strong>xyz_mm</strong> (<em>torch.Tensor</em><em> (</em><em>N_MM_ATOMS</em><em>, </em><em>3</em><em>) or </em><em>(</em><em>BATCH</em><em>, </em><em>N_MM_ATOMS</em><em>, </em><em>3</em><em>)</em>) – Positions of MM atoms in Angstrom.</p></li>
+<li><p><strong>qm_charge</strong> (<em>int</em><em> or </em><em>torch.Tensor</em><em> (</em><em>BATCH</em><em>,</em><em>)</em>) – The charge on the QM region.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>result</strong> – The ANI2x and static and induced EMLE energy components in Hartree.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor (3,) or (3, BATCH)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.ANI2xEMLE.to">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_ani.html#ANI2xEMLE.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.ANI2xEMLE.to" title="Link to this definition">¶</a></dt>
+<dd><p>Performs Tensor dtype and/or device conversion on the model.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="emle.models.MACEEMLE">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">emle.models.</span></span><span class="sig-name descname"><span class="pre">MACEEMLE</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">emle_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">emle_method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'electrostatic'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'species'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mm_charges</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qm_charge</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mace_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atomic_numbers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_mace.html#MACEEMLE"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.MACEEMLE" title="Link to this definition">¶</a></dt>
+<dd><p>Combined MACE and EMLE model. Predicts the in vacuo MACE energy along with
+static and induced EMLE energy components.</p>
+<p>Constructor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>emle_model</strong> (<em>str</em>) – Path to a custom EMLE model parameter file. If None, then the
+default model for the specified ‘alpha_mode’ will be used.</p></li>
+<li><p><strong>emle_method</strong> (<em>str</em>) – <dl class="simple">
+<dt>The desired embedding method. Options are:</dt><dd><dl class="simple">
+<dt>”electrostatic”:</dt><dd><p>Full ML electrostatic embedding.</p>
+</dd>
+<dt>”mechanical”:</dt><dd><p>ML predicted charges for the core, but zero valence charge.</p>
+</dd>
+<dt>”nonpol”:</dt><dd><p>Non-polarisable ML embedding. Here the induced component of
+the potential is zeroed.</p>
+</dd>
+<dt>”mm”:</dt><dd><p>MM charges are used for the core charge and valence charges
+are set to zero.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>alpha_mode</strong> (<em>str</em>) – <dl class="simple">
+<dt>How atomic polarizabilities are calculated.</dt><dd><dl class="simple">
+<dt>”species”:</dt><dd><p>one volume scaling factor is used for each species</p>
+</dd>
+<dt>”reference”:</dt><dd><p>scaling factors are obtained with GPR using the values learned
+for each reference environmentw</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>mm_charges</strong> (<em>List</em><em>[</em><em>float</em><em>]</em><em>, </em><em>Tuple</em><em>[</em><em>Float</em><em>]</em><em>, </em><em>numpy.ndarray</em><em>, </em><em>torch.Tensor</em>) – List of MM charges for atoms in the QM region in units of mod
+electron charge. This is required if the ‘mm’ method is specified.</p></li>
+<li><p><strong>qm_charge</strong> (<em>int</em>) – The charge on the QM region. This can also be passed when calling
+the forward method. The non-default value will take precendence.</p></li>
+<li><p><strong>mace_model</strong> (<em>List</em><em>[</em><em>str</em><em>]</em><em>, </em><em>Tuple</em><em>[</em><em>str</em><em>]</em><em>, </em><em>str</em>) – Name of the MACE model(s) to use.
+Available pre-trained models are ‘mace-off23-small’, ‘mace-off23-medium’, ‘mace-off23-large’.
+To use a locally trained MACE model, provide the path to the model file.
+If None, the MACE-OFF23(S) model will be used by default.
+If more than one model is provided, only the energy from the first model will be returned
+in the forward pass, but the energy and forces from all models will be stored.</p></li>
+<li><p><strong>atomic_numbers</strong> (<em>List</em><em>[</em><em>int</em><em>]</em><em>, </em><em>Tuple</em><em>[</em><em>int</em><em>]</em><em>, </em><em>numpy.ndarray</em><em>, </em><em>torch.Tensor</em><em> (</em><em>N_ATOMS</em><em>,</em><em>)</em>) – List of atomic numbers to use in the MACE model.</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em>) – The device on which to run the model.</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em>) – The data type to use for the models floating point tensors.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.MACEEMLE.cpu">
+<span class="sig-name descname"><span class="pre">cpu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_mace.html#MACEEMLE.cpu"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.MACEEMLE.cpu" title="Link to this definition">¶</a></dt>
+<dd><p>Move all model parameters and buffers to CPU memory.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.MACEEMLE.cuda">
+<span class="sig-name descname"><span class="pre">cuda</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_mace.html#MACEEMLE.cuda"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.MACEEMLE.cuda" title="Link to this definition">¶</a></dt>
+<dd><p>Move all model parameters and buffers to CUDA memory.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.MACEEMLE.double">
+<span class="sig-name descname"><span class="pre">double</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_mace.html#MACEEMLE.double"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.MACEEMLE.double" title="Link to this definition">¶</a></dt>
+<dd><p>Cast all floating point model parameters and buffers to float64 precision.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.MACEEMLE.float">
+<span class="sig-name descname"><span class="pre">float</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_mace.html#MACEEMLE.float"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.MACEEMLE.float" title="Link to this definition">¶</a></dt>
+<dd><p>Cast all floating point model parameters and buffers to float32 precision.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.MACEEMLE.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">atomic_numbers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">charges_mm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xyz_qm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xyz_mm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qm_charge</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../_modules/emle/models/_mace.html#MACEEMLE.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.MACEEMLE.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the the MACE and static and induced EMLE energy components.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>atomic_numbers</strong> (<em>torch.Tensor</em><em> (</em><em>N_QM_ATOMS</em><em>,</em><em>) or </em><em>(</em><em>BATCH</em><em>, </em><em>N_QM_ATOMS</em><em>)</em>) – Atomic numbers of QM atoms.</p></li>
+<li><p><strong>charges_mm</strong> (<em>torch.Tensor</em><em> (</em><em>max_mm_atoms</em><em>,</em><em>) or </em><em>(</em><em>BATCH</em><em>, </em><em>max_mm_atoms</em><em>)</em>) – MM point charges in atomic units.</p></li>
+<li><p><strong>xyz_qm</strong> (<em>torch.Tensor</em><em> (</em><em>N_QM_ATOMS</em><em>, </em><em>3</em><em>)</em><em>, or </em><em>(</em><em>BATCH</em><em>, </em><em>N_QM_ATOMS</em><em>, </em><em>3</em><em>)</em>) – Positions of QM atoms in Angstrom.</p></li>
+<li><p><strong>xyz_mm</strong> (<em>torch.Tensor</em><em> (</em><em>N_MM_ATOMS</em><em>, </em><em>3</em><em>) or </em><em>(</em><em>BATCH</em><em>, </em><em>N_MM_ATOMS</em><em>, </em><em>3</em><em>)</em>) – Positions of MM atoms in Angstrom.</p></li>
+<li><p><strong>qm_charge</strong> (<em>int</em>) – The charge on the QM region.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>result</strong> – The ANI2x and static and induced EMLE energy components in Hartree.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor (3,)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="emle.models.MACEEMLE.to">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/emle/models/_mace.html#MACEEMLE.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#emle.models.MACEEMLE.to" title="Link to this definition">¶</a></dt>
+<dd><p>Performs Tensor dtype and/or device conversion on the model.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="index_calculator.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">emle.calculator</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="index.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">API Documentation</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            Made with 
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Jul 23, 2025</div>
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">emle.models</a><ul>
+<li><a class="reference internal" href="#emle.models.EMLEAEVComputer"><code class="docutils literal notranslate"><span class="pre">EMLEAEVComputer</span></code></a><ul>
+<li><a class="reference internal" href="#emle.models.EMLEAEVComputer.cpu"><code class="docutils literal notranslate"><span class="pre">EMLEAEVComputer.cpu()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLEAEVComputer.cuda"><code class="docutils literal notranslate"><span class="pre">EMLEAEVComputer.cuda()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLEAEVComputer.double"><code class="docutils literal notranslate"><span class="pre">EMLEAEVComputer.double()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLEAEVComputer.float"><code class="docutils literal notranslate"><span class="pre">EMLEAEVComputer.float()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLEAEVComputer.forward"><code class="docutils literal notranslate"><span class="pre">EMLEAEVComputer.forward()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLEAEVComputer.to"><code class="docutils literal notranslate"><span class="pre">EMLEAEVComputer.to()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#emle.models.EMLEBase"><code class="docutils literal notranslate"><span class="pre">EMLEBase</span></code></a><ul>
+<li><a class="reference internal" href="#emle.models.EMLEBase.cpu"><code class="docutils literal notranslate"><span class="pre">EMLEBase.cpu()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLEBase.cuda"><code class="docutils literal notranslate"><span class="pre">EMLEBase.cuda()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLEBase.double"><code class="docutils literal notranslate"><span class="pre">EMLEBase.double()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLEBase.float"><code class="docutils literal notranslate"><span class="pre">EMLEBase.float()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLEBase.forward"><code class="docutils literal notranslate"><span class="pre">EMLEBase.forward()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLEBase.get_induced_energy"><code class="docutils literal notranslate"><span class="pre">EMLEBase.get_induced_energy()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLEBase.get_static_energy"><code class="docutils literal notranslate"><span class="pre">EMLEBase.get_static_energy()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLEBase.to"><code class="docutils literal notranslate"><span class="pre">EMLEBase.to()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#emle.models.EMLE"><code class="docutils literal notranslate"><span class="pre">EMLE</span></code></a><ul>
+<li><a class="reference internal" href="#emle.models.EMLE.cpu"><code class="docutils literal notranslate"><span class="pre">EMLE.cpu()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLE.cuda"><code class="docutils literal notranslate"><span class="pre">EMLE.cuda()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLE.double"><code class="docutils literal notranslate"><span class="pre">EMLE.double()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLE.float"><code class="docutils literal notranslate"><span class="pre">EMLE.float()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLE.forward"><code class="docutils literal notranslate"><span class="pre">EMLE.forward()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.EMLE.to"><code class="docutils literal notranslate"><span class="pre">EMLE.to()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#emle.models.ANI2xEMLE"><code class="docutils literal notranslate"><span class="pre">ANI2xEMLE</span></code></a><ul>
+<li><a class="reference internal" href="#emle.models.ANI2xEMLE.cpu"><code class="docutils literal notranslate"><span class="pre">ANI2xEMLE.cpu()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.ANI2xEMLE.cuda"><code class="docutils literal notranslate"><span class="pre">ANI2xEMLE.cuda()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.ANI2xEMLE.double"><code class="docutils literal notranslate"><span class="pre">ANI2xEMLE.double()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.ANI2xEMLE.float"><code class="docutils literal notranslate"><span class="pre">ANI2xEMLE.float()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.ANI2xEMLE.forward"><code class="docutils literal notranslate"><span class="pre">ANI2xEMLE.forward()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.ANI2xEMLE.to"><code class="docutils literal notranslate"><span class="pre">ANI2xEMLE.to()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#emle.models.MACEEMLE"><code class="docutils literal notranslate"><span class="pre">MACEEMLE</span></code></a><ul>
+<li><a class="reference internal" href="#emle.models.MACEEMLE.cpu"><code class="docutils literal notranslate"><span class="pre">MACEEMLE.cpu()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.MACEEMLE.cuda"><code class="docutils literal notranslate"><span class="pre">MACEEMLE.cuda()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.MACEEMLE.double"><code class="docutils literal notranslate"><span class="pre">MACEEMLE.double()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.MACEEMLE.float"><code class="docutils literal notranslate"><span class="pre">MACEEMLE.float()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.MACEEMLE.forward"><code class="docutils literal notranslate"><span class="pre">MACEEMLE.forward()</span></code></a></li>
+<li><a class="reference internal" href="#emle.models.MACEEMLE.to"><code class="docutils literal notranslate"><span class="pre">MACEEMLE.to()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/scripts/furo.js?v=5fa4622c"></script>
+    </body>
+</html>
