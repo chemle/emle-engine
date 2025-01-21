@@ -18,8 +18,9 @@ First create a conda environment with all of the required dependencies:
 
 .. note::
 
-    If you wisth to use ``emle-engine`` with ``OpenMM`` via the ``sire`` interface,
-    please use the ``environment_sire.yaml`` file insteadz
+    If you wisth to use ``emle-engine`` with ``OpenMM``, please use the
+    ``environment_sire.yaml`` file instead. (This is required as ``sire``
+    provides the interface between ``emle-engine`` and ``OpenMM``.)
 
 For GPU functionality, you will need to install appropriate CUDA drivers on
 your host system. (This doesn't come with ``cudatoolkit`` from ``conda-forge``.)
