@@ -15,7 +15,7 @@ cd output
 name=emle
 
 # Launch the emle-server in the background. (Sander will connect to this via ORCA.)
-emle-server &
+emle-server > server_log.txt 2>&1 &
 
 # Launch sander.
 sander -O -i ../$name.in -o $name.out -p ../$PARM -c ../$CRD -r $name.ncrst -x $name.nc
