@@ -4,10 +4,10 @@
 Training
 ========
 
-Training of custom ``EMLE`` models can be performed with the ``emle-train`` 
+Training of custom ``EMLE`` models can be performed with the ``emle-train``
 executable. It requires a tarball with the reference QM calculations with the
-same naming convention as used one for :ref:`ref_analysis`, with
-the difference that only gas phase calculations are required and dipolar
+same naming convention as used one for :ref:`error analysis <ref_analysis>`,
+with the difference that only gas phase calculations are required and dipolar
 polarizabilies must be present.
 
 Simple usage:

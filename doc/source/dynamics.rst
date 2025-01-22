@@ -27,7 +27,7 @@ Then, launch ``sander`` as normal, e.g.:
 This assumes that you are using the external ORCA interface in your ``md.in``
 file, e.g. something like:
 
-.. code-block:: bash
+.. code-block:: text
 
     &qmmm
       qmmask=':1-3',
@@ -261,7 +261,7 @@ written. (The default is 0, which means that energies aren't logged.) The output
 will look something like the following, where the columns specify the current step,
 the in vacuo energy and the total energy.
 
-.. code-block:: bash
+.. code-block:: text
 
     #     Step            E_vac (Eh)            E_tot (Eh)
              0     -495.724193647246     -495.720214843750
@@ -285,7 +285,7 @@ argument or the ``EMLE_QM_XYZ_FILE`` environment variable) as an XYZ trajectory 
 the QM region, and a ``pc.xyz`` file (controlled by ``--pc-xyz-file`` argument or
 the ``EMLE_PC_XYZ_FILE`` environment variable) with the following format:
 
-.. code-block:: bash
+.. code-block:: text
 
     <number of point charges in frame1>
     charge_1 x y z
@@ -297,7 +297,7 @@ the ``EMLE_PC_XYZ_FILE`` environment variable) with the following format:
     charge_2 x y z
     ...
 
-The ``qm.xyz`` and ``pc.xyz`` files can be used for :ref:`ref_analysis`.
+The ``qm.xyz`` and ``pc.xyz`` files can be used for :ref:`error analysis <ref_analysis>`.
 
 End-state correction
 --------------------
@@ -340,7 +340,7 @@ file (if written) will contain output similar to that shown below. The columns
 specify the current step, the current λ value, the energy at the current
 λ value, and the pure MM and EMLE energies.
 
-.. code-block:: bash
+.. code-block:: text
 
     #     Step                     λ             E(λ) (Eh)           E(λ=0) (Eh)           E(λ=1) (Eh)
              0        0.000000000000       -0.031915396452       -0.031915396452     -495.735900878906
@@ -385,5 +385,3 @@ there is no need to specify the ``lambda_interpolate`` keyword when creating an
 ``EMLECalculator`` instance. Instead, interpolation can be enabled when creating a
 ``Sire`` dynamics object via the same keyword. (See the
 `tutorial <https://sire.openbiosim.org/tutorial/part08/02_emle.html>`__ for details.)
-
-
