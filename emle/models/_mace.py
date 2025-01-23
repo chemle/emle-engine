@@ -195,9 +195,9 @@ class MACEEMLE(_torch.nn.Module):
             if not isinstance(mace_model, str):
                 raise TypeError("'mace_model' must be of type 'str'")
             # Convert to lower case and remove whitespace.
-            mace_model = mace_model.lower().replace(" ", "")
-            if mace_model.startswith("mace-off23"):
-                size = mace_model.split("-")[-1]
+            formatted_mace_model = mace_model.lower().replace(" ", "")
+            if formatted_mace_model.startswith("mace-off23"):
+                size = formatted_mace_model.split("-")[-1]
                 if not size in ["small", "medium", "large"]:
                     raise ValueError(
                         f"Unsupported MACE model: '{mace_model}'. Available MACE-OFF23 models are "
