@@ -31,7 +31,7 @@ parser.add_argument(
     "--orca-tarball", type=str, metavar="name.tar", required=True, help="ORCA tarball"
 )
 parser.add_argument(
-    "--emle-model", type=str, metavar="name.mat", required=True, help="EMLE model file"
+    "--emle-model", type=str, metavar="name.mat", required=False, help="EMLE model file"
 )
 parser.add_argument(
     "--backend",
