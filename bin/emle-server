@@ -662,6 +662,9 @@ if args["save_settings"] is None:
 # Use the default backend if no backend is specified.
 if args["backend"] is None:
     args["backend"] = "torchani"
+# Convert single entries to strings.
+elif len(args["backend"]) == 1:
+    args["backend"] = args["backend"][0]
 
 # Use the default backend if no external backend is specified.
 if args["external_backend"] is None:
