@@ -107,7 +107,9 @@ class XTB(_Backend):
             results_energy.append(atoms.get_potential_energy() * _EV_TO_HARTREE)
 
             if forces:
-                results_forces.append(atoms.get_forces() * _BOHR_TO_ANGSTROM)
+                results_forces.append(
+                    atoms.get_forces() * _EV_TO_HARTREE * _BOHR_TO_ANGSTROM
+                )
 
         # Convert to NumPy arrays.
         results_energy = _np.array(results_energy)
