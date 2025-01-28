@@ -1072,7 +1072,7 @@ class EMLECalculator:
             self._is_first_step = False
         else:
             self._step += 1
-            _logger.error(f"Step: {self._step}")
+            _logger.info(f"Step: {self._step}")
 
     def _calculate_energy_and_gradients(
         self,
