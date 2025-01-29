@@ -16,7 +16,11 @@ To run, just start an ``emle-server`` background process running:
 
 .. code-block:: bash
 
-    emle-server &
+    emle-server > server_log.txt 2>&1 &
+
+.. note::
+
+   Here we also redirect all server output to a log file, ``server_log.txt``.
 
 Then, launch ``sander`` as normal, e.g.:
 
