@@ -25,7 +25,7 @@ We thank EPSRC for funding (grant code EP/V011421/1).
 Citation
 ========
 
-.. code-block:: text
+.. code-block:: bibtex
 
     @article{doi:10.1021/acs.jctc.4c00248,
       author = {Zinovjev, Kirill and Hedges, Lester and Montagud Andreu, Rub{\'e}n and Woods, Christopher and Tu{\~n}ón, I{\~n}aki and van der Kamp, Marc W.},
