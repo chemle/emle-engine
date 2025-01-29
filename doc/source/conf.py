@@ -212,4 +212,7 @@ autodoc_default_options = {
     "show-inheritance": False,
 }
 
+pygments_style = "monokai"
+pygments_dark_style = "monokai"
+
 autoclass_content = "both"
