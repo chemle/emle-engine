@@ -22,6 +22,25 @@ to add support for further elements in the near future.
 
 We thank EPSRC for funding (grant code EP/V011421/1).
 
+Citation
+========
+
+.. code-block:: text
+
+    @article{doi:10.1021/acs.jctc.4c00248,
+      author = {Zinovjev, Kirill and Hedges, Lester and Montagud Andreu, Rub{\'e}n and Woods, Christopher and Tu{\~n}ón, I{\~n}aki and van der Kamp, Marc W.},
+      title = {emle-engine: A Flexible Electrostatic Machine Learning Embedding Package for Multiscale Molecular Dynamics Simulations},
+      journal = {Journal of Chemical Theory and Computation},
+      volume = {20},
+      number = {11},
+      pages = {4514-4522},
+      year = {2024},
+      doi = {10.1021/acs.jctc.4c00248},
+      note ={PMID: 38804055},
+      url = {https://doi.org/10.1021/acs.jctc.4c00248},
+      eprint = {https://doi.org/10.1021/acs.jctc.4c00248}
+    }
+
 Installation
 ============
 
