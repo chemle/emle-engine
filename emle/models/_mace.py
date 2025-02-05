@@ -164,17 +164,21 @@ class MACEEMLE(_torch.nn.Module):
                 if not all(isinstance(i, int) for i in atomic_numbers):
                     raise ValueError("'atomic_numbers' must be a list of integers")
                 else:
-                    atomic_numbers = _torch.tensor(atomic_numbers, dtype=_torch.int64)
+                    atomic_numbers = _torch.tensor(
+                        atomic_numbers, dtype=_torch.int64, device=device
+                    )
             if not isinstance(atomic_numbers, _torch.Tensor):
                 raise TypeError("'atomic_numbers' must be of type 'torch.Tensor'")
             # Check that they are integers.
             if atomic_numbers.dtype != _torch.int64:
                 raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
-            self.register_buffer("_atomic_numbers", atomic_numbers)
+            self.register_buffer("_atomic_numbers", atomic_numbers.to(device))
         else:
             self.register_buffer(
                 "_atomic_numbers",
-                _torch.tensor([], dtype=_torch.int64, requires_grad=False),
+                _torch.tensor(
+                    [], dtype=_torch.int64, device=device, requires_grad=False
+                ),
             )
 
         # Create an instance of the EMLE model.
