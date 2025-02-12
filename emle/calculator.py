@@ -1033,7 +1033,6 @@ class EMLECalculator:
         # Log energies to file.
         if (
             self._energy_frequency > 0
-            and not self._is_first_step
             and self._step % self._energy_frequency == 0
         ):
             with open(self._energy_file, "a+") as f:
@@ -1068,11 +1067,8 @@ class EMLECalculator:
                 f.write("\n")
 
         # Increment the step counter.
-        if self._is_first_step:
-            self._is_first_step = False
-        else:
-            self._step += 1
-            _logger.info(f"Step: {self._step}")
+        self._step += 1
+        _logger.info(f"Step: {self._step}")
 
     def _calculate_energy_and_gradients(
         self,
