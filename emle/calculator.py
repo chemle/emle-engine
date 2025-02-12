@@ -994,7 +994,7 @@ class EMLECalculator:
                 raise ValueError(msg)
 
         # Compute the energy and gradients.
-        E_tot, grad_qm, grad_mm = self._calculate_energy_and_gradients(
+        E_vac, grad_vac, E_tot, grad_qm, grad_mm = self._calculate_energy_and_gradients(
             atomic_numbers,
             charges_mm,
             xyz_qm,
@@ -1319,7 +1319,7 @@ class EMLECalculator:
             grad_qm = lam * grad_qm + (1 - lam) * (grad_mm_qm_vac + dE_dxyz_qm_bohr)
             grad_mm = lam * grad_mm + (1 - lam) * dE_dxyz_mm_bohr
 
-        return E_tot, grad_qm, grad_mm
+        return E_vac, grad_vac, E_tot, grad_qm, grad_mm
 
     def set_lambda_interpolate(self, lambda_interpolate):
         """
@@ -1440,7 +1440,7 @@ class EMLECalculator:
                 raise ValueError(msg)
 
         # Compute the energy and gradients.
-        E_tot, grad_qm, grad_mm = self._calculate_energy_and_gradients(
+        E_vac, grad_vac, E_tot, grad_qm, grad_mm = self._calculate_energy_and_gradients(
             atomic_numbers,
             charges_mm,
             xyz_qm,
