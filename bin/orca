@@ -100,6 +100,9 @@ try:
 
     if msg == "emlefin":
         print("Received notice that the EMLE calculation has finished.")
+        print("Dummy dipole for consistency with sander API when imin=6:")
+        print("Total Dipole Moment    :      0.00000       0.00000       0.00000\n")
+        print("Magnitude (a.u.)       :      0.00000")
     elif msg == "emlefail":
         print("Received notice that the EMLE calculation has failed.")
         print(f"[ERROR] {err}")
