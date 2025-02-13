@@ -45,7 +45,7 @@ def _fetch_resources():
     if not _os.path.exists(resource_dir):
         try:
             # If it doesn't, clone the resources repository.
-            print("Downloading EMLE resources...", file=sys.stderr)
+            print("Downloading EMLE resources ...", file=sys.stderr)
             _pygit2.clone_repository(
                 "https://github.com/chemle/emle-models.git", resource_dir
             )
@@ -105,7 +105,7 @@ def _pull(repo, remote_name="origin", branch="main"):
                 return
             # We can just fastforward
             elif merge_result & _pygit2.GIT_MERGE_ANALYSIS_FASTFORWARD:
-                print("Updating EMLE resources...")
+                print("Updating EMLE resources ...")
                 repo.checkout_tree(repo.get(remote_master_id))
                 try:
                     master_ref = repo.lookup_reference("refs/heads/%s" % (branch))
@@ -114,7 +114,7 @@ def _pull(repo, remote_name="origin", branch="main"):
                     repo.create_branch(branch, repo.get(remote_master_id))
                 repo.head.set_target(remote_master_id)
             elif merge_result & _pygit2.GIT_MERGE_ANALYSIS_NORMAL:
-                print("Updating EMLE resources...")
+                print("Updating EMLE resources ...")
                 repo.merge(remote_master_id)
 
                 if repo.index.conflicts is not None:
