@@ -18,10 +18,9 @@ Usage:
 
     emle-analyze --qm-xyz qm.xyz \
                  --pc.xyz pc.xyz \
-                 --emle-model model.mat \
                  --orca-tarball orca.tar \
-                 --backend [deepmd, ani2x]
-                 --alpha
+                 --backend [deepmd, ani2x, mace] \
+                 --alpha \
                  result.mat
 
 Here ``qm.xyz`` and ``pc.xyz`` are the QM and MM XYZ trajectories written out by
