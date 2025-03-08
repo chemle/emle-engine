@@ -201,10 +201,8 @@ class ORCAParser:
 
     @staticmethod
     def _get_alpha_from_out(f):
-        while next(f) != b"THE POLARIZABILITY TENSOR\n":
+        while next(f) != b"The raw cartesian tensor (atomic units):\n":
             pass
-        for i in range(3):
-            next(f)
         return _np.array([list(map(float, next(f).split())) for _ in range(3)])
 
     def _get_z_xyz(self):
