@@ -238,6 +238,7 @@ class MACEEMLE(_torch.nn.Module):
 
         # Create the z_table of the MACE model.
         self._z_table = [int(z.item()) for z in self._mace.atomic_numbers]
+        self.r_max = self._mace.r_max.item()
 
         if len(self._atomic_numbers) > 0:
             # Get the node attributes.
@@ -453,7 +454,7 @@ class MACEEMLE(_torch.nn.Module):
         for i in range(num_batches):
             # Get the edge index and shifts for this configuration.
             edge_index, shifts = self._get_neighbor_pairs(
-                xyz_qm[i], None, self._mace.r_max, self._dtype, device
+                xyz_qm[i], None, self.r_max, self._dtype, device
             )
 
             if not _torch.equal(atomic_numbers[i], self._atomic_numbers):
