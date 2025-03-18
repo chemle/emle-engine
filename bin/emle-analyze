@@ -65,7 +65,7 @@ parser.add_argument(
     type=str,
     choices=["species", "reference"],
     default="species",
-    help="Gas phase ML backend",
+    help="Method for calculating atomic polarizabilities",
 )
 parser.add_argument(
     "--alpha", action="store_true", help="Extract molecular dipolar polarizabilities"
