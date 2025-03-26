@@ -93,7 +93,7 @@ if args.backend == "torchani":
 elif args.backend == "mace":
     from emle.models import MACEEMLE
 
-    backend = MACEEMLE(mace_model=args.mace_model)
+    backend = MACEEMLE(emle_model=args.emle_model, mace_model=args.mace_model)
 elif args.backend == "deepmd":
     from emle._backends import DeePMD
 
