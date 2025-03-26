@@ -83,7 +83,8 @@ add_function_parentheses = True
 show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = "sphinx"
+pygments_style = "xcode"
+pygments_dark_style = "monokai"
 
 # A list of ignored prefixes for module index sorting.
 # modindex_common_prefix = []
@@ -189,8 +190,5 @@ autodoc_default_options = {
     "inherited-members": False,
     "show-inheritance": False,
 }
-
-pygments_style = "monokai"
-pygments_dark_style = "monokai"
 
 autoclass_content = "both"
