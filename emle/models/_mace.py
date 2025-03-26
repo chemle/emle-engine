@@ -483,8 +483,12 @@ class MACEEMLE(_torch.nn.Module):
         # Store the number of models.
         num_models = len(self._mace_models)
 
-        # Create a list to store the results.
-        self.results_E_vac = _torch.empty(num_models, num_batches, dtype=self._dtype, device=device)
+        # Create tensors to store the data for the other models.
+        self._E_vac_qbc = _torch.empty(num_models - 1, num_batches, dtype=self._dtype, device=device)
+        self._grads_qbc = _torch.empty(num_models - 1, num_batches, xyz_qm.shape[1], 3, dtype=self._dtype, device=device)
+
+        # Create tensors to store the results.
+        results_E_vac = _torch.empty(num_batches, dtype=self._dtype, device=device)
         results_E_emle_static = _torch.empty(
             num_batches, dtype=self._dtype, device=device
         )
@@ -517,27 +521,46 @@ class MACEEMLE(_torch.nn.Module):
             # Get the in vacuo energy.
             EV_TO_HARTREE = 0.0367492929
 
+            positions = xyz_qm[i].to(self._dtype)
+
             # Create the input dictionary
             input_dict = {
                 "ptr": self._ptr,
                 "node_attrs": self._node_attrs,
                 "batch": self._batch,
                 "pbc": self._pbc,
-                "positions": xyz_qm[i].to(self._dtype),
+                "positions": positions,
                 "edge_index": edge_index,
                 "shifts": shifts,
                 "cell": self._cell,
             }
 
-            # Do inference for all models.
-            for j, mace in enumerate(self._mace_models):
+            E_vac = self._mace(input_dict, compute_force=False)["interaction_energy"]
+
+            assert (
+                E_vac is not None
+            ), "The model did not return any energy. Please check the input."
+
+            results_E_vac[i] = E_vac[0] * EV_TO_HARTREE
+
+            # Do inference for the other models.
+            for j, mace in enumerate(self._mace_models[1:]):
+                # Decouple the positions from the computation graph for the next model.
+                input_dict["positions"] = input_dict["positions"].clone().detach().requires_grad_(True)
+
+                # Get the in vacuo energy.
                 E_vac = mace(input_dict, compute_force=False)["interaction_energy"]
 
                 assert (
                     E_vac is not None
                 ), "The model did not return any energy. Please check the input."
 
-                self.results_E_vac[j, i] = E_vac[0] * EV_TO_HARTREE
+                # Calculate the gradients
+                grads = _torch.autograd.grad(E_vac, input_dict["positions"])[0]
+
+                # Store the results.
+                self._E_vac_qbc[j, i] = E_vac[0] * EV_TO_HARTREE
+                self._grads_qbc[j, i] = grads
 
             # If there are no point charges, return the in vacuo energy and zeros
             # for the static and induced terms.
@@ -555,5 +578,5 @@ class MACEEMLE(_torch.nn.Module):
 
         # Return the MACE and EMLE energy components.
         return _torch.stack(
-            [self.results_E_vac[0], results_E_emle_static, results_E_emle_induced]
+            [results_E_vac, results_E_emle_static, results_E_emle_induced]
         )
