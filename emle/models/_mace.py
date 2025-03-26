@@ -543,12 +543,11 @@ class MACEEMLE(_torch.nn.Module):
 
             results_E_vac[i] = E_vac[0] * EV_TO_HARTREE
 
-            # Decouple the positions from the computation graph for the next model.
+            # Decouple the positions from the computation graph for the next models.
             input_dict["positions"] = input_dict["positions"].clone().detach().requires_grad_(True)
 
             # Do inference for the other models.
             for j, mace in enumerate(self._mace_models[1:]):
-                # Get the in vacuo energy.
                 E_vac = mace(input_dict, compute_force=False)["interaction_energy"]
 
                 assert (
