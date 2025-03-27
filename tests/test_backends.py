@@ -121,7 +121,7 @@ def test_deepmd(data):
 
     with tempfile.NamedTemporaryFile() as tmp:
         # Instantiate the DeePMD backend.
-        backend = DeePMD(models, deviation=tmp.name)
+        backend = DeepMD(models, deviation=tmp.name)
 
         # Calculate the energy and forces.
         energy, forces = backend(atomic_numbers, xyz)

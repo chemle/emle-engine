@@ -22,7 +22,7 @@
 
 """DeePMD in-vacuo backend implementation."""
 
-__all__ = ["DeePMD"]
+__all__ = ["DeepMD"]
 
 import ase as _ase
 import numpy as _np
@@ -33,7 +33,7 @@ from .._units import _EV_TO_HARTREE, _BOHR_TO_ANGSTROM
 from ._backend import Backend as _Backend
 
 
-class DeePMD(_Backend):
+class DeepMD(_Backend):
     """
     DeepMD in-vacuo backend implementation.
     """
