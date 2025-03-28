@@ -204,7 +204,7 @@ class MACEEMLE(_torch.nn.Module):
             raise TypeError("'mace_model' must be a list, tuple, or str, with elements of type str or None")
 
         from mace.tools.scripts_utils import extract_config_mace_model
-        self._mace_models = []
+        self._mace_models = _torch.nn.ModuleList()
         for model in mace_model:
             source_model = self._load_mace_model(model, device)
             
@@ -222,6 +222,9 @@ class MACEEMLE(_torch.nn.Module):
 
         # Set the MACE model to the first model.
         self._mace = self._mace_models[0]
+
+        self._E_vac_qbc = _torch.empty(0, dtype=self._dtype)
+        self._grads_qbc = _torch.empty(0, dtype=self._dtype)
 
         # Create the z_table of the MACE model.
         self._z_table = [int(z.item()) for z in self._mace.atomic_numbers]
@@ -547,19 +550,21 @@ class MACEEMLE(_torch.nn.Module):
             input_dict["positions"] = input_dict["positions"].clone().detach().requires_grad_(True)
 
             # Do inference for the other models.
-            for j, mace in enumerate(self._mace_models[1:]):
-                E_vac = mace(input_dict, compute_force=False)["interaction_energy"]
+            for j, mace in enumerate(self._mace_models):
+                if j != 0:
+                    E_vac_qbc = mace(input_dict, compute_force=False)["interaction_energy"]
 
-                assert (
-                    E_vac is not None
-                ), "The model did not return any energy. Please check the input."
+                    assert (
+                        E_vac_qbc is not None
+                    ), "The model did not return any energy. Please check the input."
 
-                # Calculate the gradients
-                grads = _torch.autograd.grad(E_vac, input_dict["positions"])[0]
+                    # Calculate the gradients
+                    grads_qbc = _torch.autograd.grad([E_vac_qbc], [input_dict["positions"]])[0]
+                    assert grads_qbc is not None, "Gradient computation failed"
 
-                # Store the results.
-                self._E_vac_qbc[j, i] = E_vac[0] * EV_TO_HARTREE
-                self._grads_qbc[j, i] = grads
+                    # Store the results.
+                    self._E_vac_qbc[j - 1, i] = E_vac_qbc[0] * EV_TO_HARTREE
+                    self._grads_qbc[j - 1, i] = grads_qbc
 
             # If there are no point charges, return the in vacuo energy and zeros
             # for the static and induced terms.
