@@ -1023,12 +1023,13 @@ class EMLECalculator:
             for x, y, z in grad_qm:
                 f.write(f"{x:16.10f}\n{y:16.10f}\n{z:16.10f}\n")
 
-        with open(pcgrad, "w") as f:
-            # Write the number of MM atoms.
-            f.write(f"{num_mm_atoms}\n")
-            # Write the MM gradients.
-            for x, y, z in grad_mm[:num_mm_atoms]:
-                f.write(f"{x:17.12f}{y:17.12f}{z:17.12f}\n")
+        if grad_mm is not None:
+            with open(pcgrad, "w") as f:
+                # Write the number of MM atoms.
+                f.write(f"{num_mm_atoms}\n")
+                # Write the MM gradients.
+                for x, y, z in grad_mm[:num_mm_atoms]:
+                    f.write(f"{x:17.12f}{y:17.12f}{z:17.12f}\n")
 
         # Log energies to file.
         if (
@@ -1239,17 +1240,22 @@ class EMLECalculator:
         # Compute embedding energy and gradients.
         if base_model is None:
             try:
-                E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
-                dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
-                    E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
-                )
-                dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
-                dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
+                if len(xyz_mm) > 0:
+                    E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
+                    dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
+                        E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
+                    )
+                    dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
+                    dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
 
-                # Compute the total energy and gradients.
-                E_tot = E_vac + E.sum().detach().cpu().numpy()
-                grad_qm = dE_dxyz_qm_bohr + grad_vac
-                grad_mm = dE_dxyz_mm_bohr
+                    # Compute the total energy and gradients.
+                    E_tot = E_vac + E.sum().detach().cpu().numpy()
+                    grad_qm = dE_dxyz_qm_bohr + grad_vac
+                    grad_mm = dE_dxyz_mm_bohr
+                else:
+                    E_tot = E_vac
+                    grad_qm = grad_vac
+                    grad_mm = None
 
             except Exception as e:
                 msg = f"Failed to compute EMLE energies and gradients: {e}"
@@ -1593,9 +1599,8 @@ class EMLECalculator:
                 raise ValueError(msg)
 
         if xyz_file_mm is None:
-            msg = "Unable to determine MM xyz file from ORCA input."
+            msg = "No MM xyz file in ORCA input, assuming no MM region."
             _logger.error(msg)
-            raise ValueError(msg)
         else:
             if not _os.path.isfile(xyz_file_mm):
                 xyz_file_mm = dirname + xyz_file_mm
@@ -1616,25 +1621,26 @@ class EMLECalculator:
         xyz_mm = []
 
         # Process the MM xyz file. (Charges plus coordinates.)
-        with open(xyz_file_mm, "r") as f:
-            for line in f:
-                data = line.split()
+        if xyz_file_mm is not None:
+            with open(xyz_file_mm, "r") as f:
+                for line in f:
+                    data = line.split()
 
-                # MM records have four entries per line.
-                if len(data) == 4:
-                    try:
-                        charges_mm.append(float(data[0]))
-                    except:
-                        msg = "Unable to parse MM charge."
-                        _logger.error(msg)
-                        raise ValueError(msg)
+                    # MM records have four entries per line.
+                    if len(data) == 4:
+                        try:
+                            charges_mm.append(float(data[0]))
+                        except:
+                            msg = "Unable to parse MM charge."
+                            _logger.error(msg)
+                            raise ValueError(msg)
 
-                    try:
-                        xyz_mm.append([float(x) for x in data[1:]])
-                    except:
-                        msg = "Unable to parse MM coordinates."
-                        _logger.error(msg)
-                        raise ValueError(msg)
+                        try:
+                            xyz_mm.append([float(x) for x in data[1:]])
+                        except:
+                            msg = "Unable to parse MM coordinates."
+                            _logger.error(msg)
+                            raise ValueError(msg)
 
         # Convert to NumPy arrays.
         charges_mm = _np.array(charges_mm)
