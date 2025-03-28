@@ -486,9 +486,9 @@ class MACEEMLE(_torch.nn.Module):
         # Store the number of models.
         num_models = len(self._mace_models)
 
-        # Create tensors to store the data for the other models.
-        self._E_vac_qbc = _torch.empty(num_models - 1, num_batches, dtype=self._dtype, device=device)
-        self._grads_qbc = _torch.empty(num_models - 1, num_batches, xyz_qm.shape[1], 3, dtype=self._dtype, device=device)
+        # Create tensors to store the data for QbC.
+        self._E_vac_qbc = _torch.empty(num_models, num_batches, dtype=self._dtype, device=device)
+        self._grads_qbc = _torch.empty(num_models, num_batches, xyz_qm.shape[1], 3, dtype=self._dtype, device=device)
 
         # Create tensors to store the results.
         results_E_vac = _torch.empty(num_batches, dtype=self._dtype, device=device)
@@ -551,20 +551,19 @@ class MACEEMLE(_torch.nn.Module):
 
             # Do inference for the other models.
             for j, mace in enumerate(self._mace_models):
-                if j != 0:
-                    E_vac_qbc = mace(input_dict, compute_force=False)["interaction_energy"]
+                E_vac_qbc = mace(input_dict, compute_force=False)["interaction_energy"]
 
-                    assert (
-                        E_vac_qbc is not None
-                    ), "The model did not return any energy. Please check the input."
+                assert (
+                    E_vac_qbc is not None
+                ), "The model did not return any energy. Please check the input."
 
-                    # Calculate the gradients
-                    grads_qbc = _torch.autograd.grad([E_vac_qbc], [input_dict["positions"]])[0]
-                    assert grads_qbc is not None, "Gradient computation failed"
+                # Calculate the gradients
+                grads_qbc = _torch.autograd.grad([E_vac_qbc], [input_dict["positions"]])[0]
+                assert grads_qbc is not None, "Gradient computation failed"
 
-                    # Store the results.
-                    self._E_vac_qbc[j - 1, i] = E_vac_qbc[0] * EV_TO_HARTREE
-                    self._grads_qbc[j - 1, i] = grads_qbc
+                # Store the results.
+                self._E_vac_qbc[j, i] = E_vac_qbc[0] * EV_TO_HARTREE
+                self._grads_qbc[j, i] = grads_qbc * EV_TO_HARTREE
 
             # If there are no point charges, return the in vacuo energy and zeros
             # for the static and induced terms.
