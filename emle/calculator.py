@@ -94,6 +94,8 @@ class EMLECalculator:
         qm_xyz_frequency=0,
         ani2x_model_index=None,
         mace_model=None,
+        qbc_deviation=None,
+        qbc_deviation_threshold=None,
         ace_model=None,
         rascal_model=None,
         parm7=None,
@@ -208,11 +210,22 @@ class EMLECalculator:
             The index of the ANI model to use when using the TorchANI backend.
             If None, then the full 8 model ensemble is used.
 
-        mmace_model: str
+        mace_model: str, list[str]
             Name of the MACE-OFF23 models to use.
             Available models are 'mace-off23-small', 'mace-off23-medium', 'mace-off23-large'.
             To use a locally trained MACE model, provide the path to the model file.
+            If a list of strings is provided, deviation between the models will be printed
+            on each step to qbc_deviation.
             If None, the MACE-OFF23(S) model will be used by default.
+
+        qbc_deviation: str
+            Path to a file to write the max deviation between forces predicted
+            with the models (for Query-by-Committee).
+
+        qbc_deviation_threshold: float
+            The threshold for the maximum deviation between forces.
+            If the deviation exceeds this value, a ValueError
+            will be raised and the calculation will be terminated.
 
         ace_model: str
             Path to the ACE model file to use for in vacuo calculations. This
@@ -723,6 +736,23 @@ class EMLECalculator:
 
             # Append the backend to the list.
             self._backends.append(b)
+
+        if qbc_deviation is not None:
+            if not isinstance(qbc_deviation, str):
+                raise TypeError("'deviation' must be of type 'str'")
+
+            self._qbc_deviation = qbc_deviation
+
+            if qbc_deviation_threshold is not None:
+                try:
+                    qbc_deviation_threshold = float(qbc_deviation_threshold)
+                except:
+                    raise TypeError("'deviation_threshold' must be of type 'float'")
+
+            self._qbc_deviation_threshold = qbc_deviation_threshold
+        else:
+            self._qbc_deviation = None
+            self._qbc_deviation_threshold = None
 
         if restart is not None:
             if not isinstance(restart, bool):
@@ -1275,6 +1305,14 @@ class EMLECalculator:
                 msg = f"Failed to compute {model} energies and gradients: {e}"
                 _logger.error(msg)
                 raise RuntimeError(msg)
+
+            if (self._qbc_deviation):
+                max_f_std = _torch.max(_torch.std(base_model._grads_qbc, axis=0)).item()
+                with open(self._qbc_deviation, "a") as f:
+                    f.write(f"{max_f_std:12.5f}\n")
+                if self._qbc_deviation_threshold and max_f_std > self._qbc_deviation_threshold:
+                    msg = "Force deviation threshold reached!"
+                    raise ValueError(msg)
 
         if self._is_interpolate:
             # Compute the in vacuo MM energy and gradients for the QM region.
