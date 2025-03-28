@@ -952,6 +952,8 @@ class EMLECalculator:
             "qm_xyz_frequency": qm_xyz_frequency,
             "ani2x_model_index": ani2x_model_index,
             "mace_model": None if mace_model is None else self._mace_model,
+            "qbc_deviation": qbc_deviation,
+            "qbc_deviation_threshold": qbc_deviation_threshold,
             "rascal_model": rascal_model,
             "parm7": parm7,
             "qm_indices": None if qm_indices is None else self._qm_indices,
