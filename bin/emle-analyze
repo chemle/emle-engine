@@ -95,9 +95,9 @@ elif args.backend == "mace":
 
     backend = MACEEMLE(mace_model=args.mace_model)
 elif args.backend == "deepmd":
-    from emle._backends import DeepMD
+    from emle._backends import DeePMD
 
-    backend = DeepMD(args.deepmd_model)
+    backend = DeePMD(args.deepmd_model)
 
 emle_base = EMLE(model=args.emle_model, alpha_mode=args.alpha_mode)._emle_base
 

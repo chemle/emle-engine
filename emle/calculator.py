@@ -678,9 +678,9 @@ class EMLECalculator:
 
             elif backend == "deepmd":
                 try:
-                    from ._backends import DeepMD
+                    from ._backends import DeePMD
 
-                    b = DeepMD(
+                    b = DeePMD(
                         model=deepmd_model,
                         deviation=deepmd_deviation,
                         deviation_threshold=deepmd_deviation_threshold,

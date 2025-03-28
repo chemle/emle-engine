@@ -35,7 +35,7 @@ from ._backend import Backend as _Backend
 
 class DeePMD(_Backend):
     """
-    DeepMD in-vacuo backend implementation.
+    DeePMD in-vacuo backend implementation.
     """
 
     def __init__(self, model, deviation=None, deviation_threshold=None):

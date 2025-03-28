@@ -3,9 +3,9 @@
 emle._backends
 ==============
 
-The *backends* module classes for computing in-vacuo energies and gradients.
-This is an internal module. Backends are used by the :ref:`ref-calculator` and
-:ref:`ref-analyzer` modules.
+The *backends* module containts classes for computing in-vacuo energies and
+gradients. This is an internal module. Backends are used by the :ref:`ref-calculator`
+and :ref:`ref-analyzer` modules.
 
 .. autoclass:: emle._backends._backend.Backend
    :no-show-inheritance:
