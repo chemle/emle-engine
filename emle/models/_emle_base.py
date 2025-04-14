@@ -27,14 +27,12 @@ __email__ = "kzinovjev@gmail.com"
 
 __all__ = ["EMLEBase"]
 
-import numpy as _np
-
-import torch as _torch
-
-from torch import Tensor
 from typing import Tuple
 
+import numpy as _np
+import torch as _torch
 import torchani as _torchani
+from torch import Tensor
 
 try:
     import NNPOps as _NNPOps
@@ -56,6 +54,30 @@ class EMLEBase(_torch.nn.Module):
 
     # Store the list of supported species.
     _species = [1, 6, 7, 8, 16]
+
+    # Values in atomic units, taken from:
+    # Chu, X., & Dalgarno, A. (2004).
+    # Linear response time-dependent density functional theory for van der Waals coefficients.
+    # The Journal of Chemical Physics, 121(9), 4083--4088. http://doi.org/10.1063/1.1779576
+    # Bfree: Ha.Bohr**6 (https://pubs.acs.org/doi/10.1021/acs.jctc.6b00027) #TODO: convert to Angstrom^6?
+    C6_COEFFICIENTS = {
+        0: 0.0,  # Dummy atom
+        1: 6.5,  # H
+        6: 46.6,  # C
+        7: 24.2,  # N
+        8: 15.6,  # O
+        16: 134.0,  # S
+    }
+
+    # Calculated free atom volumes in Angstrom^3 at B3LYP/cc-pVTZ #TODO: convert to Bohr^3?
+    RCUBED_FREE = {
+        0: 0.0,  # Dummy atom
+        1: 1.172520801342987,  # H
+        6: 5.044203900156338,  # C
+        7: 3.7853134153705934,  # N
+        8: 3.135943377417264,  # O
+        16: 11.015796687279208,  # S
+    }
 
     def __init__(
         self,
@@ -226,6 +248,19 @@ class EMLEBase(_torch.nn.Module):
         for i, s in enumerate(species):
             species_map[s] = i
         species_map = _torch.tensor(species_map, dtype=_torch.int64, device=device)
+
+        # Create lookup tensors for free atom volumes and C6 coefficients
+        self._vol_isolated = _torch.zeros(
+            max(self.RCUBED_FREE.keys()) + 1, dtype=_torch.float
+        )
+        for Z, vol in self.RCUBED_FREE.items():
+            self._vol_isolated[Z] = vol
+
+        self._c6 = _torch.zeros(
+            max(self.C6_COEFFICIENTS.keys()) + 1, dtype=_torch.float
+        )
+        for Z, c6_coeff in self.C6_COEFFICIENTS.items():
+            self._c6[Z] = c6_coeff
 
         # Compute the inverse of the K matrix.
         Kinv = self._get_Kinv(ref_features, 1e-3)
@@ -1038,3 +1073,164 @@ class EMLEBase(_torch.nn.Module):
         results: torch.Tensor (N_BATCH, MAX_QM_ATOMS, MAX_MM_ATOMS)
         """
         return (1 - (1 + r / (s * 2)) * _torch.exp(-r / s)) / r
+
+    @staticmethod
+    def get_lj_energy(
+        sigma_qm: Tensor,
+        epsilon_qm: Tensor,
+        sigma_mm: Tensor,
+        epsilon_mm: Tensor,
+        mesh_data: Tuple[Tensor, Tensor, Tensor],
+    ) -> Tensor:
+        """
+        Calculate the Lennard-Jones energy.
+
+        Parameters
+        ----------
+
+        sigma_qm: Tensor (N_BATCH, N_QM_ATOMS)
+            Lennard-Jones sigma values in Bohr.
+
+        epsilon_qm: Tensor (N_BATCH, N_QM_ATOMS)
+            Lennard-Jones epsilon values in atomic units.
+
+        sigma_mm: Tensor (N_BATCH, N_MM_ATOMS)
+            Lennard-Jones sigma values in Bohr.
+
+        epsilon_mm: Tensor (N_BATCH, N_MM_ATOMS)
+            Lennard-Jones epsilon values in atomic units.
+
+        mesh_data: Tuple[Tensor, Tensor, Tensor]
+            Mesh data tuple containing (r_inv, r_vec, s_outer_product).
+            r_inv: Tensor (N_BATCH, N_QM_ATOMS, N_MM_ATOMS) of inverse QM-MM distances.
+
+        Returns
+        -------
+
+        Tensor (N_BATCH,)
+            Total Lennard-Jones energy for each batch element in atomic units.
+        """
+        # Lorentz-Berthelot combining rules
+        # sigma (N_BATCH, N_QM, N_MM)
+        # epsilon (N_BATCH, N_QM, N_MM)
+        sigma = 0.5 * (sigma_qm[:, :, None] + sigma_mm[:, None, :])
+        epsilon_product = epsilon_qm[:, :, None] * epsilon_mm[:, None, :]
+        epsilon = _torch.where(epsilon_product > 0, _torch.sqrt(epsilon_product), 0.0)
+
+        # Get distances
+        # r_inv (N_BATCH, N_QM, N_MM)
+        r_inv, _, _ = mesh_data
+        sigma_r_inv_6 = (sigma * r_inv) ** 6
+        sigma_r_inv_12 = sigma_r_inv_6 * sigma_r_inv_6
+
+        # Calculate pairwise energy matrix (N_BATCH, N_QM, N_MM)
+        pairwise_energy = 4 * epsilon * (sigma_r_inv_12 - sigma_r_inv_6)
+
+        # Sum over QM and MM atoms for each batch element
+        total_energy = pairwise_energy.sum(dim=(1, 2))
+
+        return total_energy
+
+    @staticmethod
+    def calculate_isotropic_polarizabilities(A_thole: _torch.Tensor) -> _torch.Tensor:
+        """
+        Calculate isotropic polarizabilities from the A_thole tensor.
+
+        Parameters
+        ----------
+
+        A_thole : torch.Tensor(N_BATCH, 3N_ATOMS, 3N_ATOMS)
+            Full polarizability tensor in block form.
+
+        Returns
+        -------
+
+        torch.Tensor(N_BATCH, N_ATOMS)
+            Isotropic polarizabilities per atom.
+        """
+
+        def _get_traces(A_thole: _torch.Tensor) -> _torch.Tensor:
+            """
+            Compute the trace of the inverse of each 3x3 block in each polarizability tensor.
+            """
+            n_mol, dim, _ = A_thole.shape
+            if dim % 3 != 0:
+                raise ValueError("Dimension of A_thole must be divisible by 3.")
+
+            n_atoms = dim // 3
+            traces = _torch.empty(
+                (n_mol, n_atoms), dtype=A_thole.dtype, device=A_thole.device
+            )
+
+            for mol_idx in range(n_mol):
+                for atom_idx in range(n_atoms):
+                    block = A_thole[
+                        mol_idx,
+                        3 * atom_idx : 3 * atom_idx + 3,
+                        3 * atom_idx : 3 * atom_idx + 3,
+                    ]
+                    inv_block = _torch.inverse(block)
+                    traces[mol_idx, atom_idx] = _torch.trace(inv_block)
+
+            return traces
+
+        return _get_traces(A_thole) / 3.0
+
+    def calculate_atomic_lj_parameters(
+        self, atomic_numbers: Tensor, rcubed: Tensor, alpha: Tensor
+    ) -> Tuple[Tensor, Tensor]:
+        """
+        Calculate Lennard-Jones sigma and epsilon parameters.
+
+        Parameters
+        ----------
+
+        atomic_numbers : torch.Tensor(N_BATCH, N_ATOMS)
+            Atomic numbers of atoms in the molecule.
+
+        rcubed : torch.Tensor(N_BATCH, N_ATOMS)
+            Cube of the vdW radii of atoms in the molecule in Bohr^3.
+
+        alpha : torch.Tensor(N_BATCH, N_ATOMS)
+            Isotropic polarizabilities per atom in Bohr^3.
+
+        Returns
+        -------
+
+        Tuple[torch.Tensor, torch.Tensor]
+            Tuple containing the sigma (Bohr) and epsilon (Hartree) LJ parameters for each atom.
+        """
+        # Mask out dummy atoms
+        mask = atomic_numbers > 0
+        alpha = alpha * mask
+        rcubed = rcubed * mask
+
+        # Get free atom volumes
+        try:
+            vol_isolated = self._vol_isolated[atomic_numbers]
+        except KeyError as e:
+            raise ValueError(f"Missing RCUBED_FREE entry for atomic number {e.args[0]}")
+
+        # Volume scaling factor
+        scaling = rcubed / vol_isolated
+
+        # Get C6 coefficients
+        try:
+            c6 = self._c6[atomic_numbers]
+        except KeyError as e:
+            raise ValueError(
+                f"Missing C6_COEFFICIENTS entry for atomic number {e.args[0]}"
+            )
+
+        # Scale C6 coefficients
+        c6_scaled = c6 * scaling**2
+
+        # Calculate vdW radius from polarizability (Fedorov-Tkatchenko relation)
+        radius = 2.54 * alpha ** (1.0 / 7.0)
+        rmin = 2 * radius
+
+        # Calculate Lennard-Jones parameters
+        sigma = rmin / (2 ** (1.0 / 6.0))
+        epsilon = c6_scaled / (2 * rmin**6.0)
+
+        return sigma, epsilon

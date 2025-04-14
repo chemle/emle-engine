@@ -27,17 +27,17 @@ __email__ = "lester.hedges@gmail.com"
 
 __all__ = ["EMLE"]
 
-import numpy as _np
 import os as _os
+from typing import Union
+
+import numpy as _np
 import scipy.io as _scipy_io
 import torch as _torch
 import torchani as _torchani
-
 from torch import Tensor
-from typing import Union
 
-from . import _patches
 from . import EMLEBase as _EMLEBase
+from . import _patches
 
 # Monkey-patch the TorchANI BuiltInModel and BuiltinEnsemble classes so that
 # they call self.aev_computer using args only to allow forward hooks to work
@@ -83,6 +83,7 @@ class EMLE(_torch.nn.Module):
         model=None,
         method="electrostatic",
         alpha_mode="species",
+        lj_method=None,
         atomic_numbers=None,
         qm_charge=0,
         mm_charges=None,
@@ -122,6 +123,15 @@ class EMLE(_torch.nn.Module):
                 "reference":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
+
+        lj_method: str
+            How the LJ parameters are calculated.
+                "dynamic":
+                    Lennard-Jones parameters are calculated dynamically from EMLE parameters.
+                "static":
+                    Lennard-Jones parameters are fixed.
+                None
+                    Lennard-Jones parameters and interactions are not included.
 
         atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor
             Atomic numbers for the QM region. This allows use of optimised AEV
@@ -178,6 +188,16 @@ class EMLE(_torch.nn.Module):
         if alpha_mode not in ["species", "reference"]:
             raise ValueError("'alpha_mode' must be 'species' or 'reference'")
         self._alpha_mode = alpha_mode
+
+        if lj_method is not None:
+            if not isinstance(lj_method, str):
+                raise TypeError("'lj_method' must be of type 'str'")
+            lj_method = lj_method.lower().replace(" ", "")
+            if lj_method not in {"dynamic", "static"}:
+                raise ValueError("'lj_method' must be 'dynamic' or 'static'")
+            if lj_method == "static":
+                raise NotImplementedError("Static LJ model not implemented")
+        self._lj_method = lj_method
 
         if atomic_numbers is not None:
             if isinstance(atomic_numbers, (_np.ndarray, _torch.Tensor)):
@@ -522,5 +542,47 @@ class EMLE(_torch.nn.Module):
             E_ind = _torch.zeros_like(
                 E_static, dtype=self._charges_mm.dtype, device=self._device
             )
+
+        if self._lj_method is not None:
+            if self._lj_method == "dynamic":
+                # Calculate the isotropic polarizabilities and cube of the vdW radii.
+                alpha_qm = self._emle_base.calculate_isotropic_polarizabilities(A_thole)
+                rcubed_qm = -60 * q_val * s**3 / ANGSTROM_TO_BOHR**3
+
+                # Calculate the LJ parameters.
+                sigma_qm, epsilon_qm = self._emle_base.calculate_atomic_lj_parameters(
+                    self._atomic_numbers,
+                    rcubed_qm,
+                    alpha_qm,
+                )
+
+                # TODO: How to handle this properly?
+                # Calculate the LJ parameters for the MM atoms.
+                sigma_tip3p_O = 3.0050806999206543 * 1.8897259886  # ≈ 5.676 Bohr
+                epsilon_tip3p_O = (
+                    0.4382217228412628 * 0.00038087980
+                )  # ≈ 0.000167 Hartree
+
+                # Hydrogen
+                sigma_tip3p_H = 2.608452081680298 * 1.8897259886  # ≈ 4.927 Bohr
+                epsilon_tip3p_H = (
+                    0.01849512942135334 * 0.00038087980
+                )  # ≈ 7.043e-6 Hartree
+
+                sigma_mm = charges_mm
+                sigma_mm[charges_mm < 0] = sigma_tip3p_O
+                sigma_mm[charges_mm > 0] = sigma_tip3p_H
+                epsilon_mm = charges_mm
+                epsilon_mm[charges_mm < 0] = epsilon_tip3p_O
+                epsilon_mm[charges_mm > 0] = epsilon_tip3p_H
+
+                # Compute the LJ energy.
+                E_lj = self._emle_base.get_lj_energy(
+                    sigma_qm, epsilon_qm, sigma_mm, epsilon_mm, mesh_data
+                )
+            else:
+                raise NotImplementedError("Static LJ model not implemented")
+
+            return _torch.stack((E_static, E_ind, E_lj), dim=0)
 
         return _torch.stack((E_static, E_ind), dim=0)
