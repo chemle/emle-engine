@@ -102,7 +102,7 @@ class DeePMD(_Backend):
 
         self._max_f_std = None
 
-    def calculate(self, atomic_numbers, xyz, forces=True):
+    def calculate(self, atomic_numbers, xyz, forces=True, box=None):
         """
         Compute the energy and forces.
 
@@ -117,6 +117,9 @@ class DeePMD(_Backend):
 
         forces: bool
             Whether to calculate and return forces.
+
+        box: List, Tuple, numpy.ndarray, (3,)
+            PBC box. Only orthorhombic boxes are supported.
 
         Returns
         -------
@@ -144,6 +147,13 @@ class DeePMD(_Backend):
             atomic_numbers = _np.expand_dims(atomic_numbers, axis=0)
             xyz = _np.expand_dims(xyz, axis=0)
 
+        if box is not None:
+            n_batch = len(atomic_numbers)
+            # Fon now only support single cell for the whole batch
+            cells = _np.repeat(_np.diag(box).flatten()[None, :], n_batch, axis=0)
+        else:
+            cells = None
+
         e_list = []
         f_list = []
 
@@ -153,12 +163,7 @@ class DeePMD(_Backend):
             atom_types = [
                 self._z_map[i][_ase.Atom(z).symbol] for z in atomic_numbers[0]
             ]
-            box = _np.array([
-                [17.2, 0,  0], 
-                [0,  17.2, 0], 
-                [0,  0,  17.2]
-            ])
-            e, f, _ = dp.eval(xyz, cells=box, atom_types=atom_types)
+            e, f, _ = dp.eval(xyz, cells=cells, atom_types=atom_types)
             e_list.append(e)
             f_list.append(f)
 

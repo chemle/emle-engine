@@ -86,6 +86,7 @@ class EMLECalculator:
         external_backend=None,
         plugin_path=".",
         mm_charges=None,
+        box=None,
         deepmd_model=None,
         deepmd_deviation=None,
         deepmd_deviation_threshold=None,
@@ -178,6 +179,10 @@ class EMLECalculator:
             when the embedding method is "mm". Alternatively, pass the path to
             a file containing the charges. The file should contain a single
             column. Units are electron charge.
+
+        box: List, Tuple, numpy.ndarray, (3,)
+            PBC box. Only orthorhombic boxes are supported.
+            (For now only works for DeePMD)
 
         deepmd_model: str
             Path to the DeePMD model file to use for in vacuo calculations. This
@@ -427,6 +432,8 @@ class EMLECalculator:
         else:
             self._mm_charges = None
 
+        self.box = box
+
         if qm_charge is not None:
             try:
                 qm_charge = int(qm_charge)
@@ -666,12 +673,15 @@ class EMLECalculator:
             elif backend == "deepmd":
                 try:
                     from ._backends import DeePMD
+                    from functools import partial
 
                     b = DeePMD(
                         model=deepmd_model,
                         deviation=deepmd_deviation,
                         deviation_threshold=deepmd_deviation_threshold,
                     )
+                    b.calculate = partial(b.calculate, box=self.box)
+
                     self._deepmd_model = b._model
                     self._deepmd_deviation = b._deviation
                     self._deepmd_deviation_threshold = b._deviation_threshold
@@ -914,6 +924,7 @@ class EMLECalculator:
             "backend": self._backend,
             "external_backend": None if external_backend is None else external_backend,
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),
+            "box": self.box,
             "deepmd_model": deepmd_model,
             "deepmd_deviation": deepmd_deviation,
             "deepmd_deviation_threshold": deepmd_deviation_threshold,
