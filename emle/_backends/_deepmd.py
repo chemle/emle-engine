@@ -153,7 +153,12 @@ class DeePMD(_Backend):
             atom_types = [
                 self._z_map[i][_ase.Atom(z).symbol] for z in atomic_numbers[0]
             ]
-            e, f, _ = dp.eval(xyz, cells=None, atom_types=atom_types)
+            box = _np.array([
+                [17.2, 0,  0], 
+                [0,  17.2, 0], 
+                [0,  0,  17.2]
+            ])
+            e, f, _ = dp.eval(xyz, cells=box, atom_types=atom_types)
             e_list.append(e)
             f_list.append(f)
 
@@ -171,14 +176,13 @@ class DeePMD(_Backend):
             # To be written to qm_xyz_file.
             self._max_f_std = max_f_std
 
-        # Take averages over models and return.
-        e_mean = _np.mean(_np.array(e_list), axis=0)
-        f_mean = -_np.mean(_np.array(f_list), axis=0)
-
+        # Choose model 0 to production energy and forces.   
+        model_index = 0
+        e_sel = e_list[model_index]
+        f_sel = f_list[model_index]
         # Covert units.
         e, f = (
-            e_mean.flatten() * _EV_TO_HARTREE,
-            f_mean * _EV_TO_HARTREE * _BOHR_TO_ANGSTROM,
-        )
-
+            e_sel.flatten() * _EV_TO_HARTREE,
+            f_sel * _EV_TO_HARTREE * _BOHR_TO_ANGSTROM,
+        )        
         return e, f if forces else e
