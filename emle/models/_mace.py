@@ -392,7 +392,9 @@ class MACEEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.to(*args, **kwargs)
         self._mace = self._mace.to(*args, **kwargs)
-        self._mace_models = [model.to(*args, **kwargs) for model in self._mace_models]
+        self._mace_models = _torch.nn.ModuleList([
+            model.to(*args, **kwargs) for model in self._mace_models
+        ])
         return self
 
     def cpu(self, **kwargs):
@@ -403,7 +405,9 @@ class MACEEMLE(_torch.nn.Module):
         self._mace = self._mace.cpu(**kwargs)
         if self._atomic_numbers is not None:
             self._atomic_numbers = self._atomic_numbers.cpu(**kwargs)
-        self._mace_models = [model.cpu(**kwargs) for model in self._mace_models]
+        self._mace_models = _torch.nn.ModuleList([
+            model.cpu(**kwargs) for model in self._mace_models
+        ])
         return self
 
     def cuda(self, **kwargs):
@@ -414,7 +418,9 @@ class MACEEMLE(_torch.nn.Module):
         self._mace = self._mace.cuda(**kwargs)
         if self._atomic_numbers is not None:
             self._atomic_numbers = self._atomic_numbers.cuda(**kwargs)
-        self._mace_models = [model.cuda(**kwargs) for model in self._mace_models]
+        self._mace_models = _torch.nn.ModuleList([
+            model.cuda(**kwargs) for model in self._mace_models
+        ])
         return self
 
     def double(self):
@@ -423,7 +429,9 @@ class MACEEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.double()
         self._mace = self._mace.double()
-        self._mace_models = [model.double() for model in self._mace_models]
+        self._mace_models = _torch.nn.ModuleList([
+            model.double() for model in self._mace_models
+        ])
         return self
 
     def float(self):
@@ -432,7 +440,9 @@ class MACEEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.float()
         self._mace = self._mace.float()
-        self._mace_models = [model.float() for model in self._mace_models]
+        self._mace_models = _torch.nn.ModuleList([
+            model.float() for model in self._mace_models
+        ])
         return self
 
     def forward(
