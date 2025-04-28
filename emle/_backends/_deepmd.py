@@ -181,7 +181,7 @@ class DeePMD(_Backend):
             # To be written to qm_xyz_file.
             self._max_f_std = max_f_std
 
-        # Choose model 0 to production energy and forces.   
+        # Choose model 0 to production energy and forces.
         model_index = 0
         e_sel = e_list[model_index]
         f_sel = f_list[model_index]
@@ -189,5 +189,5 @@ class DeePMD(_Backend):
         e, f = (
             e_sel.flatten() * _EV_TO_HARTREE,
             f_sel * _EV_TO_HARTREE * _BOHR_TO_ANGSTROM,
-        )        
+        )
         return e, f if forces else e
