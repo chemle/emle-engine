@@ -186,7 +186,10 @@ class EMLECalculator:
 
         deepmd_model: str
             Path to the DeePMD model file to use for in vacuo calculations. This
-            must be specified if "deepmd" is the selected backend.
+            must be specified if "deepmd" is the selected backend. This can be
+            one or more files, i.e. multiple models can be used to compute
+            force deviations. When multiple models are specified, the first model
+            will be used for the production energy and forces.
 
         deepmd_deviation: str
             Path to a file to write the max deviation between forces predicted

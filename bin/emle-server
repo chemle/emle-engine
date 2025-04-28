@@ -289,7 +289,7 @@ parser.add_argument(
     "--deepmd-model",
     type=str,
     nargs="*",
-    help="path to DeePMD model file(s)",
+    help="path to DeePMD model file(s) (first file is the reference model)",
     required=False,
 )
 parser.add_argument(
