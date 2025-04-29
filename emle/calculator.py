@@ -1310,7 +1310,7 @@ class EMLECalculator:
 
             # If no backend is specified, then the MM energy and gradients are zero.
             else:
-                E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm)
+                E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm_np)
 
             # Compute the embedding contributions.
             E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
