@@ -1187,10 +1187,6 @@ class EMLECalculator:
                             _logger.error(msg)
                             raise RuntimeError(msg)
 
-            # No backend.
-            else:
-                E_vac, grad_vac = 0.0, _np.zeros_like(xyz_qm.detatch().cpu())
-
         # External backend.
         else:
             try:
