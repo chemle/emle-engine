@@ -490,7 +490,9 @@ class EMLECalculator:
                     _logger.error(msg)
                     raise ValueError(msg)
                 formatted_backends.append(b)
-        self._backend = formatted_backends
+            self._backend = formatted_backends
+        else:
+            self._backend = None
 
         # Validate the external backend.
         if external_backend is not None:
@@ -608,134 +610,135 @@ class EMLECalculator:
 
         # Validate and create the backend(s).
         self._backends = []
-        for backend in self._backend:
-            if backend == "torchani":
-                from .models import ANI2xEMLE as _ANI2xEMLE
+        if self._backend is not None:
+            for backend in self._backend:
+                if backend == "torchani":
+                    from .models import ANI2xEMLE as _ANI2xEMLE
 
-                ani2x_emle = _ANI2xEMLE(
-                    emle_model=model,
-                    emle_method=method,
-                    alpha_mode=alpha_mode,
-                    mm_charges=self._mm_charges,
-                    qm_charge=self._qm_charge,
-                    model_index=ani2x_model_index,
-                    atomic_numbers=atomic_numbers,
-                    device=self._device,
-                )
-
-                # Convert to TorchScript.
-                b = _torch.jit.script(ani2x_emle).eval()
-
-                # Store the model index.
-                self._ani2x_model_index = ani2x_model_index
-
-            # Initialise the MACEMLE model.
-            elif backend == "mace":
-                from .models import MACEEMLE as _MACEEMLE
-
-                mace_emle = _MACEEMLE(
-                    emle_model=model,
-                    emle_method=method,
-                    alpha_mode=alpha_mode,
-                    mm_charges=self._mm_charges,
-                    qm_charge=self._qm_charge,
-                    mace_model=mace_model,
-                    atomic_numbers=atomic_numbers,
-                    device=self._device,
-                )
-
-                # Convert to TorchScript.
-                b = _torch.jit.script(mace_emle).eval()
-
-                # Store the MACE model.
-                self._mace_model = mace_model
-
-            elif backend == "ace":
-                try:
-                    # Import directly from module since the import is so slow.
-                    from ._backends._ace import ACE
-
-                    b = ACE(ace_model)
-                except:
-                    msg = "Unable to create ACE backend. Please ensure PyJulip is installed."
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            elif backend == "orca":
-                try:
-                    from ._backends import ORCA
-
-                    b = ORCA(orca_path, template=orca_template)
-                    self._orca_path = b._exe
-                    self._orca_template = b._template
-                except Exception as e:
-                    msg = "Unable to create ORCA backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            elif backend == "deepmd":
-                try:
-                    from ._backends import DeePMD
-                    from functools import partial
-
-                    b = DeePMD(
-                        model=deepmd_model,
-                        deviation=deepmd_deviation,
-                        deviation_threshold=deepmd_deviation_threshold,
+                    ani2x_emle = _ANI2xEMLE(
+                        emle_model=model,
+                        emle_method=method,
+                        alpha_mode=alpha_mode,
+                        mm_charges=self._mm_charges,
+                        qm_charge=self._qm_charge,
+                        model_index=ani2x_model_index,
+                        atomic_numbers=atomic_numbers,
+                        device=self._device,
                     )
-                    b.calculate = partial(b.calculate, box=self.box)
 
-                    self._deepmd_model = b._model
-                    self._deepmd_deviation = b._deviation
-                    self._deepmd_deviation_threshold = b._deviation_threshold
-                except Exception as e:
-                    msg = "Unable to create DeePMD backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
+                    # Convert to TorchScript.
+                    b = _torch.jit.script(ani2x_emle).eval()
 
-            elif backend == "sqm":
-                try:
-                    from ._backends import SQM
+                    # Store the model index.
+                    self._ani2x_model_index = ani2x_model_index
 
-                    b = SQM(parm7, theory=sqm_theory)
-                    self._sqm_theory = b._theory
-                except Exception as e:
-                    msg = "Unable to create SQM backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
+                # Initialise the MACEMLE model.
+                elif backend == "mace":
+                    from .models import MACEEMLE as _MACEEMLE
 
-            elif backend == "xtb":
-                try:
-                    from ._backends import XTB
+                    mace_emle = _MACEEMLE(
+                        emle_model=model,
+                        emle_method=method,
+                        alpha_mode=alpha_mode,
+                        mm_charges=self._mm_charges,
+                        qm_charge=self._qm_charge,
+                        mace_model=mace_model,
+                        atomic_numbers=atomic_numbers,
+                        device=self._device,
+                    )
 
-                    b = XTB()
-                except Exception as e:
-                    msg = "Unable to create XTB backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
+                    # Convert to TorchScript.
+                    b = _torch.jit.script(mace_emle).eval()
 
-            elif backend == "sander":
-                try:
-                    from ._backends import Sander
+                    # Store the MACE model.
+                    self._mace_model = mace_model
 
-                    b = Sander(parm7)
-                except Exception as e:
-                    msg = "Unable to create Sander backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
+                elif backend == "ace":
+                    try:
+                        # Import directly from module since the import is so slow.
+                        from ._backends._ace import ACE
 
-            elif backend == "rascal":
-                try:
-                    from ._backends import Rascal
+                        b = ACE(ace_model)
+                    except:
+                        msg = "Unable to create ACE backend. Please ensure PyJulip is installed."
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
 
-                    b = Rascal(rascal_model)
-                except Exception as e:
-                    msg = "Unable to create Rascal backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
+                elif backend == "orca":
+                    try:
+                        from ._backends import ORCA
 
-            # Append the backend to the list.
-            self._backends.append(b)
+                        b = ORCA(orca_path, template=orca_template)
+                        self._orca_path = b._exe
+                        self._orca_template = b._template
+                    except Exception as e:
+                        msg = "Unable to create ORCA backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
+                elif backend == "deepmd":
+                    try:
+                        from ._backends import DeePMD
+                        from functools import partial
+
+                        b = DeePMD(
+                            model=deepmd_model,
+                            deviation=deepmd_deviation,
+                            deviation_threshold=deepmd_deviation_threshold,
+                        )
+                        b.calculate = partial(b.calculate, box=self.box)
+
+                        self._deepmd_model = b._model
+                        self._deepmd_deviation = b._deviation
+                        self._deepmd_deviation_threshold = b._deviation_threshold
+                    except Exception as e:
+                        msg = "Unable to create DeePMD backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
+                elif backend == "sqm":
+                    try:
+                        from ._backends import SQM
+
+                        b = SQM(parm7, theory=sqm_theory)
+                        self._sqm_theory = b._theory
+                    except Exception as e:
+                        msg = "Unable to create SQM backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
+                elif backend == "xtb":
+                    try:
+                        from ._backends import XTB
+
+                        b = XTB()
+                    except Exception as e:
+                        msg = "Unable to create XTB backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
+                elif backend == "sander":
+                    try:
+                        from ._backends import Sander
+
+                        b = Sander(parm7)
+                    except Exception as e:
+                        msg = "Unable to create Sander backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
+                elif backend == "rascal":
+                    try:
+                        from ._backends import Rascal
+
+                        b = Rascal(rascal_model)
+                    except Exception as e:
+                        msg = "Unable to create Rascal backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
+                # Append the backend to the list.
+                self._backends.append(b)
 
         if restart is not None:
             if not isinstance(restart, bool):
