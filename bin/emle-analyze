@@ -70,6 +70,16 @@ parser.add_argument(
 parser.add_argument(
     "--alpha", action="store_true", help="Extract molecular dipolar polarizabilities"
 )
+parser.add_argument(
+    "--start",
+    type=int,
+    help="Structure index to start parsing",
+)
+parser.add_argument(
+    "--end",
+    type=int,
+    help="Structure index to end parsing",
+)
 parser.add_argument("output", type=str, help="Output mat file")
 args = parser.parse_args()
 
@@ -103,7 +113,8 @@ emle_base = EMLE(model=args.emle_model, alpha_mode=args.alpha_mode)._emle_base
 
 parser = ORCAParser(args.orca_tarball, decompose=True, alpha=args.alpha)
 
-analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz, emle_base, backend, parser)
+analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz, emle_base, backend, parser,
+                        start=args.start, end=args.end)
 
 result = {
     "z": parser.z,
