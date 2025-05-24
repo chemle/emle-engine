@@ -232,6 +232,13 @@ parser.add_argument(
     required=False,
 )
 parser.add_argument(
+    "--box",
+    type=float,
+    nargs="*",
+    help="Box size in A (full ML DeepMD only)",
+    required=False,
+)
+parser.add_argument(
     "--num-clients",
     type=validate_clients,
     help="the maximum number of client connections to allow",
@@ -286,7 +293,7 @@ parser.add_argument(
     "--deepmd-model",
     type=str,
     nargs="*",
-    help="path to DeePMD model file(s)",
+    help="path to DeePMD model file(s) (first file is the reference model)",
     required=False,
 )
 parser.add_argument(

@@ -26,6 +26,9 @@ doc/build
 doc/source/generated
 doc/source/api/generated
 
+# Resource files.
+emle/resources
+
 # Results.
 results/
 
