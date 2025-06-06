@@ -85,7 +85,7 @@ class EMLEAnalyzer:
         if start is not None and end is not None:
             mask = slice(start, end)
         elif start is None and end is None:
-            mask = slice(0, -1)
+            mask = slice(None)
         else:
             raise ValueError("Both start and end must be provided")
 
