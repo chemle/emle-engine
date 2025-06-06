@@ -168,6 +168,7 @@ class EMLEAnalyzer:
             self.qm_xyz,
             self.q_total,
         )
+        self.atomic_alpha = 1. / _torch.diagonal(self.A_thole, dim1=1, dim2=2)[:, ::3]
         self.alpha = self._get_mol_alpha(self.A_thole, self.atomic_numbers)
 
         mask = (self.atomic_numbers > 0).unsqueeze(-1)
@@ -201,6 +202,7 @@ class EMLEAnalyzer:
             "q_core",
             "q_val",
             "q_total",
+            "atomic_alpha",
             "alpha",
             "e_backend",
             "e_static",

@@ -131,6 +131,7 @@ result = {
     "s_emle": analyzer.s,
     "q_core_emle": analyzer.q_core,
     "q_val_emle": analyzer.q_val,
+    "atomic_alpha_emle": analyzer.atomic_alpha,
     "alpha_emle": analyzer.alpha,
 }
 if args.backend:
