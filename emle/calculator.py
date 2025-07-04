@@ -1502,6 +1502,20 @@ class EMLECalculator:
         else:
             self._step += 1
 
+        # Write out the QM region to the xyz trajectory file.
+        if self._qm_xyz_frequency > 0 and self._step % self._qm_xyz_frequency == 0:
+            atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+            if hasattr(self._backend, "_max_f_std"):
+                atoms.info = {"max_f_std": self._max_f_std}
+            _ase_io.write(self._qm_xyz_file, atoms, append=True)
+
+            pc_data = _np.hstack((charges_mm[:, None], xyz_mm))
+            pc_data = pc_data[pc_data[:, 0] != 0]
+            with open(self._pc_xyz_file, "a") as f:
+                f.write(f"{len(pc_data)}\n")
+                _np.savetxt(f, pc_data, fmt="%14.6f")
+                f.write("\n")
+
         # Return the energy and forces in OpenMM units.
         return (
             E_tot.item() * _HARTREE_TO_KJ_MOL,
