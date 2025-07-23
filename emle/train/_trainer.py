@@ -225,12 +225,12 @@ class EMLETrainer:
         for fname in aev_filenames:
             aev_batch = _torch.load(fname, map_location=device)
             batch_size = aev_batch.shape[0]
-            s_batch = s[offset:offset+batch_size]
-            zid_batch = zid[offset:offset+batch_size]
+            s_batch = s[offset : offset + batch_size]
+            zid_batch = zid[offset : offset + batch_size]
             offset += batch_size
 
             for i in range(n_species):
-                mask = (zid_batch == i)
+                mask = zid_batch == i
                 if not mask.any():
                     continue
                 # aev_z: [N_atoms_of_species, AEV_DIM]
@@ -240,7 +240,7 @@ class EMLETrainer:
                 if aev_z.numel() == 0:
                     continue
 
-                K_mol_ref = _GPR._aev_kernel(aev_z, aev_ivm_allz[i][:n_ref[i], :])
+                K_mol_ref = _GPR._aev_kernel(aev_z, aev_ivm_allz[i][: n_ref[i], :])
                 values_by_species[i].append(s_z)
                 K_mols_ref_by_species[i].append(K_mol_ref)
                 zid_by_species[i].append(zid_z)
@@ -252,11 +252,15 @@ class EMLETrainer:
                 continue
             values = _torch.cat(values_by_species[i], dim=0)
             K_mols_ref = _torch.cat(K_mols_ref_by_species[i], dim=0)
-            K_ref_ref = _GPR._aev_kernel(aev_ivm_allz[i][:n_ref[i], :], aev_ivm_allz[i][:n_ref[i], :])
+            K_ref_ref = _GPR._aev_kernel(
+                aev_ivm_allz[i][: n_ref[i], :], aev_ivm_allz[i][: n_ref[i], :]
+            )
             y_ref = _GPR._fit_sparse_gpr(values, K_mols_ref, K_ref_ref, sigma)
             if y_ref.shape[0] < aev_ivm_allz[i].shape[0]:
-                y_ref_padded = _torch.zeros(aev_ivm_allz[i].shape[0], dtype=dtype, device=device)
-                y_ref_padded[:y_ref.shape[0]] = y_ref
+                y_ref_padded = _torch.zeros(
+                    aev_ivm_allz[i].shape[0], dtype=dtype, device=device
+                )
+                y_ref_padded[: y_ref.shape[0]] = y_ref
                 ref_values_s.append(y_ref_padded)
             else:
                 ref_values_s.append(y_ref)
@@ -270,10 +274,8 @@ class EMLETrainer:
         lr,
         epochs,
         emle_base,
+        loader,
         print_every=10,
-        use_minibatch=False,
-        batch_size=32,
-        shuffle=True,
         *args,
         **kwargs,
     ):
@@ -282,135 +284,94 @@ class EMLETrainer:
 
         Parameters
         ----------
+        loss_class : class
+            The loss class to instantiate for training (e.g., QEqLoss, TholeLoss).
 
-        loss_class: class
-            Loss class.
+        opt_param_names : list of str
+            List of parameter names to optimize (e.g., ["a_QEq", "ref_values_chi"]).
 
-        opt_param_names: list of str
-            List of parameter names to optimize.
+        lr : float
+            Learning rate for the optimizer.
 
-        lr: float
-            Learning rate.
-
-        epochs: int
+        epochs : int
             Number of training epochs.
 
-        emle_base: EMLEBase
-            EMLEBase instance.
+        emle_base : EMLEBase
+            An instance of the EMLEBase model.
 
-        print_every: int
-            How often to print training progress
+        loader : torch.utils.data.DataLoader
+            DataLoader yielding batches of training data. Each batch should be a tuple of tensors:
+            (z, xyz, s, q_core, q_mol, q, alpha, zid), all already on the correct device and dtype.
+
+        print_every : int, optional
+            How often to print training progress (default: 10).
+
+        args :
+            Additional arguments passed to the loss/model call.
+
+        kwargs :
+            Additional arguments passed to the loss/model call.
 
         Returns
         -------
-
-        model
-            Trained model.
+        model : nn.Module
+            The trained model (loss instance).
         """
-        from torch.utils.data import TensorDataset, DataLoader
-
-        def _train_loop(
-            loss_instance, optimizer, epochs, print_every=10, use_minibatch=False, batch_size=32, shuffle=True, *args, **kwargs
-        ):
-            """
-            Perform the training loop.
-
-            Parameters
-            ----------
-
-            loss_instance: nn.Module
-                Loss instance.
-
-            optimizer: torch.optim.Optimizer
-                Optimizer.
-
-            epochs: int
-                Number of training epochs.
-
-            print_every: int
-                How often to print training progress
-
-            args: list
-                Positional arguments to pass to the forward method.
-
-            kwargs: dict
-                Keyword arguments to pass to the forward method.
-
-            Returns
-            -------
-
-            loss
-                Forward loss.
-            """
-            if use_minibatch:
-                tensor_keys = [k for k in list(kwargs) if isinstance(kwargs[k], _torch.Tensor)]
-                tensor_values = [kwargs[k] for k in tensor_keys]
-                for k in tensor_keys:
-                    kwargs.pop(k)
-                lengths = [t.shape[0] for t in tensor_values]
-                assert all(l == lengths[0] for l in lengths), "All tensors must have same batch dimension"
-                dataset = TensorDataset(*tensor_values)
-                loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
-
-                for epoch in range(epochs):
-                    loss_instance.train()
-                    running_loss = 0.0
-                    running_sq_error = 0.0
-                    running_count = 0
-                    running_max_error = 0.0
-                    for batch in loader:
-                        batch_dict = dict(zip(tensor_keys, batch))
-                        optimizer.zero_grad()
-                        loss, rmse, max_error = loss_instance(*args, **kwargs, **batch_dict)
-                        loss.backward(retain_graph=True)
-                        optimizer.step()
-                        batch_size_actual = batch[0].shape[0]
-                        running_loss += loss.item() * batch_size_actual
-                        running_sq_error += (rmse.item() ** 2) * batch_size_actual
-                        running_count += batch_size_actual
-                        running_max_error = max(running_max_error, max_error.item())
-                    epoch_loss = running_loss / len(dataset)
-                    epoch_rmse = (running_sq_error / running_count) ** 0.5 if running_count > 0 else 0.0
-                    epoch_max_error = running_max_error
-                    if (epoch + 1) % print_every == 0:
-                        _logger.info(
-                            f"Epoch {epoch+1}: Loss ={epoch_loss:9.4f}    "
-                            f"RMSE ={epoch_rmse:9.4f}    "
-                            f"Max Error ={epoch_max_error:9.4f}"
-                        )
-                return loss
-            else:
-                for epoch in range(epochs):
-                    loss_instance.train()
-                    optimizer.zero_grad()
-                    loss, rmse, max_error = loss_instance(*args, **kwargs)
-                    loss.backward(retain_graph=True)
-                    optimizer.step()
-                    if (epoch + 1) % print_every == 0:
-                        _logger.info(
-                            f"Epoch {epoch+1}: Loss ={{loss.item():9.4f}}    "
-                            f"RMSE ={{rmse.item():9.4f}}    "
-                            f"Max Error ={{max_error.item():9.4f}}"
-                        )
-                return loss
-
         model = loss_class(emle_base)
+        loss_name = loss_class.__name__.lower()
         opt_parameters = [
             param
             for name, param in model.named_parameters()
             if name.split(".")[1] in opt_param_names
         ]
-
         optimizer = _torch.optim.Adam(opt_parameters, lr=lr)
 
-        # Figure out which args are tensors for batching
-        # For QEq: atomic_numbers, xyz, q_mol, q_target
-        # For Thole: atomic_numbers, xyz, q_mol, alpha_mol_target
-        # For sqrtk: atomic_numbers, xyz, q_mol, alpha_mol_target
-        # We'll pass all args as before, but _train_loop will batch if needed
-        _train_loop(
-            model, optimizer, epochs, print_every, use_minibatch, batch_size, shuffle, *args, **kwargs
-        )
+        for epoch in range(epochs):
+            model.train()
+            running_loss = 0.0
+            running_sq_error = 0.0
+            running_count = 0
+            running_max_error = 0.0
+            for batch in loader:
+                z_b, xyz_b, s_b, q_core_b, q_mol_b, q_b, alpha_b, zid_b = batch
+                optimizer.zero_grad()
+
+                if loss_name == "qeqloss":
+                    loss, rmse, max_error = model(
+                        atomic_numbers=z_b,
+                        xyz=xyz_b,
+                        q_mol=q_mol_b,
+                        q_target=q_b,
+                        **kwargs,
+                    )
+                elif loss_name == "tholeloss":
+                    loss, rmse, max_error = model(
+                        atomic_numbers=z_b,
+                        xyz=xyz_b,
+                        q_mol=q_mol_b,
+                        alpha_mol_target=alpha_b,
+                        **kwargs,
+                    )
+                else:
+                    raise ValueError(f"Unsupported loss class: {loss_name}")
+                loss.backward(retain_graph=True)
+                optimizer.step()
+                batch_size_actual = z_b.shape[0]
+                running_loss += loss.item() * batch_size_actual
+                running_sq_error += (rmse.item() ** 2) * batch_size_actual
+                running_count += batch_size_actual
+                running_max_error = max(running_max_error, max_error.item())
+            epoch_loss = running_loss / running_count
+            epoch_rmse = (
+                (running_sq_error / running_count) ** 0.5 if running_count > 0 else 0.0
+            )
+            epoch_max_error = running_max_error
+            if (epoch + 1) % print_every == 0:
+                _logger.info(
+                    f"Epoch {epoch + 1}: Loss ={epoch_loss:9.4f}    "
+                    f"RMSE ={epoch_rmse:9.4f}    "
+                    f"Max Error ={epoch_max_error:9.4f}"
+                )
         return model
 
     def train(
@@ -437,8 +398,8 @@ class EMLETrainer:
         device=_torch.device("cuda"),
         dtype=_torch.float64,
         use_minibatch=False,
-        batch_size=1024,
-        shuffle=True,
+        batch_size=100,
+        shuffle=False,
     ):
         """
         Train an EMLE model.
@@ -455,12 +416,7 @@ class EMLETrainer:
         s: numpy.array, List[numpy.array], torch.Tensor, List[torch.Tensor] (N_BATCH, N_ATOMS)
             Atomic widths.
 
-        q_core: numpy.array, List[numpy.array], torch.Tensor, List[torch.Tensor] (N_BATCH, N_ATOMS)
-            Atomic core charges.
-
-        q_val: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS)
-            Atomic valence charges.
-
+        q_core: numpy.array, List[numpy.arrayTrue
         alpha: array or tensor or list of tensor/arrays of shape (N_BATCH, 3, 3)
             Atomic polarizabilities.
 
@@ -516,7 +472,7 @@ class EMLETrainer:
             Batch size for minibatch training. Default is 1024.
 
         shuffle: bool
-            Shuffle training data. Default is True.
+            Shuffle training data. Default is False.
 
         Returns
         -------
@@ -524,6 +480,8 @@ class EMLETrainer:
         dict
             Trained EMLE model.
         """
+        from torch.utils.data import TensorDataset, DataLoader
+
         # Check input data.
         assert (
             len(z) == len(xyz) == len(s) == len(q_core) == len(q_val) == len(alpha)
@@ -546,109 +504,102 @@ class EMLETrainer:
         q_mol = _torch.sum(q, dim=1)
         z = _pad_to_max(z)
         xyz = _pad_to_max(xyz)
+        s = _pad_to_max(s)
+        alpha = _pad_to_max(alpha)
 
+        # Apply train_mask
         q_core_train = q_core[train_mask]
         q_mol_train = q_mol[train_mask]
         q_train = q[train_mask]
         z_train = z[train_mask]
         xyz_train = xyz[train_mask]
-        s_train = _pad_to_max(s)[train_mask]
-        alpha_train = _pad_to_max(alpha)[train_mask]
-        species = _torch.unique(_torch.tensor(z_train[z_train > 0], device=device))
+        s_train = s[train_mask]
+        alpha_train = alpha[train_mask]
 
-        # Place on the correct device and set the data type.
-        q_mol = q_mol.to(device=device, dtype=dtype)
+        q_core_train = q_core_train.to(device=device, dtype=dtype)
         q_mol_train = q_mol_train.to(device=device, dtype=dtype)
+        q_train = q_train.to(device=device, dtype=dtype)
         z_train = z_train.to(device=device, dtype=_torch.int64)
         xyz_train = xyz_train.to(device=device, dtype=dtype)
         s_train = s_train.to(device=device, dtype=dtype)
-        q_core_train = q_core_train.to(device=device, dtype=dtype)
-        q_train = q_train.to(device=device, dtype=dtype)
         alpha_train = alpha_train.to(device=device, dtype=dtype)
+
+        # Get unique species
+        species = _torch.unique(z_train[z_train > 0])
         species = species.to(device=device, dtype=_torch.int64)
 
-        # Get zid mapping.
+        # Get zid mapping
         zid_mapping = self._get_zid_mapping(species)
         zid_train = zid_mapping[z_train]
 
         if computer_n_species is None:
             computer_n_species = len(species)
 
-        # Calculate AEVs.
+        # Create TensorDataset and DataLoader
+        batch_size = len(z_train) if not use_minibatch else batch_size
+        dataset = TensorDataset(
+            z_train,
+            xyz_train,
+            s_train,
+            q_core_train,
+            q_mol_train,
+            q_train,
+            alpha_train,
+            zid_train,
+        )
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+
+        # Calculate AEV mask globally
         emle_aev_computer = _EMLEAEVComputer(
             num_species=computer_n_species,
             zid_map=computer_zid_map,
             dtype=dtype,
             device=device,
         )
-
-        if not use_minibatch:
-            # Compute the AEVs and corresponding mask for the entire training set in a single batch,
-            # and store them in memory for subsequent use.
-            aev_mols = emle_aev_computer(zid_train, xyz_train)
-            aev_mask = _torch.sum(aev_mols.reshape(-1, aev_mols.shape[-1]) ** 2, dim=0) > 0
-
-            aev_mols = aev_mols[:, :, aev_mask]
-            emle_aev_computer = _EMLEAEVComputer(
-                num_species=computer_n_species,
-                zid_map=computer_zid_map,
-                mask=aev_mask,
-                dtype=dtype,
-                device=device,
+        aev_mask = None
+        for batch in loader:
+            z_b, xyz_b, *_, zid_b = batch
+            aev_batch = emle_aev_computer(zid_b, xyz_b)
+            batch_mask = (
+                _torch.sum(aev_batch.reshape(-1, aev_batch.shape[-1]) ** 2, dim=0) > 0
             )
-        else:
-            # Calculate AEVs in batches to save memory.
-            n_samples = zid_train.shape[0]
-            aev_filenames = []
-            aev_mask = None
-            
-            # Calculate global mask
-            for i in range(0, n_samples, batch_size):
-                _logger.info(f"Calculating AEVs for batch {i}/{n_samples}")
-                z_batch = zid_train[i:i + batch_size]
-                xyz_batch = xyz_train[i:i + batch_size]
+            if aev_mask is None:
+                aev_mask = batch_mask
+            else:
+                aev_mask |= batch_mask
+            del aev_batch
+            _torch.cuda.empty_cache()
 
-                aev_batch = emle_aev_computer(z_batch, xyz_batch)  # shape: [B, A, F]
-                batch_mask = _torch.sum(aev_batch.reshape(-1, aev_batch.shape[-1]) ** 2, dim=0) > 0
+        emle_aev_computer = _EMLEAEVComputer(
+            num_species=computer_n_species,
+            zid_map=computer_zid_map,
+            mask=aev_mask,
+            dtype=dtype,
+            device=device,
+        )
 
-                if aev_mask is None:
-                    aev_mask = batch_mask
-                else:
-                    aev_mask |= batch_mask  # logical OR across batches
-
-                del aev_batch
-                _torch.cuda.empty_cache()
-
-            emle_aev_computer = _EMLEAEVComputer(
-                num_species=computer_n_species,
-                zid_map=computer_zid_map,
-                mask=aev_mask,
-                dtype=dtype,
-                device=device,
-            )
-
-            # Create directory for batches
+        # Save masked AEVs to files if using lazy mode, else keep in memory
+        aev_filenames = []
+        if use_minibatch:
             batch_dir = "batches"
             _os.makedirs(batch_dir, exist_ok=True)
-
-            # Save masked AEVs to files
-            for i in range(0, n_samples, batch_size):
-                _logger.info(f"Saving masked AEVs for batch {i}/{n_samples}")
-                z_batch = zid_train[i:i + batch_size]
-                xyz_batch = xyz_train[i:i + batch_size]
-
-                aev_batch = emle_aev_computer(z_batch, xyz_batch)      # Now with mask applied internally
+            for i, batch in enumerate(loader):
+                _logger.info(f"Saving masked AEVs for batch {i} of {len(loader)}")
+                z_b, xyz_b, *_, zid_b = batch
+                aev_batch = emle_aev_computer(zid_b, xyz_b)
                 filename = _os.path.join(batch_dir, f"aev_mols_batch_{i}.pt")
                 _torch.save(aev_batch.cpu(), filename)
-
                 aev_filenames.append(filename)
-
                 del aev_batch
                 _torch.cuda.empty_cache()
+        else:
+            # Compute the AEVs and corresponding mask for the entire training set in a single batch
+            aev_mols = emle_aev_computer(zid_mapping[z_train], xyz_train)
 
         # "Fit" q_core (just take averages over the entire training set).
         q_core_z = _mean_by_z(q_core_train, zid_train)
 
+        # IVM selection
         if not use_minibatch:
             _logger.info("Performing IVM...")
             # Create an array of (molecule_id, atom_id) pairs (as in the full
@@ -659,27 +610,28 @@ class EMLETrainer:
                 _torch.meshgrid(_torch.arange(n_mols), _torch.arange(max_atoms)), dim=-1
             ).to(device)
 
-            # Perform IVM.
+            # Perform IVM
             ivm_mol_atom_ids_padded, aev_ivm_allz = _IVM.perform_ivm(
                 aev_mols, z_train, atom_ids, species, ivm_thr, sigma
             )
         else:
             _logger.info("Performing Lazy IVM...")
-            # Build (mol_idx, atom_idx) grid for each batch
             n_mols, max_atoms = q_train.shape
-            mol_ids = _torch.arange(n_mols)
             atom_ids = _torch.arange(max_atoms)
-
-            # Split into batches
-            z_mols_batches = [z_train[i:i+batch_size] for i in range(0, n_mols, batch_size)]
+            z_mols_batches = []
             atom_ids_batches = []
+            for i, batch in enumerate(loader):
+                z_b = batch[0]
+                batch_size_actual = z_b.shape[0]
+                start = i * loader.batch_size
+                mol_range = _torch.arange(start, start + batch_size_actual)
+                print(start, start + batch_size_actual)
+                atom_grid = _torch.stack(
+                    _torch.meshgrid(mol_range, atom_ids, indexing="ij"), dim=-1
+                )
+                z_mols_batches.append(z_b)
+                atom_ids_batches.append(atom_grid)
 
-            for i in range(0, n_mols, batch_size):
-                mol_range = _torch.arange(i, min(i + batch_size, n_mols))
-                atom_grid = _torch.stack(_torch.meshgrid(mol_range, atom_ids, indexing='ij'), dim=-1)
-                atom_ids_batches.append(atom_grid)  
-
-            # Perform Lazy IVM
             ivm_mol_atom_ids_padded, aev_ivm_allz = _IVM.perform_ivm_lazy(
                 aev_filenames=aev_filenames,
                 z_batches=z_mols_batches,
@@ -698,9 +650,13 @@ class EMLETrainer:
 
         # Fit s (pure GPR, no fancy optimization needed).
         if not use_minibatch:
-            ref_values_s = self._train_s(s_train, zid_train, aev_mols, aev_ivm_allz, sigma)
+            ref_values_s = self._train_s(
+                s_train, zid_train, aev_mols, aev_ivm_allz, sigma
+            )
         else:
-            ref_values_s = self._train_s_lazy(s_train, zid_train, aev_filenames, aev_ivm_allz, sigma)
+            ref_values_s = self._train_s_lazy(
+                s_train, zid_train, aev_filenames, aev_ivm_allz, sigma
+            )
 
         # Good for debugging
         # _torch.autograd.set_detect_anomaly(True)
@@ -750,18 +706,9 @@ class EMLETrainer:
             epochs=epochs,
             print_every=print_every,
             emle_base=emle_base,
-            atomic_numbers=z_train,
-            xyz=xyz_train,
-            q_mol=q_mol_train,
-            q_target=q_train,
-            use_minibatch=use_minibatch,
-            batch_size=batch_size,
-            shuffle=shuffle,
+            loader=loader,
         )
-        # Update GPR constants for chi
-        # (now inconsistent since not updated after the last epoch)
         self._qeq_loss._update_chi_gpr(emle_base)
-
         _logger.debug(f"Optimized a_QEq: {emle_base.a_QEq.data.item()}")
 
         # Fit a_Thole, k_Z (uses volumes predicted by QEq model).
@@ -773,16 +720,10 @@ class EMLETrainer:
             epochs=epochs,
             print_every=print_every,
             emle_base=emle_base,
-            atomic_numbers=z_train,
-            xyz=xyz_train,
-            q_mol=q_mol_train,
-            alpha_mol_target=alpha_train,
-            use_minibatch=use_minibatch,
-            batch_size=batch_size,
-            shuffle=shuffle,
+            loader=loader,
         )
-
         _logger.debug(f"Optimized a_Thole: {emle_base.a_Thole.data.item()}")
+
         # Fit sqrtk_ref ( alpha = sqrtk ** 2 * k_Z * v).
         if alpha_mode == "reference":
             _logger.info("Fitting ref_values_sqrtk values...")
@@ -793,15 +734,9 @@ class EMLETrainer:
                 epochs=epochs,
                 print_every=print_every,
                 emle_base=emle_base,
-                atomic_numbers=z_train,
-                xyz=xyz_train,
-                q_mol=q_mol_train,
-                alpha_mol_target=alpha_train,
+                loader=loader,
                 opt_sqrtk=True,
                 l2_reg=20.0,
-                use_minibatch=use_minibatch,
-                batch_size=batch_size,
-                shuffle=shuffle,
             )
             # Update GPR constants for sqrtk
             # (now inconsistent since not updated after the last epoch)
