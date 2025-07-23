@@ -204,7 +204,9 @@ class IVM:
                 best_aev = None
                 best_id = None
 
-                for fname, z_batch, id_batch in zip(aev_filenames, z_batches, atom_id_batches):
+                for fname, z_batch, id_batch in zip(
+                    aev_filenames, z_batches, atom_id_batches
+                ):
                     aev_batch = _torch.load(fname, map_location=device).to(device)
                     z_b = z_batch.to(device)
                     id_b = id_batch.to(device)
@@ -212,7 +214,7 @@ class IVM:
 
                     if not mask.any():
                         continue
-                    
+
                     aev_z = aev_batch[mask]
                     ids_z = id_b[mask]
 
@@ -239,15 +241,26 @@ class IVM:
                 selected[z].append(best_aev.to(device))
                 selected_ids[z].append(best_id)
                 iter_count += 1
-                _logger.info(f"IVM for species {z}: Iter {iter_count}: max var = {max_var:.5f}, n_selected = {len(selected[z])}")
+                _logger.info(
+                    f"IVM for species {z}: Iter {iter_count}: max var = {max_var:.5f}, n_selected = {len(selected[z])}"
+                )
 
-        ivm_mol_atom_ids_padded = _pad_to_max([
-            _torch.stack(v).to(device) if len(v) > 0 else _torch.empty(0, 2, dtype=_torch.long, device=device)
-            for v in selected_ids.values()
-        ], value=-1)
+        ivm_mol_atom_ids_padded = _pad_to_max(
+            [
+                _torch.stack(v).to(device)
+                if len(v) > 0
+                else _torch.empty(0, 2, dtype=_torch.long, device=device)
+                for v in selected_ids.values()
+            ],
+            value=-1,
+        )
 
         aev_ivm_allz = [
-            _torch.stack(v).to(device) if len(v) > 0 else _torch.empty(0, selected[next(iter(selected))][0].shape[-1], device=device)
+            _torch.stack(v).to(device)
+            if len(v) > 0
+            else _torch.empty(
+                0, selected[next(iter(selected))][0].shape[-1], device=device
+            )
             for v in selected.values()
         ]
 
