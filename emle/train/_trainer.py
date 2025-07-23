@@ -307,7 +307,6 @@ class EMLETrainer:
         model
             Trained model.
         """
-        import torch
         from torch.utils.data import TensorDataset, DataLoader
 
         def _train_loop(
@@ -344,8 +343,10 @@ class EMLETrainer:
                 Forward loss.
             """
             if use_minibatch:
-                tensor_keys = [k for k in kwargs if isinstance(kwargs[k], _torch.Tensor)]
+                tensor_keys = [k for k in list(kwargs) if isinstance(kwargs[k], _torch.Tensor)]
                 tensor_values = [kwargs[k] for k in tensor_keys]
+                for k in tensor_keys:
+                    kwargs.pop(k)
                 lengths = [t.shape[0] for t in tensor_values]
                 assert all(l == lengths[0] for l in lengths), "All tensors must have same batch dimension"
                 dataset = TensorDataset(*tensor_values)
@@ -360,7 +361,7 @@ class EMLETrainer:
                     for batch in loader:
                         batch_dict = dict(zip(tensor_keys, batch))
                         optimizer.zero_grad()
-                        loss, rmse, max_error = loss_instance(*args, **batch_dict)
+                        loss, rmse, max_error = loss_instance(*args, **kwargs, **batch_dict)
                         loss.backward(retain_graph=True)
                         optimizer.step()
                         batch_size_actual = batch[0].shape[0]
