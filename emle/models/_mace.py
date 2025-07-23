@@ -23,12 +23,13 @@
 """MACEEMLE model implementation."""
 
 __author__ = "Joao Morado"
-__email__ = "joaomorado@gmail.com>"
+__email__ = "joaomorado@gmail.com"
 
 __all__ = ["MACEEMLE"]
 
 import os as _os
 import torch as _torch
+import numpy as _np
 
 from typing import List
 
@@ -117,11 +118,13 @@ class MACEEMLE(_torch.nn.Module):
             The charge on the QM region. This can also be passed when calling
             the forward method. The non-default value will take precendence.
 
-        mace_model: str
-            Name of the MACE-OFF23 models to use.
-            Available models are 'mace-off23-small', 'mace-off23-medium', 'mace-off23-large'.
+        mace_model: List[str], Tuple[str], str
+            Name of the MACE model(s) to use.
+            Available pre-trained models are 'mace-off23-small', 'mace-off23-medium', 'mace-off23-large'.
             To use a locally trained MACE model, provide the path to the model file.
             If None, the MACE-OFF23(S) model will be used by default.
+            If more than one model is provided, only the energy from the first model will be returned 
+            in the forward pass, but the energy and forces from all models will be stored.
 
         atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor (N_ATOMS,)
             List of atomic numbers to use in the MACE model.
@@ -194,47 +197,34 @@ class MACEEMLE(_torch.nn.Module):
             create_aev_calculator=True,
         )
 
-        # Load the MACE model.
-        if mace_model is not None:
-            if not isinstance(mace_model, str):
-                raise TypeError("'mace_model' must be of type 'str'")
-            # Convert to lower case and remove whitespace.
-            formatted_mace_model = mace_model.lower().replace(" ", "")
-            if formatted_mace_model.startswith("mace-off23"):
-                size = formatted_mace_model.split("-")[-1]
-                if not size in ["small", "medium", "large"]:
-                    raise ValueError(
-                        f"Unsupported MACE model: '{mace_model}'. Available MACE-OFF23 models are "
-                        "'mace-off23-small', 'mace-off23-medium', 'mace-off23-large'"
-                    )
-                source_model = _mace_off(
-                    model=size, device=device, return_raw_model=True
-                )
-            else:
-                # Assuming that the model is a local model.
-                if _os.path.exists(mace_model):
-                    source_model = _torch.load(mace_model, map_location=device)
-                else:
-                    raise FileNotFoundError(f"MACE model file not found: {mace_model}")
-        else:
-            # If no MACE model is provided, use the default MACE-OFF23(S) model.
-            source_model = _mace_off(
-                model="small", device=device, return_raw_model=True
-            )
+        if not isinstance(mace_model, (list, tuple)):
+            mace_model = [mace_model] if mace_model is None or isinstance(mace_model, str) else None
+
+        if mace_model is None or any(not isinstance(i, (str, type(None))) for i in mace_model):
+            raise TypeError("'mace_model' must be a list, tuple, or str, with elements of type str or None")
 
         from mace.tools.scripts_utils import extract_config_mace_model
+        self._mace_models = _torch.nn.ModuleList()
+        for model in mace_model:
+            source_model = self._load_mace_model(model, device)
+            
+            # Extract the config from the model.
+            config = extract_config_mace_model(source_model)
 
-        # Extract the config from the model.
-        config = extract_config_mace_model(source_model)
+            # Create the target model.
+            target_model = source_model.__class__(**config).to(device)
 
-        # Create the target model.
-        target_model = source_model.__class__(**config).to(device)
+            # Load the state dict.
+            target_model.load_state_dict(source_model.state_dict())
 
-        # Load the state dict.
-        target_model.load_state_dict(source_model.state_dict())
+            # Compile the model.
+            self._mace_models.append(_e3nn_jit.compile(target_model).to(self._dtype))
 
-        # Compile the model.
-        self._mace = _e3nn_jit.compile(target_model).to(self._dtype)
+        # Set the MACE model to the first model.
+        self._mace = self._mace_models[0]
+
+        self._E_vac_qbc = _torch.empty(0, dtype=self._dtype)
+        self._grads_qbc = _torch.empty(0, dtype=self._dtype)
 
         # Create the z_table of the MACE model.
         self._z_table = [int(z.item()) for z in self._mace.atomic_numbers]
@@ -279,6 +269,53 @@ class MACEEMLE(_torch.nn.Module):
 
         # Set the _get_neighbor_pairs method on the instance.
         self._get_neighbor_pairs = _get_neighbor_pairs
+
+    @staticmethod
+    def _load_mace_model(mace_model: str, device: _torch.device):
+        """
+        Load a MACE model.
+
+        Parameters
+        ----------
+        mace_model: str
+            Path to the MACE model file or the name of the pre-trained MACE model.
+        device: torch.device
+            Device on which to load the model.
+        
+        Returns
+        -------
+        source_model: torch.nn.Module
+            The MACE model.
+        """
+        # Load the MACE model.
+        if mace_model is not None:
+            if not isinstance(mace_model, str):
+                raise TypeError("'mace_model' must be of type 'str'")
+            # Convert to lower case and remove whitespace.
+            formatted_mace_model = mace_model.lower().replace(" ", "")
+            if formatted_mace_model.startswith("mace-off23"):
+                size = formatted_mace_model.split("-")[-1]
+                if not size in ["small", "medium", "large"]:
+                    raise ValueError(
+                        f"Unsupported MACE model: '{mace_model}'. Available MACE-OFF23 models are "
+                        "'mace-off23-small', 'mace-off23-medium', 'mace-off23-large'"
+                    )
+                source_model = _mace_off(
+                    model=size, device=device, return_raw_model=True
+                )
+            else:
+                # Assuming that the model is a local model.
+                if _os.path.exists(mace_model):
+                    source_model = _torch.load(mace_model, map_location=device)
+                else:
+                    raise FileNotFoundError(f"MACE model file not found: {mace_model}")
+        else:
+            # If no MACE model is provided, use the default MACE-OFF23(S) model.
+            source_model = _mace_off(
+                model="small", device=device, return_raw_model=True
+            )
+
+        return source_model
 
     @staticmethod
     def _to_one_hot(indices: _torch.Tensor, num_classes: int) -> _torch.Tensor:
@@ -355,6 +392,9 @@ class MACEEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.to(*args, **kwargs)
         self._mace = self._mace.to(*args, **kwargs)
+        self._mace_models = _torch.nn.ModuleList([
+            model.to(*args, **kwargs) for model in self._mace_models
+        ])
         return self
 
     def cpu(self, **kwargs):
@@ -365,6 +405,9 @@ class MACEEMLE(_torch.nn.Module):
         self._mace = self._mace.cpu(**kwargs)
         if self._atomic_numbers is not None:
             self._atomic_numbers = self._atomic_numbers.cpu(**kwargs)
+        self._mace_models = _torch.nn.ModuleList([
+            model.cpu(**kwargs) for model in self._mace_models
+        ])
         return self
 
     def cuda(self, **kwargs):
@@ -375,6 +418,9 @@ class MACEEMLE(_torch.nn.Module):
         self._mace = self._mace.cuda(**kwargs)
         if self._atomic_numbers is not None:
             self._atomic_numbers = self._atomic_numbers.cuda(**kwargs)
+        self._mace_models = _torch.nn.ModuleList([
+            model.cuda(**kwargs) for model in self._mace_models
+        ])
         return self
 
     def double(self):
@@ -383,6 +429,9 @@ class MACEEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.double()
         self._mace = self._mace.double()
+        self._mace_models = _torch.nn.ModuleList([
+            model.double() for model in self._mace_models
+        ])
         return self
 
     def float(self):
@@ -391,6 +440,9 @@ class MACEEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.float()
         self._mace = self._mace.float()
+        self._mace_models = _torch.nn.ModuleList([
+            model.float() for model in self._mace_models
+        ])
         return self
 
     def forward(
@@ -441,7 +493,14 @@ class MACEEMLE(_torch.nn.Module):
         # Store the number of batches.
         num_batches = atomic_numbers.shape[0]
 
-        # Create a list to store the results.
+        # Store the number of models.
+        num_models = len(self._mace_models)
+
+        # Create tensors to store the data for QbC.
+        self._E_vac_qbc = _torch.empty(num_models, num_batches, dtype=self._dtype, device=device)
+        self._grads_qbc = _torch.empty(num_models, num_batches, xyz_qm.shape[1], 3, dtype=self._dtype, device=device)
+
+        # Create tensors to store the results.
         results_E_vac = _torch.empty(num_batches, dtype=self._dtype, device=device)
         results_E_emle_static = _torch.empty(
             num_batches, dtype=self._dtype, device=device
@@ -472,20 +531,23 @@ class MACEEMLE(_torch.nn.Module):
                 ).to(device)
                 self._atomic_numbers = atomic_numbers[i]
 
+            # Get the in vacuo energy.
+            EV_TO_HARTREE = 0.0367492929
+
+            positions = xyz_qm[i].to(self._dtype)
+
             # Create the input dictionary
             input_dict = {
                 "ptr": self._ptr,
                 "node_attrs": self._node_attrs,
                 "batch": self._batch,
                 "pbc": self._pbc,
-                "positions": xyz_qm[i].to(self._dtype),
+                "positions": positions,
                 "edge_index": edge_index,
                 "shifts": shifts,
                 "cell": self._cell,
             }
 
-            # Get the in vacuo energy.
-            EV_TO_HARTREE = 0.0367492929
             E_vac = self._mace(input_dict, compute_force=False)["interaction_energy"]
 
             assert (
@@ -493,6 +555,26 @@ class MACEEMLE(_torch.nn.Module):
             ), "The model did not return any energy. Please check the input."
 
             results_E_vac[i] = E_vac[0] * EV_TO_HARTREE
+
+            # Decouple the positions from the computation graph for the next models.
+            input_dict["positions"] = input_dict["positions"].clone().detach().requires_grad_(True)
+
+            # Do inference for the other models.
+            if len(self._mace_models) > 1:
+                for j, mace in enumerate(self._mace_models):
+                    E_vac_qbc = mace(input_dict, compute_force=False)["interaction_energy"]
+
+                    assert (
+                        E_vac_qbc is not None
+                    ), "The model did not return any energy. Please check the input."
+
+                    # Calculate the gradients
+                    grads_qbc = _torch.autograd.grad([E_vac_qbc], [input_dict["positions"]])[0]
+                    assert grads_qbc is not None, "Gradient computation failed"
+
+                    # Store the results.
+                    self._E_vac_qbc[j, i] = E_vac_qbc[0] * EV_TO_HARTREE
+                    self._grads_qbc[j, i] = grads_qbc * EV_TO_HARTREE
 
             # If there are no point charges, return the in vacuo energy and zeros
             # for the static and induced terms.
