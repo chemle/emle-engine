@@ -24,6 +24,8 @@ from loguru import logger as _logger
 import os as _os
 import sys as _sys
 import torch as _torch
+from torch.utils.data import TensorDataset as _TensorDataset
+from torch.utils.data import DataLoader as _DataLoader
 
 from ..models import EMLEAEVComputer as _EMLEAEVComputer
 from ..models import EMLEBase as _EMLEBase
@@ -313,7 +315,7 @@ class EMLETrainer:
         model : nn.Module
             The trained model (loss instance).
         """
-        model = loss_class(emle_base).to(f"cuda:{local_rank}" if ddp else emle_base.device)
+        model = loss_class(emle_base).to(f"cuda:{local_rank}" if ddp else emle_base._device)
 
         if ddp:
             import torch.distributed as dist
@@ -491,10 +493,9 @@ class EMLETrainer:
             Trained EMLE model.
         """
         if ddp:
-            import torch.distributed as dist
-            from torch.utils.data.distributed import DistributedSampler
-            from torch.utils.data import TensorDataset, DataLoader
-  
+            import torch.distributed as dist 
+            from torch.utils.data.distributed import DistributedSampler as _DistributedSampler
+
             dist.init_process_group(backend="nccl")
             _torch.cuda.set_device(local_rank)
             device = _torch.device(f"cuda:{local_rank}")
@@ -523,6 +524,8 @@ class EMLETrainer:
         xyz = _pad_to_max(xyz)
         s = _pad_to_max(s)
         alpha = _pad_to_max(alpha)
+
+        print("Size of the dataset ", len(z))
 
         # Apply train_mask
         q_core_train = q_core[train_mask]
@@ -556,7 +559,7 @@ class EMLETrainer:
             computer_n_species = len(species)
 
         batch_size_eff = len(z_train) if not use_minibatch else batch_size
-        dataset = TensorDataset(
+        dataset = _TensorDataset(
             z_train,
             xyz_train,
             s_train,
@@ -567,10 +570,10 @@ class EMLETrainer:
             zid_train,
         )
         if ddp:
-            sampler = DistributedSampler(dataset)
-            loader = DataLoader(dataset, batch_size=batch_size_eff, sampler=sampler)
+            sampler = _DistributedSampler(dataset)
+            loader = _DataLoader(dataset, batch_size=batch_size_eff, sampler=sampler)
         else:
-            loader = DataLoader(dataset, batch_size=batch_size_eff, shuffle=shuffle)
+            loader = _DataLoader(dataset, batch_size=batch_size_eff, shuffle=shuffle)
 
         # Calculate AEV mask globally
         emle_aev_computer = _EMLEAEVComputer(
@@ -648,7 +651,6 @@ class EMLETrainer:
                 batch_size_actual = z_b.shape[0]
                 start = i * loader.batch_size
                 mol_range = _torch.arange(start, start + batch_size_actual)
-                print(start, start + batch_size_actual)
                 atom_grid = _torch.stack(
                     _torch.meshgrid(mol_range, atom_ids, indexing="ij"), dim=-1
                 )
