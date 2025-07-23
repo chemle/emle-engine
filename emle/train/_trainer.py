@@ -192,6 +192,9 @@ class EMLETrainer:
         epochs,
         emle_base,
         print_every=10,
+        use_minibatch=False,
+        batch_size=32,
+        shuffle=True,
         *args,
         **kwargs,
     ):
@@ -225,9 +228,11 @@ class EMLETrainer:
         model
             Trained model.
         """
+        import torch
+        from torch.utils.data import TensorDataset, DataLoader
 
         def _train_loop(
-            loss_instance, optimizer, epochs, print_every=10, *args, **kwargs
+            loss_instance, optimizer, epochs, print_every=10, use_minibatch=False, batch_size=32, shuffle=True, *args, **kwargs
         ):
             """
             Perform the training loop.
@@ -259,20 +264,49 @@ class EMLETrainer:
             loss
                 Forward loss.
             """
-            for epoch in range(epochs):
-                loss_instance.train()
-                optimizer.zero_grad()
-                loss, rmse, max_error = loss_instance(*args, **kwargs)
-                loss.backward(retain_graph=True)
-                optimizer.step()
-                if (epoch + 1) % print_every == 0:
-                    _logger.info(
-                        f"Epoch {epoch+1}: Loss ={loss.item():9.4f}    "
-                        f"RMSE ={rmse.item():9.4f}    "
-                        f"Max Error ={max_error.item():9.4f}"
-                    )
-
-            return loss
+            if use_minibatch:
+                dataset = TensorDataset(*args)
+                loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+                for epoch in range(epochs):
+                    loss_instance.train()
+                    running_loss = 0.0
+                    running_sq_error = 0.0
+                    running_count = 0
+                    running_max_error = 0.0
+                    for batch in loader:
+                        optimizer.zero_grad()
+                        loss, rmse, max_error = loss_instance(*batch, **kwargs)
+                        loss.backward()
+                        optimizer.step()
+                        batch_size_actual = batch[0].shape[0]
+                        running_loss += loss.item() * batch_size_actual
+                        running_sq_error += (rmse.item() ** 2) * batch_size_actual
+                        running_count += batch_size_actual
+                        running_max_error = max(running_max_error, max_error.item())
+                    epoch_loss = running_loss / len(dataset)
+                    epoch_rmse = (running_sq_error / running_count) ** 0.5 if running_count > 0 else 0.0
+                    epoch_max_error = running_max_error
+                    if (epoch + 1) % print_every == 0:
+                        _logger.info(
+                            f"Epoch {epoch+1}: Loss ={epoch_loss:9.4f}    "
+                            f"RMSE ={epoch_rmse:9.4f}    "
+                            f"Max Error ={epoch_max_error:9.4f}"
+                        )
+                return loss
+            else:
+                for epoch in range(epochs):
+                    loss_instance.train()
+                    optimizer.zero_grad()
+                    loss, rmse, max_error = loss_instance(*args, **kwargs)
+                    loss.backward(retain_graph=True)
+                    optimizer.step()
+                    if (epoch + 1) % print_every == 0:
+                        _logger.info(
+                            f"Epoch {epoch+1}: Loss ={{loss.item():9.4f}}    "
+                            f"RMSE ={{rmse.item():9.4f}}    "
+                            f"Max Error ={{max_error.item():9.4f}}"
+                        )
+                return loss
 
         model = loss_class(emle_base)
         opt_parameters = [
@@ -282,7 +316,15 @@ class EMLETrainer:
         ]
 
         optimizer = _torch.optim.Adam(opt_parameters, lr=lr)
-        _train_loop(model, optimizer, epochs, print_every, *args, **kwargs)
+
+        # Figure out which args are tensors for batching
+        # For QEq: atomic_numbers, xyz, q_mol, q_target
+        # For Thole: atomic_numbers, xyz, q_mol, alpha_mol_target
+        # For sqrtk: atomic_numbers, xyz, q_mol, alpha_mol_target
+        # We'll pass all args as before, but _train_loop will batch if needed
+        _train_loop(
+            model, optimizer, epochs, print_every, use_minibatch, batch_size, shuffle, *args, **kwargs
+        )
         return model
 
     def train(
@@ -308,6 +350,9 @@ class EMLETrainer:
         plot_data_filename=None,
         device=_torch.device("cuda"),
         dtype=_torch.float64,
+        use_minibatch=False,
+        batch_size=1024,
+        shuffle=True,
     ):
         """
         Train an EMLE model.
@@ -377,6 +422,15 @@ class EMLETrainer:
 
         dtype: torch.dtype
             Data type to use for training. Default is torch.float64.
+
+        use_minibatch: bool
+            Use minibatch training. Default is False.
+
+        batch_size: int
+            Batch size for minibatch training. Default is 1024.
+
+        shuffle: bool
+            Shuffle training data. Default is True.
 
         Returns
         -------
@@ -532,6 +586,9 @@ class EMLETrainer:
             xyz=xyz_train,
             q_mol=q_mol_train,
             q_target=q_train,
+            use_minibatch=use_minibatch,
+            batch_size=batch_size,
+            shuffle=shuffle,
         )
         # Update GPR constants for chi
         # (now inconsistent since not updated after the last epoch)
@@ -552,6 +609,9 @@ class EMLETrainer:
             xyz=xyz_train,
             q_mol=q_mol_train,
             alpha_mol_target=alpha_train,
+            use_minibatch=use_minibatch,
+            batch_size=batch_size,
+            shuffle=shuffle,
         )
 
         _logger.debug(f"Optimized a_Thole: {emle_base.a_Thole.data.item()}")
@@ -571,6 +631,9 @@ class EMLETrainer:
                 alpha_mol_target=alpha_train,
                 opt_sqrtk=True,
                 l2_reg=20.0,
+                use_minibatch=use_minibatch,
+                batch_size=batch_size,
+                shuffle=shuffle,
             )
             # Update GPR constants for sqrtk
             # (now inconsistent since not updated after the last epoch)
