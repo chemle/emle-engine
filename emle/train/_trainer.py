@@ -276,40 +276,36 @@ class EMLETrainer:
         emle_base,
         loader,
         print_every=10,
+        ddp: bool = False,
+        local_rank: int = 0,
         *args,
         **kwargs,
     ):
         """
-        Train a model.
+        Train a model using a DataLoader for batching. Optionally uses DistributedDataParallel (DDP) for multi-GPU training.
 
         Parameters
         ----------
         loss_class : class
             The loss class to instantiate for training (e.g., QEqLoss, TholeLoss).
-
         opt_param_names : list of str
             List of parameter names to optimize (e.g., ["a_QEq", "ref_values_chi"]).
-
         lr : float
             Learning rate for the optimizer.
-
         epochs : int
             Number of training epochs.
-
         emle_base : EMLEBase
             An instance of the EMLEBase model.
-
         loader : torch.utils.data.DataLoader
             DataLoader yielding batches of training data. Each batch should be a tuple of tensors:
             (z, xyz, s, q_core, q_mol, q, alpha, zid), all already on the correct device and dtype.
-
         print_every : int, optional
             How often to print training progress (default: 10).
-
-        args :
-            Additional arguments passed to the loss/model call.
-
-        kwargs :
+        ddp : bool, optional
+            If True, use DistributedDataParallel for multi-GPU training (default: False).
+        local_rank : int, optional
+            Local GPU index for DDP (default: 0). Should be set automatically by torchrun.
+        *args, **kwargs :
             Additional arguments passed to the loss/model call.
 
         Returns
@@ -317,7 +313,13 @@ class EMLETrainer:
         model : nn.Module
             The trained model (loss instance).
         """
-        model = loss_class(emle_base)
+        model = loss_class(emle_base).to(f"cuda:{local_rank}" if ddp else emle_base.device)
+
+        if ddp:
+            import torch.distributed as dist
+            from torch.nn.parallel import DistributedDataParallel as DDP
+            model = DDP(model, device_ids=[local_rank])
+
         loss_name = loss_class.__name__.lower()
         opt_parameters = [
             param
@@ -327,6 +329,8 @@ class EMLETrainer:
         optimizer = _torch.optim.Adam(opt_parameters, lr=lr)
 
         for epoch in range(epochs):
+            if ddp and hasattr(loader.sampler, 'set_epoch'):
+                loader.sampler.set_epoch(epoch)
             model.train()
             running_loss = 0.0
             running_sq_error = 0.0
@@ -335,7 +339,6 @@ class EMLETrainer:
             for batch in loader:
                 z_b, xyz_b, s_b, q_core_b, q_mol_b, q_b, alpha_b, zid_b = batch
                 optimizer.zero_grad()
-
                 if loss_name == "qeqloss":
                     loss, rmse, max_error = model(
                         atomic_numbers=z_b,
@@ -366,7 +369,7 @@ class EMLETrainer:
                 (running_sq_error / running_count) ** 0.5 if running_count > 0 else 0.0
             )
             epoch_max_error = running_max_error
-            if (epoch + 1) % print_every == 0:
+            if (epoch + 1) % print_every == 0 and (not ddp or local_rank == 0):
                 _logger.info(
                     f"Epoch {epoch + 1}: Loss ={epoch_loss:9.4f}    "
                     f"RMSE ={epoch_rmse:9.4f}    "
@@ -396,13 +399,15 @@ class EMLETrainer:
         model_filename="emle_model.mat",
         plot_data_filename=None,
         device=_torch.device("cuda"),
-        dtype=_torch.float64,
+        dtype=_torch.float32,
         use_minibatch=False,
         batch_size=100,
         shuffle=False,
+        ddp: bool = False,
+        local_rank: int = 0,
     ):
         """
-        Train an EMLE model.
+        Train an EMLE model, optionally using DistributedDataParallel (DDP) for multi-GPU training.
 
         Parameters
         ----------
@@ -474,13 +479,25 @@ class EMLETrainer:
         shuffle: bool
             Shuffle training data. Default is False.
 
+        ddp : bool, optional
+            If True, use DistributedDataParallel for multi-GPU training (default: False).
+        local_rank : int, optional
+            Local GPU index for DDP (default: 0). Should be set automatically by torchrun.
+
         Returns
         -------
 
         dict
             Trained EMLE model.
         """
-        from torch.utils.data import TensorDataset, DataLoader
+        if ddp:
+            import torch.distributed as dist
+            from torch.utils.data.distributed import DistributedSampler
+            from torch.utils.data import TensorDataset, DataLoader
+  
+            dist.init_process_group(backend="nccl")
+            _torch.cuda.set_device(local_rank)
+            device = _torch.device(f"cuda:{local_rank}")
 
         # Check input data.
         assert (
@@ -524,6 +541,9 @@ class EMLETrainer:
         s_train = s_train.to(device=device, dtype=dtype)
         alpha_train = alpha_train.to(device=device, dtype=dtype)
 
+        del q_core, q_val, q, q_mol, z, xyz, s, alpha
+        _torch.cuda.empty_cache()
+
         # Get unique species
         species = _torch.unique(z_train[z_train > 0])
         species = species.to(device=device, dtype=_torch.int64)
@@ -535,8 +555,7 @@ class EMLETrainer:
         if computer_n_species is None:
             computer_n_species = len(species)
 
-        # Create TensorDataset and DataLoader
-        batch_size = len(z_train) if not use_minibatch else batch_size
+        batch_size_eff = len(z_train) if not use_minibatch else batch_size
         dataset = TensorDataset(
             z_train,
             xyz_train,
@@ -547,7 +566,11 @@ class EMLETrainer:
             alpha_train,
             zid_train,
         )
-        loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+        if ddp:
+            sampler = DistributedSampler(dataset)
+            loader = DataLoader(dataset, batch_size=batch_size_eff, sampler=sampler)
+        else:
+            loader = DataLoader(dataset, batch_size=batch_size_eff, shuffle=shuffle)
 
         # Calculate AEV mask globally
         emle_aev_computer = _EMLEAEVComputer(
@@ -584,7 +607,8 @@ class EMLETrainer:
             batch_dir = "batches"
             _os.makedirs(batch_dir, exist_ok=True)
             for i, batch in enumerate(loader):
-                _logger.info(f"Saving masked AEVs for batch {i} of {len(loader)}")
+                if not ddp or local_rank == 0:
+                    _logger.info(f"Saving masked AEVs for batch {i+1}/{len(loader)}")
                 z_b, xyz_b, *_, zid_b = batch
                 aev_batch = emle_aev_computer(zid_b, xyz_b)
                 filename = _os.path.join(batch_dir, f"aev_mols_batch_{i}.pt")
@@ -593,7 +617,6 @@ class EMLETrainer:
                 del aev_batch
                 _torch.cuda.empty_cache()
         else:
-            # Compute the AEVs and corresponding mask for the entire training set in a single batch
             aev_mols = emle_aev_computer(zid_mapping[z_train], xyz_train)
 
         # "Fit" q_core (just take averages over the entire training set).
@@ -698,7 +721,8 @@ class EMLETrainer:
         )
 
         # Fit chi, a_QEq (QEq over chi predicted with GPR).
-        _logger.info("Fitting a_QEq and chi values...")
+        if not ddp or local_rank == 0:
+            _logger.info("Fitting a_QEq and chi values...")
         self._train_model(
             loss_class=self._qeq_loss,
             opt_param_names=["a_QEq", "ref_values_chi"],
@@ -707,12 +731,16 @@ class EMLETrainer:
             print_every=print_every,
             emle_base=emle_base,
             loader=loader,
+            ddp=ddp,
+            local_rank=local_rank,
         )
         self._qeq_loss._update_chi_gpr(emle_base)
-        _logger.debug(f"Optimized a_QEq: {emle_base.a_QEq.data.item()}")
+        if not ddp or local_rank == 0:
+            _logger.debug(f"Optimized a_QEq: {emle_base.a_QEq.data.item()}")
 
         # Fit a_Thole, k_Z (uses volumes predicted by QEq model).
-        _logger.info("Fitting a_Thole and k_Z values...")
+        if not ddp or local_rank == 0:
+            _logger.info("Fitting a_Thole and k_Z values...")
         self._train_model(
             loss_class=self._thole_loss,
             opt_param_names=["a_Thole", "k_Z"],
@@ -721,12 +749,16 @@ class EMLETrainer:
             print_every=print_every,
             emle_base=emle_base,
             loader=loader,
+            ddp=ddp,
+            local_rank=local_rank,
         )
-        _logger.debug(f"Optimized a_Thole: {emle_base.a_Thole.data.item()}")
+        if not ddp or local_rank == 0:
+            _logger.debug(f"Optimized a_Thole: {emle_base.a_Thole.data.item()}")
 
         # Fit sqrtk_ref ( alpha = sqrtk ** 2 * k_Z * v).
         if alpha_mode == "reference":
-            _logger.info("Fitting ref_values_sqrtk values...")
+            if not ddp or local_rank == 0:
+                _logger.info("Fitting ref_values_sqrtk values...")
             self._train_model(
                 loss_class=self._thole_loss,
                 opt_param_names=["ref_values_sqrtk"],
@@ -735,37 +767,39 @@ class EMLETrainer:
                 print_every=print_every,
                 emle_base=emle_base,
                 loader=loader,
+                ddp=ddp,
+                local_rank=local_rank,
                 opt_sqrtk=True,
                 l2_reg=20.0,
             )
-            # Update GPR constants for sqrtk
-            # (now inconsistent since not updated after the last epoch)
             self._thole_loss._update_sqrtk_gpr(emle_base)
 
-        # Create the final model.
-        emle_model = {
-            "q_core": q_core_z,
-            "a_QEq": emle_base.a_QEq,
-            "a_Thole": emle_base.a_Thole,
-            "s_ref": emle_base.ref_values_s,
-            "chi_ref": emle_base.ref_values_chi,
-            "k_Z": emle_base.k_Z,
-            "sqrtk_ref": (
-                emle_base.ref_values_sqrtk if alpha_mode == "reference" else None
-            ),
-            "species": species,
-            "alpha_mode": alpha_mode,
-            "n_ref": n_ref,
-            "ref_aev": ref_features,
-            "aev_mask": aev_mask,
-            "zid_map": emle_aev_computer._zid_map,
-            "computer_n_species": computer_n_species,
-        }
-
-        if model_filename is not None:
+        # Only save model on rank 0
+        if (model_filename is not None) and (not ddp or local_rank == 0):
+            emle_model = {
+                "q_core": q_core_z,
+                "a_QEq": emle_base.a_QEq,
+                "a_Thole": emle_base.a_Thole,
+                "s_ref": emle_base.ref_values_s,
+                "chi_ref": emle_base.ref_values_chi,
+                "k_Z": emle_base.k_Z,
+                "sqrtk_ref": (
+                    emle_base.ref_values_sqrtk if alpha_mode == "reference" else None
+                ),
+                "species": species,
+                "alpha_mode": alpha_mode,
+                "n_ref": n_ref,
+                "ref_aev": ref_features,
+                "aev_mask": aev_mask,
+                "zid_map": emle_aev_computer._zid_map,
+                "computer_n_species": computer_n_species,
+            }
             self._write_model_to_file(emle_model, model_filename)
 
         if plot_data_filename is None:
+            if ddp:
+                dist.barrier()
+                dist.destroy_process_group()
             return emle_base
 
         emle_base._alpha_mode = "species"
@@ -798,6 +832,10 @@ class EMLETrainer:
                 A_thole, z_mask
             )
 
-        self._write_model_to_file(plot_data, plot_data_filename)
+        if not ddp or local_rank == 0:
+            self._write_model_to_file(plot_data, plot_data_filename)
 
+        if ddp:
+            dist.barrier()
+            dist.destroy_process_group()
         return emle_base
