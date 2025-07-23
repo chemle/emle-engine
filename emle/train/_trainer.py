@@ -170,8 +170,8 @@ class EMLETrainer:
         Returns
         -------
 
-        torch.Tensor(N_BATCH, N_ATOMS)
-            Atomic widths.
+        torch.Tensor(N_SPECIES, MAX_N_REF)
+            Fitted reference values.
         """
         n_ref = _torch.tensor([_.shape[0] for _ in aev_ivm_allz], device=s.device)
         K_ref_ref_padded, K_mols_ref = _GPR.get_gpr_kernels(
@@ -181,6 +181,85 @@ class EMLETrainer:
         ref_values_s = _GPR.fit_atomic_sparse_gpr(
             s, K_mols_ref, K_ref_ref_padded, zid, sigma, n_ref
         )
+
+        return _pad_to_max(ref_values_s)
+
+    @staticmethod
+    def _train_s_lazy(s, zid, aev_filenames, aev_ivm_allz, sigma):
+        """
+        Train the s model in a memory-efficient, lazy (batch-wise) manner.
+
+        Parameters
+        ----------
+        s: torch.Tensor(N_BATCH, N_ATOMS)
+            Atomic widths.
+
+        zid: torch.Tensor(N_BATCH, N_ATOMS)
+            Species IDs.
+
+        aev_filenames: list of str
+            List of filenames for AEV batches.
+
+        aev_ivm_allz: list of torch.Tensor(N_REF, AEV_DIM)
+            Atomic environment vectors for all species (reference AEVs).
+
+        sigma: float
+            GPR sigma value.
+
+        Returns
+        -------
+
+        torch.Tensor(N_SPECIES, MAX_N_REF)
+            Fitted reference values.
+        """
+        n_ref = _torch.tensor([_.shape[0] for _ in aev_ivm_allz], device=s.device)
+        n_species = len(aev_ivm_allz)
+        device = s.device
+        dtype = s.dtype
+
+        values_by_species = [[] for _ in range(n_species)]
+        K_mols_ref_by_species = [[] for _ in range(n_species)]
+        zid_by_species = [[] for _ in range(n_species)]
+
+        offset = 0
+        for fname in aev_filenames:
+            aev_batch = _torch.load(fname, map_location=device)
+            batch_size = aev_batch.shape[0]
+            s_batch = s[offset:offset+batch_size]
+            zid_batch = zid[offset:offset+batch_size]
+            offset += batch_size
+
+            for i in range(n_species):
+                mask = (zid_batch == i)
+                if not mask.any():
+                    continue
+                # aev_z: [N_atoms_of_species, AEV_DIM]
+                aev_z = aev_batch[mask]
+                s_z = s_batch[mask]
+                zid_z = zid_batch[mask]
+                if aev_z.numel() == 0:
+                    continue
+
+                K_mol_ref = _GPR._aev_kernel(aev_z, aev_ivm_allz[i][:n_ref[i], :])
+                values_by_species[i].append(s_z)
+                K_mols_ref_by_species[i].append(K_mol_ref)
+                zid_by_species[i].append(zid_z)
+
+        ref_values_s = []
+        for i in range(n_species):
+            if len(values_by_species[i]) == 0:
+                ref_values_s.append(_torch.zeros(n_ref[i], dtype=dtype, device=device))
+                continue
+            values = _torch.cat(values_by_species[i], dim=0)
+            K_mols_ref = _torch.cat(K_mols_ref_by_species[i], dim=0)
+            K_ref_ref = _GPR._aev_kernel(aev_ivm_allz[i][:n_ref[i], :], aev_ivm_allz[i][:n_ref[i], :])
+            y_ref = _GPR._fit_sparse_gpr(values, K_mols_ref, K_ref_ref, sigma)
+            if y_ref.shape[0] < aev_ivm_allz[i].shape[0]:
+                y_ref_padded = _torch.zeros(aev_ivm_allz[i].shape[0], dtype=dtype, device=device)
+                y_ref_padded[:y_ref.shape[0]] = y_ref
+                ref_values_s.append(y_ref_padded)
+            else:
+                ref_values_s.append(y_ref)
 
         return _pad_to_max(ref_values_s)
 
@@ -265,8 +344,13 @@ class EMLETrainer:
                 Forward loss.
             """
             if use_minibatch:
-                dataset = TensorDataset(*args)
+                tensor_keys = [k for k in kwargs if isinstance(kwargs[k], _torch.Tensor)]
+                tensor_values = [kwargs[k] for k in tensor_keys]
+                lengths = [t.shape[0] for t in tensor_values]
+                assert all(l == lengths[0] for l in lengths), "All tensors must have same batch dimension"
+                dataset = TensorDataset(*tensor_values)
                 loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+
                 for epoch in range(epochs):
                     loss_instance.train()
                     running_loss = 0.0
@@ -274,9 +358,10 @@ class EMLETrainer:
                     running_count = 0
                     running_max_error = 0.0
                     for batch in loader:
+                        batch_dict = dict(zip(tensor_keys, batch))
                         optimizer.zero_grad()
-                        loss, rmse, max_error = loss_instance(*batch, **kwargs)
-                        loss.backward()
+                        loss, rmse, max_error = loss_instance(*args, **batch_dict)
+                        loss.backward(retain_graph=True)
                         optimizer.step()
                         batch_size_actual = batch[0].shape[0]
                         running_loss += loss.item() * batch_size_actual
@@ -495,34 +580,113 @@ class EMLETrainer:
             dtype=dtype,
             device=device,
         )
-        aev_mols = emle_aev_computer(zid_train, xyz_train)
-        aev_mask = _torch.sum(aev_mols.reshape(-1, aev_mols.shape[-1]) ** 2, dim=0) > 0
 
-        aev_mols = aev_mols[:, :, aev_mask]
-        emle_aev_computer = _EMLEAEVComputer(
-            num_species=computer_n_species,
-            zid_map=computer_zid_map,
-            mask=aev_mask,
-            dtype=dtype,
-            device=device,
-        )
+        if not use_minibatch:
+            # Compute the AEVs and corresponding mask for the entire training set in a single batch,
+            # and store them in memory for subsequent use.
+            aev_mols = emle_aev_computer(zid_train, xyz_train)
+            aev_mask = _torch.sum(aev_mols.reshape(-1, aev_mols.shape[-1]) ** 2, dim=0) > 0
+
+            aev_mols = aev_mols[:, :, aev_mask]
+            emle_aev_computer = _EMLEAEVComputer(
+                num_species=computer_n_species,
+                zid_map=computer_zid_map,
+                mask=aev_mask,
+                dtype=dtype,
+                device=device,
+            )
+        else:
+            # Calculate AEVs in batches to save memory.
+            n_samples = zid_train.shape[0]
+            aev_filenames = []
+            aev_mask = None
+            
+            # Calculate global mask
+            for i in range(0, n_samples, batch_size):
+                _logger.info(f"Calculating AEVs for batch {i}/{n_samples}")
+                z_batch = zid_train[i:i + batch_size]
+                xyz_batch = xyz_train[i:i + batch_size]
+
+                aev_batch = emle_aev_computer(z_batch, xyz_batch)  # shape: [B, A, F]
+                batch_mask = _torch.sum(aev_batch.reshape(-1, aev_batch.shape[-1]) ** 2, dim=0) > 0
+
+                if aev_mask is None:
+                    aev_mask = batch_mask
+                else:
+                    aev_mask |= batch_mask  # logical OR across batches
+
+                del aev_batch
+                _torch.cuda.empty_cache()
+
+            emle_aev_computer = _EMLEAEVComputer(
+                num_species=computer_n_species,
+                zid_map=computer_zid_map,
+                mask=aev_mask,
+                dtype=dtype,
+                device=device,
+            )
+
+            # Create directory for batches
+            batch_dir = "batches"
+            _os.makedirs(batch_dir, exist_ok=True)
+
+            # Save masked AEVs to files
+            for i in range(0, n_samples, batch_size):
+                _logger.info(f"Saving masked AEVs for batch {i}/{n_samples}")
+                z_batch = zid_train[i:i + batch_size]
+                xyz_batch = xyz_train[i:i + batch_size]
+
+                aev_batch = emle_aev_computer(z_batch, xyz_batch)      # Now with mask applied internally
+                filename = _os.path.join(batch_dir, f"aev_mols_batch_{i}.pt")
+                _torch.save(aev_batch.cpu(), filename)
+
+                aev_filenames.append(filename)
+
+                del aev_batch
+                _torch.cuda.empty_cache()
 
         # "Fit" q_core (just take averages over the entire training set).
         q_core_z = _mean_by_z(q_core_train, zid_train)
 
-        _logger.info("Performing IVM...")
-        # Create an array of (molecule_id, atom_id) pairs (as in the full
-        # dataset) for the training set. This is needed to be able to locate
-        # atoms/molecules in the original dataset that were picked by IVM.
-        n_mols, max_atoms = q_train.shape
-        atom_ids = _torch.stack(
-            _torch.meshgrid(_torch.arange(n_mols), _torch.arange(max_atoms)), dim=-1
-        ).to(device)
+        if not use_minibatch:
+            _logger.info("Performing IVM...")
+            # Create an array of (molecule_id, atom_id) pairs (as in the full
+            # dataset) for the training set. This is needed to be able to locate
+            # atoms/molecules in the original dataset that were picked by IVM.
+            n_mols, max_atoms = q_train.shape
+            atom_ids = _torch.stack(
+                _torch.meshgrid(_torch.arange(n_mols), _torch.arange(max_atoms)), dim=-1
+            ).to(device)
 
-        # Perform IVM.
-        ivm_mol_atom_ids_padded, aev_ivm_allz = _IVM.perform_ivm(
-            aev_mols, z_train, atom_ids, species, ivm_thr, sigma
-        )
+            # Perform IVM.
+            ivm_mol_atom_ids_padded, aev_ivm_allz = _IVM.perform_ivm(
+                aev_mols, z_train, atom_ids, species, ivm_thr, sigma
+            )
+        else:
+            _logger.info("Performing Lazy IVM...")
+            # Build (mol_idx, atom_idx) grid for each batch
+            n_mols, max_atoms = q_train.shape
+            mol_ids = _torch.arange(n_mols)
+            atom_ids = _torch.arange(max_atoms)
+
+            # Split into batches
+            z_mols_batches = [z_train[i:i+batch_size] for i in range(0, n_mols, batch_size)]
+            atom_ids_batches = []
+
+            for i in range(0, n_mols, batch_size):
+                mol_range = _torch.arange(i, min(i + batch_size, n_mols))
+                atom_grid = _torch.stack(_torch.meshgrid(mol_range, atom_ids, indexing='ij'), dim=-1)
+                atom_ids_batches.append(atom_grid)  
+
+            # Perform Lazy IVM
+            ivm_mol_atom_ids_padded, aev_ivm_allz = _IVM.perform_ivm_lazy(
+                aev_filenames=aev_filenames,
+                z_batches=z_mols_batches,
+                atom_id_batches=atom_ids_batches,
+                species=species,
+                thr=ivm_thr,
+                sigma=sigma,
+            )
 
         ref_features = _pad_to_max(aev_ivm_allz)
         ref_mask = ivm_mol_atom_ids_padded[:, :, 0] > -1
@@ -532,7 +696,10 @@ class EMLETrainer:
             _logger.info(f"{atom_z:2d}: {n:5d}")
 
         # Fit s (pure GPR, no fancy optimization needed).
-        ref_values_s = self._train_s(s_train, zid_train, aev_mols, aev_ivm_allz, sigma)
+        if not use_minibatch:
+            ref_values_s = self._train_s(s_train, zid_train, aev_mols, aev_ivm_allz, sigma)
+        else:
+            ref_values_s = self._train_s_lazy(s_train, zid_train, aev_filenames, aev_ivm_allz, sigma)
 
         # Good for debugging
         # _torch.autograd.set_detect_anomaly(True)
