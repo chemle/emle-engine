@@ -107,6 +107,10 @@ class EMLECalculator:
         interpolate_steps=None,
         restart=False,
         device=None,
+        lj_mode=None,
+        lj_params_mm=None,
+        lj_params_qm=None,
+        lj_xyz_qm=None,
         orca_template=None,
         energy_frequency=0,
         energy_file="emle_energy.txt",
@@ -301,6 +305,26 @@ class EMLECalculator:
                 ! Angs NoUseSym
                 *xyzfile 0 1 inpfile.xyz
 
+        lj_mode: str
+            The mode to use for the Lennard-Jones parameters. Options are:
+                "fixed":
+                    Lennard-Jones parameters are fixed and provided in lj_params_qm.
+                "flexible":
+                    Lennard-Jones parameters are determined from a configuration.
+                    This requires lj_xyz_qm and atomic_numbers to be provided.
+
+        lj_params_mm: List[List[float]], Tuple[List[List[Float]]], numpy.ndarray, torch.Tensor
+            Lennard-Jones parameters for each atom in the MM region (sigma, epsilon) in units of nanometers (sigma)
+            and kJ/mol (epsilon). This is required for both "fixed" and "flexible" modes.
+
+        lj_params_qm: List[List[float]], Tuple[List[List[Float]]], numpy.ndarray, torch.Tensor
+            Lennard-Jones parameters for each atom in the QM region (sigma, epsilon) in units of nanometers (sigma)
+            and kJ/mol (epsilon). This is required if the "lj_mode" is "fixed" and lj_xyz_qm is not provided.
+            Takes precedence over lj_xyz_qm.
+
+        lj_xyz_qm: List[List[float]], Tuple[List[List[Float]]], numpy.ndarray, torch.Tensor
+            Positions of the atoms in the QM region for which the Lennard-Jones parameters are to be determined.
+
         energy_frequency: int
             The frequency of logging energies to file. If 0, then no energies are
             logged.
@@ -459,6 +483,47 @@ class EMLECalculator:
                 raise TypeError(msg)
             self._qm_charge = qm_charge
 
+        if lj_mode is not None:
+            if lj_mode.lower().replace(" ", "") not in ["fixed", "flexible"]:
+                msg = f"Unsupported Lennard-Jones mode: {lj_mode}. Options are: 'fixed', 'flexible'"
+                _logger.error(msg)
+                raise ValueError(msg)
+
+            self._lj_mode = lj_mode.lower().replace(" ", "")
+
+            if lj_params_mm is None:
+                msg = (
+                    "lj_params_mm must be provided if lj_mode is 'fixed' or 'flexible'"
+                )
+                _logger.error(msg)
+                raise ValueError(msg)
+            else:
+                if not isinstance(
+                    lj_params_mm, (list, tuple, _np.ndarray, _torch.Tensor)
+                ) or not isinstance(
+                    lj_params_mm[0], (list, tuple, _np.ndarray, _torch.Tensor)
+                ):
+                    msg = "lj_params_mm must be a list of lists, tuples, or arrays"
+                    _logger.error(msg)
+                    raise TypeError(msg)
+                self._lj_params_mm = _torch.tensor(
+                    lj_params_mm, dtype=self._device.dtype, device=self._device
+                )
+
+            if lambda_interpolate is not None:
+                if not isinstance(
+                    lj_params_mm, (list, tuple, _np.ndarray, _torch.Tensor)
+                ) or not isinstance(
+                    lj_params_mm[0], (list, tuple, _np.ndarray, _torch.Tensor)
+                ):
+                    msg = "When using interpolation, 'lj_params_qm' must be provided and must be a list of lists, tuples, or arrays."
+                    _logger.error(msg)
+                    raise TypeError(msg)
+
+                self._lj_params_qm = _torch.tensor(
+                    lj_params_qm, dtype=self._device.dtype, device=self._device
+                )
+
         # Create the EMLE model instance.
         self._emle = _EMLE(
             model=model,
@@ -468,6 +533,9 @@ class EMLECalculator:
             mm_charges=self._mm_charges,
             qm_charge=self._qm_charge,
             device=self._device,
+            lj_mode=lj_mode,
+            lj_params_qm=lj_params_qm,
+            lj_xyz_qm=lj_xyz_qm,
         )
 
         # Validate the backend(s).
@@ -868,6 +936,8 @@ class EMLECalculator:
                 method="mm",
                 mm_charges=self._mm_charges,
                 device=self._device,
+                lj_mode="fixed" if self._lj_mode is not None else None,
+                lj_params_qm=self._lj_params_qm,
             )
 
         else:
@@ -1131,6 +1201,7 @@ class EMLECalculator:
         xyz_qm,
         xyz_mm,
         atoms=None,
+        lj_params_mm=None,
         charge=0,
     ):
         """
@@ -1153,6 +1224,9 @@ class EMLECalculator:
 
         atoms: ase.Atoms
             The atoms object for the QM region.
+
+        lj_params_mm: numpy.ndarray, (N_MM_ATOMS, 2, 2)
+            The LJ parameters for the MM atoms.
 
         charge: int
             The total charge of the QM region.
@@ -1286,7 +1360,9 @@ class EMLECalculator:
         if base_model is None:
             try:
                 if len(xyz_mm) > 0:
-                    E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
+                    E = self._emle(
+                        atomic_numbers, charges_mm, xyz_qm, xyz_mm, lj_params_mm, charge
+                    )
                     dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
                         E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
                     )
@@ -1506,12 +1582,17 @@ class EMLECalculator:
                 _logger.error(msg)
                 raise ValueError(msg)
 
+        if self._lj_mode is not None:
+            # Determine LJ parameters for the QM region.
+            lj_params_mm = self._lj_params_mm[idx_mm, :, :]
+
         # Compute the energy and gradients.
         E_vac, grad_vac, E_tot, grad_qm, grad_mm = self._calculate_energy_and_gradients(
             atomic_numbers,
             charges_mm,
             xyz_qm,
             xyz_mm,
+            lj_params_mm=lj_params_mm,
         )
 
         # Store the number of MM atoms.

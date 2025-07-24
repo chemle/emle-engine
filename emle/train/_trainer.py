@@ -566,7 +566,7 @@ class EMLETrainer:
         # Update GPR constants for chi
         # (now inconsistent since not updated after the last epoch)
         self._qeq_loss._update_chi_gpr(emle_base)
-        
+
         _logger.debug(f"Optimized a_QEq: {emle_base.a_QEq.data.item()}")
         # Fit a_Thole, k_Z (uses volumes predicted by QEq model).
         _logger.info("Fitting a_Thole and k_Z values...")
@@ -604,7 +604,7 @@ class EMLETrainer:
             # Update GPR constants for sqrtk
             # (now inconsistent since not updated after the last epoch)
             self._thole_loss._update_sqrtk_gpr(emle_base)
-        
+
         if c6 is not None:
             _logger.info("Fitting ref_values_c6 values...")
             self._train_model(

@@ -153,7 +153,7 @@ class EMLE(_torch.nn.Module):
                     Lennard-Jones parameters and interactions are not included.
 
         lj_params_qm: List[List[float]], Tuple[List[List[Float]]], numpy.ndarray, torch.Tensor
-            Lennard-Jones parameters for each atom in the QM region (sigma, epsilon) in units of Angstrom (sigma)
+            Lennard-Jones parameters for each atom in the QM region (sigma, epsilon) in units of nanometers (sigma)
             and kJ/mol (epsilon). This is required if the "lj_mode" is "fixed" and lj_param_qm is not provided.
             Takes precedence over lj_xyz_qm.
 
@@ -281,16 +281,12 @@ class EMLE(_torch.nn.Module):
                         raise TypeError(
                             "lj_params_qm must be a list of lists, tuples, or arrays"
                         )
-                    if len(lj_params_qm) != len(atomic_numbers):
-                        raise ValueError(
-                            "lj_params_qm must have the same length as the number of QM atoms"
-                        )
 
                     lj_params_qm = _torch.tensor(
                         lj_params_qm, dtype=dtype, device=device
                     )
                     self._lj_epsilon_qm = lj_params_qm[:, 1] / _HARTREE_TO_KJ_MOL
-                    self._lj_sigma_qm = lj_params_qm[:, 0] / _BOHR_TO_ANGSTROM
+                    self._lj_sigma_qm = lj_params_qm[:, 0] * 10.0 / _BOHR_TO_ANGSTROM
                     lj_xyz_qm = None
                 else:
                     if not isinstance(
@@ -301,6 +297,12 @@ class EMLE(_torch.nn.Module):
                         raise TypeError(
                             "lj_xyz_qm must be a list of lists, tuples, or arrays"
                         )
+
+                    if atomic_numbers is None:
+                        raise ValueError(
+                            "atomic_numbers must be provided if LJ parameters are to be determined from a configuration"
+                        )
+
                     if len(lj_xyz_qm) != len(atomic_numbers):
                         raise ValueError(
                             "lj_xyz_qm must have the same length as the number of QM atoms"
@@ -438,15 +440,30 @@ class EMLE(_torch.nn.Module):
             dtype=dtype,
         )
 
-        if lj_xyz_qm:
+        if lj_xyz_qm is not None:
+            raise NotImplementedError(
+                "LJ parameters for fixed mode with a configuration is not implemented yet"
+            )
+            """
+            atomic_numbers = _torch.as_tensor(atomic_numbers)
+            lj_xyz_qm = _torch.as_tensor(lj_xyz_qm)
+            qm_charge = _torch.as_tensor(qm_charge)
+            if atomic_numbers.ndim == 1:
+                atomic_numbers = atomic_numbers.unsqueeze(0)
+            if lj_xyz_qm.ndim == 2:
+                lj_xyz_qm = lj_xyz_qm.unsqueeze(0)
+            if qm_charge.ndim == 0:
+                qm_charge = qm_charge.unsqueeze(0)
+
             # Get the LJ parameters for the passed configuration
             _, _, _, A_thole, c6 = self._emle_base(
-                self.atomic_numbers, lj_xyz_qm, qm_charge
+                atomic_numbers, lj_xyz_qm, qm_charge
             )
             alpha_qm = self._emle_base.get_isotropic_polarizabilities(A_thole)
             sigma_qm, epsilon_qm = self._emle_base.get_lj_parameters(c6, alpha_qm)
             self._lj_sigma_qm = sigma_qm
             self._lj_epsilon_qm = epsilon_qm
+            """
 
     def to(self, *args, **kwargs):
         """
@@ -620,7 +637,7 @@ class EMLE(_torch.nn.Module):
 
         # Compute the LJ energy.
         if self._lj_mode is not None:
-            sigma_mm = lj_params_mm[:, :, 0] * 10.0 / _BOHR_TO_ANGSTROM 
+            sigma_mm = lj_params_mm[:, :, 0] * 10.0 / _BOHR_TO_ANGSTROM
             epsilon_mm = lj_params_mm[:, :, 1] / _HARTREE_TO_KJ_MOL
 
             if self._lj_mode == "flexible":
@@ -629,9 +646,6 @@ class EMLE(_torch.nn.Module):
             elif self._lj_mode == "fixed":
                 sigma_qm = self._lj_sigma_qm.expand(batch_size, -1)
                 epsilon_qm = self._lj_epsilon_qm.expand(batch_size, -1)
-            import numpy as np
-            np.savetxt("sigma_qm.txt", sigma_qm.detach().cpu().numpy())
-            np.savetxt("epsilon_qm.txt", epsilon_qm.detach().cpu().numpy())
 
             E_lj = self._emle_base.get_lj_energy(
                 sigma_qm, epsilon_qm, sigma_mm, epsilon_mm, mesh_data

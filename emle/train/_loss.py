@@ -358,9 +358,7 @@ class DispersionCoefficientLoss(_BaseLoss):
         s, q_core, q_val, A_thole, c6 = self._emle_base(atomic_numbers, xyz, q_mol)
         # Calculate isotropic polarizabilities if not already calculated.
         if self._pol is None:
-            self._pol = self._emle_base.get_isotropic_polarizabilities(
-                A_thole
-            ).detach()
+            self._pol = self._emle_base.get_isotropic_polarizabilities(A_thole).detach()
 
         # Mask out dummy atoms.
         mask = atomic_numbers > 0

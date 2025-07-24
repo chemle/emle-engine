@@ -118,7 +118,14 @@ class EMLEBase(_torch.nn.Module):
             raise TypeError("'params' must be of type 'dict'")
         if not all(
             k in params
-            for k in ["a_QEq", "a_Thole", "ref_values_s", "ref_values_chi", "k_Z", "ref_values_c6"]
+            for k in [
+                "a_QEq",
+                "a_Thole",
+                "ref_values_s",
+                "ref_values_chi",
+                "k_Z",
+                "ref_values_c6",
+            ]
         ):
             raise ValueError(
                 "'params' must contain keys 'a_QEq', 'a_Thole', 'ref_values_s', 'ref_values_chi', and 'k_Z'"
