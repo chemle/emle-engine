@@ -1327,12 +1327,15 @@ class EMLECalculator:
                 _logger.error(msg)
                 raise RuntimeError(msg)
 
-            if (self._qbc_deviation):
+            if self._qbc_deviation:
                 E_std = _torch.std(base_model._E_vac_qbc).item()
                 max_f_std = _torch.max(_torch.std(base_model._grads_qbc, axis=0)).item()
                 with open(self._qbc_deviation, "a") as f:
                     f.write(f"{E_std:12.5f}{max_f_std:12.5f}\n")
-                if self._qbc_deviation_threshold and max_f_std > self._qbc_deviation_threshold:
+                if (
+                    self._qbc_deviation_threshold
+                    and max_f_std > self._qbc_deviation_threshold
+                ):
                     msg = "Force deviation threshold reached!"
                     raise ValueError(msg)
 
@@ -1371,7 +1374,7 @@ class EMLECalculator:
             else:
                 offset = int(not self._restart)
                 lam = self._lambda_interpolate[0] + (
-                    (self._step / (self._interpolate_steps - offset))
+                    self._step / (self._interpolate_steps - offset)
                 ) * (self._lambda_interpolate[1] - self._lambda_interpolate[0])
                 if lam < 0.0:
                     lam = 0.0
