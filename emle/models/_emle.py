@@ -296,6 +296,11 @@ class EMLE(_torch.nn.Module):
                 if "sqrtk_ref" in params
                 else None
             ),
+            "ref_values_C6": (
+                _torch.tensor(params["ref_values_C6"], dtype=dtype, device=device)
+                if "ref_values_C6" in params
+                else None
+            ),
         }
 
         if method == "mm":
@@ -371,6 +376,7 @@ class EMLE(_torch.nn.Module):
             q_core,
             emle_aev_computer=emle_aev_computer,
             alpha_mode=self._alpha_mode,
+            lj_mode=self._lj_method,
             species=params.get("species", self._species),
             device=device,
             dtype=dtype,
@@ -499,11 +505,8 @@ class EMLE(_torch.nn.Module):
                 2, batch_size, dtype=self._xyz_qm.dtype, device=self._xyz_qm.device
             )
 
-        # Get the parameters from the base model:
-        #    valence widths, core charges, valence charges, A_thole tensor
-        # These are returned as batched tensors, so we need to extract the
-        # first element of each.
-        s, q_core, q_val, A_thole = self._emle_base(
+        # Get the parameters from the base model.
+        s, q_core, q_val, A_thole, C6 = self._emle_base(
             self._atomic_numbers,
             self._xyz_qm,
             qm_charge,
@@ -545,41 +548,9 @@ class EMLE(_torch.nn.Module):
 
         if self._lj_method is not None:
             if self._lj_method == "dynamic":
-                # Calculate the isotropic polarizabilities and cube of the vdW radii.
-                alpha_qm = self._emle_base.calculate_isotropic_polarizabilities(A_thole)
-                rcubed_qm = -60 * q_val * s**3 / ANGSTROM_TO_BOHR**3
-
-                # Calculate the LJ parameters.
-                sigma_qm, epsilon_qm = self._emle_base.calculate_atomic_lj_parameters(
-                    self._atomic_numbers,
-                    rcubed_qm,
-                    alpha_qm,
-                )
-
-                # TODO: How to handle this properly?
-                # Calculate the LJ parameters for the MM atoms.
-                sigma_tip3p_O = 3.0050806999206543 * 1.8897259886  # ≈ 5.676 Bohr
-                epsilon_tip3p_O = (
-                    0.4382217228412628 * 0.00038087980
-                )  # ≈ 0.000167 Hartree
-
-                # Hydrogen
-                sigma_tip3p_H = 2.608452081680298 * 1.8897259886  # ≈ 4.927 Bohr
-                epsilon_tip3p_H = (
-                    0.01849512942135334 * 0.00038087980
-                )  # ≈ 7.043e-6 Hartree
-
-                sigma_mm = charges_mm
-                sigma_mm[charges_mm < 0] = sigma_tip3p_O
-                sigma_mm[charges_mm > 0] = sigma_tip3p_H
-                epsilon_mm = charges_mm
-                epsilon_mm[charges_mm < 0] = epsilon_tip3p_O
-                epsilon_mm[charges_mm > 0] = epsilon_tip3p_H
-
-                # Compute the LJ energy.
-                E_lj = self._emle_base.get_lj_energy(
-                    sigma_qm, epsilon_qm, sigma_mm, epsilon_mm, mesh_data
-                )
+                alpha_qm = self._emle_base.get_isotropic_polarizabilities(A_thole)
+                sigma_qm, epsilon_qm = self._emle_base.get_lj_parameters(C6, alpha_qm)
+                E_lj = self._emle_base.get_lj_energy(sigma_qm, epsilon_qm, sigma_mm, epsilon_mm, mesh_data)
             else:
                 raise NotImplementedError("Static LJ model not implemented")
 

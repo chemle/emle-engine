@@ -43,7 +43,6 @@ try:
 except:
     _has_nnpops = False
 
-
 class EMLEBase(_torch.nn.Module):
     """
     Base class for the EMLE model. This is used to compute valence shell
@@ -55,30 +54,6 @@ class EMLEBase(_torch.nn.Module):
     # Store the list of supported species.
     _species = [1, 6, 7, 8, 16]
 
-    # Values in atomic units, taken from:
-    # Chu, X., & Dalgarno, A. (2004).
-    # Linear response time-dependent density functional theory for van der Waals coefficients.
-    # The Journal of Chemical Physics, 121(9), 4083--4088. http://doi.org/10.1063/1.1779576
-    # Bfree: Ha.Bohr**6 (https://pubs.acs.org/doi/10.1021/acs.jctc.6b00027) #TODO: convert to Angstrom^6?
-    C6_COEFFICIENTS = {
-        0: 0.0,  # Dummy atom
-        1: 6.5,  # H
-        6: 46.6,  # C
-        7: 24.2,  # N
-        8: 15.6,  # O
-        16: 134.0,  # S
-    }
-
-    # Calculated free atom volumes in Angstrom^3 at B3LYP/cc-pVTZ #TODO: convert to Bohr^3?
-    RCUBED_FREE = {
-        0: 0.0,  # Dummy atom
-        1: 1.172520801342987,  # H
-        6: 5.044203900156338,  # C
-        7: 3.7853134153705934,  # N
-        8: 3.135943377417264,  # O
-        16: 11.015796687279208,  # S
-    }
-
     def __init__(
         self,
         params,
@@ -88,6 +63,7 @@ class EMLEBase(_torch.nn.Module):
         emle_aev_computer=None,
         species=None,
         alpha_mode="species",
+        lj_mode=None,
         device=None,
         dtype=None,
     ):
@@ -116,6 +92,10 @@ class EMLEBase(_torch.nn.Module):
                 "reference":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
+        
+        lj_mode: str
+            Mode for calculating the Lennard-Jones potential. 
+            If None, the Lennard-Jones potential is not calculated.
 
         emle_aev_computer: EMLEAEVComputer
             EMLE AEV computer instance used to compute AEVs (masked and normalized).
@@ -227,6 +207,18 @@ class EMLEBase(_torch.nn.Module):
                     "using 'reference' alpha mode."
                 )
                 raise ValueError(msg)
+            
+        if lj_mode is not None:
+            assert lj_mode in ["static", "dynamic"], "Invalid Lennard-Jones mode"
+            try:
+                self.ref_values_C6 = _torch.nn.Parameter(params["ref_values_C6"])
+            except:
+                msg = (
+                    "Missing 'ref_values_C6' key in params. This is required when "
+                    "using the Lennard-Jones potential."
+                )
+                raise ValueError(msg)
+        self._lj_mode = lj_mode
 
         # Validate the species.
         if species is None:
@@ -249,19 +241,6 @@ class EMLEBase(_torch.nn.Module):
             species_map[s] = i
         species_map = _torch.tensor(species_map, dtype=_torch.int64, device=device)
 
-        # Create lookup tensors for free atom volumes and C6 coefficients
-        self._vol_isolated = _torch.zeros(
-            max(self.RCUBED_FREE.keys()) + 1, dtype=_torch.float
-        )
-        for Z, vol in self.RCUBED_FREE.items():
-            self._vol_isolated[Z] = vol
-
-        self._c6 = _torch.zeros(
-            max(self.C6_COEFFICIENTS.keys()) + 1, dtype=_torch.float
-        )
-        for Z, c6_coeff in self.C6_COEFFICIENTS.items():
-            self._c6[Z] = c6_coeff
-
         # Compute the inverse of the K matrix.
         Kinv = self._get_Kinv(ref_features, 1e-3)
 
@@ -276,6 +255,12 @@ class EMLEBase(_torch.nn.Module):
         else:
             ref_mean_sqrtk, c_sqrtk = self._get_c(n_ref, self.ref_values_sqrtk, Kinv)
 
+        if lj_mode is not None:
+            ref_mean_C6, c_C6 = self._get_c(n_ref, self.ref_values_C6, Kinv)
+        else:
+            ref_mean_C6 = _torch.zeros_like(ref_mean_s, dtype=dtype, device=device)
+            c_C6 = _torch.zeros_like(c_s, dtype=dtype, device=device)
+
         # Store the current device.
         self._device = device
 
@@ -288,9 +273,11 @@ class EMLEBase(_torch.nn.Module):
         self.register_buffer("_ref_mean_s", ref_mean_s)
         self.register_buffer("_ref_mean_chi", ref_mean_chi)
         self.register_buffer("_ref_mean_sqrtk", ref_mean_sqrtk)
+        self.register_buffer("_ref_mean_C6", ref_mean_C6)
         self.register_buffer("_c_s", c_s)
         self.register_buffer("_c_chi", c_chi)
         self.register_buffer("_c_sqrtk", c_sqrtk)
+        self.register_buffer("_c_C6", c_C6)
 
     def to(self, *args, **kwargs):
         """
@@ -305,9 +292,11 @@ class EMLEBase(_torch.nn.Module):
         self._ref_mean_s = self._ref_mean_s.to(*args, **kwargs)
         self._ref_mean_chi = self._ref_mean_chi.to(*args, **kwargs)
         self._ref_mean_sqrtk = self._ref_mean_sqrtk.to(*args, **kwargs)
+        self._ref_mean_C6 = self._ref_mean_C6.to(*args, **kwargs)
         self._c_s = self._c_s.to(*args, **kwargs)
         self._c_chi = self._c_chi.to(*args, **kwargs)
         self._c_sqrtk = self._c_sqrtk.to(*args, **kwargs)
+        self._c_C6 = self._c_C6.to(*args, **kwargs)
         self.k_Z = _torch.nn.Parameter(self.k_Z.to(*args, **kwargs))
 
         # Check for a device type in args and update the device attribute.
@@ -331,9 +320,11 @@ class EMLEBase(_torch.nn.Module):
         self._ref_mean_s = self._ref_mean_s.cuda(**kwargs)
         self._ref_mean_chi = self._ref_mean_chi.cuda(**kwargs)
         self._ref_mean_sqrtk = self._ref_mean_sqrtk.cuda(**kwargs)
+        self._ref_mean_C6 = self._ref_mean_C6.cuda(**kwargs)
         self._c_s = self._c_s.cuda(**kwargs)
         self._c_chi = self._c_chi.cuda(**kwargs)
         self._c_sqrtk = self._c_sqrtk.cuda(**kwargs)
+        self._c_C6 = self._c_C6.cuda(**kwargs)
         self.k_Z = _torch.nn.Parameter(self.k_Z.cuda(**kwargs))
 
         # Update the device attribute.
@@ -353,10 +344,12 @@ class EMLEBase(_torch.nn.Module):
         self._n_ref = self._n_ref.cpu(**kwargs)
         self._ref_mean_s = self._ref_mean_s.cpu(**kwargs)
         self._ref_mean_chi = self._ref_mean_chi.cpu(**kwargs)
-        self._ref_mean_sqrtk = self._ref_mean_sqrtk.to(**kwargs)
+        self._ref_mean_sqrtk = self._ref_mean_sqrtk.cpu(**kwargs)
+        self._ref_mean_C6 = self._ref_mean_C6.cpu(**kwargs)
         self._c_s = self._c_s.cpu(**kwargs)
         self._c_chi = self._c_chi.cpu(**kwargs)
         self._c_sqrtk = self._c_sqrtk.cpu(**kwargs)
+        self._c_C6 = self._c_C6.cpu(**kwargs)
         self.k_Z = _torch.nn.Parameter(self.k_Z.cpu(**kwargs))
 
         # Update the device attribute.
@@ -375,9 +368,11 @@ class EMLEBase(_torch.nn.Module):
         self._ref_mean_s = self._ref_mean_s.double()
         self._ref_mean_chi = self._ref_mean_chi.double()
         self._ref_mean_sqrtk = self._ref_mean_sqrtk.double()
+        self._ref_mean_C6 = self._ref_mean_C6.double()
         self._c_s = self._c_s.double()
         self._c_chi = self._c_chi.double()
         self._c_sqrtk = self._c_sqrtk.double()
+        self._c_C6 = self._c_C6.double()
         self.k_Z = _torch.nn.Parameter(self.k_Z.double())
         return self
 
@@ -392,9 +387,11 @@ class EMLEBase(_torch.nn.Module):
         self._ref_mean_s = self._ref_mean_s.float()
         self._ref_mean_chi = self._ref_mean_chi.float()
         self._ref_mean_sqrtk = self._ref_mean_sqrtk.float()
+        self._ref_mean_C6 = self._ref_mean_C6.float()
         self._c_s = self._c_s.float()
         self._c_chi = self._c_chi.float()
         self._c_sqrtk = self._c_sqrtk.float()
+        self._c_C6 = self._c_C6.float()
         self.k_Z = _torch.nn.Parameter(self.k_Z.float())
         return self
 
@@ -421,8 +418,9 @@ class EMLEBase(_torch.nn.Module):
         result: (torch.Tensor (N_BATCH, N_QM_ATOMS,),
                  torch.Tensor (N_BATCH, N_QM_ATOMS,),
                  torch.Tensor (N_BATCH, N_QM_ATOMS,),
-                 torch.Tensor (N_BATCH, N_QM_ATOMS * 3, N_QM_ATOMS * 3,))
-            Valence widths, core charges, valence charges, A_thole tensor
+                 torch.Tensor (N_BATCH, N_QM_ATOMS * 3, N_QM_ATOMS * 3,),
+                 torch.Tensor (N_BATCH, N_QM_ATOMS,))
+            Valence widths, core charges, valence charges, A_thole tensor, C6 coefficients
         """
 
         # Mask for padded coordinates.
@@ -460,7 +458,12 @@ class EMLEBase(_torch.nn.Module):
 
         A_thole = self._get_A_thole(r_data, s, q_val, k, self.a_Thole)
 
-        return s, q_core, q_val, A_thole
+        if self._lj_mode is not None:
+            C6 = self._gpr(aev, self._ref_mean_C6, self._c_C6, species_id)
+        else:
+            C6 = None
+
+        return s, q_core, q_val, A_thole, C6
 
     @classmethod
     def _get_Kinv(cls, ref_features, sigma):
@@ -1056,6 +1059,7 @@ class EMLEBase(_torch.nn.Module):
     @staticmethod
     def _get_T0_slater(r: Tensor, s: Tensor) -> Tensor:
         """
+        # Get distances
         Internal method, calculates T0 tensor for Slater densities.
 
         Parameters
@@ -1073,6 +1077,7 @@ class EMLEBase(_torch.nn.Module):
         results: torch.Tensor (N_BATCH, MAX_QM_ATOMS, MAX_MM_ATOMS)
         """
         return (1 - (1 + r / (s * 2)) * _torch.exp(-r / s)) / r
+    
 
     @staticmethod
     def get_lj_energy(
@@ -1124,15 +1129,15 @@ class EMLEBase(_torch.nn.Module):
         sigma_r_inv_12 = sigma_r_inv_6 * sigma_r_inv_6
 
         # Calculate pairwise energy matrix (N_BATCH, N_QM, N_MM)
-        pairwise_energy = 4 * epsilon * (sigma_r_inv_12 - sigma_r_inv_6)
+        lj_energy = 4 * epsilon * (sigma_r_inv_12 - sigma_r_inv_6)
 
         # Sum over QM and MM atoms for each batch element
-        total_energy = pairwise_energy.sum(dim=(1, 2))
+        lj_energy = lj_energy.sum(dim=(1, 2))
 
-        return total_energy
+        return lj_energy
 
     @staticmethod
-    def calculate_isotropic_polarizabilities(A_thole: _torch.Tensor) -> _torch.Tensor:
+    def get_isotropic_polarizabilities(A_thole: _torch.Tensor) -> _torch.Tensor:
         """
         Calculate isotropic polarizabilities from the A_thole tensor.
 
@@ -1176,8 +1181,8 @@ class EMLEBase(_torch.nn.Module):
 
         return _get_traces(A_thole) / 3.0
 
-    def calculate_atomic_lj_parameters(
-        self, atomic_numbers: Tensor, rcubed: Tensor, alpha: Tensor
+    def get_lj_parameters(
+        self, c6: _torch.Tensor, alpha: _torch.Tensor
     ) -> Tuple[Tensor, Tensor]:
         """
         Calculate Lennard-Jones sigma and epsilon parameters.
@@ -1185,14 +1190,11 @@ class EMLEBase(_torch.nn.Module):
         Parameters
         ----------
 
-        atomic_numbers : torch.Tensor(N_BATCH, N_ATOMS)
-            Atomic numbers of atoms in the molecule.
-
-        rcubed : torch.Tensor(N_BATCH, N_ATOMS)
-            Cube of the vdW radii of atoms in the molecule in Bohr^3.
-
-        alpha : torch.Tensor(N_BATCH, N_ATOMS)
-            Isotropic polarizabilities per atom in Bohr^3.
+        c6: _torch.Tensor(N_BATCH, N_ATOMS)
+            C6 coefficients per atom.
+        
+        alpha: _torch.Tensor(N_BATCH, N_ATOMS)
+            Isotropic polarizabilities per atom. 
 
         Returns
         -------
@@ -1200,37 +1202,9 @@ class EMLEBase(_torch.nn.Module):
         Tuple[torch.Tensor, torch.Tensor]
             Tuple containing the sigma (Bohr) and epsilon (Hartree) LJ parameters for each atom.
         """
-        # Mask out dummy atoms
-        mask = atomic_numbers > 0
-        alpha = alpha * mask
-        rcubed = rcubed * mask
-
-        # Get free atom volumes
-        try:
-            vol_isolated = self._vol_isolated[atomic_numbers]
-        except KeyError as e:
-            raise ValueError(f"Missing RCUBED_FREE entry for atomic number {e.args[0]}")
-
-        # Volume scaling factor
-        scaling = rcubed / vol_isolated
-
-        # Get C6 coefficients
-        try:
-            c6 = self._c6[atomic_numbers]
-        except KeyError as e:
-            raise ValueError(
-                f"Missing C6_COEFFICIENTS entry for atomic number {e.args[0]}"
-            )
-
-        # Scale C6 coefficients
-        c6_scaled = c6 * scaling**2
-
-        # Calculate vdW radius from polarizability (Fedorov-Tkatchenko relation)
         radius = 2.54 * alpha ** (1.0 / 7.0)
         rmin = 2 * radius
-
-        # Calculate Lennard-Jones parameters
         sigma = rmin / (2 ** (1.0 / 6.0))
-        epsilon = c6_scaled / (2 * rmin**6.0)
+        epsilon = c6 / (2 * rmin**6.0)
 
         return sigma, epsilon
