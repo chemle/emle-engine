@@ -333,7 +333,7 @@ class DispersionCoefficientLoss(_BaseLoss):
 
         self._pol = None
 
-    def forward(self, atomic_numbers, xyz, q_mol, C6_target):
+    def forward(self, atomic_numbers, xyz, q_mol, c6_target):
         """
         Forward pass.
 
@@ -348,14 +348,14 @@ class DispersionCoefficientLoss(_BaseLoss):
         q_mol: torch.Tensor(N_BATCH, MAX_N_ATOMS)
             Molecular charges.
 
-        C6_target: torch.Tensor(N_BATCH, MAX_N_ATOMS)
+        c6_target: torch.Tensor(N_BATCH, MAX_N_ATOMS)
             Target dispersion coefficients.
         """
         # Update reference values for C6.
-        self._update_C6_gpr(self._emle_base)
+        self._update_c6_gpr(self._emle_base)
 
         # Calculate C6.
-        s, q_core, q_val, A_thole, C6 = self._emle_base(atomic_numbers, xyz, q_mol)
+        s, q_core, q_val, A_thole, c6 = self._emle_base(atomic_numbers, xyz, q_mol)
         # Calculate isotropic polarizabilities if not already calculated.
         if self._pol is None:
             self._pol = self._emle_base.calculate_isotropic_polarizabilities(
@@ -364,8 +364,8 @@ class DispersionCoefficientLoss(_BaseLoss):
 
         # Mask out dummy atoms.
         mask = atomic_numbers > 0
-        target = C6_target[mask]
-        values = C6
+        target = c6_target[mask]
+        values = c6
         values = values[mask]
 
         # Calculate loss.
@@ -378,9 +378,9 @@ class DispersionCoefficientLoss(_BaseLoss):
         )
 
     @staticmethod
-    def _update_C6_gpr(emle_base):
-        emle_base._ref_mean_C6, emle_base._c_C6 = emle_base._get_c(
+    def _update_c6_gpr(emle_base):
+        emle_base._ref_mean_c6, emle_base._c_c6 = emle_base._get_c(
             emle_base._n_ref,
-            emle_base.ref_values_C6,
+            emle_base.ref_values_c6,
             emle_base._Kinv,
         )

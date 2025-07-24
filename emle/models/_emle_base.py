@@ -212,10 +212,10 @@ class EMLEBase(_torch.nn.Module):
         if lj_mode is not None:
             assert lj_mode in ["static", "dynamic"], "Invalid Lennard-Jones mode"
             try:
-                self.ref_values_C6 = _torch.nn.Parameter(params["ref_values_C6"])
+                self.ref_values_c6 = _torch.nn.Parameter(params["c6_ref"])
             except:
                 msg = (
-                    "Missing 'ref_values_C6' key in params. This is required when "
+                    "Missing 'c6_ref' key in params. This is required when "
                     "using the Lennard-Jones potential."
                 )
                 raise ValueError(msg)
@@ -257,10 +257,10 @@ class EMLEBase(_torch.nn.Module):
             ref_mean_sqrtk, c_sqrtk = self._get_c(n_ref, self.ref_values_sqrtk, Kinv)
 
         if lj_mode is not None:
-            ref_mean_C6, c_C6 = self._get_c(n_ref, self.ref_values_C6, Kinv)
+            ref_mean_c6, c_c6 = self._get_c(n_ref, self.ref_values_c6, Kinv)
         else:
-            ref_mean_C6 = _torch.zeros_like(ref_mean_s, dtype=dtype, device=device)
-            c_C6 = _torch.zeros_like(c_s, dtype=dtype, device=device)
+            ref_mean_c6 = _torch.zeros_like(ref_mean_s, dtype=dtype, device=device)
+            c_c6 = _torch.zeros_like(c_s, dtype=dtype, device=device)
 
         # Store the current device.
         self._device = device
@@ -274,11 +274,11 @@ class EMLEBase(_torch.nn.Module):
         self.register_buffer("_ref_mean_s", ref_mean_s)
         self.register_buffer("_ref_mean_chi", ref_mean_chi)
         self.register_buffer("_ref_mean_sqrtk", ref_mean_sqrtk)
-        self.register_buffer("_ref_mean_C6", ref_mean_C6)
+        self.register_buffer("_ref_mean_c6", ref_mean_c6)
         self.register_buffer("_c_s", c_s)
         self.register_buffer("_c_chi", c_chi)
         self.register_buffer("_c_sqrtk", c_sqrtk)
-        self.register_buffer("_c_C6", c_C6)
+        self.register_buffer("_c_c6", c_c6)
 
     def to(self, *args, **kwargs):
         """
@@ -293,11 +293,11 @@ class EMLEBase(_torch.nn.Module):
         self._ref_mean_s = self._ref_mean_s.to(*args, **kwargs)
         self._ref_mean_chi = self._ref_mean_chi.to(*args, **kwargs)
         self._ref_mean_sqrtk = self._ref_mean_sqrtk.to(*args, **kwargs)
-        self._ref_mean_C6 = self._ref_mean_C6.to(*args, **kwargs)
+        self._ref_mean_c6 = self._ref_mean_c6.to(*args, **kwargs)
         self._c_s = self._c_s.to(*args, **kwargs)
         self._c_chi = self._c_chi.to(*args, **kwargs)
         self._c_sqrtk = self._c_sqrtk.to(*args, **kwargs)
-        self._c_C6 = self._c_C6.to(*args, **kwargs)
+        self._c_c6 = self._c_c6.to(*args, **kwargs)
         self.k_Z = _torch.nn.Parameter(self.k_Z.to(*args, **kwargs))
 
         # Check for a device type in args and update the device attribute.
@@ -321,11 +321,11 @@ class EMLEBase(_torch.nn.Module):
         self._ref_mean_s = self._ref_mean_s.cuda(**kwargs)
         self._ref_mean_chi = self._ref_mean_chi.cuda(**kwargs)
         self._ref_mean_sqrtk = self._ref_mean_sqrtk.cuda(**kwargs)
-        self._ref_mean_C6 = self._ref_mean_C6.cuda(**kwargs)
+        self._ref_mean_c6 = self._ref_mean_c6.cuda(**kwargs)
         self._c_s = self._c_s.cuda(**kwargs)
         self._c_chi = self._c_chi.cuda(**kwargs)
         self._c_sqrtk = self._c_sqrtk.cuda(**kwargs)
-        self._c_C6 = self._c_C6.cuda(**kwargs)
+        self._c_c6 = self._c_c6.cuda(**kwargs)
         self.k_Z = _torch.nn.Parameter(self.k_Z.cuda(**kwargs))
 
         # Update the device attribute.
@@ -346,11 +346,11 @@ class EMLEBase(_torch.nn.Module):
         self._ref_mean_s = self._ref_mean_s.cpu(**kwargs)
         self._ref_mean_chi = self._ref_mean_chi.cpu(**kwargs)
         self._ref_mean_sqrtk = self._ref_mean_sqrtk.cpu(**kwargs)
-        self._ref_mean_C6 = self._ref_mean_C6.cpu(**kwargs)
+        self._ref_mean_c6 = self._ref_mean_c6.cpu(**kwargs)
         self._c_s = self._c_s.cpu(**kwargs)
         self._c_chi = self._c_chi.cpu(**kwargs)
         self._c_sqrtk = self._c_sqrtk.cpu(**kwargs)
-        self._c_C6 = self._c_C6.cpu(**kwargs)
+        self._c_c6 = self._c_c6.cpu(**kwargs)
         self.k_Z = _torch.nn.Parameter(self.k_Z.cpu(**kwargs))
 
         # Update the device attribute.
@@ -369,11 +369,11 @@ class EMLEBase(_torch.nn.Module):
         self._ref_mean_s = self._ref_mean_s.double()
         self._ref_mean_chi = self._ref_mean_chi.double()
         self._ref_mean_sqrtk = self._ref_mean_sqrtk.double()
-        self._ref_mean_C6 = self._ref_mean_C6.double()
+        self._ref_mean_c6 = self._ref_mean_c6.double()
         self._c_s = self._c_s.double()
         self._c_chi = self._c_chi.double()
         self._c_sqrtk = self._c_sqrtk.double()
-        self._c_C6 = self._c_C6.double()
+        self._c_c6 = self._c_c6.double()
         self.k_Z = _torch.nn.Parameter(self.k_Z.double())
         return self
 
@@ -388,11 +388,11 @@ class EMLEBase(_torch.nn.Module):
         self._ref_mean_s = self._ref_mean_s.float()
         self._ref_mean_chi = self._ref_mean_chi.float()
         self._ref_mean_sqrtk = self._ref_mean_sqrtk.float()
-        self._ref_mean_C6 = self._ref_mean_C6.float()
+        self._ref_mean_c6 = self._ref_mean_c6.float()
         self._c_s = self._c_s.float()
         self._c_chi = self._c_chi.float()
         self._c_sqrtk = self._c_sqrtk.float()
-        self._c_C6 = self._c_C6.float()
+        self._c_c6 = self._c_c6.float()
         self.k_Z = _torch.nn.Parameter(self.k_Z.float())
         return self
 
@@ -460,11 +460,11 @@ class EMLEBase(_torch.nn.Module):
         A_thole = self._get_A_thole(r_data, s, q_val, k, self.a_Thole)
 
         if self._lj_mode is not None:
-            C6 = self._gpr(aev, self._ref_mean_C6, self._c_C6, species_id)
+            c6 = self._gpr(aev, self._ref_mean_c6, self._c_c6, species_id)
         else:
-            C6 = None
+            c6 = None
 
-        return s, q_core, q_val, A_thole, C6
+        return s, q_core, q_val, A_thole, c6
 
     @classmethod
     def _get_Kinv(cls, ref_features, sigma):

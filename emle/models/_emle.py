@@ -352,9 +352,9 @@ class EMLE(_torch.nn.Module):
                 if "sqrtk_ref" in params
                 else None
             ),
-            "ref_values_C6": (
-                _torch.tensor(params["ref_values_C6"], dtype=dtype, device=device)
-                if "ref_values_C6" in params
+            "ref_values_c6": (
+                _torch.tensor(params["c6_ref"], dtype=dtype, device=device)
+                if "c6_ref" in params
                 else None
             ),
         }
@@ -440,11 +440,11 @@ class EMLE(_torch.nn.Module):
 
         if lj_xyz_qm:
             # Get the LJ parameters for the passed configuration
-            _, _, _, A_thole, C6 = self._emle_base(
+            _, _, _, A_thole, c6 = self._emle_base(
                 self.atomic_numbers, lj_xyz_qm, qm_charge
             )
             alpha_qm = self._emle_base.get_isotropic_polarizabilities(A_thole)
-            sigma_qm, epsilon_qm = self._emle_base.get_lj_parameters(C6, alpha_qm)
+            sigma_qm, epsilon_qm = self._emle_base.get_lj_parameters(c6, alpha_qm)
             self._lj_sigma_qm = sigma_qm
             self._lj_epsilon_qm = epsilon_qm
 
@@ -578,7 +578,7 @@ class EMLE(_torch.nn.Module):
             )
 
         # Get the parameters from the base model.
-        s, q_core, q_val, A_thole, C6 = self._emle_base(
+        s, q_core, q_val, A_thole, c6 = self._emle_base(
             self._atomic_numbers,
             self._xyz_qm,
             qm_charge,
@@ -621,7 +621,7 @@ class EMLE(_torch.nn.Module):
         if self._lj_mode is not None:
             if self._lj_mode == "flexible":
                 alpha_qm = self._emle_base.get_isotropic_polarizabilities(A_thole)
-                sigma_qm, epsilon_qm = self._emle_base.get_lj_parameters(C6, alpha_qm)
+                sigma_qm, epsilon_qm = self._emle_base.get_lj_parameters(c6, alpha_qm)
             elif self._lj_mode == "fixed":
                 sigma_qm = self._lj_sigma_qm.expand(batch_size, -1)
                 epsilon_qm = self._lj_epsilon_qm.expand(batch_size, -1)
