@@ -38,6 +38,7 @@ from torch import Tensor
 
 from . import EMLEBase as _EMLEBase
 from . import _patches
+from .._units import _HARTREE_TO_KJ_MOL, _BOHR_TO_ANGSTROM
 
 # Monkey-patch the TorchANI BuiltInModel and BuiltinEnsemble classes so that
 # they call self.aev_computer using args only to allow forward hooks to work
@@ -83,10 +84,12 @@ class EMLE(_torch.nn.Module):
         model=None,
         method="electrostatic",
         alpha_mode="species",
-        lj_method=None,
         atomic_numbers=None,
         qm_charge=0,
         mm_charges=None,
+        lj_mode=None,
+        lj_params_qm=None,
+        lj_xyz_qm=None,
         device=None,
         dtype=None,
         create_aev_calculator=True,
@@ -124,15 +127,6 @@ class EMLE(_torch.nn.Module):
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
 
-        lj_method: str
-            How the LJ parameters are calculated.
-                "dynamic":
-                    Lennard-Jones parameters are calculated dynamically from EMLE parameters.
-                "static":
-                    Lennard-Jones parameters are fixed.
-                None
-                    Lennard-Jones parameters and interactions are not included.
-
         atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor
             Atomic numbers for the QM region. This allows use of optimised AEV
             symmetry functions from the NNPOps package. Only use this option
@@ -146,6 +140,26 @@ class EMLE(_torch.nn.Module):
         mm_charges: List[float], Tuple[Float], numpy.ndarray, torch.Tensor
             List of MM charges for atoms in the QM region in units of mod
             electron charge. This is required if the 'mm' method is specified.
+
+        lj_mode: str
+            How the LJ parameters are calculated.
+                "flexible":
+                    Lennard-Jones parameters are calculated dynamically for a given configuration.
+                "fixed":
+                    Lennard-Jones parameters are fixed, i.e. independent of the configuration.
+                    Requires specifying the LJ parameters for each atom in the QM region or to
+                    provide an initial configuration.
+                None
+                    Lennard-Jones parameters and interactions are not included.
+
+        lj_params_qm: List[List[float]], Tuple[List[List[Float]]], numpy.ndarray, torch.Tensor
+            Lennard-Jones parameters for each atom in the QM region (sigma, epsilon) in units of Angstrom (sigma)
+            and kJ/mol (epsilon). This is required if the "lj_mode" is "fixed" and lj_param_qm is not provided.
+            Takes precedence over lj_xyz_qm.
+
+        lj_xyz_qm: List[List[float]], Tuple[List[List[Float]]], numpy.ndarray, torch.Tensor
+            Positions of QM atoms in Angstrom. This is required if the "lj_mode" is "fixed"
+            and lj_param_qm is not provided.
 
         device: torch.device
             The device on which to run the model.
@@ -188,16 +202,6 @@ class EMLE(_torch.nn.Module):
         if alpha_mode not in ["species", "reference"]:
             raise ValueError("'alpha_mode' must be 'species' or 'reference'")
         self._alpha_mode = alpha_mode
-
-        if lj_method is not None:
-            if not isinstance(lj_method, str):
-                raise TypeError("'lj_method' must be of type 'str'")
-            lj_method = lj_method.lower().replace(" ", "")
-            if lj_method not in {"dynamic", "static"}:
-                raise ValueError("'lj_method' must be 'dynamic' or 'static'")
-            if lj_method == "static":
-                raise NotImplementedError("Static LJ model not implemented")
-        self._lj_method = lj_method
 
         if atomic_numbers is not None:
             if isinstance(atomic_numbers, (_np.ndarray, _torch.Tensor)):
@@ -253,6 +257,58 @@ class EMLE(_torch.nn.Module):
 
             # Use the default species.
             species = self._species
+
+        if lj_mode is not None:
+            if not isinstance(lj_mode, str):
+                raise TypeError("'lj_mode' must be of type 'str'")
+
+            lj_mode = lj_mode.lower().replace(" ", "")
+            if lj_mode not in {"flexible", "fixed"}:
+                raise ValueError("'lj_mode' must be 'flexible' or 'fixed'")
+
+            if lj_mode == "fixed":
+                if lj_params_qm is None and lj_xyz_qm is None:
+                    raise ValueError(
+                        "lj_params_qm or lj_xyz_qm must be provided if lj_mode is 'fixed'"
+                    )
+
+                if lj_params_qm is not None:
+                    if not isinstance(
+                        lj_params_qm, (list, tuple, _np.ndarray, _torch.Tensor)
+                    ) or not isinstance(
+                        lj_params_qm[0], (list, tuple, _np.ndarray, _torch.Tensor)
+                    ):
+                        raise TypeError(
+                            "lj_params_qm must be a list of lists, tuples, or arrays"
+                        )
+                    if len(lj_params_qm) != len(atomic_numbers):
+                        raise ValueError(
+                            "lj_params_qm must have the same length as the number of QM atoms"
+                        )
+
+                    lj_params_qm = _torch.tensor(
+                        lj_params_qm, dtype=dtype, device=device
+                    )
+                    self._lj_epsilon_qm = lj_params_qm[:, 1] / _HARTREE_TO_KJ_MOL
+                    self._lj_sigma_qm = lj_params_qm[:, 0] / _BOHR_TO_ANGSTROM
+                    lj_xyz_qm = None
+                else:
+                    if not isinstance(
+                        lj_xyz_qm, (list, tuple, _np.ndarray, _torch.Tensor)
+                    ) or not isinstance(
+                        lj_xyz_qm[0], (list, tuple, _np.ndarray, _torch.Tensor)
+                    ):
+                        raise TypeError(
+                            "lj_xyz_qm must be a list of lists, tuples, or arrays"
+                        )
+                    if len(lj_xyz_qm) != len(atomic_numbers):
+                        raise ValueError(
+                            "lj_xyz_qm must have the same length as the number of QM atoms"
+                        )
+
+                    lj_xyz_qm = _torch.tensor(lj_xyz_qm, dtype=dtype, device=device)
+
+        self._lj_mode = lj_mode
 
         if device is not None:
             if not isinstance(device, _torch.device):
@@ -382,6 +438,16 @@ class EMLE(_torch.nn.Module):
             dtype=dtype,
         )
 
+        if lj_xyz_qm:
+            # Get the LJ parameters for the passed configuration
+            _, _, _, A_thole, C6 = self._emle_base(
+                self.atomic_numbers, lj_xyz_qm, qm_charge
+            )
+            alpha_qm = self._emle_base.get_isotropic_polarizabilities(A_thole)
+            sigma_qm, epsilon_qm = self._emle_base.get_lj_parameters(C6, alpha_qm)
+            self._lj_sigma_qm = sigma_qm
+            self._lj_epsilon_qm = epsilon_qm
+
     def to(self, *args, **kwargs):
         """
         Performs Tensor dtype and/or device conversion on the model.
@@ -466,11 +532,17 @@ class EMLE(_torch.nn.Module):
         qm_charge: int or torch.Tensor (BATCH,)
             The charge on the QM region.
 
+        sigma_mm: torch.Tensor (N_MM_ATOMS,) or (BATCH, N_MM_ATOMS)
+            Lennard-Jones sigma parameters for MM atoms in Angstrom.
+
+        epsilon_mm: torch.Tensor (N_MM_ATOMS,) or (BATCH, N_MM_ATOMS)
+            Lennard-Jones epsilon parameters for MM atoms in kJ/mol.
+
         Returns
         -------
 
-        result: torch.Tensor (2,) or (2, BATCH)
-            The static and induced EMLE energy components in Hartree.
+        result: torch.Tensor (3,) or (3, BATCH)
+            The static, induced, and LJ EMLE energy components in Hartree.
         """
         # Store the inputs as internal attributes.
         self._atomic_numbers = atomic_numbers
@@ -513,9 +585,8 @@ class EMLE(_torch.nn.Module):
         )
 
         # Convert coordinates to Bohr.
-        ANGSTROM_TO_BOHR = 1.8897261258369282
-        xyz_qm_bohr = self._xyz_qm * ANGSTROM_TO_BOHR
-        xyz_mm_bohr = self._xyz_mm * ANGSTROM_TO_BOHR
+        xyz_qm_bohr = self._xyz_qm / _BOHR_TO_ANGSTROM
+        xyz_mm_bohr = self._xyz_mm / _BOHR_TO_ANGSTROM
 
         # Compute the static energy.
         if self._method == "mm":
@@ -546,14 +617,20 @@ class EMLE(_torch.nn.Module):
                 E_static, dtype=self._charges_mm.dtype, device=self._device
             )
 
-        if self._lj_method is not None:
-            if self._lj_method == "dynamic":
+        # Compute the LJ energy.
+        if self._lj_mode is not None:
+            if self._lj_mode == "flexible":
                 alpha_qm = self._emle_base.get_isotropic_polarizabilities(A_thole)
                 sigma_qm, epsilon_qm = self._emle_base.get_lj_parameters(C6, alpha_qm)
-                E_lj = self._emle_base.get_lj_energy(sigma_qm, epsilon_qm, sigma_mm, epsilon_mm, mesh_data)
-            else:
-                raise NotImplementedError("Static LJ model not implemented")
+            elif self._lj_mode == "fixed":
+                sigma_qm = self._lj_sigma_qm.expand(batch_size, -1)
+                epsilon_qm = self._lj_epsilon_qm.expand(batch_size, -1)
+            E_lj = self._emle_base.get_lj_energy(
+                sigma_qm, epsilon_qm, sigma_mm, epsilon_mm, mesh_data
+            )
+        else:
+            E_lj = _torch.zeros_like(
+                E_static, dtype=self._charges_mm.dtype, device=self._device
+            )
 
-            return _torch.stack((E_static, E_ind, E_lj), dim=0)
-
-        return _torch.stack((E_static, E_ind), dim=0)
+        return _torch.stack((E_static, E_ind, E_lj), dim=0)

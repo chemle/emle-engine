@@ -59,7 +59,9 @@ class EMLETrainer:
         self._thole_loss = thole_loss
 
         if dispersion_coefficient_loss is not _DispersionCoefficientLoss:
-            raise TypeError("dispersion_coefficient_loss must be a reference to DispersionCoefficientLoss")
+            raise TypeError(
+                "dispersion_coefficient_loss must be a reference to DispersionCoefficientLoss"
+            )
         self._dispersion_coefficient_loss = dispersion_coefficient_loss
 
         # First handle the logger.
@@ -273,7 +275,7 @@ class EMLETrainer:
                 optimizer.step()
                 if (epoch + 1) % print_every == 0:
                     _logger.info(
-                        f"Epoch {epoch+1}: Loss ={loss.item():9.4f}    "
+                        f"Epoch {epoch + 1}: Loss ={loss.item():9.4f}    "
                         f"RMSE ={rmse.item():9.4f}    "
                         f"Max Error ={max_error.item():9.4f}"
                     )
@@ -632,9 +634,7 @@ class EMLETrainer:
             "sqrtk_ref": (
                 emle_base.ref_values_sqrtk if alpha_mode == "reference" else None
             ),
-            "ref_values_C6": (
-                emle_base.ref_values_C6 if C6 is not None else None
-            ),
+            "ref_values_C6": (emle_base.ref_values_C6 if C6 is not None else None),
             "species": species,
             "alpha_mode": alpha_mode,
             "n_ref": n_ref,
@@ -656,7 +656,7 @@ class EMLETrainer:
             xyz.to(device=device, dtype=dtype),
             q_mol,
         )
-        
+
         s_pred = emle_base_output[0]
         q_core_pred = emle_base_output[1]
         q_val_pred = emle_base_output[2]
@@ -685,7 +685,7 @@ class EMLETrainer:
             plot_data["alpha_reference"] = self._thole_loss._get_alpha_mol(
                 A_thole, z_mask
             )
-    
+
         if C6 is not None:
             C6_pred = emle_base_output[4]
             plot_data["C6_emle"] = C6_pred

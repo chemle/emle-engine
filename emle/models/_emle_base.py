@@ -43,6 +43,7 @@ try:
 except:
     _has_nnpops = False
 
+
 class EMLEBase(_torch.nn.Module):
     """
     Base class for the EMLE model. This is used to compute valence shell
@@ -92,9 +93,9 @@ class EMLEBase(_torch.nn.Module):
                 "reference":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
-        
+
         lj_mode: str
-            Mode for calculating the Lennard-Jones potential. 
+            Mode for calculating the Lennard-Jones potential.
             If None, the Lennard-Jones potential is not calculated.
 
         emle_aev_computer: EMLEAEVComputer
@@ -207,7 +208,7 @@ class EMLEBase(_torch.nn.Module):
                     "using 'reference' alpha mode."
                 )
                 raise ValueError(msg)
-            
+
         if lj_mode is not None:
             assert lj_mode in ["static", "dynamic"], "Invalid Lennard-Jones mode"
             try:
@@ -1077,7 +1078,6 @@ class EMLEBase(_torch.nn.Module):
         results: torch.Tensor (N_BATCH, MAX_QM_ATOMS, MAX_MM_ATOMS)
         """
         return (1 - (1 + r / (s * 2)) * _torch.exp(-r / s)) / r
-    
 
     @staticmethod
     def get_lj_energy(
@@ -1192,9 +1192,9 @@ class EMLEBase(_torch.nn.Module):
 
         c6: _torch.Tensor(N_BATCH, N_ATOMS)
             C6 coefficients per atom.
-        
+
         alpha: _torch.Tensor(N_BATCH, N_ATOMS)
-            Isotropic polarizabilities per atom. 
+            Isotropic polarizabilities per atom.
 
         Returns
         -------
