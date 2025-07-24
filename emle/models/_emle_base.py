@@ -110,7 +110,6 @@ class EMLEBase(_torch.nn.Module):
         dtype: torch.dtype
             The data type to use for the models floating point tensors.
         """
-
         # Call the base class constructor.
         super().__init__()
 
@@ -119,7 +118,7 @@ class EMLEBase(_torch.nn.Module):
             raise TypeError("'params' must be of type 'dict'")
         if not all(
             k in params
-            for k in ["a_QEq", "a_Thole", "ref_values_s", "ref_values_chi", "k_Z"]
+            for k in ["a_QEq", "a_Thole", "ref_values_s", "ref_values_chi", "k_Z", "ref_values_c6"]
         ):
             raise ValueError(
                 "'params' must contain keys 'a_QEq', 'a_Thole', 'ref_values_s', 'ref_values_chi', and 'k_Z'"
@@ -210,12 +209,12 @@ class EMLEBase(_torch.nn.Module):
                 raise ValueError(msg)
 
         if lj_mode is not None:
-            assert lj_mode in ["static", "dynamic"], "Invalid Lennard-Jones mode"
+            assert lj_mode in ["fixed", "flexible"], "Invalid Lennard-Jones mode"
             try:
-                self.ref_values_c6 = _torch.nn.Parameter(params["c6_ref"])
+                self.ref_values_c6 = _torch.nn.Parameter(params["ref_values_c6"])
             except:
                 msg = (
-                    "Missing 'c6_ref' key in params. This is required when "
+                    "Missing 'ref_values_c6' key in params. This is required when "
                     "using the Lennard-Jones potential."
                 )
                 raise ValueError(msg)
@@ -444,7 +443,6 @@ class EMLEBase(_torch.nn.Module):
         xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
 
         r_data = self._get_r_data(xyz_qm_bohr, mask)
-
         q_core = self._q_core[species_id] * mask
         q = self._get_q(r_data, s, chi, q_total, mask)
         q_val = q - q_core

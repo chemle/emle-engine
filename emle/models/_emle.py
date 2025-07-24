@@ -432,7 +432,7 @@ class EMLE(_torch.nn.Module):
             q_core,
             emle_aev_computer=emle_aev_computer,
             alpha_mode=self._alpha_mode,
-            lj_mode=self._lj_method,
+            lj_mode=self._lj_mode,
             species=params.get("species", self._species),
             device=device,
             dtype=dtype,
@@ -509,6 +509,7 @@ class EMLE(_torch.nn.Module):
         charges_mm: Tensor,
         xyz_qm: Tensor,
         xyz_mm: Tensor,
+        lj_params_mm: Tensor = None,
         qm_charge: Union[int, Tensor] = 0,
     ) -> Tensor:
         """
@@ -532,11 +533,8 @@ class EMLE(_torch.nn.Module):
         qm_charge: int or torch.Tensor (BATCH,)
             The charge on the QM region.
 
-        sigma_mm: torch.Tensor (N_MM_ATOMS,) or (BATCH, N_MM_ATOMS)
-            Lennard-Jones sigma parameters for MM atoms in Angstrom.
-
-        epsilon_mm: torch.Tensor (N_MM_ATOMS,) or (BATCH, N_MM_ATOMS)
-            Lennard-Jones epsilon parameters for MM atoms in kJ/mol.
+        lj_params_mm: torch.Tensor (N_MM_ATOMS, 2) or (BATCH, N_MM_ATOMS, 2)
+            Lennard-Jones parameters for MM atoms in nanometers (sigma) and kJ/mol (epsilon).
 
         Returns
         -------
@@ -556,6 +554,9 @@ class EMLE(_torch.nn.Module):
             self._charges_mm = self._charges_mm.unsqueeze(0)
             self._xyz_qm = self._xyz_qm.unsqueeze(0)
             self._xyz_mm = self._xyz_mm.unsqueeze(0)
+
+            if lj_params_mm is not None:
+                self._lj_params_mm = lj_params_mm.unsqueeze(0)
 
         batch_size = self._atomic_numbers.shape[0]
 
@@ -619,12 +620,19 @@ class EMLE(_torch.nn.Module):
 
         # Compute the LJ energy.
         if self._lj_mode is not None:
+            sigma_mm = lj_params_mm[:, :, 0] * 10.0 / _BOHR_TO_ANGSTROM 
+            epsilon_mm = lj_params_mm[:, :, 1] / _HARTREE_TO_KJ_MOL
+
             if self._lj_mode == "flexible":
                 alpha_qm = self._emle_base.get_isotropic_polarizabilities(A_thole)
                 sigma_qm, epsilon_qm = self._emle_base.get_lj_parameters(c6, alpha_qm)
             elif self._lj_mode == "fixed":
                 sigma_qm = self._lj_sigma_qm.expand(batch_size, -1)
                 epsilon_qm = self._lj_epsilon_qm.expand(batch_size, -1)
+            import numpy as np
+            np.savetxt("sigma_qm.txt", sigma_qm.detach().cpu().numpy())
+            np.savetxt("epsilon_qm.txt", epsilon_qm.detach().cpu().numpy())
+
             E_lj = self._emle_base.get_lj_energy(
                 sigma_qm, epsilon_qm, sigma_mm, epsilon_mm, mesh_data
             )

@@ -545,7 +545,7 @@ class EMLETrainer:
             emle_aev_computer=emle_aev_computer,
             species=species,
             alpha_mode=alpha_mode,
-            lj_mode="static" if c6 is not None else None,
+            lj_mode="fixed",
             device=_torch.device(device),
             dtype=dtype,
         )
@@ -611,7 +611,7 @@ class EMLETrainer:
                 loss_class=self._dispersion_coefficient_loss,
                 opt_param_names=["ref_values_c6"],
                 lr=lr_c6,
-                epochs=1000,
+                epochs=2000,
                 print_every=print_every,
                 emle_base=emle_base,
                 atomic_numbers=z_train,
