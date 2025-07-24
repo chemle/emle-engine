@@ -48,6 +48,8 @@ class EMLEAnalyzer:
         backend=None,
         parser=None,
         q_total=None,
+        start=None,
+        end=None
     ):
         """
         Constructor.
@@ -72,7 +74,20 @@ class EMLEAnalyzer:
 
         q_total: int, float
             The total charge of the QM region.
+
+        start: int
+            Structure index to start parsing
+
+        end: int
+            Structure index to end parsing
         """
+
+        if start is not None and end is not None:
+            mask = slice(start, end)
+        elif start is None and end is None:
+            mask = slice(None)
+        else:
+            raise ValueError("Both start and end must be provided")
 
         if not isinstance(qm_xyz_filename, str):
             raise ValueError("Invalid qm_xyz_filename type. Must be a string.")
@@ -108,6 +123,8 @@ class EMLEAnalyzer:
                 _torch.ones(len(self.qm_xyz), device=device, dtype=dtype) * self.q_total
             )
 
+        # All the structures are parsed (not only start:end) to ensure the
+        # same padding for all the slices (then can be trivially concatenated)
         try:
             atomic_numbers, qm_xyz = self._parse_qm_xyz(qm_xyz_filename)
         except Exception as e:
@@ -118,6 +135,11 @@ class EMLEAnalyzer:
         except Exception as e:
             raise RuntimeError(f"Unable to parse PC xyz file: {e}")
 
+        atomic_numbers = atomic_numbers[mask]
+        qm_xyz = qm_xyz[mask]
+        pc_charges = pc_charges[mask]
+        pc_xyz = pc_xyz[mask]
+
         # Store the in vacuo energies if a backend is provided.
         if backend:
             if isinstance(backend, _torch.nn.Module):
@@ -127,7 +149,7 @@ class EMLEAnalyzer:
                 charges_mm = _torch.empty((len(qm_xyz), 0), dtype=dtype, device=device)
                 mm_xyz = _torch.empty((len(qm_xyz), 0, 3), dtype=dtype, device=device)
             self.e_backend = (
-                backend(atomic_numbers, charges_mm, qm_xyz, mm_xyz)
+                backend(atomic_numbers, charges_mm, qm_xyz, mm_xyz).T
                 * _HARTREE_TO_KCAL_MOL
             )
 
@@ -146,6 +168,7 @@ class EMLEAnalyzer:
             self.qm_xyz,
             self.q_total,
         )
+        self.atomic_alpha = 1. / _torch.diagonal(self.A_thole, dim1=1, dim2=2)[:, ::3]
         self.alpha = self._get_mol_alpha(self.A_thole, self.atomic_numbers)
 
         mask = (self.atomic_numbers > 0).unsqueeze(-1)
@@ -179,6 +202,7 @@ class EMLEAnalyzer:
             "q_core",
             "q_val",
             "q_total",
+            "atomic_alpha",
             "alpha",
             "e_backend",
             "e_static",

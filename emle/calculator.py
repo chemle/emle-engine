@@ -86,6 +86,7 @@ class EMLECalculator:
         external_backend=None,
         plugin_path=".",
         mm_charges=None,
+        box=None,
         deepmd_model=None,
         deepmd_deviation=None,
         deepmd_deviation_threshold=None,
@@ -94,6 +95,8 @@ class EMLECalculator:
         qm_xyz_frequency=0,
         ani2x_model_index=None,
         mace_model=None,
+        qbc_deviation=None,
+        qbc_deviation_threshold=None,
         ace_model=None,
         rascal_model=None,
         parm7=None,
@@ -179,9 +182,16 @@ class EMLECalculator:
             a file containing the charges. The file should contain a single
             column. Units are electron charge.
 
+        box: List, Tuple, numpy.ndarray, (3,)
+            PBC box. Only orthorhombic boxes are supported.
+            (For now only works for DeePMD)
+
         deepmd_model: str
             Path to the DeePMD model file to use for in vacuo calculations. This
-            must be specified if "deepmd" is the selected backend.
+            must be specified if "deepmd" is the selected backend. This can be
+            one or more files, i.e. multiple models can be used to compute
+            force deviations. When multiple models are specified, the first model
+            will be used for the production energy and forces.
 
         deepmd_deviation: str
             Path to a file to write the max deviation between forces predicted
@@ -208,11 +218,22 @@ class EMLECalculator:
             The index of the ANI model to use when using the TorchANI backend.
             If None, then the full 8 model ensemble is used.
 
-        mmace_model: str
+        mace_model: str, list[str]
             Name of the MACE-OFF23 models to use.
             Available models are 'mace-off23-small', 'mace-off23-medium', 'mace-off23-large'.
             To use a locally trained MACE model, provide the path to the model file.
+            If a list of strings is provided, deviation between the models will be printed
+            on each step to qbc_deviation.
             If None, the MACE-OFF23(S) model will be used by default.
+
+        qbc_deviation: str
+            Path to a file to write the max deviation between forces predicted
+            with the models (for Query-by-Committee).
+
+        qbc_deviation_threshold: float
+            The threshold for the maximum deviation between forces.
+            If the deviation exceeds this value, a ValueError
+            will be raised and the calculation will be terminated.
 
         ace_model: str
             Path to the ACE model file to use for in vacuo calculations. This
@@ -427,6 +448,8 @@ class EMLECalculator:
         else:
             self._mm_charges = None
 
+        self.box = box
+
         if qm_charge is not None:
             try:
                 qm_charge = int(qm_charge)
@@ -480,7 +503,9 @@ class EMLECalculator:
                     _logger.error(msg)
                     raise ValueError(msg)
                 formatted_backends.append(b)
-        self._backend = formatted_backends
+            self._backend = formatted_backends
+        else:
+            self._backend = None
 
         # Validate the external backend.
         if external_backend is not None:
@@ -598,131 +623,152 @@ class EMLECalculator:
 
         # Validate and create the backend(s).
         self._backends = []
-        for backend in self._backend:
-            if backend == "torchani":
-                from .models import ANI2xEMLE as _ANI2xEMLE
+        if self._backend is not None:
+            for backend in self._backend:
+                if backend == "torchani":
+                    from .models import ANI2xEMLE as _ANI2xEMLE
 
-                ani2x_emle = _ANI2xEMLE(
-                    emle_model=model,
-                    emle_method=method,
-                    alpha_mode=alpha_mode,
-                    mm_charges=self._mm_charges,
-                    qm_charge=self._qm_charge,
-                    model_index=ani2x_model_index,
-                    atomic_numbers=atomic_numbers,
-                    device=self._device,
-                )
-
-                # Convert to TorchScript.
-                b = _torch.jit.script(ani2x_emle).eval()
-
-                # Store the model index.
-                self._ani2x_model_index = ani2x_model_index
-
-            # Initialise the MACEMLE model.
-            elif backend == "mace":
-                from .models import MACEEMLE as _MACEEMLE
-
-                mace_emle = _MACEEMLE(
-                    emle_model=model,
-                    emle_method=method,
-                    alpha_mode=alpha_mode,
-                    mm_charges=self._mm_charges,
-                    qm_charge=self._qm_charge,
-                    mace_model=mace_model,
-                    atomic_numbers=atomic_numbers,
-                    device=self._device,
-                )
-
-                # Convert to TorchScript.
-                b = _torch.jit.script(mace_emle).eval()
-
-                # Store the MACE model.
-                self._mace_model = mace_model
-
-            elif backend == "ace":
-                try:
-                    # Import directly from module since the import is so slow.
-                    from ._backends._ace import ACE
-
-                    b = ACE(ace_model)
-                except:
-                    msg = "Unable to create ACE backend. Please ensure PyJulip is installed."
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            elif backend == "orca":
-                try:
-                    from ._backends import ORCA
-
-                    b = ORCA(orca_path, template=orca_template)
-                    self._orca_path = b._exe
-                    self._orca_template = b._template
-                except Exception as e:
-                    msg = "Unable to create ORCA backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            elif backend == "deepmd":
-                try:
-                    from ._backends import DeePMD
-
-                    b = DeePMD(
-                        model=deepmd_model,
-                        deviation=deepmd_deviation,
-                        deviation_threshold=deepmd_deviation_threshold,
+                    ani2x_emle = _ANI2xEMLE(
+                        emle_model=model,
+                        emle_method=method,
+                        alpha_mode=alpha_mode,
+                        mm_charges=self._mm_charges,
+                        qm_charge=self._qm_charge,
+                        model_index=ani2x_model_index,
+                        atomic_numbers=atomic_numbers,
+                        device=self._device,
                     )
-                    self._deepmd_model = b._model
-                    self._deepmd_deviation = b._deviation
-                    self._deepmd_deviation_threshold = b._deviation_threshold
-                except Exception as e:
-                    msg = "Unable to create DeePMD backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
 
-            elif backend == "sqm":
+                    # Convert to TorchScript.
+                    b = _torch.jit.script(ani2x_emle).eval()
+
+                    # Store the model index.
+                    self._ani2x_model_index = ani2x_model_index
+
+                # Initialise the MACEMLE model.
+                elif backend == "mace":
+                    from .models import MACEEMLE as _MACEEMLE
+
+                    mace_emle = _MACEEMLE(
+                        emle_model=model,
+                        emle_method=method,
+                        alpha_mode=alpha_mode,
+                        mm_charges=self._mm_charges,
+                        qm_charge=self._qm_charge,
+                        mace_model=mace_model,
+                        atomic_numbers=atomic_numbers,
+                        device=self._device,
+                    )
+
+                    # Convert to TorchScript.
+                    b = _torch.jit.script(mace_emle).eval()
+
+                    # Store the MACE model.
+                    self._mace_model = mace_model
+
+                elif backend == "ace":
+                    try:
+                        # Import directly from module since the import is so slow.
+                        from ._backends._ace import ACE
+
+                        b = ACE(ace_model)
+                    except:
+                        msg = "Unable to create ACE backend. Please ensure PyJulip is installed."
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
+                elif backend == "orca":
+                    try:
+                        from ._backends import ORCA
+
+                        b = ORCA(orca_path, template=orca_template)
+                        self._orca_path = b._exe
+                        self._orca_template = b._template
+                    except Exception as e:
+                        msg = "Unable to create ORCA backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
+                elif backend == "deepmd":
+                    try:
+                        from ._backends import DeePMD
+                        from functools import partial
+
+                        b = DeePMD(
+                            model=deepmd_model,
+                            deviation=deepmd_deviation,
+                            deviation_threshold=deepmd_deviation_threshold,
+                        )
+                        b.calculate = partial(b.calculate, box=self.box)
+
+                        self._deepmd_model = b._model
+                        self._deepmd_deviation = b._deviation
+                        self._deepmd_deviation_threshold = b._deviation_threshold
+                    except Exception as e:
+                        msg = "Unable to create DeePMD backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
+                elif backend == "sqm":
+                    try:
+                        from ._backends import SQM
+
+                        b = SQM(parm7, theory=sqm_theory)
+                        self._sqm_theory = b._theory
+                    except Exception as e:
+                        msg = "Unable to create SQM backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
+                elif backend == "xtb":
+                    try:
+                        from ._backends import XTB
+
+                        b = XTB()
+                    except Exception as e:
+                        msg = "Unable to create XTB backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
+                elif backend == "sander":
+                    try:
+                        from ._backends import Sander
+
+                        b = Sander(parm7)
+                    except Exception as e:
+                        msg = "Unable to create Sander backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
+                elif backend == "rascal":
+                    try:
+                        from ._backends import Rascal
+
+                        b = Rascal(rascal_model)
+                    except Exception as e:
+                        msg = "Unable to create Rascal backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
+                # Append the backend to the list.
+                self._backends.append(b)
+
+        if qbc_deviation is not None:
+            if not isinstance(qbc_deviation, str):
+                raise TypeError("'deviation' must be of type 'str'")
+
+            self._qbc_deviation = qbc_deviation
+
+            if qbc_deviation_threshold is not None:
                 try:
-                    from ._backends import SQM
+                    qbc_deviation_threshold = float(qbc_deviation_threshold)
+                except:
+                    raise TypeError("'deviation_threshold' must be of type 'float'")
 
-                    b = SQM(parm7, theory=sqm_theory)
-                    self._sqm_theory = b._theory
-                except Exception as e:
-                    msg = "Unable to create SQM backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            elif backend == "xtb":
-                try:
-                    from ._backends import XTB
-
-                    b = XTB()
-                except Exception as e:
-                    msg = "Unable to create XTB backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            elif backend == "sander":
-                try:
-                    from ._backends import Sander
-
-                    b = Sander(parm7)
-                except Exception as e:
-                    msg = "Unable to create Sander backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            elif backend == "rascal":
-                try:
-                    from ._backends import Rascal
-
-                    b = Rascal(rascal_model)
-                except Exception as e:
-                    msg = "Unable to create Rascal backend: {e}"
-                    _logger.error(msg)
-                    raise RuntimeError(msg)
-
-            # Append the backend to the list.
-            self._backends.append(b)
+            self._qbc_deviation_threshold = qbc_deviation_threshold
+        else:
+            self._qbc_deviation = None
+            self._qbc_deviation_threshold = None
 
         if restart is not None:
             if not isinstance(restart, bool):
@@ -914,6 +960,7 @@ class EMLECalculator:
             "backend": self._backend,
             "external_backend": None if external_backend is None else external_backend,
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),
+            "box": self.box,
             "deepmd_model": deepmd_model,
             "deepmd_deviation": deepmd_deviation,
             "deepmd_deviation_threshold": deepmd_deviation_threshold,
@@ -922,6 +969,8 @@ class EMLECalculator:
             "qm_xyz_frequency": qm_xyz_frequency,
             "ani2x_model_index": ani2x_model_index,
             "mace_model": None if mace_model is None else self._mace_model,
+            "qbc_deviation": qbc_deviation,
+            "qbc_deviation_threshold": qbc_deviation_threshold,
             "rascal_model": rascal_model,
             "parm7": parm7,
             "qm_indices": None if qm_indices is None else self._qm_indices,
@@ -1023,12 +1072,13 @@ class EMLECalculator:
             for x, y, z in grad_qm:
                 f.write(f"{x:16.10f}\n{y:16.10f}\n{z:16.10f}\n")
 
-        with open(pcgrad, "w") as f:
-            # Write the number of MM atoms.
-            f.write(f"{num_mm_atoms}\n")
-            # Write the MM gradients.
-            for x, y, z in grad_mm[:num_mm_atoms]:
-                f.write(f"{x:17.12f}{y:17.12f}{z:17.12f}\n")
+        if grad_mm is not None:
+            with open(pcgrad, "w") as f:
+                # Write the number of MM atoms.
+                f.write(f"{num_mm_atoms}\n")
+                # Write the MM gradients.
+                for x, y, z in grad_mm[:num_mm_atoms]:
+                    f.write(f"{x:17.12f}{y:17.12f}{z:17.12f}\n")
 
         # Log energies to file.
         if (
@@ -1169,10 +1219,6 @@ class EMLECalculator:
                             _logger.error(msg)
                             raise RuntimeError(msg)
 
-            # No backend.
-            else:
-                E_vac, grad_vac = 0.0, _np.zeros_like(xyz_qm.detatch().cpu())
-
         # External backend.
         else:
             try:
@@ -1239,17 +1285,22 @@ class EMLECalculator:
         # Compute embedding energy and gradients.
         if base_model is None:
             try:
-                E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
-                dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
-                    E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
-                )
-                dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
-                dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
+                if len(xyz_mm) > 0:
+                    E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
+                    dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
+                        E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
+                    )
+                    dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
+                    dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
 
-                # Compute the total energy and gradients.
-                E_tot = E_vac + E.sum().detach().cpu().numpy()
-                grad_qm = dE_dxyz_qm_bohr + grad_vac
-                grad_mm = dE_dxyz_mm_bohr
+                    # Compute the total energy and gradients.
+                    E_tot = E_vac + E.sum().detach().cpu().numpy()
+                    grad_qm = dE_dxyz_qm_bohr + grad_vac
+                    grad_mm = dE_dxyz_mm_bohr
+                else:
+                    E_tot = E_vac
+                    grad_qm = grad_vac
+                    grad_mm = None
 
             except Exception as e:
                 msg = f"Failed to compute EMLE energies and gradients: {e}"
@@ -1276,6 +1327,15 @@ class EMLECalculator:
                 _logger.error(msg)
                 raise RuntimeError(msg)
 
+            if (self._qbc_deviation):
+                E_std = _torch.std(base_model._E_vac_qbc).item()
+                max_f_std = _torch.max(_torch.std(base_model._grads_qbc, axis=0)).item()
+                with open(self._qbc_deviation, "a") as f:
+                    f.write(f"{E_std:12.5f}{max_f_std:12.5f}\n")
+                if self._qbc_deviation_threshold and max_f_std > self._qbc_deviation_threshold:
+                    msg = "Force deviation threshold reached!"
+                    raise ValueError(msg)
+
         if self._is_interpolate:
             # Compute the in vacuo MM energy and gradients for the QM region.
             if self._backend != None:
@@ -1291,7 +1351,7 @@ class EMLECalculator:
 
             # If no backend is specified, then the MM energy and gradients are zero.
             else:
-                E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm)
+                E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm_np)
 
             # Compute the embedding contributions.
             E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
@@ -1483,6 +1543,20 @@ class EMLECalculator:
         else:
             self._step += 1
 
+        # Write out the QM region to the xyz trajectory file.
+        if self._qm_xyz_frequency > 0 and self._step % self._qm_xyz_frequency == 0:
+            atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+            if hasattr(self._backend, "_max_f_std"):
+                atoms.info = {"max_f_std": self._max_f_std}
+            _ase_io.write(self._qm_xyz_file, atoms, append=True)
+
+            pc_data = _np.hstack((charges_mm[:, None], xyz_mm))
+            pc_data = pc_data[pc_data[:, 0] != 0]
+            with open(self._pc_xyz_file, "a") as f:
+                f.write(f"{len(pc_data)}\n")
+                _np.savetxt(f, pc_data, fmt="%14.6f")
+                f.write("\n")
+
         # Return the energy and forces in OpenMM units.
         return (
             E_tot.item() * _HARTREE_TO_KJ_MOL,
@@ -1593,9 +1667,8 @@ class EMLECalculator:
                 raise ValueError(msg)
 
         if xyz_file_mm is None:
-            msg = "Unable to determine MM xyz file from ORCA input."
+            msg = "No MM xyz file in ORCA input, assuming no MM region."
             _logger.error(msg)
-            raise ValueError(msg)
         else:
             if not _os.path.isfile(xyz_file_mm):
                 xyz_file_mm = dirname + xyz_file_mm
@@ -1616,25 +1689,26 @@ class EMLECalculator:
         xyz_mm = []
 
         # Process the MM xyz file. (Charges plus coordinates.)
-        with open(xyz_file_mm, "r") as f:
-            for line in f:
-                data = line.split()
+        if xyz_file_mm is not None:
+            with open(xyz_file_mm, "r") as f:
+                for line in f:
+                    data = line.split()
 
-                # MM records have four entries per line.
-                if len(data) == 4:
-                    try:
-                        charges_mm.append(float(data[0]))
-                    except:
-                        msg = "Unable to parse MM charge."
-                        _logger.error(msg)
-                        raise ValueError(msg)
+                    # MM records have four entries per line.
+                    if len(data) == 4:
+                        try:
+                            charges_mm.append(float(data[0]))
+                        except:
+                            msg = "Unable to parse MM charge."
+                            _logger.error(msg)
+                            raise ValueError(msg)
 
-                    try:
-                        xyz_mm.append([float(x) for x in data[1:]])
-                    except:
-                        msg = "Unable to parse MM coordinates."
-                        _logger.error(msg)
-                        raise ValueError(msg)
+                        try:
+                            xyz_mm.append([float(x) for x in data[1:]])
+                        except:
+                            msg = "Unable to parse MM coordinates."
+                            _logger.error(msg)
+                            raise ValueError(msg)
 
         # Convert to NumPy arrays.
         charges_mm = _np.array(charges_mm)

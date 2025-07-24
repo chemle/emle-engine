@@ -83,6 +83,8 @@ orca_template = os.getenv("EMLE_ORCA_TEMPLATE")
 deepmd_model = os.getenv("EMLE_DEEPMD_MODEL")
 deepmd_deviation = os.getenv("EMLE_DEEPMD_DEVIATION")
 deepmd_deviation_threshold = os.getenv("EMLE_DEEPMD_DEVIATION_THRESHOLD")
+qbc_deviation = os.getenv("EMLE_QBC_DEVIATION")
+qbc_deviation_threshold = os.getenv("EMLE_QBC_DEVIATION_THRESHOLD")
 qm_xyz_file = os.getenv("EMLE_QM_XYZ_FILE")
 pc_xyz_file = os.getenv("EMLE_PC_XYZ_FILE")
 try:
@@ -152,6 +154,8 @@ env = {
     "deepmd_model": deepmd_model,
     "deepmd_deviation": deepmd_deviation,
     "deepmd_deviation_threshold": deepmd_deviation_threshold,
+    "qbc_deviation": qbc_deviation,
+    "qbc_deviation_threshold": qbc_deviation_threshold,
     "qm_xyz_file": qm_xyz_file,
     "pc_xyz_file": pc_xyz_file,
     "qm_xyz_frequency": qm_xyz_frequency,
@@ -228,6 +232,13 @@ parser.add_argument(
     required=False,
 )
 parser.add_argument(
+    "--box",
+    type=float,
+    nargs="*",
+    help="Box size in A (full ML DeepMD only)",
+    required=False,
+)
+parser.add_argument(
     "--num-clients",
     type=validate_clients,
     help="the maximum number of client connections to allow",
@@ -282,7 +293,7 @@ parser.add_argument(
     "--deepmd-model",
     type=str,
     nargs="*",
-    help="path to DeePMD model file(s)",
+    help="path to DeePMD model file(s) (first file is the reference model)",
     required=False,
 )
 parser.add_argument(

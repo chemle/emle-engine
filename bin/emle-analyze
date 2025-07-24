@@ -43,7 +43,7 @@ parser.add_argument(
     "--deepmd-model",
     type=str,
     metavar="name.pb",
-    help="DeePMD model file (for backend='deepmd')",
+    help="DeePMD model file(s) (for backend='deepmd')",
 )
 parser.add_argument(
     "--mace-model",
@@ -70,6 +70,16 @@ parser.add_argument(
 parser.add_argument(
     "--alpha", action="store_true", help="Extract molecular dipolar polarizabilities"
 )
+parser.add_argument(
+    "--start",
+    type=int,
+    help="Structure index to start parsing",
+)
+parser.add_argument(
+    "--end",
+    type=int,
+    help="Structure index to end parsing",
+)
 parser.add_argument("output", type=str, help="Output mat file")
 args = parser.parse_args()
 
@@ -93,7 +103,7 @@ if args.backend == "torchani":
 elif args.backend == "mace":
     from emle.models import MACEEMLE
 
-    backend = MACEEMLE(mace_model=args.mace_model)
+    backend = MACEEMLE(emle_model=args.emle_model, mace_model=args.mace_model)
 elif args.backend == "deepmd":
     from emle._backends import DeePMD
 
@@ -103,7 +113,8 @@ emle_base = EMLE(model=args.emle_model, alpha_mode=args.alpha_mode)._emle_base
 
 parser = ORCAParser(args.orca_tarball, decompose=True, alpha=args.alpha)
 
-analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz, emle_base, backend, parser)
+analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz, emle_base, backend, parser,
+                        start=args.start, end=args.end)
 
 result = {
     "z": parser.z,
@@ -120,6 +131,7 @@ result = {
     "s_emle": analyzer.s,
     "q_core_emle": analyzer.q_core,
     "q_val_emle": analyzer.q_val,
+    "atomic_alpha_emle": analyzer.atomic_alpha,
     "alpha_emle": analyzer.alpha,
 }
 if args.backend:

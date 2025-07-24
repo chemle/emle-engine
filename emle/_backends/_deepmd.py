@@ -102,7 +102,7 @@ class DeePMD(_Backend):
 
         self._max_f_std = None
 
-    def calculate(self, atomic_numbers, xyz, forces=True):
+    def calculate(self, atomic_numbers, xyz, forces=True, box=None):
         """
         Compute the energy and forces.
 
@@ -117,6 +117,9 @@ class DeePMD(_Backend):
 
         forces: bool
             Whether to calculate and return forces.
+
+        box: List, Tuple, numpy.ndarray, (3,)
+            PBC box. Only orthorhombic boxes are supported.
 
         Returns
         -------
@@ -144,6 +147,13 @@ class DeePMD(_Backend):
             atomic_numbers = _np.expand_dims(atomic_numbers, axis=0)
             xyz = _np.expand_dims(xyz, axis=0)
 
+        if box is not None:
+            n_batch = len(atomic_numbers)
+            # Fon now only support single cell for the whole batch
+            cells = _np.repeat(_np.diag(box).flatten()[None, :], n_batch, axis=0)
+        else:
+            cells = None
+
         e_list = []
         f_list = []
 
@@ -153,7 +163,7 @@ class DeePMD(_Backend):
             atom_types = [
                 self._z_map[i][_ase.Atom(z).symbol] for z in atomic_numbers[0]
             ]
-            e, f, _ = dp.eval(xyz, cells=None, atom_types=atom_types)
+            e, f, _ = dp.eval(xyz, cells=cells, atom_types=atom_types)
             e_list.append(e)
             f_list.append(f)
 
@@ -171,14 +181,14 @@ class DeePMD(_Backend):
             # To be written to qm_xyz_file.
             self._max_f_std = max_f_std
 
-        # Take averages over models and return.
-        e_mean = _np.mean(_np.array(e_list), axis=0)
-        f_mean = -_np.mean(_np.array(f_list), axis=0)
+        # Use the first model for production energy and forces.
+        e_sel = e_list[0]
+        f_sel = f_list[0]
 
-        # Covert units.
+        # Convert units.
         e, f = (
-            e_mean.flatten() * _EV_TO_HARTREE,
-            f_mean * _EV_TO_HARTREE * _BOHR_TO_ANGSTROM,
+            e_sel.flatten() * _EV_TO_HARTREE,
+            f_sel * _EV_TO_HARTREE * _BOHR_TO_ANGSTROM,
         )
 
         return e, f if forces else e
