@@ -315,11 +315,14 @@ class EMLETrainer:
         model : nn.Module
             The trained model (loss instance).
         """
-        model = loss_class(emle_base).to(f"cuda:{local_rank}" if ddp else emle_base._device)
+        model = loss_class(emle_base).to(
+            f"cuda:{local_rank}" if ddp else emle_base._device
+        )
 
         if ddp:
             import torch.distributed as dist
             from torch.nn.parallel import DistributedDataParallel as DDP
+
             model = DDP(model, device_ids=[local_rank])
 
         loss_name = loss_class.__name__.lower()
@@ -331,7 +334,7 @@ class EMLETrainer:
         optimizer = _torch.optim.Adam(opt_parameters, lr=lr)
 
         for epoch in range(epochs):
-            if ddp and hasattr(loader.sampler, 'set_epoch'):
+            if ddp and hasattr(loader.sampler, "set_epoch"):
                 loader.sampler.set_epoch(epoch)
             model.train()
             running_loss = 0.0
@@ -407,6 +410,7 @@ class EMLETrainer:
         shuffle=False,
         ddp: bool = False,
         local_rank: int = 0,
+        ivm_data_file: str = None,
     ):
         """
         Train an EMLE model, optionally using DistributedDataParallel (DDP) for multi-GPU training.
@@ -483,8 +487,12 @@ class EMLETrainer:
 
         ddp : bool, optional
             If True, use DistributedDataParallel for multi-GPU training (default: False).
+
         local_rank : int, optional
             Local GPU index for DDP (default: 0). Should be set automatically by torchrun.
+
+        ivm_data_file: str or None
+            Filename to save IVM data. If None, IVM data is not saved.
 
         Returns
         -------
@@ -493,8 +501,10 @@ class EMLETrainer:
             Trained EMLE model.
         """
         if ddp:
-            import torch.distributed as dist 
-            from torch.utils.data.distributed import DistributedSampler as _DistributedSampler
+            import torch.distributed as dist
+            from torch.utils.data.distributed import (
+                DistributedSampler as _DistributedSampler,
+            )
 
             dist.init_process_group(backend="nccl")
             _torch.cuda.set_device(local_rank)
@@ -611,7 +621,7 @@ class EMLETrainer:
             _os.makedirs(batch_dir, exist_ok=True)
             for i, batch in enumerate(loader):
                 if not ddp or local_rank == 0:
-                    _logger.info(f"Saving masked AEVs for batch {i+1}/{len(loader)}")
+                    _logger.info(f"Saving masked AEVs for batch {i + 1}/{len(loader)}")
                 z_b, xyz_b, *_, zid_b = batch
                 aev_batch = emle_aev_computer(zid_b, xyz_b)
                 filename = _os.path.join(batch_dir, f"aev_mols_batch_{i}.pt")
@@ -626,45 +636,56 @@ class EMLETrainer:
         q_core_z = _mean_by_z(q_core_train, zid_train)
 
         # IVM selection
-        if not use_minibatch:
-            _logger.info("Performing IVM...")
-            # Create an array of (molecule_id, atom_id) pairs (as in the full
-            # dataset) for the training set. This is needed to be able to locate
-            # atoms/molecules in the original dataset that were picked by IVM.
-            n_mols, max_atoms = q_train.shape
-            atom_ids = _torch.stack(
-                _torch.meshgrid(_torch.arange(n_mols), _torch.arange(max_atoms)), dim=-1
-            ).to(device)
-
-            # Perform IVM
-            ivm_mol_atom_ids_padded, aev_ivm_allz = _IVM.perform_ivm(
-                aev_mols, z_train, atom_ids, species, ivm_thr, sigma
-            )
+        if ivm_data_file is not None and _os.path.exists(ivm_data_file):
+            if not ddp or local_rank == 0:
+                _logger.info(f"Loading IVM data from file: {ivm_data_file}")
+            ivm_data = _torch.load(ivm_data_file, map_location=device)
+            ivm_mol_atom_ids_padded = ivm_data["ivm_mol_atom_ids_padded"]
+            aev_ivm_allz = ivm_data["aev_ivm_allz"]
         else:
-            _logger.info("Performing Lazy IVM...")
-            n_mols, max_atoms = q_train.shape
-            atom_ids = _torch.arange(max_atoms)
-            z_mols_batches = []
-            atom_ids_batches = []
-            for i, batch in enumerate(loader):
-                z_b = batch[0]
-                batch_size_actual = z_b.shape[0]
-                start = i * loader.batch_size
-                mol_range = _torch.arange(start, start + batch_size_actual)
-                atom_grid = _torch.stack(
-                    _torch.meshgrid(mol_range, atom_ids, indexing="ij"), dim=-1
+            if not use_minibatch:
+                _logger.info("Performing IVM...")
+                n_mols, max_atoms = q_train.shape
+                atom_ids = _torch.stack(
+                    _torch.meshgrid(_torch.arange(n_mols), _torch.arange(max_atoms)),
+                    dim=-1,
+                ).to(device)
+                ivm_mol_atom_ids_padded, aev_ivm_allz = _IVM.perform_ivm(
+                    aev_mols, z_train, atom_ids, species, ivm_thr, sigma
                 )
-                z_mols_batches.append(z_b)
-                atom_ids_batches.append(atom_grid)
-
-            ivm_mol_atom_ids_padded, aev_ivm_allz = _IVM.perform_ivm_lazy(
-                aev_filenames=aev_filenames,
-                z_batches=z_mols_batches,
-                atom_id_batches=atom_ids_batches,
-                species=species,
-                thr=ivm_thr,
-                sigma=sigma,
-            )
+            else:
+                _logger.info("Performing Lazy IVM...")
+                n_mols, max_atoms = q_train.shape
+                atom_ids = _torch.arange(max_atoms)
+                z_mols_batches = []
+                atom_ids_batches = []
+                for i, batch in enumerate(loader):
+                    z_b = batch[0]
+                    batch_size_actual = z_b.shape[0]
+                    start = i * loader.batch_size
+                    mol_range = _torch.arange(start, start + batch_size_actual)
+                    atom_grid = _torch.stack(
+                        _torch.meshgrid(mol_range, atom_ids, indexing="ij"), dim=-1
+                    )
+                    z_mols_batches.append(z_b)
+                    atom_ids_batches.append(atom_grid)
+                ivm_mol_atom_ids_padded, aev_ivm_allz = _IVM.perform_ivm_lazy(
+                    aev_filenames=aev_filenames,
+                    z_batches=z_mols_batches,
+                    atom_id_batches=atom_ids_batches,
+                    species=species,
+                    thr=ivm_thr,
+                    sigma=sigma,
+                )
+            if not ddp or local_rank == 0:
+                _logger.info(f"Saving IVM data to file: {ivm_data_file}")
+                _torch.save(
+                    {
+                        "ivm_mol_atom_ids_padded": ivm_mol_atom_ids_padded,
+                        "aev_ivm_allz": aev_ivm_allz,
+                    },
+                    ivm_data_file,
+                )
 
         ref_features = _pad_to_max(aev_ivm_allz)
         ref_mask = ivm_mol_atom_ids_padded[:, :, 0] > -1
