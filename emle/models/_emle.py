@@ -287,7 +287,7 @@ class EMLE(_torch.nn.Module):
                     )
                     self._lj_epsilon_qm = lj_params_qm[:, 1] / _HARTREE_TO_KJ_MOL
                     self._lj_sigma_qm = lj_params_qm[:, 0] * 10.0 / _BOHR_TO_ANGSTROM
-                    lj_xyz_qm = None
+                    self._lj_xyz_qm = None
                 else:
                     if not isinstance(
                         lj_xyz_qm, (list, tuple, _np.ndarray, _torch.Tensor)
@@ -297,18 +297,11 @@ class EMLE(_torch.nn.Module):
                         raise TypeError(
                             "lj_xyz_qm must be a list of lists, tuples, or arrays"
                         )
-
-                    if atomic_numbers is None:
-                        raise ValueError(
-                            "atomic_numbers must be provided if LJ parameters are to be determined from a configuration"
-                        )
-
-                    if len(lj_xyz_qm) != len(atomic_numbers):
-                        raise ValueError(
-                            "lj_xyz_qm must have the same length as the number of QM atoms"
-                        )
-
-                    lj_xyz_qm = _torch.tensor(lj_xyz_qm, dtype=dtype, device=device)
+                    self._lj_epsilon_qm = None
+                    self._lj_sigma_qm = None
+                    self._lj_xyz_qm = _torch.tensor(
+                        lj_xyz_qm, dtype=dtype, device=device
+                    )
 
         self._lj_mode = lj_mode
 
@@ -441,29 +434,7 @@ class EMLE(_torch.nn.Module):
         )
 
         if lj_xyz_qm is not None:
-            raise NotImplementedError(
-                "LJ parameters for fixed mode with a configuration is not implemented yet"
-            )
-            """
-            atomic_numbers = _torch.as_tensor(atomic_numbers)
-            lj_xyz_qm = _torch.as_tensor(lj_xyz_qm)
-            qm_charge = _torch.as_tensor(qm_charge)
-            if atomic_numbers.ndim == 1:
-                atomic_numbers = atomic_numbers.unsqueeze(0)
-            if lj_xyz_qm.ndim == 2:
-                lj_xyz_qm = lj_xyz_qm.unsqueeze(0)
-            if qm_charge.ndim == 0:
-                qm_charge = qm_charge.unsqueeze(0)
-
-            # Get the LJ parameters for the passed configuration
-            _, _, _, A_thole, c6 = self._emle_base(
-                atomic_numbers, lj_xyz_qm, qm_charge
-            )
-            alpha_qm = self._emle_base.get_isotropic_polarizabilities(A_thole)
-            sigma_qm, epsilon_qm = self._emle_base.get_lj_parameters(c6, alpha_qm)
-            self._lj_sigma_qm = sigma_qm
-            self._lj_epsilon_qm = epsilon_qm
-            """
+            pass
 
     def to(self, *args, **kwargs):
         """
@@ -635,24 +606,45 @@ class EMLE(_torch.nn.Module):
                 E_static, dtype=self._charges_mm.dtype, device=self._device
             )
 
-        # Compute the LJ energy.
-        if self._lj_mode is not None:
+        # Compute the LJ energy
+        if self._lj_mode is None:
+            E_lj = _torch.zeros_like(
+                E_static, dtype=self._charges_mm.dtype, device=self._device
+            )
+        else:
+            # Convert MM LJ parameters
             sigma_mm = lj_params_mm[:, :, 0] * 10.0 / _BOHR_TO_ANGSTROM
             epsilon_mm = lj_params_mm[:, :, 1] / _HARTREE_TO_KJ_MOL
 
             if self._lj_mode == "flexible":
                 alpha_qm = self._emle_base.get_isotropic_polarizabilities(A_thole)
                 sigma_qm, epsilon_qm = self._emle_base.get_lj_parameters(c6, alpha_qm)
+
             elif self._lj_mode == "fixed":
+                if self._lj_sigma_qm is None or self._lj_epsilon_qm is None:
+                    if self._lj_xyz_qm is None:
+                        raise RuntimeError(
+                            "LJ mode is 'fixed', but LJ parameters are not set and lj_xyz_qm is missing."
+                        )
+                    lj_xyz_qm = (
+                        self._lj_xyz_qm.unsqueeze(0)
+                        if self._lj_xyz_qm.ndim == 2
+                        else self._lj_xyz_qm
+                    )
+                    _, _, _, A_thole, c6 = self._emle_base(
+                        self._atomic_numbers[0:1, :], lj_xyz_qm, qm_charge[0:1]
+                    )
+                    alpha_qm = self._emle_base.get_isotropic_polarizabilities(A_thole)
+                    self._lj_sigma_qm, self._lj_epsilon_qm = (
+                        self._emle_base.get_lj_parameters(c6, alpha_qm)
+                    )
+
                 sigma_qm = self._lj_sigma_qm.expand(batch_size, -1)
                 epsilon_qm = self._lj_epsilon_qm.expand(batch_size, -1)
 
+            # Compute Lennard-Jones energy
             E_lj = self._emle_base.get_lj_energy(
                 sigma_qm, epsilon_qm, sigma_mm, epsilon_mm, mesh_data
-            )
-        else:
-            E_lj = _torch.zeros_like(
-                E_static, dtype=self._charges_mm.dtype, device=self._device
             )
 
         return _torch.stack((E_static, E_ind, E_lj), dim=0)
