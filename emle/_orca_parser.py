@@ -125,7 +125,6 @@ class ORCAParser:
 
         try:
             with _tarfile.open(filename, "r") as tar:
-
                 self._tar = tar
                 self.names = self._get_names(tar)
 

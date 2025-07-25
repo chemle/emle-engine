@@ -134,7 +134,7 @@ class QEqLoss(_BaseLoss):
         self._update_chi_gpr(self._emle_base)
 
         # Calculate q_core and q_val
-        _, q_core, q_val, _ = self._emle_base(atomic_numbers, xyz, q_mol)
+        _, q_core, q_val, *_ = self._emle_base(atomic_numbers, xyz, q_mol)
 
         mask = atomic_numbers > 0
         target = q_target[mask]
@@ -275,7 +275,7 @@ class TholeLoss(_BaseLoss):
             self._update_sqrtk_gpr(self._emle_base)
 
         # Calculate A_thole and alpha_mol.
-        _, _, _, A_thole = self._emle_base(atomic_numbers, xyz, q_mol)
+        _, _, _, A_thole, *_ = self._emle_base(atomic_numbers, xyz, q_mol)
         alpha_mol = self._get_alpha_mol(A_thole, atomic_numbers > 0)
 
         triu_row, triu_col = _torch.triu_indices(3, 3, offset=0)
@@ -309,5 +309,76 @@ class TholeLoss(_BaseLoss):
         emle_base._ref_mean_sqrtk, emle_base._c_sqrtk = emle_base._get_c(
             emle_base._n_ref,
             emle_base.ref_values_sqrtk,
+            emle_base._Kinv,
+        )
+
+
+class DispersionCoefficientLoss(_BaseLoss):
+    """
+    Loss function for dispersion coefficients. Used to train ref_values_C6.
+    """
+
+    def __init__(self, emle_base, loss=_torch.nn.MSELoss()):
+        super().__init__()
+
+        from ..models._emle_base import EMLEBase
+
+        if not isinstance(emle_base, EMLEBase):
+            raise TypeError("emle_base must be an instance of EMLEBase")
+        self._emle_base = emle_base
+
+        if not isinstance(loss, _torch.nn.Module):
+            raise TypeError("loss must be an instance of torch.nn.Module")
+        self._loss = loss
+
+        self._pol = None
+
+    def forward(self, atomic_numbers, xyz, q_mol, c6_target):
+        """
+        Forward pass.
+
+        Parameters
+        ----------
+        atomic_numbers: torch.Tensor(N_BATCH, MAX_N_ATOMS)
+            Atomic numbers.
+
+        xyz: torch.Tensor(N_BATCH, MAX_N_ATOMS, 3)
+            Cartesian coordinates.
+
+        q_mol: torch.Tensor(N_BATCH, MAX_N_ATOMS)
+            Molecular charges.
+
+        c6_target: torch.Tensor(N_BATCH, MAX_N_ATOMS)
+            Target dispersion coefficients.
+        """
+        # Update reference values for C6.
+        self._update_c6_gpr(self._emle_base)
+
+        # Calculate C6.
+        s, q_core, q_val, A_thole, c6 = self._emle_base(atomic_numbers, xyz, q_mol)
+        # Calculate isotropic polarizabilities if not already calculated.
+        if self._pol is None:
+            self._pol = self._emle_base.get_isotropic_polarizabilities(A_thole).detach()
+
+        # Mask out dummy atoms.
+        mask = atomic_numbers > 0
+        target = c6_target[mask]
+        values = c6
+        values = values[mask]
+
+        # Calculate loss.
+        loss = self._loss(values, target)
+
+        return (
+            loss,
+            self._get_rmse(values, target),
+            self._get_max_error(values, target),
+        )
+
+    @staticmethod
+    def _update_c6_gpr(emle_base):
+        emle_base._ref_mean_c6, emle_base._c_c6 = emle_base._get_c(
+            emle_base._n_ref,
+            emle_base.ref_values_c6,
             emle_base._Kinv,
         )

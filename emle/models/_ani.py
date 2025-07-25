@@ -375,7 +375,7 @@ class ANI2xEMLE(_torch.nn.Module):
         -------
 
         result: torch.Tensor (3,) or (3, BATCH)
-            The ANI2x and static and induced EMLE energy components in Hartree.
+            The ANI2x and static, induced and LJ EMLE energy components in Hartree.
         """
         # Batch the inputs if necessary.
         if atomic_numbers.ndim == 1:
@@ -407,4 +407,4 @@ class ANI2xEMLE(_torch.nn.Module):
         E_emle = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, qm_charge)
 
         # Return the ANI2x and EMLE energy components.
-        return _torch.stack((E_vac, E_emle[0], E_emle[1]))
+        return _torch.stack((E_vac, E_emle[0], E_emle[1], E_emle[2]))
