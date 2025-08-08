@@ -215,7 +215,7 @@ class MACEEMLE(_torch.nn.Module):
             target_model = source_model.__class__(**config).to(device)
 
             # Load the state dict.
-            target_model.load_state_dict(source_model.state_dict())
+            target_model.load_state_dict(source_model.state_dict(), strict=False)
 
             # Compile the model.
             self._mace_models.append(_e3nn_jit.compile(target_model).to(self._dtype))
