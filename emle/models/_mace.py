@@ -198,12 +198,21 @@ class MACEEMLE(_torch.nn.Module):
         )
 
         if not isinstance(mace_model, (list, tuple)):
-            mace_model = [mace_model] if mace_model is None or isinstance(mace_model, str) else None
+            mace_model = (
+                [mace_model]
+                if mace_model is None or isinstance(mace_model, str)
+                else None
+            )
 
-        if mace_model is None or any(not isinstance(i, (str, type(None))) for i in mace_model):
-            raise TypeError("'mace_model' must be a list, tuple, or str, with elements of type str or None")
+        if mace_model is None or any(
+            not isinstance(i, (str, type(None))) for i in mace_model
+        ):
+            raise TypeError(
+                "'mace_model' must be a list, tuple, or str, with elements of type str or None"
+            )
 
         from mace.tools.scripts_utils import extract_config_mace_model
+
         self._mace_models = _torch.nn.ModuleList()
         for model in mace_model:
             source_model = self._load_mace_model(model, device)
@@ -392,9 +401,9 @@ class MACEEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.to(*args, **kwargs)
         self._mace = self._mace.to(*args, **kwargs)
-        self._mace_models = _torch.nn.ModuleList([
-            model.to(*args, **kwargs) for model in self._mace_models
-        ])
+        self._mace_models = _torch.nn.ModuleList(
+            [model.to(*args, **kwargs) for model in self._mace_models]
+        )
         return self
 
     def cpu(self, **kwargs):
@@ -405,9 +414,9 @@ class MACEEMLE(_torch.nn.Module):
         self._mace = self._mace.cpu(**kwargs)
         if self._atomic_numbers is not None:
             self._atomic_numbers = self._atomic_numbers.cpu(**kwargs)
-        self._mace_models = _torch.nn.ModuleList([
-            model.cpu(**kwargs) for model in self._mace_models
-        ])
+        self._mace_models = _torch.nn.ModuleList(
+            [model.cpu(**kwargs) for model in self._mace_models]
+        )
         return self
 
     def cuda(self, **kwargs):
@@ -418,9 +427,9 @@ class MACEEMLE(_torch.nn.Module):
         self._mace = self._mace.cuda(**kwargs)
         if self._atomic_numbers is not None:
             self._atomic_numbers = self._atomic_numbers.cuda(**kwargs)
-        self._mace_models = _torch.nn.ModuleList([
-            model.cuda(**kwargs) for model in self._mace_models
-        ])
+        self._mace_models = _torch.nn.ModuleList(
+            [model.cuda(**kwargs) for model in self._mace_models]
+        )
         return self
 
     def double(self):
@@ -429,9 +438,9 @@ class MACEEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.double()
         self._mace = self._mace.double()
-        self._mace_models = _torch.nn.ModuleList([
-            model.double() for model in self._mace_models
-        ])
+        self._mace_models = _torch.nn.ModuleList(
+            [model.double() for model in self._mace_models]
+        )
         return self
 
     def float(self):
@@ -440,9 +449,9 @@ class MACEEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.float()
         self._mace = self._mace.float()
-        self._mace_models = _torch.nn.ModuleList([
-            model.float() for model in self._mace_models
-        ])
+        self._mace_models = _torch.nn.ModuleList(
+            [model.float() for model in self._mace_models]
+        )
         return self
 
     def forward(
@@ -478,7 +487,7 @@ class MACEEMLE(_torch.nn.Module):
         -------
 
         result: torch.Tensor (3,)
-            The ANI2x and static and induced EMLE energy components in Hartree.
+            The MACE and static, induced and LJ EMLE energy components in Hartree.
         """
         # Get the device.
         device = xyz_qm.device
@@ -497,8 +506,17 @@ class MACEEMLE(_torch.nn.Module):
         num_models = len(self._mace_models)
 
         # Create tensors to store the data for QbC.
-        self._E_vac_qbc = _torch.empty(num_models, num_batches, dtype=self._dtype, device=device)
-        self._grads_qbc = _torch.empty(num_models, num_batches, xyz_qm.shape[1], 3, dtype=self._dtype, device=device)
+        self._E_vac_qbc = _torch.empty(
+            num_models, num_batches, dtype=self._dtype, device=device
+        )
+        self._grads_qbc = _torch.empty(
+            num_models,
+            num_batches,
+            xyz_qm.shape[1],
+            3,
+            dtype=self._dtype,
+            device=device,
+        )
 
         # Create tensors to store the results.
         results_E_vac = _torch.empty(num_batches, dtype=self._dtype, device=device)
@@ -550,26 +568,32 @@ class MACEEMLE(_torch.nn.Module):
 
             E_vac = self._mace(input_dict, compute_force=False)["interaction_energy"]
 
-            assert (
-                E_vac is not None
-            ), "The model did not return any energy. Please check the input."
+            assert E_vac is not None, (
+                "The model did not return any energy. Please check the input."
+            )
 
             results_E_vac[i] = E_vac[0] * EV_TO_HARTREE
 
             # Decouple the positions from the computation graph for the next models.
-            input_dict["positions"] = input_dict["positions"].clone().detach().requires_grad_(True)
+            input_dict["positions"] = (
+                input_dict["positions"].clone().detach().requires_grad_(True)
+            )
 
             # Do inference for the other models.
             if len(self._mace_models) > 1:
                 for j, mace in enumerate(self._mace_models):
-                    E_vac_qbc = mace(input_dict, compute_force=False)["interaction_energy"]
+                    E_vac_qbc = mace(input_dict, compute_force=False)[
+                        "interaction_energy"
+                    ]
 
-                    assert (
-                        E_vac_qbc is not None
-                    ), "The model did not return any energy. Please check the input."
+                    assert E_vac_qbc is not None, (
+                        "The model did not return any energy. Please check the input."
+                    )
 
                     # Calculate the gradients
-                    grads_qbc = _torch.autograd.grad([E_vac_qbc], [input_dict["positions"]])[0]
+                    grads_qbc = _torch.autograd.grad(
+                        [E_vac_qbc], [input_dict["positions"]]
+                    )[0]
                     assert grads_qbc is not None, "Gradient computation failed"
 
                     # Store the results.
@@ -582,6 +606,7 @@ class MACEEMLE(_torch.nn.Module):
                 zero = _torch.tensor(0.0, dtype=xyz_qm.dtype, device=device)
                 results_E_emle_static[i] = zero
                 results_E_emle_induced[i] = zero
+                results_E_emle_lj[i] = zero
             else:
                 # Get the EMLE energy components.
                 E_emle = self._emle(
@@ -589,8 +614,14 @@ class MACEEMLE(_torch.nn.Module):
                 )
                 results_E_emle_static[i] = E_emle[0][0]
                 results_E_emle_induced[i] = E_emle[1][0]
+                results_E_emle_lj[i] = E_emle[2][0]
 
         # Return the MACE and EMLE energy components.
         return _torch.stack(
-            [results_E_vac, results_E_emle_static, results_E_emle_induced]
+            [
+                results_E_vac,
+                results_E_emle_static,
+                results_E_emle_induced,
+                results_E_emle_lj,
+            ]
         )

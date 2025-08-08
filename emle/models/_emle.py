@@ -27,17 +27,18 @@ __email__ = "lester.hedges@gmail.com"
 
 __all__ = ["EMLE"]
 
-import numpy as _np
 import os as _os
+from typing import Union
+
+import numpy as _np
 import scipy.io as _scipy_io
 import torch as _torch
 import torchani as _torchani
-
 from torch import Tensor
-from typing import Union
 
-from . import _patches
 from . import EMLEBase as _EMLEBase
+from . import _patches
+from .._units import _HARTREE_TO_KJ_MOL, _BOHR_TO_ANGSTROM
 
 # Monkey-patch the TorchANI BuiltInModel and BuiltinEnsemble classes so that
 # they call self.aev_computer using args only to allow forward hooks to work
@@ -86,6 +87,9 @@ class EMLE(_torch.nn.Module):
         atomic_numbers=None,
         qm_charge=0,
         mm_charges=None,
+        lj_mode=None,
+        lj_params_qm=None,
+        lj_xyz_qm=None,
         device=None,
         dtype=None,
         create_aev_calculator=True,
@@ -136,6 +140,26 @@ class EMLE(_torch.nn.Module):
         mm_charges: List[float], Tuple[Float], numpy.ndarray, torch.Tensor
             List of MM charges for atoms in the QM region in units of mod
             electron charge. This is required if the 'mm' method is specified.
+
+        lj_mode: str
+            How the LJ parameters are calculated.
+                "flexible":
+                    Lennard-Jones parameters are calculated dynamically for a given configuration.
+                "fixed":
+                    Lennard-Jones parameters are fixed, i.e. independent of the configuration.
+                    Requires specifying the LJ parameters for each atom in the QM region or to
+                    provide an initial configuration.
+                None
+                    Lennard-Jones parameters and interactions are not included.
+
+        lj_params_qm: List[List[float]], Tuple[List[List[Float]]], numpy.ndarray, torch.Tensor
+            Lennard-Jones parameters for each atom in the QM region (sigma, epsilon) in units of nanometers (sigma)
+            and kJ/mol (epsilon). This is required if the "lj_mode" is "fixed" and lj_param_qm is not provided.
+            Takes precedence over lj_xyz_qm.
+
+        lj_xyz_qm: List[List[float]], Tuple[List[List[Float]]], numpy.ndarray, torch.Tensor
+            Positions of QM atoms in Angstrom. This is required if the "lj_mode" is "fixed"
+            and lj_param_qm is not provided.
 
         device: torch.device
             The device on which to run the model.
@@ -234,6 +258,53 @@ class EMLE(_torch.nn.Module):
             # Use the default species.
             species = self._species
 
+        if lj_mode is not None:
+            if not isinstance(lj_mode, str):
+                raise TypeError("'lj_mode' must be of type 'str'")
+
+            lj_mode = lj_mode.lower().replace(" ", "")
+            if lj_mode not in {"flexible", "fixed"}:
+                raise ValueError("'lj_mode' must be 'flexible' or 'fixed'")
+
+            if lj_mode == "fixed":
+                if lj_params_qm is None and lj_xyz_qm is None:
+                    raise ValueError(
+                        "lj_params_qm or lj_xyz_qm must be provided if lj_mode is 'fixed'"
+                    )
+
+                if lj_params_qm is not None:
+                    if not isinstance(
+                        lj_params_qm, (list, tuple, _np.ndarray, _torch.Tensor)
+                    ) or not isinstance(
+                        lj_params_qm[0], (list, tuple, _np.ndarray, _torch.Tensor)
+                    ):
+                        raise TypeError(
+                            "lj_params_qm must be a list of lists, tuples, or arrays"
+                        )
+
+                    lj_params_qm = _torch.tensor(
+                        lj_params_qm, dtype=dtype, device=device
+                    )
+                    self._lj_epsilon_qm = lj_params_qm[:, 1] / _HARTREE_TO_KJ_MOL
+                    self._lj_sigma_qm = lj_params_qm[:, 0] * 10.0 / _BOHR_TO_ANGSTROM
+                    self._lj_xyz_qm = None
+                else:
+                    if not isinstance(
+                        lj_xyz_qm, (list, tuple, _np.ndarray, _torch.Tensor)
+                    ) or not isinstance(
+                        lj_xyz_qm[0], (list, tuple, _np.ndarray, _torch.Tensor)
+                    ):
+                        raise TypeError(
+                            "lj_xyz_qm must be a list of lists, tuples, or arrays"
+                        )
+                    self._lj_epsilon_qm = None
+                    self._lj_sigma_qm = None
+                    self._lj_xyz_qm = _torch.tensor(
+                        lj_xyz_qm, dtype=dtype, device=device
+                    )
+
+        self._lj_mode = lj_mode
+
         if device is not None:
             if not isinstance(device, _torch.device):
                 raise TypeError("'device' must be of type 'torch.device'")
@@ -274,6 +345,11 @@ class EMLE(_torch.nn.Module):
             "sqrtk_ref": (
                 _torch.tensor(params["sqrtk_ref"], dtype=dtype, device=device)
                 if "sqrtk_ref" in params
+                else None
+            ),
+            "ref_values_c6": (
+                _torch.tensor(params["c6_ref"], dtype=dtype, device=device)
+                if "c6_ref" in params
                 else None
             ),
         }
@@ -351,10 +427,14 @@ class EMLE(_torch.nn.Module):
             q_core,
             emle_aev_computer=emle_aev_computer,
             alpha_mode=self._alpha_mode,
+            lj_mode=self._lj_mode,
             species=params.get("species", self._species),
             device=device,
             dtype=dtype,
         )
+
+        if lj_xyz_qm is not None:
+            pass
 
     def to(self, *args, **kwargs):
         """
@@ -417,6 +497,7 @@ class EMLE(_torch.nn.Module):
         charges_mm: Tensor,
         xyz_qm: Tensor,
         xyz_mm: Tensor,
+        lj_params_mm: Tensor = None,
         qm_charge: Union[int, Tensor] = 0,
     ) -> Tensor:
         """
@@ -440,11 +521,14 @@ class EMLE(_torch.nn.Module):
         qm_charge: int or torch.Tensor (BATCH,)
             The charge on the QM region.
 
+        lj_params_mm: torch.Tensor (N_MM_ATOMS, 2) or (BATCH, N_MM_ATOMS, 2)
+            Lennard-Jones parameters for MM atoms in nanometers (sigma) and kJ/mol (epsilon).
+
         Returns
         -------
 
-        result: torch.Tensor (2,) or (2, BATCH)
-            The static and induced EMLE energy components in Hartree.
+        result: torch.Tensor (3,) or (3, BATCH)
+            The static, induced, and LJ EMLE energy components in Hartree.
         """
         # Store the inputs as internal attributes.
         self._atomic_numbers = atomic_numbers
@@ -458,6 +542,9 @@ class EMLE(_torch.nn.Module):
             self._charges_mm = self._charges_mm.unsqueeze(0)
             self._xyz_qm = self._xyz_qm.unsqueeze(0)
             self._xyz_mm = self._xyz_mm.unsqueeze(0)
+
+            if lj_params_mm is not None:
+                self._lj_params_mm = lj_params_mm.unsqueeze(0)
 
         batch_size = self._atomic_numbers.shape[0]
 
@@ -479,20 +566,16 @@ class EMLE(_torch.nn.Module):
                 2, batch_size, dtype=self._xyz_qm.dtype, device=self._xyz_qm.device
             )
 
-        # Get the parameters from the base model:
-        #    valence widths, core charges, valence charges, A_thole tensor
-        # These are returned as batched tensors, so we need to extract the
-        # first element of each.
-        s, q_core, q_val, A_thole = self._emle_base(
+        # Get the parameters from the base model.
+        s, q_core, q_val, A_thole, c6 = self._emle_base(
             self._atomic_numbers,
             self._xyz_qm,
             qm_charge,
         )
 
         # Convert coordinates to Bohr.
-        ANGSTROM_TO_BOHR = 1.8897261258369282
-        xyz_qm_bohr = self._xyz_qm * ANGSTROM_TO_BOHR
-        xyz_mm_bohr = self._xyz_mm * ANGSTROM_TO_BOHR
+        xyz_qm_bohr = self._xyz_qm / _BOHR_TO_ANGSTROM
+        xyz_mm_bohr = self._xyz_mm / _BOHR_TO_ANGSTROM
 
         # Compute the static energy.
         if self._method == "mm":
@@ -523,4 +606,45 @@ class EMLE(_torch.nn.Module):
                 E_static, dtype=self._charges_mm.dtype, device=self._device
             )
 
-        return _torch.stack((E_static, E_ind), dim=0)
+        # Compute the LJ energy
+        if self._lj_mode is None:
+            E_lj = _torch.zeros_like(
+                E_static, dtype=self._charges_mm.dtype, device=self._device
+            )
+        else:
+            # Convert MM LJ parameters
+            sigma_mm = lj_params_mm[:, :, 0] * 10.0 / _BOHR_TO_ANGSTROM
+            epsilon_mm = lj_params_mm[:, :, 1] / _HARTREE_TO_KJ_MOL
+
+            if self._lj_mode == "flexible":
+                alpha_qm = self._emle_base.get_isotropic_polarizabilities(A_thole)
+                sigma_qm, epsilon_qm = self._emle_base.get_lj_parameters(c6, alpha_qm)
+
+            elif self._lj_mode == "fixed":
+                if self._lj_sigma_qm is None or self._lj_epsilon_qm is None:
+                    if self._lj_xyz_qm is None:
+                        raise RuntimeError(
+                            "LJ mode is 'fixed', but LJ parameters are not set and lj_xyz_qm is missing."
+                        )
+                    lj_xyz_qm = (
+                        self._lj_xyz_qm.unsqueeze(0)
+                        if self._lj_xyz_qm.ndim == 2
+                        else self._lj_xyz_qm
+                    )
+                    _, _, _, A_thole, c6 = self._emle_base(
+                        self._atomic_numbers[0:1, :], lj_xyz_qm, qm_charge[0:1]
+                    )
+                    alpha_qm = self._emle_base.get_isotropic_polarizabilities(A_thole)
+                    self._lj_sigma_qm, self._lj_epsilon_qm = (
+                        self._emle_base.get_lj_parameters(c6, alpha_qm)
+                    )
+
+                sigma_qm = self._lj_sigma_qm.expand(batch_size, -1)
+                epsilon_qm = self._lj_epsilon_qm.expand(batch_size, -1)
+
+            # Compute Lennard-Jones energy
+            E_lj = self._emle_base.get_lj_energy(
+                sigma_qm, epsilon_qm, sigma_mm, epsilon_mm, mesh_data
+            )
+
+        return _torch.stack((E_static, E_ind, E_lj), dim=0)

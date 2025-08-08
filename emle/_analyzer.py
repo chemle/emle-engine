@@ -49,7 +49,7 @@ class EMLEAnalyzer:
         parser=None,
         q_total=None,
         start=None,
-        end=None
+        end=None,
     ):
         """
         Constructor.
@@ -168,7 +168,7 @@ class EMLEAnalyzer:
             self.qm_xyz,
             self.q_total,
         )
-        self.atomic_alpha = 1. / _torch.diagonal(self.A_thole, dim1=1, dim2=2)[:, ::3]
+        self.atomic_alpha = 1.0 / _torch.diagonal(self.A_thole, dim1=1, dim2=2)[:, ::3]
         self.alpha = self._get_mol_alpha(self.A_thole, self.atomic_numbers)
 
         mask = (self.atomic_numbers > 0).unsqueeze(-1)
