@@ -123,7 +123,7 @@ class MACEEMLE(_torch.nn.Module):
             Available pre-trained models are 'mace-off23-small', 'mace-off23-medium', 'mace-off23-large'.
             To use a locally trained MACE model, provide the path to the model file.
             If None, the MACE-OFF23(S) model will be used by default.
-            If more than one model is provided, only the energy from the first model will be returned 
+            If more than one model is provided, only the energy from the first model will be returned
             in the forward pass, but the energy and forces from all models will be stored.
 
         atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor (N_ATOMS,)
@@ -207,7 +207,7 @@ class MACEEMLE(_torch.nn.Module):
         self._mace_models = _torch.nn.ModuleList()
         for model in mace_model:
             source_model = self._load_mace_model(model, device)
-            
+
             # Extract the config from the model.
             config = extract_config_mace_model(source_model)
 
@@ -281,7 +281,7 @@ class MACEEMLE(_torch.nn.Module):
             Path to the MACE model file or the name of the pre-trained MACE model.
         device: torch.device
             Device on which to load the model.
-        
+
         Returns
         -------
         source_model: torch.nn.Module
