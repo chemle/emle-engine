@@ -28,7 +28,7 @@ parser = argparse.ArgumentParser(
     description="Analysis tool for ML(EMLE)/MM simulations"
 )
 parser.add_argument(
-    "--orca-tarball", type=str, metavar="name.tar", required=True, help="ORCA tarball"
+    "--orca-tarball", type=str, metavar="name.tar", required=False, help="ORCA tarball"
 )
 parser.add_argument(
     "--emle-model", type=str, metavar="name.mat", required=False, help="EMLE model file"
@@ -71,6 +71,11 @@ parser.add_argument(
     "--alpha", action="store_true", help="Extract molecular dipolar polarizabilities"
 )
 parser.add_argument(
+    "--q-total",
+    type=int,
+    help="Total charge of the QM region",
+)
+parser.add_argument(
     "--start",
     type=int,
     help="Structure index to start parsing",
@@ -104,6 +109,12 @@ elif args.backend == "mace":
     from emle.models import MACEEMLE
 
     backend = MACEEMLE(emle_model=args.emle_model, mace_model=args.mace_model)
+
+elif args.backend == "maceemle":
+    from emle.models import MACEEMLEJoint
+
+    backend = MACEEMLEJoint(emle_model=args.emle_model, mace_model=args.mace_model)
+
 elif args.backend == "deepmd":
     from emle._backends import DeePMD
 
@@ -111,22 +122,17 @@ elif args.backend == "deepmd":
 
 emle_base = EMLE(model=args.emle_model, alpha_mode=args.alpha_mode)._emle_base
 
-parser = ORCAParser(args.orca_tarball, decompose=True, alpha=args.alpha)
+orca_parser = None
+if args.orca_tarball:
+    orca_parser = ORCAParser(args.orca_tarball, decompose=True, alpha=args.alpha)
 
-analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz, emle_base, backend, parser,
-                        start=args.start, end=args.end)
+analyzer = EMLEAnalyzer(args.qm_xyz, args.pc_xyz, emle_base, backend, orca_parser,
+                        args.q_total, start=args.start, end=args.end)
 
 result = {
-    "z": parser.z,
-    "xyz": parser.xyz,
-    "E_vac_qm": parser.vac_E,
-    "E_static_qm": parser.E_static,
-    "E_induced_qm": parser.E_induced,
-    "s_qm": parser.mbis["s"],
-    "q_core_qm": parser.mbis["q_core"],
-    "q_val_qm": parser.mbis["q_val"],
+    "z": analyzer.atomic_numbers,
+    "xyz": analyzer.qm_xyz,
     "E_static_emle": analyzer.e_static,
-    "E_static_mbis": analyzer.e_static_mbis,
     "E_induced_emle": analyzer.e_induced,
     "s_emle": analyzer.s,
     "q_core_emle": analyzer.q_core,
@@ -134,9 +140,23 @@ result = {
     "atomic_alpha_emle": analyzer.atomic_alpha,
     "alpha_emle": analyzer.alpha,
 }
+
+if orca_parser:
+    result.update({
+        "z": orca_parser.z,
+        "xyz": orca_parser.xyz,
+        "E_vac_qm": orca_parser.vac_E,
+        "E_static_qm": orca_parser.E_static,
+        "E_induced_qm": orca_parser.E_induced,
+        "s_qm": orca_parser.mbis["s"],
+        "q_core_qm": orca_parser.mbis["q_core"],
+        "q_val_qm": orca_parser.mbis["q_val"],
+        "E_static_mbis": analyzer.e_static_mbis,
+    })
+
 if args.backend:
     result["E_vac_emle"] = analyzer.e_backend
 if args.alpha:
-    result["alpha_qm"] = parser.alpha
+    result["alpha_qm"] = orca_parser.alpha
 
 scipy.io.savemat(args.output, result)

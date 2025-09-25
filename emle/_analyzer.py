@@ -109,20 +109,6 @@ class EMLEAnalyzer:
         dtype = emle_base._dtype
         device = emle_base._device
 
-        if parser:
-            self.q_total = _torch.sum(
-                _torch.tensor(
-                    parser.mbis["q_core"] + parser.mbis["q_val"],
-                    device=device,
-                    dtype=dtype,
-                ),
-                dim=1,
-            )
-        else:
-            self.q_total = (
-                _torch.ones(len(self.qm_xyz), device=device, dtype=dtype) * self.q_total
-            )
-
         # All the structures are parsed (not only start:end) to ensure the
         # same padding for all the slices (then can be trivially concatenated)
         try:
@@ -134,6 +120,21 @@ class EMLEAnalyzer:
             pc_charges, pc_xyz = self._parse_pc_xyz(pc_xyz_filename)
         except Exception as e:
             raise RuntimeError(f"Unable to parse PC xyz file: {e}")
+
+
+        if parser:
+            self.q_total = _torch.sum(
+                _torch.tensor(
+                    parser.mbis["q_core"] + parser.mbis["q_val"],
+                    device=device,
+                    dtype=dtype,
+                ),
+                dim=1,
+            )
+        else:
+            self.q_total = (
+                _torch.ones(len(qm_xyz), device=device, dtype=dtype) * q_total
+            )
 
         atomic_numbers = atomic_numbers[mask]
         qm_xyz = qm_xyz[mask]
@@ -198,6 +199,8 @@ class EMLEAnalyzer:
             )
 
         for attr in (
+            "atomic_numbers",
+            "qm_xyz",
             "s",
             "q_core",
             "q_val",
