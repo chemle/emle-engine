@@ -31,6 +31,7 @@ from ._gpr import GPR as _GPR
 from ._ivm import IVM as _IVM
 from ._loss import QEqLoss as _QEqLoss
 from ._loss import TholeLoss as _TholeLoss
+from ._loss import DispersionCoefficientLoss as _DispersionCoefficientLoss
 from ._utils import pad_to_max as _pad_to_max
 from ._utils import mean_by_z as _mean_by_z
 
@@ -41,6 +42,7 @@ class EMLETrainer:
         emle_base=_EMLEBase,
         qeq_loss=_QEqLoss,
         thole_loss=_TholeLoss,
+        dispersion_coefficient_loss=_DispersionCoefficientLoss,
         log_level=None,
         log_file=None,
     ):
@@ -55,6 +57,12 @@ class EMLETrainer:
         if thole_loss is not _TholeLoss:
             raise TypeError("thole_loss must be a reference to TholeLoss")
         self._thole_loss = thole_loss
+
+        if dispersion_coefficient_loss is not _DispersionCoefficientLoss:
+            raise TypeError(
+                "dispersion_coefficient_loss must be a reference to DispersionCoefficientLoss"
+            )
+        self._dispersion_coefficient_loss = dispersion_coefficient_loss
 
         # First handle the logger.
         if log_level is None:
@@ -267,7 +275,7 @@ class EMLETrainer:
                 optimizer.step()
                 if (epoch + 1) % print_every == 0:
                     _logger.info(
-                        f"Epoch {epoch+1}: Loss ={loss.item():9.4f}    "
+                        f"Epoch {epoch + 1}: Loss ={loss.item():9.4f}    "
                         f"RMSE ={rmse.item():9.4f}    "
                         f"Max Error ={max_error.item():9.4f}"
                     )
@@ -293,7 +301,8 @@ class EMLETrainer:
         q_core,
         q_val,
         alpha,
-        train_mask,
+        c6=None,
+        train_mask=None,
         alpha_mode="reference",
         sigma=1e-3,
         ivm_thr=0.05,
@@ -301,6 +310,7 @@ class EMLETrainer:
         lr_qeq=0.05,
         lr_thole=0.05,
         lr_sqrtk=0.05,
+        lr_c6=0.05,
         print_every=10,
         computer_n_species=None,
         computer_zid_map=None,
@@ -333,6 +343,9 @@ class EMLETrainer:
         alpha: array or tensor or list of tensor/arrays of shape (N_BATCH, 3, 3)
             Atomic polarizabilities.
 
+        c6: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS, N_ATOMS)
+            C6 dispersion coefficients. If None, the C6 dispersion coefficients are not trained.
+
         train_mask: torch.Tensor(N_BATCH,)
             Mask for training samples.
 
@@ -356,6 +369,9 @@ class EMLETrainer:
 
         lr_sqrtk: float
             Learning rate for sqrtk.
+
+        lr_c6: float
+            Learning rate for c6.
 
         print_every: int
             How often to print training progress.
@@ -426,6 +442,11 @@ class EMLETrainer:
         q_train = q_train.to(device=device, dtype=dtype)
         alpha_train = alpha_train.to(device=device, dtype=dtype)
         species = species.to(device=device, dtype=_torch.int64)
+
+        if c6 is not None:
+            c6 = _pad_to_max(c6)
+            c6_train = c6[train_mask]
+            c6_train = c6_train.to(device=device, dtype=dtype)
 
         # Get zid mapping.
         zid_mapping = self._get_zid_mapping(species)
@@ -504,6 +525,15 @@ class EMLETrainer:
                 if alpha_mode == "reference"
                 else None
             ),
+            "ref_values_c6": (
+                _torch.ones(
+                    *ref_values_s.shape,
+                    dtype=ref_values_s.dtype,
+                    device=_torch.device(device),
+                )
+                if c6 is not None
+                else None
+            ),
         }
 
         # Create the EMLE base instance.
@@ -515,10 +545,10 @@ class EMLETrainer:
             emle_aev_computer=emle_aev_computer,
             species=species,
             alpha_mode=alpha_mode,
+            lj_mode="fixed",
             device=_torch.device(device),
             dtype=dtype,
         )
-
         # Fit chi, a_QEq (QEq over chi predicted with GPR).
         _logger.info("Fitting a_QEq and chi values...")
         self._train_model(
@@ -538,7 +568,6 @@ class EMLETrainer:
         self._qeq_loss._update_chi_gpr(emle_base)
 
         _logger.debug(f"Optimized a_QEq: {emle_base.a_QEq.data.item()}")
-
         # Fit a_Thole, k_Z (uses volumes predicted by QEq model).
         _logger.info("Fitting a_Thole and k_Z values...")
         self._train_model(
@@ -576,6 +605,24 @@ class EMLETrainer:
             # (now inconsistent since not updated after the last epoch)
             self._thole_loss._update_sqrtk_gpr(emle_base)
 
+        if c6 is not None:
+            _logger.info("Fitting ref_values_c6 values...")
+            self._train_model(
+                loss_class=self._dispersion_coefficient_loss,
+                opt_param_names=["ref_values_c6"],
+                lr=lr_c6,
+                epochs=2000,
+                print_every=print_every,
+                emle_base=emle_base,
+                atomic_numbers=z_train,
+                xyz=xyz_train,
+                q_mol=q_mol_train,
+                c6_target=c6_train,
+            )
+
+            # Update reference values for C6.
+            self._dispersion_coefficient_loss._update_c6_gpr(emle_base)
+
         # Create the final model.
         emle_model = {
             "q_core": q_core_z,
@@ -587,6 +634,7 @@ class EMLETrainer:
             "sqrtk_ref": (
                 emle_base.ref_values_sqrtk if alpha_mode == "reference" else None
             ),
+            "c6_ref": (emle_base.ref_values_c6 if c6 is not None else None),
             "species": species,
             "alpha_mode": alpha_mode,
             "n_ref": n_ref,
@@ -603,11 +651,12 @@ class EMLETrainer:
             return emle_base
 
         emle_base._alpha_mode = "species"
-        s_pred, q_core_pred, q_val_pred, A_thole = emle_base(
+        s_pred, q_core_pred, q_val_pred, A_thole, c6_pred = emle_base(
             z.to(device=device, dtype=_torch.int64),
             xyz.to(device=device, dtype=dtype),
             q_mol,
         )
+
         z_mask = _torch.tensor(z > 0, device=device)
         plot_data = {
             "s_emle": s_pred,
@@ -631,6 +680,10 @@ class EMLETrainer:
             plot_data["alpha_reference"] = self._thole_loss._get_alpha_mol(
                 A_thole, z_mask
             )
+
+        if c6 is not None:
+            plot_data["c6_qm"] = c6
+            plot_data["c6_emle"] = c6_pred
 
         self._write_model_to_file(plot_data, plot_data_filename)
 

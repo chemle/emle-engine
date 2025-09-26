@@ -27,14 +27,12 @@ __email__ = "kzinovjev@gmail.com"
 
 __all__ = ["EMLEBase"]
 
-import numpy as _np
-
-import torch as _torch
-
-from torch import Tensor
 from typing import Tuple
 
+import numpy as _np
+import torch as _torch
 import torchani as _torchani
+from torch import Tensor
 
 try:
     import NNPOps as _NNPOps
@@ -66,6 +64,7 @@ class EMLEBase(_torch.nn.Module):
         emle_aev_computer=None,
         species=None,
         alpha_mode="species",
+        lj_mode=None,
         device=None,
         dtype=None,
     ):
@@ -95,6 +94,10 @@ class EMLEBase(_torch.nn.Module):
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
 
+        lj_mode: str
+            Mode for calculating the Lennard-Jones potential.
+            If None, the Lennard-Jones potential is not calculated.
+
         emle_aev_computer: EMLEAEVComputer
             EMLE AEV computer instance used to compute AEVs (masked and normalized).
 
@@ -107,7 +110,6 @@ class EMLEBase(_torch.nn.Module):
         dtype: torch.dtype
             The data type to use for the models floating point tensors.
         """
-
         # Call the base class constructor.
         super().__init__()
 
@@ -116,7 +118,14 @@ class EMLEBase(_torch.nn.Module):
             raise TypeError("'params' must be of type 'dict'")
         if not all(
             k in params
-            for k in ["a_QEq", "a_Thole", "ref_values_s", "ref_values_chi", "k_Z"]
+            for k in [
+                "a_QEq",
+                "a_Thole",
+                "ref_values_s",
+                "ref_values_chi",
+                "k_Z",
+                "ref_values_c6",
+            ]
         ):
             raise ValueError(
                 "'params' must contain keys 'a_QEq', 'a_Thole', 'ref_values_s', 'ref_values_chi', and 'k_Z'"
@@ -206,6 +215,18 @@ class EMLEBase(_torch.nn.Module):
                 )
                 raise ValueError(msg)
 
+        if lj_mode is not None:
+            assert lj_mode in ["fixed", "flexible"], "Invalid Lennard-Jones mode"
+            try:
+                self.ref_values_c6 = _torch.nn.Parameter(params["ref_values_c6"])
+            except:
+                msg = (
+                    "Missing 'ref_values_c6' key in params. This is required when "
+                    "using the Lennard-Jones potential."
+                )
+                raise ValueError(msg)
+        self._lj_mode = lj_mode
+
         # Validate the species.
         if species is None:
             # Use the default species.
@@ -241,6 +262,12 @@ class EMLEBase(_torch.nn.Module):
         else:
             ref_mean_sqrtk, c_sqrtk = self._get_c(n_ref, self.ref_values_sqrtk, Kinv)
 
+        if lj_mode is not None:
+            ref_mean_c6, c_c6 = self._get_c(n_ref, self.ref_values_c6, Kinv)
+        else:
+            ref_mean_c6 = _torch.zeros_like(ref_mean_s, dtype=dtype, device=device)
+            c_c6 = _torch.zeros_like(c_s, dtype=dtype, device=device)
+
         # Store the current device.
         self._device = device
 
@@ -253,9 +280,11 @@ class EMLEBase(_torch.nn.Module):
         self.register_buffer("_ref_mean_s", ref_mean_s)
         self.register_buffer("_ref_mean_chi", ref_mean_chi)
         self.register_buffer("_ref_mean_sqrtk", ref_mean_sqrtk)
+        self.register_buffer("_ref_mean_c6", ref_mean_c6)
         self.register_buffer("_c_s", c_s)
         self.register_buffer("_c_chi", c_chi)
         self.register_buffer("_c_sqrtk", c_sqrtk)
+        self.register_buffer("_c_c6", c_c6)
 
     def to(self, *args, **kwargs):
         """
@@ -270,9 +299,11 @@ class EMLEBase(_torch.nn.Module):
         self._ref_mean_s = self._ref_mean_s.to(*args, **kwargs)
         self._ref_mean_chi = self._ref_mean_chi.to(*args, **kwargs)
         self._ref_mean_sqrtk = self._ref_mean_sqrtk.to(*args, **kwargs)
+        self._ref_mean_c6 = self._ref_mean_c6.to(*args, **kwargs)
         self._c_s = self._c_s.to(*args, **kwargs)
         self._c_chi = self._c_chi.to(*args, **kwargs)
         self._c_sqrtk = self._c_sqrtk.to(*args, **kwargs)
+        self._c_c6 = self._c_c6.to(*args, **kwargs)
         self.k_Z = _torch.nn.Parameter(self.k_Z.to(*args, **kwargs))
 
         # Check for a device type in args and update the device attribute.
@@ -296,9 +327,11 @@ class EMLEBase(_torch.nn.Module):
         self._ref_mean_s = self._ref_mean_s.cuda(**kwargs)
         self._ref_mean_chi = self._ref_mean_chi.cuda(**kwargs)
         self._ref_mean_sqrtk = self._ref_mean_sqrtk.cuda(**kwargs)
+        self._ref_mean_c6 = self._ref_mean_c6.cuda(**kwargs)
         self._c_s = self._c_s.cuda(**kwargs)
         self._c_chi = self._c_chi.cuda(**kwargs)
         self._c_sqrtk = self._c_sqrtk.cuda(**kwargs)
+        self._c_c6 = self._c_c6.cuda(**kwargs)
         self.k_Z = _torch.nn.Parameter(self.k_Z.cuda(**kwargs))
 
         # Update the device attribute.
@@ -318,10 +351,12 @@ class EMLEBase(_torch.nn.Module):
         self._n_ref = self._n_ref.cpu(**kwargs)
         self._ref_mean_s = self._ref_mean_s.cpu(**kwargs)
         self._ref_mean_chi = self._ref_mean_chi.cpu(**kwargs)
-        self._ref_mean_sqrtk = self._ref_mean_sqrtk.to(**kwargs)
+        self._ref_mean_sqrtk = self._ref_mean_sqrtk.cpu(**kwargs)
+        self._ref_mean_c6 = self._ref_mean_c6.cpu(**kwargs)
         self._c_s = self._c_s.cpu(**kwargs)
         self._c_chi = self._c_chi.cpu(**kwargs)
         self._c_sqrtk = self._c_sqrtk.cpu(**kwargs)
+        self._c_c6 = self._c_c6.cpu(**kwargs)
         self.k_Z = _torch.nn.Parameter(self.k_Z.cpu(**kwargs))
 
         # Update the device attribute.
@@ -340,9 +375,11 @@ class EMLEBase(_torch.nn.Module):
         self._ref_mean_s = self._ref_mean_s.double()
         self._ref_mean_chi = self._ref_mean_chi.double()
         self._ref_mean_sqrtk = self._ref_mean_sqrtk.double()
+        self._ref_mean_c6 = self._ref_mean_c6.double()
         self._c_s = self._c_s.double()
         self._c_chi = self._c_chi.double()
         self._c_sqrtk = self._c_sqrtk.double()
+        self._c_c6 = self._c_c6.double()
         self.k_Z = _torch.nn.Parameter(self.k_Z.double())
         return self
 
@@ -357,9 +394,11 @@ class EMLEBase(_torch.nn.Module):
         self._ref_mean_s = self._ref_mean_s.float()
         self._ref_mean_chi = self._ref_mean_chi.float()
         self._ref_mean_sqrtk = self._ref_mean_sqrtk.float()
+        self._ref_mean_c6 = self._ref_mean_c6.float()
         self._c_s = self._c_s.float()
         self._c_chi = self._c_chi.float()
         self._c_sqrtk = self._c_sqrtk.float()
+        self._c_c6 = self._c_c6.float()
         self.k_Z = _torch.nn.Parameter(self.k_Z.float())
         return self
 
@@ -386,8 +425,9 @@ class EMLEBase(_torch.nn.Module):
         result: (torch.Tensor (N_BATCH, N_QM_ATOMS,),
                  torch.Tensor (N_BATCH, N_QM_ATOMS,),
                  torch.Tensor (N_BATCH, N_QM_ATOMS,),
-                 torch.Tensor (N_BATCH, N_QM_ATOMS * 3, N_QM_ATOMS * 3,))
-            Valence widths, core charges, valence charges, A_thole tensor
+                 torch.Tensor (N_BATCH, N_QM_ATOMS * 3, N_QM_ATOMS * 3,),
+                 torch.Tensor (N_BATCH, N_QM_ATOMS,))
+            Valence widths, core charges, valence charges, A_thole tensor, C6 coefficients
         """
 
         # Mask for padded coordinates.
@@ -410,7 +450,6 @@ class EMLEBase(_torch.nn.Module):
         xyz_qm_bohr = xyz_qm * ANGSTROM_TO_BOHR
 
         r_data = self._get_r_data(xyz_qm_bohr, mask)
-
         q_core = self._q_core[species_id] * mask
         q = self._get_q(r_data, s, chi, q_total, mask)
         q_val = q - q_core
@@ -425,7 +464,12 @@ class EMLEBase(_torch.nn.Module):
 
         A_thole = self._get_A_thole(r_data, s, q_val, k, self.a_Thole)
 
-        return s, q_core, q_val, A_thole
+        if self._lj_mode is not None:
+            c6 = self._gpr(aev, self._ref_mean_c6, self._c_c6, species_id)
+        else:
+            c6 = None
+
+        return s, q_core, q_val, A_thole, c6
 
     @classmethod
     def _get_Kinv(cls, ref_features, sigma):
@@ -1021,6 +1065,7 @@ class EMLEBase(_torch.nn.Module):
     @staticmethod
     def _get_T0_slater(r: Tensor, s: Tensor) -> Tensor:
         """
+        # Get distances
         Internal method, calculates T0 tensor for Slater densities.
 
         Parameters
@@ -1038,3 +1083,133 @@ class EMLEBase(_torch.nn.Module):
         results: torch.Tensor (N_BATCH, MAX_QM_ATOMS, MAX_MM_ATOMS)
         """
         return (1 - (1 + r / (s * 2)) * _torch.exp(-r / s)) / r
+
+    @staticmethod
+    def get_lj_energy(
+        sigma_qm: Tensor,
+        epsilon_qm: Tensor,
+        sigma_mm: Tensor,
+        epsilon_mm: Tensor,
+        mesh_data: Tuple[Tensor, Tensor, Tensor],
+    ) -> Tensor:
+        """
+        Calculate the Lennard-Jones energy.
+
+        Parameters
+        ----------
+
+        sigma_qm: Tensor (N_BATCH, N_QM_ATOMS)
+            Lennard-Jones sigma values in Bohr.
+
+        epsilon_qm: Tensor (N_BATCH, N_QM_ATOMS)
+            Lennard-Jones epsilon values in atomic units.
+
+        sigma_mm: Tensor (N_BATCH, N_MM_ATOMS)
+            Lennard-Jones sigma values in Bohr.
+
+        epsilon_mm: Tensor (N_BATCH, N_MM_ATOMS)
+            Lennard-Jones epsilon values in atomic units.
+
+        mesh_data: Tuple[Tensor, Tensor, Tensor]
+            Mesh data tuple containing (r_inv, r_vec, s_outer_product).
+            r_inv: Tensor (N_BATCH, N_QM_ATOMS, N_MM_ATOMS) of inverse QM-MM distances.
+
+        Returns
+        -------
+
+        Tensor (N_BATCH,)
+            Total Lennard-Jones energy for each batch element in atomic units.
+        """
+        # Lorentz-Berthelot combining rules
+        # sigma (N_BATCH, N_QM, N_MM)
+        # epsilon (N_BATCH, N_QM, N_MM)
+        sigma = 0.5 * (sigma_qm[:, :, None] + sigma_mm[:, None, :])
+        epsilon_product = epsilon_qm[:, :, None] * epsilon_mm[:, None, :]
+        epsilon = _torch.where(epsilon_product > 0, _torch.sqrt(epsilon_product), 0.0)
+
+        # Get distances
+        # r_inv (N_BATCH, N_QM, N_MM)
+        r_inv, _, _ = mesh_data
+        sigma_r_inv_6 = (sigma * r_inv) ** 6
+        sigma_r_inv_12 = sigma_r_inv_6 * sigma_r_inv_6
+
+        # Calculate pairwise energy matrix (N_BATCH, N_QM, N_MM)
+        lj_energy = 4 * epsilon * (sigma_r_inv_12 - sigma_r_inv_6)
+
+        # Sum over QM and MM atoms for each batch element
+        lj_energy = lj_energy.sum(dim=(1, 2))
+
+        return lj_energy
+
+    @staticmethod
+    def get_isotropic_polarizabilities(A_thole: _torch.Tensor) -> _torch.Tensor:
+        """
+        Calculate isotropic polarizabilities from the A_thole tensor.
+
+        Parameters
+        ----------
+
+        A_thole : torch.Tensor(N_BATCH, 3N_ATOMS, 3N_ATOMS)
+            Full polarizability tensor in block form.
+
+        Returns
+        -------
+
+        torch.Tensor(N_BATCH, N_ATOMS)
+            Isotropic polarizabilities per atom.
+        """
+
+        def _get_traces(A_thole: _torch.Tensor) -> _torch.Tensor:
+            """
+            Compute the trace of the inverse of each 3x3 block in each polarizability tensor.
+            """
+            n_mol, dim, _ = A_thole.shape
+            if dim % 3 != 0:
+                raise ValueError("Dimension of A_thole must be divisible by 3.")
+
+            n_atoms = dim // 3
+            traces = _torch.empty(
+                (n_mol, n_atoms), dtype=A_thole.dtype, device=A_thole.device
+            )
+
+            for mol_idx in range(n_mol):
+                for atom_idx in range(n_atoms):
+                    block = A_thole[
+                        mol_idx,
+                        3 * atom_idx : 3 * atom_idx + 3,
+                        3 * atom_idx : 3 * atom_idx + 3,
+                    ]
+                    inv_block = _torch.inverse(block)
+                    traces[mol_idx, atom_idx] = _torch.trace(inv_block)
+
+            return traces
+
+        return _get_traces(A_thole) / 3.0
+
+    def get_lj_parameters(
+        self, c6: _torch.Tensor, alpha: _torch.Tensor
+    ) -> Tuple[Tensor, Tensor]:
+        """
+        Calculate Lennard-Jones sigma and epsilon parameters.
+
+        Parameters
+        ----------
+
+        c6: _torch.Tensor(N_BATCH, N_ATOMS)
+            C6 coefficients per atom.
+
+        alpha: _torch.Tensor(N_BATCH, N_ATOMS)
+            Isotropic polarizabilities per atom.
+
+        Returns
+        -------
+
+        Tuple[torch.Tensor, torch.Tensor]
+            Tuple containing the sigma (Bohr) and epsilon (Hartree) LJ parameters for each atom.
+        """
+        radius = 2.54 * alpha ** (1.0 / 7.0)
+        rmin = 2 * radius
+        sigma = rmin / (2 ** (1.0 / 6.0))
+        epsilon = c6 / (2 * rmin**6.0)
+
+        return sigma, epsilon
