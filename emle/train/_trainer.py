@@ -338,7 +338,8 @@ class EMLETrainer:
             Atomic valence charges.
 
         q_mol: array or tensor or list of scalars of shape (N_BATCH,)
-            Total molecular charges. Required when training Thole without QEq data.
+            Total molecular charges. Only required when training Thole without QEq data using a
+            pre-trained EMLE model.
 
         alpha: array or tensor or list of tensor/arrays of shape (N_BATCH, 3, 3)
             Molecular polarizability tensors.
@@ -415,18 +416,22 @@ class EMLETrainer:
         """
         # Good for debugging
         # _torch.autograd.set_detect_anomaly(True)
-        
         train_qeq = q_core is not None and q_val is not None
         train_thole = alpha is not None
 
-        if not train_qeq and not train_thole:
+        if emle_model is None and (not train_qeq or not train_thole):
             raise ValueError(
-                "At least one of (q_core and q_val) or alpha must be provided"
+                "Both QEq and Thole data must be provided when training EMLE from scratch."
+            )
+
+        if not (train_qeq or train_thole):
+            raise ValueError(
+                "At least one of (q_core and q_val) or alpha must be provided."
             )
 
         if train_thole and not train_qeq and q_mol is None:
             raise ValueError(
-                "q_mol must be provided when training Thole without QEq data"
+                "q_mol must be provided when training Thole without QEq data."
             )
 
         # Checks for alpha_mode.
