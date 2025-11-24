@@ -27,6 +27,7 @@ import torch as _torch
 
 from ..models import EMLEAEVComputer as _EMLEAEVComputer
 from ..models import EMLEBase as _EMLEBase
+from ..models import EMLE
 from ._gpr import GPR as _GPR
 from ._ivm import IVM as _IVM
 from ._loss import QEqLoss as _QEqLoss
@@ -290,10 +291,12 @@ class EMLETrainer:
         z,
         xyz,
         s,
-        q_core,
-        q_val,
-        alpha,
-        train_mask,
+        q_core=None,
+        q_val=None,
+        q_mol=None,
+        alpha=None,
+        train_mask=None,
+        alpha_atomic=None,
         alpha_mode="reference",
         sigma=1e-3,
         ivm_thr=0.05,
@@ -301,9 +304,13 @@ class EMLETrainer:
         lr_qeq=0.05,
         lr_thole=0.05,
         lr_sqrtk=0.05,
+        l2_reg_thole=20.0,
+        weight_alpha_mol=1.0,
+        weight_alpha_atomic=1.0,
         print_every=10,
         computer_n_species=None,
         computer_zid_map=None,
+        emle_model=None,
         model_filename="emle_model.mat",
         plot_data_filename=None,
         device=_torch.device("cuda"),
@@ -330,7 +337,13 @@ class EMLETrainer:
         q_val: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS)
             Atomic valence charges.
 
+        q_mol: array or tensor or list of scalars of shape (N_BATCH,)
+            Total molecular charges. Required when training Thole without QEq data.
+
         alpha: array or tensor or list of tensor/arrays of shape (N_BATCH, 3, 3)
+            Molecular polarizability tensors.
+
+        alpha_atomic: array or tensor or list of tensor/arrays of shape (N_BATCH, N_ATOMS)
             Atomic polarizabilities.
 
         train_mask: torch.Tensor(N_BATCH,)
@@ -357,6 +370,18 @@ class EMLETrainer:
         lr_sqrtk: float
             Learning rate for sqrtk.
 
+        l2_reg_thole: float
+            L2 regularization coefficient for Thole model training.
+            Only relevant if alpha_mode is 'reference'.
+
+        weight_alpha_mol: float
+            Weight of molecular polarizabilities in the loss function.
+            Only relevant if atomic polarizability targets are provided.
+
+        weight_alpha_atomic: float
+            Weight of atomic polarizabilities in the loss function.
+            Only relevant if atomic polarizability targets are provided.
+
         print_every: int
             How often to print training progress.
 
@@ -365,6 +390,10 @@ class EMLETrainer:
 
         computer_zid_map: dict ({emle_zid: calculator_zid})
             Map between EMLE and calculator zid values (for ANI2x backend).
+
+        emle_model: str or None
+            Filename of pre-trained EMLE model to use for initialization. If None,
+            the model is trained from scratch.
 
         model_filename: str or None
             Filename to save the trained model. If None, the model is not saved.
@@ -384,10 +413,21 @@ class EMLETrainer:
         dict
             Trained EMLE model.
         """
-        # Check input data.
-        assert (
-            len(z) == len(xyz) == len(s) == len(q_core) == len(q_val) == len(alpha)
-        ), "z, xyz, s, q_core, q, and alpha must have the same number of samples"
+        # Good for debugging
+        # _torch.autograd.set_detect_anomaly(True)
+        
+        train_qeq = q_core is not None and q_val is not None
+        train_thole = alpha is not None
+
+        if not train_qeq and not train_thole:
+            raise ValueError(
+                "At least one of (q_core and q_val) or alpha must be provided"
+            )
+
+        if train_thole and not train_qeq and q_mol is None:
+            raise ValueError(
+                "q_mol must be provided when training Thole without QEq data"
+            )
 
         # Checks for alpha_mode.
         if not isinstance(alpha_mode, str):
@@ -400,168 +440,178 @@ class EMLETrainer:
             train_mask = _torch.ones(len(z), dtype=_torch.bool)
 
         # Prepare batch data.
-        q_val = _pad_to_max(q_val)
-        q_core = _pad_to_max(q_core)
-        q = q_core + q_val
-        q_mol = _torch.sum(q, dim=1)
         z = _pad_to_max(z)
         xyz = _pad_to_max(xyz)
-
-        q_core_train = q_core[train_mask]
-        q_mol_train = q_mol[train_mask]
-        q_train = q[train_mask]
         z_train = z[train_mask]
         xyz_train = xyz[train_mask]
         s_train = _pad_to_max(s)[train_mask]
-        alpha_train = _pad_to_max(alpha)[train_mask]
         species = _torch.unique(_torch.tensor(z_train[z_train > 0], device=device))
 
-        # Place on the correct device and set the data type.
-        q_mol = q_mol.to(device=device, dtype=dtype)
-        q_mol_train = q_mol_train.to(device=device, dtype=dtype)
         z_train = z_train.to(device=device, dtype=_torch.int64)
         xyz_train = xyz_train.to(device=device, dtype=dtype)
         s_train = s_train.to(device=device, dtype=dtype)
-        q_core_train = q_core_train.to(device=device, dtype=dtype)
-        q_train = q_train.to(device=device, dtype=dtype)
-        alpha_train = alpha_train.to(device=device, dtype=dtype)
         species = species.to(device=device, dtype=_torch.int64)
 
-        # Get zid mapping.
-        zid_mapping = self._get_zid_mapping(species)
-        zid_train = zid_mapping[z_train]
+        if train_qeq:
+            q_val = _pad_to_max(q_val)
+            q_core = _pad_to_max(q_core)
+            q = q_core + q_val
+            q_mol = _torch.sum(q, dim=1)
+            q_core_train = q_core[train_mask]
+            q_mol_train = q_mol[train_mask]
+            q_train = q[train_mask]
+            q_mol = q_mol.to(device=device, dtype=dtype)
+            q_mol_train = q_mol_train.to(device=device, dtype=dtype)
+            q_core_train = q_core_train.to(device=device, dtype=dtype)
+            q_train = q_train.to(device=device, dtype=dtype)
+        elif train_thole:
+            q_mol = _pad_to_max(q_mol)
+            q_mol_train = q_mol[train_mask]
+            q_mol = q_mol.to(device=device, dtype=dtype)
+            q_mol_train = q_mol_train.to(device=device, dtype=dtype)
 
-        if computer_n_species is None:
-            computer_n_species = len(species)
+        if train_thole:
+            alpha_train = _pad_to_max(alpha)[train_mask]
+            alpha_train = alpha_train.to(device=device, dtype=dtype)
 
-        # Calculate AEVs.
-        emle_aev_computer = _EMLEAEVComputer(
-            num_species=computer_n_species,
-            zid_map=computer_zid_map,
-            dtype=dtype,
-            device=device,
-        )
-        aev_mols = emle_aev_computer(zid_train, xyz_train)
-        aev_mask = _torch.sum(aev_mols.reshape(-1, aev_mols.shape[-1]) ** 2, dim=0) > 0
+        if alpha_atomic is not None:
+            alpha_atomic = _pad_to_max(alpha_atomic)[train_mask]
+            alpha_atomic = alpha_atomic.to(device=device, dtype=dtype)
 
-        aev_mols = aev_mols[:, :, aev_mask]
-        emle_aev_computer = _EMLEAEVComputer(
-            num_species=computer_n_species,
-            zid_map=computer_zid_map,
-            mask=aev_mask,
-            dtype=dtype,
-            device=device,
-        )
+        if not emle_model:
+            _logger.info("Training EMLE model from scratch...")
+            # Get zid mapping.
+            zid_mapping = self._get_zid_mapping(species)
+            zid_train = zid_mapping[z_train]
 
-        # "Fit" q_core (just take averages over the entire training set).
-        q_core_z = _mean_by_z(q_core_train, zid_train)
+            if computer_n_species is None:
+                computer_n_species = len(species)
 
-        _logger.info("Performing IVM...")
-        # Create an array of (molecule_id, atom_id) pairs (as in the full
-        # dataset) for the training set. This is needed to be able to locate
-        # atoms/molecules in the original dataset that were picked by IVM.
-        n_mols, max_atoms = q_train.shape
-        atom_ids = _torch.stack(
-            _torch.meshgrid(_torch.arange(n_mols), _torch.arange(max_atoms)), dim=-1
-        ).to(device)
-
-        # Perform IVM.
-        ivm_mol_atom_ids_padded, aev_ivm_allz = _IVM.perform_ivm(
-            aev_mols, z_train, atom_ids, species, ivm_thr, sigma
-        )
-
-        ref_features = _pad_to_max(aev_ivm_allz)
-        ref_mask = ivm_mol_atom_ids_padded[:, :, 0] > -1
-        n_ref = _torch.sum(ref_mask, dim=1)
-        _logger.info("IVM done. Number of reference environments selected:")
-        for atom_z, n in zip(species, n_ref):
-            _logger.info(f"{atom_z:2d}: {n:5d}")
-
-        # Fit s (pure GPR, no fancy optimization needed).
-        ref_values_s = self._train_s(s_train, zid_train, aev_mols, aev_ivm_allz, sigma)
-
-        # Good for debugging
-        # _torch.autograd.set_detect_anomaly(True)
-
-        # Initial guess for the model parameters.
-        params = {
-            "a_QEq": _torch.tensor([1.0]).to(device=device, dtype=dtype),
-            "a_Thole": _torch.tensor([2.0]).to(device=device, dtype=dtype),
-            "ref_values_s": ref_values_s.to(device=device, dtype=dtype),
-            "ref_values_chi": _torch.zeros(
-                *ref_values_s.shape,
-                dtype=ref_values_s.dtype,
+            # Calculate AEVs.
+            emle_aev_computer = _EMLEAEVComputer(
+                num_species=computer_n_species,
+                zid_map=computer_zid_map,
+                dtype=dtype,
                 device=device,
-            ),
-            "k_Z": 0.5
-            * _torch.ones(len(species), dtype=dtype, device=_torch.device(device)),
-            "sqrtk_ref": (
-                _torch.ones(
+            )
+            aev_mols = emle_aev_computer(zid_train, xyz_train)
+            aev_mask = (
+                _torch.sum(aev_mols.reshape(-1, aev_mols.shape[-1]) ** 2, dim=0) > 0
+            )
+
+            aev_mols = aev_mols[:, :, aev_mask]
+            emle_aev_computer = _EMLEAEVComputer(
+                num_species=computer_n_species,
+                zid_map=computer_zid_map,
+                mask=aev_mask,
+                dtype=dtype,
+                device=device,
+            )
+
+            # "Fit" q_core (just take averages over the entire training set).
+            q_core_z = (
+                _mean_by_z(q_core_train, zid_train)
+                if train_qeq
+                else _torch.zeros(len(species), dtype=dtype, device=device)
+            )
+
+            _logger.info("Performing IVM...")
+            # Create an array of (molecule_id, atom_id) pairs (as in the full
+            # dataset) for the training set. This is needed to be able to locate
+            # atoms/molecules in the original dataset that were picked by IVM.
+            n_mols, max_atoms = q_train.shape
+            atom_ids = _torch.stack(
+                _torch.meshgrid(_torch.arange(n_mols), _torch.arange(max_atoms)), dim=-1
+            ).to(device)
+
+            # Perform IVM.
+            ivm_mol_atom_ids_padded, aev_ivm_allz = _IVM.perform_ivm(
+                aev_mols, z_train, atom_ids, species, ivm_thr, sigma
+            )
+
+            ref_features = _pad_to_max(aev_ivm_allz)
+            ref_mask = ivm_mol_atom_ids_padded[:, :, 0] > -1
+            n_ref = _torch.sum(ref_mask, dim=1)
+            _logger.info("IVM done. Number of reference environments selected:")
+            for atom_z, n in zip(species, n_ref):
+                _logger.info(f"{atom_z:2d}: {n:5d}")
+
+            # Fit s (pure GPR, no fancy optimization needed).
+            ref_values_s = self._train_s(
+                s_train, zid_train, aev_mols, aev_ivm_allz, sigma
+            )
+
+            # Initial guess for the model parameters.
+            params = {
+                "a_QEq": _torch.tensor([1.0]).to(device=device, dtype=dtype),
+                "a_Thole": _torch.tensor([2.0]).to(device=device, dtype=dtype),
+                "ref_values_s": ref_values_s.to(device=device, dtype=dtype),
+                "ref_values_chi": _torch.zeros(
                     *ref_values_s.shape,
                     dtype=ref_values_s.dtype,
-                    device=_torch.device(device),
-                )
-                if alpha_mode == "reference"
-                else None
-            ),
-        }
+                    device=device,
+                ),
+                "k_Z": 0.5
+                * _torch.ones(len(species), dtype=dtype, device=_torch.device(device)),
+                "sqrtk_ref": (
+                    _torch.ones(
+                        *ref_values_s.shape,
+                        dtype=ref_values_s.dtype,
+                        device=_torch.device(device),
+                    )
+                    if alpha_mode == "reference"
+                    else None
+                ),
+            }
 
-        # Create the EMLE base instance.
-        emle_base = self._emle_base(
-            params=params,
-            n_ref=n_ref,
-            ref_features=ref_features,
-            q_core=q_core_z,
-            emle_aev_computer=emle_aev_computer,
-            species=species,
-            alpha_mode=alpha_mode,
-            device=_torch.device(device),
-            dtype=dtype,
-        )
+            # Create the EMLE base instance.
+            emle_base = self._emle_base(
+                params=params,
+                n_ref=n_ref,
+                ref_features=ref_features,
+                q_core=q_core_z,
+                emle_aev_computer=emle_aev_computer,
+                species=species,
+                alpha_mode=alpha_mode,
+                device=_torch.device(device),
+                dtype=dtype,
+            )
+        else:
+            # Load pre-trained EMLE model.
+            _logger.info(f"Loading pre-trained EMLE model from '{emle_model}'")
+            emle = EMLE(
+                model=emle_model,
+                alpha_mode=alpha_mode,
+                device=_torch.device(device),
+                dtype=dtype,
+            )
+            emle_base = emle._emle_base
 
         # Fit chi, a_QEq (QEq over chi predicted with GPR).
-        _logger.info("Fitting a_QEq and chi values...")
-        self._train_model(
-            loss_class=self._qeq_loss,
-            opt_param_names=["a_QEq", "ref_values_chi"],
-            lr=lr_qeq,
-            epochs=epochs,
-            print_every=print_every,
-            emle_base=emle_base,
-            atomic_numbers=z_train,
-            xyz=xyz_train,
-            q_mol=q_mol_train,
-            q_target=q_train,
-        )
-        # Update GPR constants for chi
-        # (now inconsistent since not updated after the last epoch)
-        self._qeq_loss._update_chi_gpr(emle_base)
-
-        _logger.debug(f"Optimized a_QEq: {emle_base.a_QEq.data.item()}")
+        if train_qeq:
+            _logger.info("Fitting a_QEq and chi values...")
+            self._train_model(
+                loss_class=self._qeq_loss,
+                opt_param_names=["a_QEq", "ref_values_chi"],
+                lr=lr_qeq,
+                epochs=epochs,
+                print_every=print_every,
+                emle_base=emle_base,
+                atomic_numbers=z_train,
+                xyz=xyz_train,
+                q_mol=q_mol_train,
+                q_target=q_train,
+            )
+            self._qeq_loss._update_chi_gpr(emle_base)
+            _logger.debug(f"Optimized a_QEq: {emle_base.a_QEq.data.item()}")
 
         # Fit a_Thole, k_Z (uses volumes predicted by QEq model).
-        _logger.info("Fitting a_Thole and k_Z values...")
-        self._train_model(
-            loss_class=self._thole_loss,
-            opt_param_names=["a_Thole", "k_Z"],
-            lr=lr_thole,
-            epochs=epochs,
-            print_every=print_every,
-            emle_base=emle_base,
-            atomic_numbers=z_train,
-            xyz=xyz_train,
-            q_mol=q_mol_train,
-            alpha_mol_target=alpha_train,
-        )
-
-        _logger.debug(f"Optimized a_Thole: {emle_base.a_Thole.data.item()}")
-        # Fit sqrtk_ref ( alpha = sqrtk ** 2 * k_Z * v).
-        if alpha_mode == "reference":
-            _logger.info("Fitting ref_values_sqrtk values...")
+        if train_thole:
+            _logger.info("Fitting a_Thole and k_Z values...")
             self._train_model(
                 loss_class=self._thole_loss,
-                opt_param_names=["ref_values_sqrtk"],
-                lr=lr_sqrtk,
+                opt_param_names=["a_Thole", "k_Z"],
+                lr=lr_thole,
                 epochs=epochs,
                 print_every=print_every,
                 emle_base=emle_base,
@@ -569,16 +619,37 @@ class EMLETrainer:
                 xyz=xyz_train,
                 q_mol=q_mol_train,
                 alpha_mol_target=alpha_train,
-                opt_sqrtk=True,
-                l2_reg=20.0,
+                alpha_atomic_target=alpha_atomic,
+                weight_alpha_mol=weight_alpha_mol,
+                weight_alpha_atomic=weight_alpha_atomic,
             )
-            # Update GPR constants for sqrtk
-            # (now inconsistent since not updated after the last epoch)
-            self._thole_loss._update_sqrtk_gpr(emle_base)
+            _logger.debug(f"Optimized a_Thole: {emle_base.a_Thole.data.item()}")
+
+            # Fit sqrtk_ref ( alpha = sqrtk ** 2 * k_Z * v).
+            if alpha_mode == "reference":
+                _logger.info("Fitting ref_values_sqrtk values...")
+                self._train_model(
+                    loss_class=self._thole_loss,
+                    opt_param_names=["ref_values_sqrtk"],
+                    lr=lr_sqrtk,
+                    epochs=epochs,
+                    print_every=print_every,
+                    emle_base=emle_base,
+                    atomic_numbers=z_train,
+                    xyz=xyz_train,
+                    q_mol=q_mol_train,
+                    alpha_mol_target=alpha_train,
+                    alpha_atomic_target=alpha_atomic,
+                    opt_sqrtk=True,
+                    l2_reg=l2_reg_thole,
+                    weight_alpha_mol=weight_alpha_mol,
+                    weight_alpha_atomic=weight_alpha_atomic,
+                )
+                self._thole_loss._update_sqrtk_gpr(emle_base)
 
         # Create the final model.
         emle_model = {
-            "q_core": q_core_z,
+            "q_core": emle_base._q_core,
             "a_QEq": emle_base.a_QEq,
             "a_Thole": emle_base.a_Thole,
             "s_ref": emle_base.ref_values_s,
@@ -587,13 +658,13 @@ class EMLETrainer:
             "sqrtk_ref": (
                 emle_base.ref_values_sqrtk if alpha_mode == "reference" else None
             ),
-            "species": species,
-            "alpha_mode": alpha_mode,
-            "n_ref": n_ref,
-            "ref_aev": ref_features,
-            "aev_mask": aev_mask,
-            "zid_map": emle_aev_computer._zid_map,
-            "computer_n_species": computer_n_species,
+            "species": emle_base._species,
+            "alpha_mode": emle_base._alpha_mode,
+            "n_ref": emle_base._n_ref,
+            "ref_aev": emle_base._ref_features,
+            "aev_mask": emle_base._emle_aev_computer._mask,
+            "zid_map": emle_base._emle_aev_computer._zid_map,
+            "computer_n_species": len(emle_base._emle_aev_computer._zid_map) - 1,
         }
 
         if model_filename is not None:
@@ -603,7 +674,7 @@ class EMLETrainer:
             return emle_base
 
         emle_base._alpha_mode = "species"
-        s_pred, q_core_pred, q_val_pred, A_thole = emle_base(
+        s_pred, q_core_pred, q_val_pred, A_thole, *_ = emle_base(
             z.to(device=device, dtype=_torch.int64),
             xyz.to(device=device, dtype=dtype),
             q_mol,
@@ -613,13 +684,26 @@ class EMLETrainer:
             "s_emle": s_pred,
             "q_core_emle": q_core_pred,
             "q_val_emle": q_val_pred,
-            "alpha_species": self._thole_loss._get_alpha_mol(A_thole, z_mask),
             "z": z,
             "s_qm": s,
-            "q_core_qm": q_core,
-            "q_val_qm": q_val,
-            "alpha_qm": alpha,
         }
+
+        if train_qeq:
+            plot_data.update({"q_core_qm": q_core, "q_val_qm": q_val})
+
+        if train_thole:
+            plot_data.update(
+                {
+                    "alpha_species": self._thole_loss._get_alpha_mol(A_thole, z_mask),
+                    "alpha_qm": alpha,
+                }
+            )
+
+        if alpha_atomic is not None:
+            plot_data["alpha_atomic_qm"] = alpha_atomic
+            plot_data["alpha_atomic_species_emle"] = self._thole_loss._get_alpha_atomic(
+                A_thole, z_mask
+            )
 
         if alpha_mode == "reference":
             emle_base._alpha_mode = "reference"
@@ -631,6 +715,11 @@ class EMLETrainer:
             plot_data["alpha_reference"] = self._thole_loss._get_alpha_mol(
                 A_thole, z_mask
             )
+
+            if alpha_atomic is not None:
+                plot_data["alpha_atomic_reference_emle"] = (
+                    self._thole_loss._get_alpha_atomic(A_thole, z_mask)
+                )
 
         self._write_model_to_file(plot_data, plot_data_filename)
 
