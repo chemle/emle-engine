@@ -203,7 +203,7 @@ class TholeLoss(_BaseLoss):
     @staticmethod
     def _get_alpha_mol(A_thole, mask):
         """
-        Calculates molecular dipolar polarizability tensor from the A_thole matrix
+        Calculates molecular dipolar polarizability tensor from the A_thole matrix.
 
         Parameters
         ----------
@@ -216,9 +216,11 @@ class TholeLoss(_BaseLoss):
 
         Returns
         -------
-
         alpha_mol: torch.Tensor(N_BATCH, 3, 3)
             Molecular dipolar polarizability tensor.
+
+        A_thole_inv: torch.Tensor(N_BATCH, MAX_N_ATOMS * 3, MAX_N_ATOMS * 3)
+            Inverse of A_thole matrix.
         """
         n_atoms = mask.shape[1]
 
@@ -229,7 +231,41 @@ class TholeLoss(_BaseLoss):
         )
 
         A_thole_inv = _torch.where(mask_mat, _torch.linalg.inv(A_thole), 0.0)
-        return _torch.sum(A_thole_inv.reshape((-1, n_atoms, 3, n_atoms, 3)), dim=(1, 3))
+        return (
+            _torch.sum(A_thole_inv.reshape((-1, n_atoms, 3, n_atoms, 3)), dim=(1, 3)),
+            A_thole_inv,
+        )
+
+    @staticmethod
+    def _get_alpha_atomic(A_thole, mask, A_thole_inv=None):
+        """
+        Compute isotropic polarizabilities.
+
+        Parameters
+        ----------
+        A_thole : torch.Tensor
+            Full polarizability tensor.
+
+        mask : torch.Tensor
+            Mask for valid atoms.
+
+        A_thole_inv : torch.Tensor, optional
+            Inverse of A_thole matrix. If provided, it will be used instead of computing the inverse again.
+
+        Returns
+        -------
+        torch.Tensor
+            Isotropic atomic polarizabilities.
+        """
+        batch, dim, _ = A_thole.shape
+        n_atoms = dim // 3
+        Ainv = _torch.linalg.inv(A_thole) if A_thole_inv is None else A_thole_inv
+        Ainv_blocks = Ainv.reshape(batch, n_atoms, 3, n_atoms, 3)
+        block_traces = _torch.diagonal(Ainv_blocks, dim1=2, dim2=4)
+        block_traces = block_traces.sum(dim=-1)
+        alpha_atomic = block_traces.sum(dim=-1) / 3.0
+        alpha_atomic = alpha_atomic * mask
+        return alpha_atomic
 
     def _set_mode(self, mode):
         """
@@ -246,7 +282,16 @@ class TholeLoss(_BaseLoss):
         self._emle_base.alpha_mode = mode
 
     def forward(
-        self, atomic_numbers, xyz, q_mol, alpha_mol_target, opt_sqrtk=False, l2_reg=None
+        self,
+        atomic_numbers,
+        xyz,
+        q_mol,
+        alpha_mol_target,
+        alpha_atomic_target=None,
+        opt_sqrtk=False,
+        l2_reg=None,
+        weight_alpha_mol=1.0,
+        weight_alpha_atomic=1.0,
     ):
         """
         Forward pass.
@@ -265,24 +310,43 @@ class TholeLoss(_BaseLoss):
         alpha_mol_target: torch.Tensor(N_BATCH, 3, 3)
             Target molecular dipolar polarizability tensor.
 
+        alpha_atomic_target: torch.Tensor(N_BATCH, MAX_N_ATOMS)
+            Target atomic dipolar polarizabilities.
+
         opt_sqrtk: bool, optional, default=False
             Whether to optimize sqrtk.
 
         l2_reg: float, optional, default=None
             L2 regularization coefficient. If None, no regularization is applied.
+
+        weight_alpha_mol: float, optional, default=1.0
+            Weight of molecular polarizabilities in the loss function.
+
+        weight_alpha_atomic: float, optional, default=1.0
+            Weight of atomic polarizabilities in the loss function.
         """
         if opt_sqrtk:
             self._update_sqrtk_gpr(self._emle_base)
 
+        mask = atomic_numbers > 0
+
         # Calculate A_thole and alpha_mol.
         _, _, _, A_thole = self._emle_base(atomic_numbers, xyz, q_mol)
-        alpha_mol = self._get_alpha_mol(A_thole, atomic_numbers > 0)
+        alpha_mol, A_thole_inv = self._get_alpha_mol(A_thole, mask)
 
         triu_row, triu_col = _torch.triu_indices(3, 3, offset=0)
         alpha_mol_triu = alpha_mol[:, triu_row, triu_col]
         alpha_mol_target_triu = alpha_mol_target[:, triu_row, triu_col]
 
         loss = self._loss(alpha_mol_triu, alpha_mol_target_triu)
+
+        # Calculate atomic polarizabilities loss.
+        if alpha_atomic_target is not None:
+            alpha_atomic = self._get_alpha_atomic(A_thole, mask, A_thole_inv)
+            alpha_atomic_target_vals = alpha_atomic_target[mask]
+            alpha_atomic_vals = alpha_atomic[mask]
+            loss_atomic = self._loss(alpha_atomic_vals, alpha_atomic_target_vals)
+            loss = weight_alpha_mol * loss + weight_alpha_atomic * loss_atomic
 
         if l2_reg is not None:
             mask = (
