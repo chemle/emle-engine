@@ -1131,6 +1131,7 @@ class EMLECalculator:
         xyz_qm,
         xyz_mm,
         atoms=None,
+        cell=None,
         charge=0,
     ):
         """
@@ -1153,6 +1154,9 @@ class EMLECalculator:
 
         atoms: ase.Atoms
             The atoms object for the QM region.
+
+        cell: numpy.ndarray, (3, 3)
+            The simulation cell vectors.
 
         charge: int
             The total charge of the QM region.
@@ -1249,6 +1253,8 @@ class EMLECalculator:
         xyz_mm = _torch.tensor(
             xyz_mm, dtype=_torch.float32, device=self._device, requires_grad=True
         )
+        if cell is not None:
+            cell = _torch.tensor(cell, dtype=_torch.float32, device=self._device)
 
         # Are there any MM atoms?
         allow_unused = len(charges_mm) == 0
@@ -1263,7 +1269,7 @@ class EMLECalculator:
 
                 # Compute the energy.
                 E = delta_model(
-                    atomic_numbers, null_charges_mm, xyz_qm, null_xyz_mm, charge
+                    atomic_numbers, null_charges_mm, xyz_qm, null_xyz_mm, cell, charge
                 )
 
                 # Compute the gradients.
@@ -1286,7 +1292,9 @@ class EMLECalculator:
         if base_model is None:
             try:
                 if len(xyz_mm) > 0:
-                    E = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
+                    E = self._emle(
+                        atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell, charge
+                    )
                     dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
                         E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
                     )
@@ -1313,7 +1321,9 @@ class EMLECalculator:
             model = base_model.original_name
             try:
                 with _torch.jit.optimized_execution(False):
-                    E = base_model(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
+                    E = base_model(
+                        atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell, charge
+                    )
                     dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
                         E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
                     )
@@ -1357,7 +1367,7 @@ class EMLECalculator:
                 E_mm_qm_vac, grad_mm_qm_vac = 0.0, _np.zeros_like(xyz_qm_np)
 
             # Compute the embedding contributions.
-            E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm, charge)
+            E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell, charge)
             dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
                 E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
             )
@@ -1448,7 +1458,9 @@ class EMLECalculator:
         # Reset the first step flag.
         self._is_first_step = not self._restart
 
-    def _sire_callback(self, atomic_numbers, charges_mm, xyz_qm, xyz_mm, idx_mm=None):
+    def _sire_callback(
+        self, atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell=None, idx_mm=None
+    ):
         """
         A callback function to be used with Sire.
 
@@ -1466,6 +1478,9 @@ class EMLECalculator:
 
         xyz_mm: [[float, float, float]]
             The coordinates of the MM atoms in Angstrom.
+
+        cell: [[float, float, float], [float, float, float], [float, float, float]]
+            The simulation box vectors.
 
         idx_mm: [int]
             A list of indices of the MM atoms in the QM/MM region.
@@ -1493,6 +1508,8 @@ class EMLECalculator:
         charges_mm = _np.array(charges_mm)
         xyz_qm = _np.array(xyz_qm)
         xyz_mm = _np.array(xyz_mm)
+        if cell is not None:
+            cell = _np.array(cell)
 
         # Make sure that the number of QM atoms matches the number of MM charges
         # when using mm embedding.
@@ -1512,6 +1529,7 @@ class EMLECalculator:
             charges_mm,
             xyz_qm,
             xyz_mm,
+            cell=cell,
         )
 
         # Store the number of MM atoms.
