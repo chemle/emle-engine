@@ -542,7 +542,7 @@ class MACEEMLE(_torch.nn.Module):
 
             # Get the cell for this configuration.
             if cell is not None:
-                cell = cell.to(self._dtype).to(device)
+                cell = cell[i].to(self._dtype).to(device)
 
             if not _torch.equal(atomic_numbers[i], self._atomic_numbers):
                 # Update the node attributes if the atomic numbers have changed.
