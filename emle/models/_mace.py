@@ -573,7 +573,7 @@ class MACEEMLE(_torch.nn.Module):
                 "positions": positions,
                 "edge_index": edge_index,
                 "shifts": shifts,
-                "cell": self._cell,
+                "cell": self._cell if cell is None else cell,
             }
 
             E_vac = self._mace(input_dict, compute_force=False)["interaction_energy"]
