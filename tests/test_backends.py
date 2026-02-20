@@ -31,6 +31,7 @@ def data():
     return atomic_numbers, xyz
 
 
+@pytest.mark.xfail(reason="SQM from the conda-forge AmberTools pacakge is currently broken.")
 def test_sqm(data):
     """
     Test the SQM backend.
