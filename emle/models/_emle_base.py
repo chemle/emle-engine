@@ -220,6 +220,7 @@ class EMLEBase(_torch.nn.Module):
             raise TypeError("All elements of 'species' must be of type 'int'")
         if not all(s > 0 for s in species):
             raise ValueError("All elements of 'species' must be greater than zero")
+        self._species = species
 
         # Create a map between species and their indices in the model.
         species_map = _np.full(max(species) + 2, fill_value=-1, dtype=_np.int64)
