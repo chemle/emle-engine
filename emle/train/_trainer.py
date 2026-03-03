@@ -699,7 +699,9 @@ class EMLETrainer:
         if train_thole:
             plot_data.update(
                 {
-                    "alpha_species": self._thole_loss._get_alpha_mol(A_thole, z_mask)[0],
+                    "alpha_species": self._thole_loss._get_alpha_mol(A_thole, z_mask)[
+                        0
+                    ],
                     "alpha_qm": alpha,
                 }
             )
