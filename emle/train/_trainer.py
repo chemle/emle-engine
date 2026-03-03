@@ -699,7 +699,7 @@ class EMLETrainer:
         if train_thole:
             plot_data.update(
                 {
-                    "alpha_species": self._thole_loss._get_alpha_mol(A_thole, z_mask),
+                    "alpha_species": self._thole_loss._get_alpha_mol(A_thole, z_mask)[0],
                     "alpha_qm": alpha,
                 }
             )
@@ -719,7 +719,7 @@ class EMLETrainer:
             )
             plot_data["alpha_reference"] = self._thole_loss._get_alpha_mol(
                 A_thole, z_mask
-            )
+            )[0]
 
             if alpha_atomic is not None:
                 plot_data["alpha_atomic_reference_emle"] = (
