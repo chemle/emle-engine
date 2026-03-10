@@ -68,6 +68,91 @@ except:
     has_e3nn = False
 
 
+# Reference values computed with float64 to serve as a regression baseline
+# for the EMLE single-point energy and gradients.
+_EMLE_REFERENCE = {
+    "species": {
+        "energy": [-0.04694829706768215, -0.008400531962381722],
+        "grad_qm_0": [0.003351301543246329, 0.0018965630117571137, -0.0041146694189497],
+        "grad_mm_0": [
+            0.0004374908586717941,
+            -0.0009871188091785251,
+            -0.0005122610976422208,
+        ],
+    },
+    "reference": {
+        "energy": [-0.04694829706768215, -0.008116915512224699],
+        "grad_qm_0": [
+            0.0028342878810772108,
+            0.002356408404009194,
+            -0.004817227101772402,
+        ],
+        "grad_mm_0": [
+            0.00043195332106246736,
+            -0.0009844321656743244,
+            -0.0004930087933985936,
+        ],
+    },
+}
+
+
+@pytest.mark.parametrize("alpha_mode", ["species", "reference"])
+def test_emle_single_point(alpha_mode):
+    """
+    Regression test: checks that the EMLE model produces the expected
+    single-point energies and gradients (float64, CPU) to guard against
+    regressions when optimising the model internals.
+    """
+    ref = _EMLE_REFERENCE[alpha_mode]
+    tol = 1e-8
+
+    _dtype = torch.float64
+    _device = torch.device("cpu")
+
+    atomic_numbers = torch.tensor(
+        numpy.load("tests/input/atomic_numbers.npy"),
+        dtype=torch.int64,
+        device=_device,
+    )
+    charges_mm = torch.tensor(
+        numpy.load("tests/input/charges_mm.npy"),
+        dtype=_dtype,
+        device=_device,
+    )
+    xyz_qm = torch.tensor(
+        numpy.load("tests/input/xyz_qm.npy"),
+        dtype=_dtype,
+        device=_device,
+        requires_grad=True,
+    )
+    xyz_mm = torch.tensor(
+        numpy.load("tests/input/xyz_mm.npy"),
+        dtype=_dtype,
+        device=_device,
+        requires_grad=True,
+    )
+
+    model = EMLE(alpha_mode=alpha_mode, dtype=_dtype, device=_device)
+    energy = model(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+    grad_qm, grad_mm = torch.autograd.grad(energy.sum(), (xyz_qm, xyz_mm))
+
+    assert energy.shape == (2, 1)
+    for i, expected in enumerate(ref["energy"]):
+        assert abs(energy[i, 0].item() - expected) < tol, (
+            f"energy[{i}] mismatch: got {energy[i,0].item()}, expected {expected}"
+        )
+
+    for j, expected in enumerate(ref["grad_qm_0"]):
+        assert abs(grad_qm[0, j].item() - expected) < tol, (
+            f"grad_qm[0,{j}] mismatch: got {grad_qm[0,j].item()}, expected {expected}"
+        )
+
+    for j, expected in enumerate(ref["grad_mm_0"]):
+        assert abs(grad_mm[0, j].item() - expected) < tol, (
+            f"grad_mm[0,{j}] mismatch: got {grad_mm[0,j].item()}, expected {expected}"
+        )
+
+
 @pytest.mark.parametrize("alpha_mode", ["species", "reference"])
 def test_emle(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     """
