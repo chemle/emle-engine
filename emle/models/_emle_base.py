@@ -563,9 +563,9 @@ class EMLEBase(_torch.nn.Module):
         rr_mat = xyz[:, :, None, :] - xyz[:, None, :, :]
         # cdist handles the zero-distance (self-interaction) gradient correctly.
         r_mat = _torch.where(mask_mat, _torch.cdist(xyz, xyz), 0.0)
-        # Gradient-safe inverse: clamp prevents 1/0 in the autograd graph while
+        # Gradient-safe inverse: +1e-10 prevents 1/0 in the autograd graph while
         # the where ensures the actual output is zero for masked/diagonal entries.
-        r_inv = _torch.where(r_mat > 0.0, 1.0 / r_mat.clamp(min=1e-10), 0.0)
+        r_inv = _torch.where(r_mat > 0.0, 1.0 / (r_mat + 1e-10), 0.0)
 
         r_inv2 = r_inv.repeat_interleave(3, dim=1).repeat_interleave(3, dim=2)
 
@@ -1027,9 +1027,9 @@ class EMLEBase(_torch.nn.Module):
         rr = xyz_mesh[:, None, :, :] - xyz[:, :, None, :]
         r = (rr * rr).sum(-1).sqrt()
 
-        # Mask for padded coordinates; clamp keeps the autograd graph free of
+        # Mask for padded coordinates; +1e-10 keeps the autograd graph free of
         # inf/nan even where mask is False.
-        r_inv = _torch.where(mask, 1.0 / r.clamp(min=1e-10), 0.0)
+        r_inv = _torch.where(mask, 1.0 / (r + 1e-10), 0.0)
         T0_slater = _torch.where(mask, EMLEBase._get_T0_slater(r, s[:, :, None]), 0.0)
 
         return (
