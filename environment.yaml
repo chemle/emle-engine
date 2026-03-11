@@ -8,11 +8,10 @@ dependencies:
   - ase
   - deepmd-kit
   - loguru
-  - nnpops
   - pip
   - psutil
   - pygit2
-  - pytorch
+  - pytorch >= 2.7
   - python
   - pyyaml
   - torchani
