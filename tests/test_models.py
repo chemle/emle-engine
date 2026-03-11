@@ -138,19 +138,19 @@ def test_emle_single_point(alpha_mode):
 
     assert energy.shape == (2, 1)
     for i, expected in enumerate(ref["energy"]):
-        assert abs(energy[i, 0].item() - expected) < tol, (
-            f"energy[{i}] mismatch: got {energy[i,0].item()}, expected {expected}"
-        )
+        assert (
+            abs(energy[i, 0].item() - expected) < tol
+        ), f"energy[{i}] mismatch: got {energy[i,0].item()}, expected {expected}"
 
     for j, expected in enumerate(ref["grad_qm_0"]):
-        assert abs(grad_qm[0, j].item() - expected) < tol, (
-            f"grad_qm[0,{j}] mismatch: got {grad_qm[0,j].item()}, expected {expected}"
-        )
+        assert (
+            abs(grad_qm[0, j].item() - expected) < tol
+        ), f"grad_qm[0,{j}] mismatch: got {grad_qm[0,j].item()}, expected {expected}"
 
     for j, expected in enumerate(ref["grad_mm_0"]):
-        assert abs(grad_mm[0, j].item() - expected) < tol, (
-            f"grad_mm[0,{j}] mismatch: got {grad_mm[0,j].item()}, expected {expected}"
-        )
+        assert (
+            abs(grad_mm[0, j].item() - expected) < tol
+        ), f"grad_mm[0,{j}] mismatch: got {grad_mm[0,j].item()}, expected {expected}"
 
 
 @pytest.mark.parametrize("alpha_mode", ["species", "reference"])
@@ -243,6 +243,7 @@ def test_ani2x_nnpops(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
 
 @pytest.mark.skipif(not has_mace, reason="mace-torch not installed")
 @pytest.mark.skipif(not has_e3nn, reason="e3nn not installed")
+@pytest.mark.skipif(not has_nnpops, reason="NNPOps not installed")
 @pytest.mark.parametrize("alpha_mode", ["species", "reference"])
 @pytest.mark.parametrize(
     "mace_model", ["mace-off23-small", "mace-off23-medium", "mace-off23-large"]
