@@ -54,6 +54,12 @@ jobs:
           environment-file: environment.yaml
           miniforge-version: latest
 #
+      - name: Cache MACE models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mace
+          key: mace-models-v1
+#
       - name: Install additional test dependencies
         run: conda install pytest
 #
