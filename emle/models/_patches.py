@@ -32,6 +32,7 @@ directly calculate energies or get an ASE calculator. For example:
     # convert atom species from string to long tensor
     model0.species_to_tensor(['C', 'H', 'H', 'H', 'H'])
 """
+
 import os
 import torch
 import torchani
