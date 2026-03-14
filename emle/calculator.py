@@ -685,7 +685,7 @@ class EMLECalculator:
                         self._orca_path = b._exe
                         self._orca_template = b._template
                     except Exception as e:
-                        msg = "Unable to create ORCA backend: {e}"
+                        msg = f"Unable to create ORCA backend: {e}"
                         _logger.error(msg)
                         raise RuntimeError(msg)
 
@@ -705,7 +705,7 @@ class EMLECalculator:
                         self._deepmd_deviation = b._deviation
                         self._deepmd_deviation_threshold = b._deviation_threshold
                     except Exception as e:
-                        msg = "Unable to create DeePMD backend: {e}"
+                        msg = f"Unable to create DeePMD backend: {e}"
                         _logger.error(msg)
                         raise RuntimeError(msg)
 
@@ -716,7 +716,7 @@ class EMLECalculator:
                         b = SQM(parm7, theory=sqm_theory)
                         self._sqm_theory = b._theory
                     except Exception as e:
-                        msg = "Unable to create SQM backend: {e}"
+                        msg = f"Unable to create SQM backend: {e}"
                         _logger.error(msg)
                         raise RuntimeError(msg)
 
@@ -726,7 +726,7 @@ class EMLECalculator:
 
                         b = XTB()
                     except Exception as e:
-                        msg = "Unable to create XTB backend: {e}"
+                        msg = f"Unable to create XTB backend: {e}"
                         _logger.error(msg)
                         raise RuntimeError(msg)
 
@@ -736,7 +736,7 @@ class EMLECalculator:
 
                         b = Sander(parm7)
                     except Exception as e:
-                        msg = "Unable to create Sander backend: {e}"
+                        msg = f"Unable to create Sander backend: {e}"
                         _logger.error(msg)
                         raise RuntimeError(msg)
 
@@ -746,7 +746,7 @@ class EMLECalculator:
 
                         b = Rascal(rascal_model)
                     except Exception as e:
-                        msg = "Unable to create Rascal backend: {e}"
+                        msg = f"Unable to create Rascal backend: {e}"
                         _logger.error(msg)
                         raise RuntimeError(msg)
 
@@ -1043,13 +1043,15 @@ class EMLECalculator:
                 raise ValueError(msg)
 
         # Compute the energy and gradients.
-        E_vac, grad_vac, E_tot, grad_qm, grad_mm = self._calculate_energy_and_gradients(
-            atomic_numbers,
-            charges_mm,
-            xyz_qm,
-            xyz_mm,
-            atoms=atoms,
-            charge=charge,
+        E_vac, grad_vac, E_tot, grad_qm, grad_mm, lam, E_mm, E_emle = (
+            self._calculate_energy_and_gradients(
+                atomic_numbers,
+                charges_mm,
+                xyz_qm,
+                xyz_mm,
+                atoms=atoms,
+                charge=charge,
+            )
         )
 
         # Create the file names for the ORCA format output.
@@ -1107,7 +1109,7 @@ class EMLECalculator:
         if self._qm_xyz_frequency > 0 and self._step % self._qm_xyz_frequency == 0:
             atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
             if hasattr(self._backend, "_max_f_std"):
-                atoms.info = {"max_f_std": self._max_f_std}
+                atoms.info = {"max_f_std": self._backend._max_f_std}
             _ase_io.write(self._qm_xyz_file, atoms, append=True)
 
             pc_data = _np.hstack((charges_mm[:, None], xyz_mm))
@@ -1299,7 +1301,11 @@ class EMLECalculator:
                         E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
                     )
                     dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
-                    dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
+                    dE_dxyz_mm_bohr = (
+                        dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
+                        if dE_dxyz_mm is not None
+                        else _np.zeros_like(xyz_mm.cpu().numpy())
+                    )
 
                     # Compute the total energy and gradients.
                     E_tot = E_vac + E.sum().detach().cpu().numpy()
@@ -1329,7 +1335,11 @@ class EMLECalculator:
                     )
 
                 grad_qm = grad_vac + dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
-                grad_mm = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
+                grad_mm = (
+                    dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
+                    if dE_dxyz_mm is not None
+                    else _np.zeros_like(xyz_mm.cpu().numpy())
+                )
                 E_tot = E_vac + E.sum().detach().cpu().numpy()
 
             except Exception as e:
@@ -1372,7 +1382,11 @@ class EMLECalculator:
                 E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
             )
             dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
-            dE_dxyz_mm_bohr = dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
+            dE_dxyz_mm_bohr = (
+                dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
+                if dE_dxyz_mm is not None
+                else _np.zeros_like(xyz_mm.cpu().numpy())
+            )
 
             # Store the the MM and EMLE energies. The MM energy is an approximation.
             E_mm = E_mm_qm_vac + E.sum().detach().cpu().numpy()
@@ -1396,7 +1410,9 @@ class EMLECalculator:
             grad_qm = lam * grad_qm + (1 - lam) * (grad_mm_qm_vac + dE_dxyz_qm_bohr)
             grad_mm = lam * grad_mm + (1 - lam) * dE_dxyz_mm_bohr
 
-        return E_vac, grad_vac, E_tot, grad_qm, grad_mm
+            return E_vac, grad_vac, E_tot, grad_qm, grad_mm, lam, E_mm, E_emle
+
+        return E_vac, grad_vac, E_tot, grad_qm, grad_mm, None, None, None
 
     def set_lambda_interpolate(self, lambda_interpolate):
         """
@@ -1524,13 +1540,15 @@ class EMLECalculator:
                 raise ValueError(msg)
 
         # Compute the energy and gradients.
-        E_vac, grad_vac, E_tot, grad_qm, grad_mm = self._calculate_energy_and_gradients(
-            atomic_numbers,
-            charges_mm,
-            xyz_qm,
-            xyz_mm,
-            cell=cell,
-            charge=self._qm_charge
+        E_vac, grad_vac, E_tot, grad_qm, grad_mm, lam, E_mm, E_emle = (
+            self._calculate_energy_and_gradients(
+                atomic_numbers,
+                charges_mm,
+                xyz_qm,
+                xyz_mm,
+                cell=cell,
+                charge=self._qm_charge
+            )
         )
 
         # Store the number of MM atoms.
@@ -1569,7 +1587,7 @@ class EMLECalculator:
         if self._qm_xyz_frequency > 0 and self._step % self._qm_xyz_frequency == 0:
             atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
             if hasattr(self._backend, "_max_f_std"):
-                atoms.info = {"max_f_std": self._max_f_std}
+                atoms.info = {"max_f_std": self._backend._max_f_std}
             _ase_io.write(self._qm_xyz_file, atoms, append=True)
 
             pc_data = _np.hstack((charges_mm[:, None], xyz_mm))
