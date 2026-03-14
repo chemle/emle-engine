@@ -1530,6 +1530,7 @@ class EMLECalculator:
             xyz_qm,
             xyz_mm,
             cell=cell,
+            charge=self._qm_charge
         )
 
         # Store the number of MM atoms.
