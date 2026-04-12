@@ -53,6 +53,13 @@ try:
 except:
     _has_e3nn = False
 
+# Re-export EnergyEMLEMACE so that torch.load() can deserialize saved models
+# without requiring user code to import emle_mace directly.
+try:
+    from emle_mace.models import EnergyEMLEMACE as EnergyEMLEMACE  # noqa: F401
+except ImportError:
+    pass  # emle-mace not installed; torch.load() will fail if the checkpoint uses EnergyEMLEMACE
+
 
 class MACEEMLE(_torch.nn.Module):
     """
@@ -217,8 +224,21 @@ class MACEEMLE(_torch.nn.Module):
         for model in mace_model:
             source_model = self._load_mace_model(model, device)
 
-            # Extract the config from the model.
-            config = extract_config_mace_model(source_model)
+            # Dispatch to the appropriate config extractor.
+            if source_model.__class__.__name__ == "EnergyEMLEMACE":
+                try:
+                    from emle_mace.tools.model_utils import extract_config_emle_mace_model
+                    config = extract_config_emle_mace_model(source_model)
+                except ImportError as e:
+                    raise ImportError(
+                        "emle-mace package is required to load EnergyEMLEMACE models. "
+                        "Install it with: pip install emle-mace"
+                    ) from e
+            else:
+                config = extract_config_mace_model(source_model)
+
+            if "error" in config:
+                raise ValueError(f"Failed to extract model config: {config['error']}")
 
             # Create the target model.
             target_model = source_model.__class__(**config).to(device)
@@ -785,8 +805,21 @@ class MACEEMLEJoint(_torch.nn.Module):
         for model in mace_model:
             source_model = self._load_mace_model(model, device)
 
-            # Extract the config from the model.
-            config = extract_config_mace_model(source_model)
+            # Dispatch to the appropriate config extractor.
+            if source_model.__class__.__name__ == "EnergyEMLEMACE":
+                try:
+                    from emle_mace.tools.model_utils import extract_config_emle_mace_model
+                    config = extract_config_emle_mace_model(source_model)
+                except ImportError as e:
+                    raise ImportError(
+                        "emle-mace package is required to load EnergyEMLEMACE models. "
+                        "Install it with: pip install emle-mace"
+                    ) from e
+            else:
+                config = extract_config_mace_model(source_model)
+
+            if "error" in config:
+                raise ValueError(f"Failed to extract model config: {config['error']}")
 
             # Create the target model.
             target_model = source_model.__class__(**config).to(device)
