@@ -53,12 +53,17 @@ try:
 except:
     _has_e3nn = False
 
-# Re-export EnergyEMLEMACE so that torch.load() can deserialize saved models
-# without requiring user code to import emle_mace directly.
+# Inject EnergyEMLEMACE into mace.modules.models so that torch.load() can
+# deserialize saved EnergyEMLEMACE checkpoints.  Pickle records the class at
+# its original location (mace.modules.models.EnergyEMLEMACE); we restore that
+# binding here without modifying the mace package itself.
 try:
     from emle_mace.models import EnergyEMLEMACE as EnergyEMLEMACE  # noqa: F401
+    import mace.modules.models as _mace_models_module
+    if not hasattr(_mace_models_module, "EnergyEMLEMACE"):
+        _mace_models_module.EnergyEMLEMACE = EnergyEMLEMACE
 except ImportError:
-    pass  # emle-mace not installed; torch.load() will fail if the checkpoint uses EnergyEMLEMACE
+    pass  # emle-mace not installed; torch.load() will fail for EnergyEMLEMACE checkpoints
 
 
 class MACEEMLE(_torch.nn.Module):
