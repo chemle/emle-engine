@@ -235,8 +235,15 @@ class MACEEMLE(_torch.nn.Module):
         for model in mace_model:
             source_model = self._load_mace_model(model, device)
 
+            # Already-compiled models (RecursiveScriptModule) cannot have their
+            # config extracted via attribute introspection (ModuleList indexing
+            # is not supported).  Reuse them directly after dtype conversion.
+            if source_model.__class__.__name__ == "RecursiveScriptModule":
+                self._mace_models.append(source_model.to(self._dtype))
+                continue
+
             # Dispatch to the appropriate config extractor.
-            if source_model.__class__.__name__ == "EnergyEMLEMACE":
+            if getattr(source_model, "original_name", source_model.__class__.__name__) == "EnergyEMLEMACE":
                 try:
                     from emle_mace.tools.model_utils import extract_config_emle_mace_model
                     config = extract_config_emle_mace_model(source_model)
@@ -252,7 +259,13 @@ class MACEEMLE(_torch.nn.Module):
                 raise ValueError(f"Failed to extract model config: {config['error']}")
 
             # Create the target model.
-            target_model = source_model.__class__(**config).to(device)
+            _source_name = getattr(source_model, "original_name", source_model.__class__.__name__)
+            if _source_name == "EnergyEMLEMACE":
+                from emle_mace.models import EnergyEMLEMACE as _EnergyEMLEMACE
+                _model_cls = _EnergyEMLEMACE
+            else:
+                _model_cls = source_model.__class__
+            target_model = _model_cls(**config).to(device)
 
             # Load the state dict.
             target_model.load_state_dict(source_model.state_dict(), strict=False)
@@ -818,8 +831,15 @@ class MACEEMLEJoint(_torch.nn.Module):
         for model in mace_model:
             source_model = self._load_mace_model(model, device)
 
+            # Already-compiled models (RecursiveScriptModule) cannot have their
+            # config extracted via attribute introspection (ModuleList indexing
+            # is not supported).  Reuse them directly after dtype conversion.
+            if source_model.__class__.__name__ == "RecursiveScriptModule":
+                self._mace_models.append(source_model.to(self._dtype))
+                continue
+
             # Dispatch to the appropriate config extractor.
-            if source_model.__class__.__name__ == "EnergyEMLEMACE":
+            if getattr(source_model, "original_name", source_model.__class__.__name__) == "EnergyEMLEMACE":
                 try:
                     from emle_mace.tools.model_utils import extract_config_emle_mace_model
                     config = extract_config_emle_mace_model(source_model)
@@ -835,7 +855,13 @@ class MACEEMLEJoint(_torch.nn.Module):
                 raise ValueError(f"Failed to extract model config: {config['error']}")
 
             # Create the target model.
-            target_model = source_model.__class__(**config).to(device)
+            _source_name = getattr(source_model, "original_name", source_model.__class__.__name__)
+            if _source_name == "EnergyEMLEMACE":
+                from emle_mace.models import EnergyEMLEMACE as _EnergyEMLEMACE
+                _model_cls = _EnergyEMLEMACE
+            else:
+                _model_cls = source_model.__class__
+            target_model = _model_cls(**config).to(device)
 
             # Load the state dict.
             target_model.load_state_dict(source_model.state_dict(), strict=False)
