@@ -57,12 +57,18 @@ except:
 # deserialize saved EnergyEMLEMACE checkpoints.  Pickle records the class at
 # its original location (mace.modules.models.EnergyEMLEMACE); we restore that
 # binding here without modifying the mace package itself.
+#
+# e3nn loads constants.pt at import time via torch.load.  Under PyTorch >= 2.6
+# the default weights_only=True rejects the slice object stored in that file.
+# Allow slice globally so that e3nn (and therefore emle_mace) can be imported
+# without requiring the TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD environment variable.
 try:
+    _torch.serialization.add_safe_globals([slice])
     from emle_mace.models import EnergyEMLEMACE as EnergyEMLEMACE  # noqa: F401
     import mace.modules.models as _mace_models_module
     if not hasattr(_mace_models_module, "EnergyEMLEMACE"):
         _mace_models_module.EnergyEMLEMACE = EnergyEMLEMACE
-except ImportError:
+except Exception:
     pass  # emle-mace not installed; torch.load() will fail for EnergyEMLEMACE checkpoints
 
 
