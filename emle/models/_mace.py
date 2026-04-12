@@ -340,7 +340,9 @@ class MACEEMLE(_torch.nn.Module):
             else:
                 # Assuming that the model is a local model.
                 if _os.path.exists(mace_model):
-                    source_model = _torch.load(mace_model, map_location=device)
+                    source_model = _torch.load(
+                        mace_model, map_location=device, weights_only=False
+                    )
                 else:
                     raise FileNotFoundError(f"MACE model file not found: {mace_model}")
         else:
@@ -930,7 +932,9 @@ class MACEEMLEJoint(_torch.nn.Module):
             else:
                 # Assuming that the model is a local model.
                 if _os.path.exists(mace_model):
-                    source_model = _torch.load(mace_model, map_location=device)
+                    source_model = _torch.load(
+                        mace_model, map_location=device, weights_only=False
+                    )
                 else:
                     raise FileNotFoundError(f"MACE model file not found: {mace_model}")
         else:
