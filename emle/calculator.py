@@ -513,8 +513,8 @@ class EMLECalculator:
 
         if use_dipoles:
             for backend in formatted_backends:
-                if backend != 'maceemle':
-                    msg = f"Static dipoles can only be used with maceemle backend"
+                if backend != 'emle-mace':
+                    msg = f"Static dipoles can only be used with emle-mace backend"
                     _logger.error(msg)
                     raise ValueError(msg)
 
@@ -660,7 +660,7 @@ class EMLECalculator:
                     self._ani2x_model_index = ani2x_model_index
 
                 # Initialise the MACEMLE model.
-                elif backend in ["mace", "maceemle"]:
+                elif backend in ["mace", "emle-mace"]:
                     if backend == "mace":
                         from .models import MACEEMLE as _MACEEMLE
                         mace_emle = _MACEEMLE(
@@ -673,7 +673,7 @@ class EMLECalculator:
                             atomic_numbers=atomic_numbers,
                             device=self._device,
                         )
-                    else:
+                    else:  # emle-mace
                         from .models import MACEEMLEJoint as _MACEEMLE
                         mace_emle = _MACEEMLE(
                             emle_model=model,

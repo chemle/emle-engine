@@ -36,14 +36,14 @@ parser.add_argument(
 parser.add_argument(
     "--backend",
     type=str,
-    choices=["torchani", "mace", "maceemle", "deepmd"],
+    choices=["torchani", "mace", "emle-mace", "deepmd"],
     help="Gas phase ML backend",
 )
 parser.add_argument(
     "--deepmd-model",
     type=str,
     metavar="name.pb",
-    help="MACE model file (for 'mace' and 'maceemle' backends)",
+    help="MACE model file (for 'mace' and 'emle-mace' backends)",
 )
 parser.add_argument(
     "--mace-model",
@@ -103,8 +103,8 @@ from emle._orca_parser import ORCAParser
 
 if args.backend == "deepmd" and not args.deepmd_model:
     parser.error("--deepmd-model is required when backend='deepmd'")
-if args.backend == "mace" and not args.mace_model:
-    parser.error("--mace-model is required when backend is 'mace' or 'maceemle'")
+if args.backend in ("mace", "emle-mace") and not args.mace_model:
+    parser.error("--mace-model is required when backend is 'mace' or 'emle-mace'")
 
 backend = None
 if args.backend == "torchani":
@@ -116,17 +116,12 @@ elif args.backend == "mace":
 
     backend = MACEEMLE(emle_model=args.emle_model, mace_model=args.mace_model)
 
-elif args.backend == "maceemle":
+elif args.backend == "emle-mace":
     from emle.models import MACEEMLEJoint
 
     backend = MACEEMLEJoint(emle_model=args.emle_model,
                             mace_model=args.mace_model,
                             qm_charge=args.q_total)
-
-elif args.backend == "maceemle":
-    from emle.models import MACEEMLEJoint
-
-    backend = MACEEMLEJoint(emle_model=args.emle_model, mace_model=args.mace_model)
 
 elif args.backend == "deepmd":
     from emle._backends import DeePMD
