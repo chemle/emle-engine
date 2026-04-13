@@ -43,12 +43,12 @@ parser.add_argument(
     "--deepmd-model",
     type=str,
     metavar="name.pb",
-    help="MACE model file (for 'mace' and 'emle-mace' backends)",
+    help="DeePMD model file(s) (for backend='deepmd')",
 )
 parser.add_argument(
     "--mace-model",
     type=str,
-    help="MACE model file (for backend='mace')",
+    help="MACE model file (for 'mace' and 'maceemle' backends)",
 )
 parser.add_argument(
     "--qm-xyz", type=str, metavar="name.xyz", required=True, help="QM xyz file"
