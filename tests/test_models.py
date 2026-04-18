@@ -1,3 +1,4 @@
+import os
 import numpy
 import pytest
 import torch
@@ -66,6 +67,9 @@ try:
     has_e3nn = True
 except:
     has_e3nn = False
+
+MACE_EMLE_MODEL = "tests/input/mace-emle.model"
+has_emle_mace_model = os.path.exists(MACE_EMLE_MODEL)
 
 
 @pytest.mark.parametrize("alpha_mode", ["species", "reference"])
@@ -172,6 +176,36 @@ def test_mace(alpha_mode, mace_model, atomic_numbers, charges_mm, xyz_qm, xyz_mm
         model = MACEEMLE(alpha_mode=alpha_mode)
     except RuntimeError as e:
         pytest.skip(f"MACE model unavailable: {e}")
+
+    # Make sure the model can be converted to TorchScript.
+    model = torch.jit.script(model)
+
+    # Get the energy and gradients.
+    energy = model(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+    grad_qm, grad_mm = torch.autograd.grad(energy.sum(), (xyz_qm, xyz_mm))
+
+    # Test batched inputs.
+    energy = model(
+        atomic_numbers.unsqueeze(0).repeat(2, 1),
+        charges_mm.unsqueeze(0).repeat(2, 1),
+        xyz_qm.unsqueeze(0).repeat(2, 1, 1),
+        xyz_mm.unsqueeze(0).repeat(2, 1, 1),
+    )
+
+
+@pytest.mark.skipif(not has_mace, reason="mace-torch not installed")
+@pytest.mark.skipif(not has_e3nn, reason="e3nn not installed")
+@pytest.mark.skipif(not has_emle_mace_model, reason="Test emle-mace model not found")
+def test_emle_mace(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    """
+    Check that we can instantiate MACEEMLEJoint models, convert to TorchScript,
+    then compute energies and gradients.
+    """
+    # Instantiate the MACEEMLEJoint model.
+    try:
+        model = MACEEMLEJoint(mace_model=MACE_EMLE_MODEL)
+    except RuntimeError as e:
+        pytest.skip(f"MACEEMLEJoint model unavailable: {e}")
 
     # Make sure the model can be converted to TorchScript.
     model = torch.jit.script(model)
