@@ -1289,9 +1289,13 @@ class MACEEMLEJoint(_torch.nn.Module):
                                    'k_Z': self._mace.elements_alpha_v_ratios}
                 if mu is not None:
                     external_params['mu'] = mu
-                # Get the EMLE energy components.
+                # Get the EMLE energy components. Pass only batch element i so
+                # that external_params (batch=1) and the coordinate tensors are
+                # consistent inside EMLE's forward.
                 E_emle = self._emle(
-                    atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell, qm_charge,
+                    atomic_numbers[i:i+1], charges_mm[i:i+1],
+                    xyz_qm[i:i+1], xyz_mm[i:i+1],
+                    cell, qm_charge,
                     external_params
                 )
                 results_E_emle_static[i] = E_emle[0][0]
