@@ -38,11 +38,7 @@ import torch
 import torchani
 from torch import Tensor
 from typing import Tuple, Optional, NamedTuple
-from torchani.nn import SpeciesConverter
-try:
-    from torchani.nn import SpeciesEnergies
-except ImportError:
-    from torchani.tuples import SpeciesEnergies
+from torchani.nn import SpeciesConverter, SpeciesEnergies
 from torchani.aev import AEVComputer
 
 
