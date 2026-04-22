@@ -34,6 +34,11 @@ import torchani as _torchani
 from torch import Tensor
 from typing import Optional, Tuple
 
+try:
+    _SpeciesAEV = _torchani.aev.SpeciesAEV
+except AttributeError:
+    from torchani.tuples import SpeciesAEV as _SpeciesAEV
+
 from ._emle import EMLE as _EMLE
 
 try:
@@ -270,7 +275,7 @@ class ANI2xEMLE(_torch.nn.Module):
             def hook(
                 module,
                 input: Tuple[Tuple[Tensor, Tensor], Optional[Tensor], Optional[Tensor]],
-                output: _torchani.aev.SpeciesAEV,
+                output: _SpeciesAEV,
             ):
                 module._aev = output[1]
 
