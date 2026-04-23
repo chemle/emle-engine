@@ -32,18 +32,30 @@ import torch as _torch
 from torch import Tensor as _Tensor
 
 
+class _NoOpRecaster(_torch.nn.Module):
+    """No-op stand-in used as the recast provider for non-ANI backends."""
+
+    @_torch.jit.export
+    def _recast_long_buffers(self) -> None:
+        pass
+
+
 class _CustomMLMMWrapper(_torch.nn.Module):
-    """Adapts an ``ANI2xEMLE``/``MACEEMLE`` composite to the torchani-amber
+    """Adapts an ANI2xEMLE/MACEEMLE composite to the torchani-amber
     ``compute_mlmm`` contract.
 
-    The composite returns ``(E_vac, E_static, E_induced)`` in Hartree; this
-    wrapper sums those components into a single scalar total energy and
-    unpacks the ``species_coords`` tuple used by torchani-amber.
+    ``_recaster`` is either the real ``_ani2x`` sub-model (which has a
+    ``@torch.jit.export _recast_long_buffers`` that restores torchani's
+    integer index buffers after C++ ``module.to(dtype)`` corrupts them) or
+    a ``_NoOpRecaster`` for backends that don't need it.  TorchScript infers
+    the concrete type of ``_recaster`` from the instance at script time, so
+    the call resolves correctly with no runtime branching.
     """
 
-    def __init__(self, composite: _torch.nn.Module):
+    def __init__(self, composite: _torch.nn.Module, recaster: _torch.nn.Module):
         super().__init__()
         self._composite = composite
+        self._recaster = recaster
 
     @_torch.jit.export
     def compute_mlmm(
@@ -58,11 +70,16 @@ class _CustomMLMMWrapper(_torch.nn.Module):
         atomic_numbers, xyz_qm = species_coords
         # torch.jit.load(map_location=...) moves tensors but does not rewrite
         # stored torch.device attributes.  Sync EMLE's _device from the actual
-        # tensor device so the model works regardless of the device it was
-        # compiled on.
+        # tensor device so the model is device-agnostic at load time.
         d = xyz_qm.device
         self._composite._emle._device = d
         self._composite._emle._emle_base._device = d
+        # C++ torch::jit::Module::to(dtype) converts ALL buffers including
+        # integer ones (unlike Python nn.Module.to which skips non-float
+        # tensors).  Recast torchani's index buffers back to int64 so that
+        # index_add_() does not receive a Float index.
+        self._recaster._recast_long_buffers()
+
         energies = self._composite(
             atomic_numbers, mm_charges, xyz_qm, mm_coords, cell, charge
         )
@@ -212,6 +229,12 @@ class EMLECompiler:
 
     def compile(self, output_path: str) -> None:
         """Script the wrapped model and save it to ``output_path``."""
-        wrapper = _CustomMLMMWrapper(self._composite).eval()
+        from .models import ANI2xEMLE
+        recaster = (
+            self._composite._ani2x
+            if isinstance(self._composite, ANI2xEMLE)
+            else _NoOpRecaster()
+        )
+        wrapper = _CustomMLMMWrapper(self._composite, recaster).eval()
         scripted = _torch.jit.script(wrapper)
         scripted.save(output_path)
