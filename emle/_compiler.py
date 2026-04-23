@@ -56,6 +56,13 @@ class _CustomMLMMWrapper(_torch.nn.Module):
         charge: int,
     ) -> _Tensor:
         atomic_numbers, xyz_qm = species_coords
+        # torch.jit.load(map_location=...) moves tensors but does not rewrite
+        # stored torch.device attributes.  Sync EMLE's _device from the actual
+        # tensor device so the model works regardless of the device it was
+        # compiled on.
+        d = xyz_qm.device
+        self._composite._emle._device = d
+        self._composite._emle._emle_base._device = d
         energies = self._composite(
             atomic_numbers, mm_charges, xyz_qm, mm_coords, cell, charge
         )
