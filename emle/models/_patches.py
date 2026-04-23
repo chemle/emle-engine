@@ -196,14 +196,6 @@ class BuiltinModel(torch.nn.Module):
             dtype=torch.long
         )
         self.aev_computer.triu_index = self.aev_computer.triu_index.to(dtype=torch.long)
-        # C++ module.to(float32) also converts self_energies from float64 to
-        # float32 (it is a plain tensor attribute, not a registered buffer, so
-        # Python's nn.Module.to() skips it but C++'s unconditional version
-        # does not).  EnergyShifter.sae hardcodes dtype=torch.double for its
-        # masked assignment, so self_energies must stay float64.
-        self.energy_shifter.self_energies = self.energy_shifter.self_energies.to(
-            dtype=torch.float64
-        )
 
     def species_to_tensor(self, *args, **kwargs):
         """Convert species from strings to tensor.
