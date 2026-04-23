@@ -14,7 +14,8 @@ dependencies:
   - pytorch >= 2.7
   - python
   - pyyaml
-  - torchani
+  - setuptools < 81
   - xtb-python
   - pip:
     - mace-torch
+    - torchani >= 2.7
