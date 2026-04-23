@@ -35,6 +35,7 @@ from torch import Tensor
 from typing import Optional, Tuple
 
 from ._emle import EMLE as _EMLE
+from . import _patches as _patches
 
 try:
     import NNPOps as _NNPOps
@@ -43,6 +44,16 @@ try:
 except:
     _has_nnpops = False
     pass
+
+
+# Module-level hook so TorchScript can access its source during compilation.
+# TorchANI >= 2.7.9: AEVComputer.forward(elem_idxs, coords, cell, pbc) -> Tensor.
+def _aev_hook(
+    module,
+    input: Tuple[Tensor, Optional[Tensor], Optional[Tensor], Optional[Tensor]],
+    output: Tensor,
+):
+    module._aev = output
 
 
 class ANI2xEMLE(_torch.nn.Module):
@@ -190,42 +201,27 @@ class ANI2xEMLE(_torch.nn.Module):
         self._is_nnpops = False
 
         if ani2x_model is not None:
-            # Add the base ANI2x model and ensemble.
-            allowed_types = [
-                _torchani.models.BuiltinModel,
-                _torchani.models.BuiltinEnsemble,
-            ]
-
-            # Add the optimised model if NNPOps is available.
-            try:
-                allowed_types.append(_NNPOps.OptimizedTorchANI)
-            except:
-                pass
-
-            if not isinstance(ani2x_model, tuple(allowed_types)):
-                raise TypeError(f"'ani2x_model' must be of type {allowed_types}")
+            if not isinstance(ani2x_model, _torch.nn.Module):
+                raise TypeError("'ani2x_model' must be a torch.nn.Module")
 
             if (
-                isinstance(
-                    ani2x_model,
-                    (_torchani.models.BuiltinModel, _torchani.models.BuiltinEnsemble),
-                )
+                hasattr(ani2x_model, "periodic_table_index")
                 and not ani2x_model.periodic_table_index
             ):
                 raise ValueError(
                     "The ANI2x model must be created with 'periodic_table_index=True'"
                 )
 
-            self._ani2x = ani2x_model.to(device)
+            raw_ani2x = ani2x_model.to(device)
             if dtype == _torch.float64:
-                self._ani2x = self._ani2x.double()
+                raw_ani2x = raw_ani2x.double()
         else:
             # Create the ANI2x model.
-            self._ani2x = _torchani.models.ANI2x(
+            raw_ani2x = _torchani.models.ANI2x(
                 periodic_table_index=True, model_index=model_index
             ).to(device)
             if dtype == _torch.float64:
-                self._ani2x = self._ani2x.double()
+                raw_ani2x = raw_ani2x.double()
 
             # Optimise the ANI2x model if atomic_numbers are specified.
             if _has_nnpops and atomic_numbers is not None:
@@ -233,9 +229,9 @@ class ANI2xEMLE(_torch.nn.Module):
                     atomic_numbers = atomic_numbers.reshape(
                         1, *atomic_numbers.shape
                     ).to(self._device)
-                    self._ani2x = _NNPOps.OptimizedTorchANI(
-                        self._ani2x, atomic_numbers
-                    ).to(device)
+                    raw_ani2x = _NNPOps.OptimizedTorchANI(raw_ani2x, atomic_numbers).to(
+                        device
+                    )
 
                     # Flag that the model has been optimised with NNPOps.
                     self._is_nnpops = True
@@ -244,38 +240,14 @@ class ANI2xEMLE(_torch.nn.Module):
                         "Failed to optimise the ANI2x model with NNPOps."
                     ) from e
 
-        # Add a hook to the ANI2x model to capture the AEV features.
-        self._add_hook()
+        # Wrap in PatchedANI2x so that aev_computer is a direct attribute
+        # (not a property) — this gives TorchScript a single unambiguous path
+        # and allows forward hooks to be shared correctly.
+        self._ani2x = _patches.PatchedANI2x(raw_ani2x)
 
-    def _add_hook(self):
-        """
-        Add a hook to the ANI2x model to capture the AEV features.
-        """
-        # Assign a tensor attribute that can be used for assigning the AEVs.
+        # Register a forward hook on aev_computer to capture AEVs.
         self._ani2x.aev_computer._aev = _torch.empty(0, device=self._device)
-
-        # Hook the forward pass of the ANI2x model to get the AEV features.
-        # Note that this currently requires a patched versions of TorchANI and NNPOps.
-        if _has_nnpops and isinstance(self._ani2x, _NNPOps.OptimizedTorchANI):
-
-            def hook(
-                module,
-                input: Tuple[Tuple[Tensor, Tensor], Optional[Tensor], Optional[Tensor]],
-                output: Tuple[Tensor, Tensor],
-            ):
-                module._aev = output[1]
-
-        else:
-
-            def hook(
-                module,
-                input: Tuple[Tuple[Tensor, Tensor], Optional[Tensor], Optional[Tensor]],
-                output: _torchani.aev.SpeciesAEV,
-            ):
-                module._aev = output[1]
-
-        # Register the hook.
-        self._aev_hook = self._ani2x.aev_computer.register_forward_hook(hook)
+        self._aev_hook = self._ani2x.aev_computer.register_forward_hook(_aev_hook)
 
     def to(self, *args, **kwargs):
         """
@@ -324,7 +296,7 @@ class ANI2xEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.float()
         # Using .float() or .to(torch.float32) is broken for ANI2x models.
-        self._ani2x = _torchani.models.ANI2x(
+        raw_ani2x = _torchani.models.ANI2x(
             periodic_table_index=True, model_index=self._model_index
         ).to(self._device)
         # Optimise the ANI2x model if atomic_numbers were specified.
@@ -333,12 +305,13 @@ class ANI2xEMLE(_torch.nn.Module):
                 from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
 
                 species = self._atomic_numbers.reshape(1, *self._atomic_numbers.shape)
-                self._ani2x = _OptimizedTorchANI(self._ani2x, species).to(self._device)
+                raw_ani2x = _OptimizedTorchANI(raw_ani2x, species).to(self._device)
             except:
                 pass
 
-        # Re-append the hook.
-        self._add_hook()
+        self._ani2x = _patches.PatchedANI2x(raw_ani2x)
+        self._ani2x.aev_computer._aev = _torch.empty(0, device=self._device)
+        self._aev_hook = self._ani2x.aev_computer.register_forward_hook(_aev_hook)
 
         return self
 
