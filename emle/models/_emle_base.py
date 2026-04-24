@@ -811,10 +811,7 @@ class EMLEBase(_torch.nn.Module):
         mesh_data: mesh_data object (output of self._get_mesh_data)
             Mesh data object.
 
-        q_val: torch.Tensor (N_BATCH, N_QM_ATOMS,)
-            QM valence charges.
-
-        mu: Optional[torch.Tensor] (N_BATCH, N_QM_ATOMS,)
+        mu: Optional[torch.Tensor] (N_BATCH, N_QM_ATOMS, 3)
             QM static atomic dipoles.
 
         Returns

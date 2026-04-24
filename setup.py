@@ -15,7 +15,7 @@ setup(
         "bin/emle-stop",
         "bin/emle-train",
         "bin/orca",
-        'bin/tarball-to-extxyz',
+        "bin/tarball-to-extxyz",
     ],
     include_package_data=True,
     url="https://github.com/chemle/emle-engine",

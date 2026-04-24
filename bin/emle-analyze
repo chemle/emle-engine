@@ -48,7 +48,7 @@ parser.add_argument(
 parser.add_argument(
     "--mace-model",
     type=str,
-    help="MACE model file (for 'mace' and 'maceemle' backends)",
+    help="MACE model file (for 'mace' and 'emle-mace' backends)",
 )
 parser.add_argument(
     "--qm-xyz", type=str, metavar="name.xyz", required=True, help="QM xyz file"
