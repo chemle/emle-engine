@@ -1138,6 +1138,9 @@ class EMLECalculator:
                 atoms.info = {"max_f_std": self._backend._max_f_std}
             if getattr(self._backends[0], "emle_values", None) is not None:
                 for key, value in self._backends[0].emle_values.items():
+                    assert len(value) == 1, (
+                        "emle_values xyz export assumes a single frame per forward() call"
+                    )
                     atoms.arrays[key] = value[0].detach().cpu().numpy()
             _ase_io.write(self._qm_xyz_file, atoms, append=True)
 
