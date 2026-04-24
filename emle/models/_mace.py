@@ -71,6 +71,12 @@ try:
 except Exception:
     pass  # emle-mace not installed; torch.load() will fail for EnergyEMLEMACE checkpoints
 
+def _is_energy_emle_mace(model) -> bool:
+    # TorchScript-compiled models expose the source class name via
+    # 'original_name'; plain nn.Modules expose it via __class__.__name__.
+    name = getattr(model, "original_name", model.__class__.__name__)
+    return name == "EnergyEMLEMACE"
+
 
 class MACEEMLE(_torch.nn.Module):
     """
@@ -243,7 +249,7 @@ class MACEEMLE(_torch.nn.Module):
                 continue
 
             # Dispatch to the appropriate config extractor.
-            if getattr(source_model, "original_name", source_model.__class__.__name__) == "EnergyEMLEMACE":
+            if _is_energy_emle_mace(source_model):
                 try:
                     from emle_mace.tools.model_utils import extract_config_emle_mace_model
                     config = extract_config_emle_mace_model(source_model)
@@ -259,8 +265,7 @@ class MACEEMLE(_torch.nn.Module):
                 raise ValueError(f"Failed to extract model config: {config['error']}")
 
             # Create the target model.
-            _source_name = getattr(source_model, "original_name", source_model.__class__.__name__)
-            if _source_name == "EnergyEMLEMACE":
+            if _is_energy_emle_mace(source_model):
                 from emle_mace.models import EnergyEMLEMACE as _EnergyEMLEMACE
                 _model_cls = _EnergyEMLEMACE
             else:
@@ -839,7 +844,7 @@ class MACEEMLEJoint(_torch.nn.Module):
                 continue
 
             # Dispatch to the appropriate config extractor.
-            if getattr(source_model, "original_name", source_model.__class__.__name__) == "EnergyEMLEMACE":
+            if _is_energy_emle_mace(source_model):
                 try:
                     from emle_mace.tools.model_utils import extract_config_emle_mace_model
                     config = extract_config_emle_mace_model(source_model)
@@ -855,8 +860,7 @@ class MACEEMLEJoint(_torch.nn.Module):
                 raise ValueError(f"Failed to extract model config: {config['error']}")
 
             # Create the target model.
-            _source_name = getattr(source_model, "original_name", source_model.__class__.__name__)
-            if _source_name == "EnergyEMLEMACE":
+            if _is_energy_emle_mace(source_model):
                 from emle_mace.models import EnergyEMLEMACE as _EnergyEMLEMACE
                 _model_cls = _EnergyEMLEMACE
             else:
