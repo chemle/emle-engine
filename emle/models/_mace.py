@@ -706,17 +706,16 @@ class MACEEMLEJoint(_torch.nn.Module):
     _is_emle = True
 
     def __init__(
-            self,
-            emle_model=None,
-            emle_method="electrostatic",
-            alpha_mode="species", # Ignored, to be implemented
-            mm_charges=None,
-            qm_charge=0,
-            mace_model=None,
-            atomic_numbers=None,
-            use_dipoles=False,
-            device=None,
-            dtype=None,
+        self,
+        emle_model=None,
+        emle_method="electrostatic",
+        mm_charges=None,
+        qm_charge=0,
+        mace_model=None,
+        atomic_numbers=None,
+        use_dipoles=False,
+        device=None,
+        dtype=None,
     ):
         """
         Constructor.
@@ -740,14 +739,6 @@ class MACEEMLEJoint(_torch.nn.Module):
                 "mm":
                     MM charges are used for the core charge and valence charges
                     are set to zero.
-
-        alpha_mode: str
-            How atomic polarizabilities are calculated.
-                "species":
-                    one volume scaling factor is used for each species
-                "reference":
-                    scaling factors are obtained with GPR using the values learned
-                    for each reference environmentw
 
         mm_charges: List[float], Tuple[Float], numpy.ndarray, torch.Tensor
             List of MM charges for atoms in the QM region in units of mod
@@ -830,10 +821,13 @@ class MACEEMLEJoint(_torch.nn.Module):
             )
 
         # Create an instance of the EMLE model.
+        # alpha_mode is fixed to "species" here: MACEEMLEJoint currently only
+        # supports the species mode. Re-expose as a parameter once reference
+        # mode is wired through MACE.
         self._emle = _EMLE(
             model=emle_model,
             method=emle_method,
-            alpha_mode=alpha_mode,
+            alpha_mode="species",
             atomic_numbers=(atomic_numbers if atomic_numbers is not None else None),
             mm_charges=mm_charges,
             qm_charge=qm_charge,
