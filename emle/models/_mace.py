@@ -901,9 +901,23 @@ class MACEEMLEJoint(_torch.nn.Module):
         self._E_vac_qbc = _torch.empty(0, dtype=self._dtype)
         self._grads_qbc = _torch.empty(0, dtype=self._dtype)
 
+        # Per-batch-element EMLE quantities predicted by the MACE model,
+        # exposed here so the EMLECalculator can write them into the QM xyz
+        # trajectory (see emle/calculator.py) and the EMLEAnalyzer can
+        # recompute polarisabilities / energies from them. Keys:
+        #   's'      - valence widths
+        #   'q_core' - core charges
+        #   'q_val'  - valence charges (= total MACE charges minus q_core);
+        #              name matches EMLE.forward's `external_params`
+        #   'q'      - total charges (= q_core + q_val); kept for parity with
+        #              the training-data extXYZ produced by tarball-to-extxyz
+        #   'mu'     - static atomic dipoles (3-vectors)
+        # Cleared by reset_emle() at the start of each forward() call, then
+        # one tensor is appended per batch element inside forward().
         self.emle_values: Dict[str, List[Tensor]] = {
             's': [_torch.empty(0, dtype=self._dtype)],
             'q_core': [_torch.empty(0, dtype=self._dtype)],
+            'q_val': [_torch.empty(0, dtype=self._dtype)],
             'q': [_torch.empty(0, dtype=self._dtype)],
             'mu': [_torch.empty(0, dtype=self._dtype)],
         }
@@ -1275,18 +1289,21 @@ class MACEEMLEJoint(_torch.nn.Module):
             assert q is not None
             assert mu is not None
 
-            # Store to be included in qm.xyz
+            q_val = q - q_core
+
             # Store per-batch-element tensors so the calculator can write them
-            # into the QM xyz trajectory. Keys match EMLE.forward conventions.
+            # into the QM xyz trajectory. Both q_val (EMLE.forward convention)
+            # and q (total, for parity with the training-data extXYZ written
+            # by tarball-to-extxyz) are stored.
             self.emle_values['s'].append(s)
             self.emle_values['q_core'].append(q_core)
+            self.emle_values['q_val'].append(q_val)
             self.emle_values['q'].append(q)
             self.emle_values['mu'].append(mu)
 
             s = s.view(1, -1)
             q_core = q_core.view(1, -1)
-            q = q.view(1, -1)
-            q_val = q - q_core
+            q_val = q_val.view(1, -1)
             mu = mu.view(1, -1, 3) if self.use_dipoles else None
 
             assert (
@@ -1368,5 +1385,6 @@ class MACEEMLEJoint(_torch.nn.Module):
         """
         self.emle_values['s'] = []
         self.emle_values['q_core'] = []
+        self.emle_values['q_val'] = []
         self.emle_values['q'] = []
         self.emle_values['mu'] = []
