@@ -163,15 +163,13 @@ class EMLEAnalyzer:
         self.pc_charges = _torch.tensor(pc_charges, dtype=dtype, device=device)
         self.pc_xyz = _torch.tensor(pc_xyz, dtype=dtype, device=device)
 
-        # TODO: naming differs from EMLE.forward, unify
         qm_xyz_bohr = self.qm_xyz * _ANGSTROM_TO_BOHR
         pc_xyz_bohr = self.pc_xyz * _ANGSTROM_TO_BOHR
 
         if isinstance(backend, MACEEMLEJoint):
             self.s = _torch.stack(backend.emle_values['s'])
             self.q_core = _torch.stack(backend.emle_values['q_core'])
-            self.q = _torch.stack(backend.emle_values['q'])
-            self.q_val = self.q - self.q_core
+            self.q_val = _torch.stack(backend.emle_values['q_val'])
             self.mu = _torch.stack(backend.emle_values['mu'])
 
             a_Thole = backend._mace.a_Thole
