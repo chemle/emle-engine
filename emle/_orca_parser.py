@@ -33,7 +33,7 @@ import numpy as _np
 import tarfile as _tarfile
 
 from ._utils import pad_to_max
-from ._units import _HARTREE_TO_KCAL_MOL, _HARTREE_BOHR_TO_EV_A
+from ._units import _HARTREE_TO_KCAL_MOL
 
 
 class ORCAParser:
@@ -282,13 +282,14 @@ class ORCAParser:
     def get_forces(self):
         """
         Parse the gas-phase ORCA output for each configuration and return the
-        atomic forces in eV/Angstrom.
+        atomic forces in Hartree/Bohr.
 
         Returns
         -------
 
         forces: List[numpy.ndarray]
-            Per-configuration atomic forces, each of shape (N_ATOMS, 3).
+            Per-configuration atomic forces in Hartree/Bohr, each of shape
+            (N_ATOMS, 3).
         """
         forces = [
             self._get_forces_from_out(self._get_file(name, "vac.orca"))
@@ -299,8 +300,8 @@ class ORCAParser:
     def _get_forces_from_out(self, f):
         """
         Extract the Cartesian forces from an ORCA gas-phase output file.
-        Returns forces in eV/Angstrom (ORCA reports the gradient in Hartree/Bohr;
-        we negate and convert).
+        ORCA reports the gradient in Hartree/Bohr; we negate (forces =
+        -gradient) and return in the same units.
         """
         while next(f) != b"CARTESIAN GRADIENT\n":
             pass
@@ -312,11 +313,8 @@ class ORCAParser:
                 line_elements = next(f).split()
                 if len(line_elements) == 0:
                     break
-                # Extract gradient (last 3 elements) and convert to forces in eV/A.
-                force_values = [
-                    float(x) * _HARTREE_BOHR_TO_EV_A * (-1)
-                    for x in line_elements[-3:]
-                ]
+                # Extract gradient (last 3 elements) and negate to get forces.
+                force_values = [-float(x) for x in line_elements[-3:]]
                 forces.append(force_values)
 
         except ValueError:

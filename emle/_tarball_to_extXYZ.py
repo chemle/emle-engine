@@ -12,6 +12,7 @@ from ase import Atoms
 from ase.data import chemical_symbols
 
 from ._orca_parser import ORCAParser
+from ._units import _HARTREE_BOHR_TO_EV_A
 
 
 def orca_to_extxyz(
@@ -90,8 +91,9 @@ def orca_to_extxyz(
         # Create ASE atoms object from parser data
         atoms = Atoms(symbols=symbols, positions=parser.xyz[i])
 
-        # Add forces
-        atoms.arrays['forces_dft'] = parser.forces[i]
+        # Add forces (ORCAParser returns Hartree/Bohr; extXYZ stores eV/A
+        # for MACE training).
+        atoms.arrays['forces_dft'] = parser.forces[i] * _HARTREE_BOHR_TO_EV_A
 
         # Add MBIS properties
         if not (hasattr(parser, 'mbis') and parser.mbis is not None):
