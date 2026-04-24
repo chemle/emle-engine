@@ -518,8 +518,7 @@ class EMLECalculator:
                     _logger.error(msg)
                     raise ValueError(msg)
 
-        self.use_dipoles = use_dipoles
-
+        self._use_dipoles = use_dipoles
 
         # Validate the external backend.
         if external_backend is not None:
@@ -678,8 +677,7 @@ class EMLECalculator:
                         mace_emle = _MACEEMLE(
                             emle_model=model,
                             emle_method=method,
-                            alpha_mode=alpha_mode,
-                            use_dipoles=self.use_dipoles,
+                            use_dipoles=self._use_dipoles,
                             mm_charges=self._mm_charges,
                             qm_charge=self._qm_charge,
                             mace_model=mace_model,
