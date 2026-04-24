@@ -33,4 +33,3 @@ _HARTREE_TO_KCAL_MOL = _ase.units.Hartree / _ase.units.kcal * _ase.units.mol
 _HARTREE_TO_KJ_MOL = _ase.units.Hartree / _ase.units.kJ * _ase.units.mol
 _NANOMETER_TO_ANGSTROM = 10.0
 _HARTREE_BOHR_TO_EV_A = _ase.units.Hartree / _ase.units.Bohr
-

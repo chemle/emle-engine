@@ -66,6 +66,7 @@ try:
     _torch.serialization.add_safe_globals([slice])
     from emle_mace.models import EnergyEMLEMACE as EnergyEMLEMACE  # noqa: F401
     import mace.modules.models as _mace_models_module
+
     if not hasattr(_mace_models_module, "EnergyEMLEMACE"):
         _mace_models_module.EnergyEMLEMACE = EnergyEMLEMACE
 except Exception:
@@ -256,6 +257,7 @@ class MACEEMLE(_torch.nn.Module):
                     from emle_mace.tools.model_utils import (
                         extract_config_emle_mace_model,
                     )
+
                     config = extract_config_emle_mace_model(source_model)
                 except ImportError as e:
                     raise ImportError(
@@ -271,6 +273,7 @@ class MACEEMLE(_torch.nn.Module):
             # Create the target model.
             if _is_energy_emle_mace(source_model):
                 from emle_mace.models import EnergyEMLEMACE as _EnergyEMLEMACE
+
                 _model_cls = _EnergyEMLEMACE
             else:
                 _model_cls = source_model.__class__
@@ -676,10 +679,10 @@ class MACEEMLE(_torch.nn.Module):
                 # that the coordinate tensors inside EMLE.forward are batch=1
                 # and consistent with the per-element loop here.
                 E_emle = self._emle(
-                    atomic_numbers[i:i + 1],
-                    charges_mm[i:i + 1],
-                    xyz_qm[i:i + 1],
-                    xyz_mm[i:i + 1],
+                    atomic_numbers[i : i + 1],
+                    charges_mm[i : i + 1],
+                    xyz_qm[i : i + 1],
+                    xyz_mm[i : i + 1],
                     cell,
                     qm_charge,
                 )
@@ -852,6 +855,7 @@ class MACEEMLEJoint(_torch.nn.Module):
             )
 
         from mace.tools.scripts_utils import extract_config_mace_model
+
         self._mace_models = _torch.nn.ModuleList()
         for model in mace_model:
             source_model = self._load_mace_model(model, device)
@@ -869,6 +873,7 @@ class MACEEMLEJoint(_torch.nn.Module):
                     from emle_mace.tools.model_utils import (
                         extract_config_emle_mace_model,
                     )
+
                     config = extract_config_emle_mace_model(source_model)
                 except ImportError as e:
                     raise ImportError(
@@ -884,6 +889,7 @@ class MACEEMLEJoint(_torch.nn.Module):
             # Create the target model.
             if _is_energy_emle_mace(source_model):
                 from emle_mace.models import EnergyEMLEMACE as _EnergyEMLEMACE
+
                 _model_cls = _EnergyEMLEMACE
             else:
                 _model_cls = source_model.__class__
@@ -915,11 +921,11 @@ class MACEEMLEJoint(_torch.nn.Module):
         # Cleared by reset_emle() at the start of each forward() call, then
         # one tensor is appended per batch element inside forward().
         self.emle_values: Dict[str, List[Tensor]] = {
-            's': [_torch.empty(0, dtype=self._dtype)],
-            'q_core': [_torch.empty(0, dtype=self._dtype)],
-            'q_val': [_torch.empty(0, dtype=self._dtype)],
-            'q': [_torch.empty(0, dtype=self._dtype)],
-            'mu': [_torch.empty(0, dtype=self._dtype)],
+            "s": [_torch.empty(0, dtype=self._dtype)],
+            "q_core": [_torch.empty(0, dtype=self._dtype)],
+            "q_val": [_torch.empty(0, dtype=self._dtype)],
+            "q": [_torch.empty(0, dtype=self._dtype)],
+            "mu": [_torch.empty(0, dtype=self._dtype)],
         }
 
         # Create the z_table of the MACE model.
@@ -1295,11 +1301,11 @@ class MACEEMLEJoint(_torch.nn.Module):
             # into the QM xyz trajectory. Both q_val (EMLE.forward convention)
             # and q (total, for parity with the training-data extXYZ written
             # by tarball-to-extxyz) are stored.
-            self.emle_values['s'].append(s)
-            self.emle_values['q_core'].append(q_core)
-            self.emle_values['q_val'].append(q_val)
-            self.emle_values['q'].append(q)
-            self.emle_values['mu'].append(mu)
+            self.emle_values["s"].append(s)
+            self.emle_values["q_core"].append(q_core)
+            self.emle_values["q_val"].append(q_val)
+            self.emle_values["q"].append(q)
+            self.emle_values["mu"].append(mu)
 
             s = s.view(1, -1)
             q_core = q_core.view(1, -1)
@@ -1346,22 +1352,22 @@ class MACEEMLEJoint(_torch.nn.Module):
                 results_E_emle_induced[i] = zero
             else:
                 external_params = {
-                    's': s,
-                    'q_core': q_core,
-                    'q_val': q_val,
-                    'a_Thole': a_Thole,
-                    'k_Z': k_Z,
+                    "s": s,
+                    "q_core": q_core,
+                    "q_val": q_val,
+                    "a_Thole": a_Thole,
+                    "k_Z": k_Z,
                 }
                 if mu is not None:
-                    external_params['mu'] = mu
+                    external_params["mu"] = mu
                 # Get the EMLE energy components. Pass only batch element i so
                 # that external_params (batch=1) and the coordinate tensors are
                 # consistent inside EMLE's forward.
                 E_emle = self._emle(
-                    atomic_numbers[i:i + 1],
-                    charges_mm[i:i + 1],
-                    xyz_qm[i:i + 1],
-                    xyz_mm[i:i + 1],
+                    atomic_numbers[i : i + 1],
+                    charges_mm[i : i + 1],
+                    xyz_qm[i : i + 1],
+                    xyz_mm[i : i + 1],
                     cell,
                     qm_charge,
                     external_params,
@@ -1383,8 +1389,8 @@ class MACEEMLEJoint(_torch.nn.Module):
         per key). The calculator reads these values to write QM xyz trajectory
         frames; see emle/calculator.py.
         """
-        self.emle_values['s'] = []
-        self.emle_values['q_core'] = []
-        self.emle_values['q_val'] = []
-        self.emle_values['q'] = []
-        self.emle_values['mu'] = []
+        self.emle_values["s"] = []
+        self.emle_values["q_core"] = []
+        self.emle_values["q_val"] = []
+        self.emle_values["q"] = []
+        self.emle_values["mu"] = []

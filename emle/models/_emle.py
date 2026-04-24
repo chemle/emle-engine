@@ -521,21 +521,21 @@ class EMLE(_torch.nn.Module):
         # These are returned as batched tensors, so we need to extract the
         # first element of each.
         if external_params is not None:
-            s = external_params['s']
-            q_core = external_params['q_core']
-            q_val = external_params['q_val']
-            mu = external_params.get('mu')
+            s = external_params["s"]
+            q_core = external_params["q_core"]
+            q_val = external_params["q_val"]
+            mu = external_params.get("mu")
 
             xyz_qm_bohr = self._xyz_qm * ANGSTROM_TO_BOHR
             mask = atomic_numbers > 0
 
             species_id = self._emle_base._species_map[atomic_numbers]
-            k = external_params['k_Z'][species_id]
+            k = external_params["k_Z"][species_id]
 
             r_data = self._emle_base._get_r_data(xyz_qm_bohr, mask)
-            A_thole = self._emle_base._get_A_thole(r_data, s, q_val,
-                                                   k,
-                                                   external_params['a_Thole'])
+            A_thole = self._emle_base._get_A_thole(
+                r_data, s, q_val, k, external_params["a_Thole"]
+            )
         else:
             s, q_core, q_val, A_thole = self._emle_base(
                 self._atomic_numbers,

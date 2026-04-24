@@ -791,7 +791,7 @@ class EMLEBase(_torch.nn.Module):
         q_val: Tensor,
         charges_mm: Tensor,
         mesh_data: Tuple[Tensor, Tensor, Tensor],
-        mu: Optional[Tensor] = None
+        mu: Optional[Tensor] = None,
     ) -> Tensor:
         """
         Calculate the static electrostatic energy.

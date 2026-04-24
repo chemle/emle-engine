@@ -513,7 +513,7 @@ class EMLECalculator:
 
         if use_dipoles:
             for backend in formatted_backends:
-                if backend != 'emle-mace':
+                if backend != "emle-mace":
                     msg = f"Static dipoles can only be used with emle-mace backend"
                     _logger.error(msg)
                     raise ValueError(msg)
@@ -662,6 +662,7 @@ class EMLECalculator:
                 elif backend in ["mace", "emle-mace"]:
                     if backend == "mace":
                         from .models import MACEEMLE as _MACEEMLE
+
                         mace_emle = _MACEEMLE(
                             emle_model=model,
                             emle_method=method,
@@ -674,6 +675,7 @@ class EMLECalculator:
                         )
                     else:  # emle-mace
                         from .models import MACEEMLEJoint as _MACEEMLE
+
                         mace_emle = _MACEEMLE(
                             emle_model=model,
                             emle_method=method,
@@ -1133,14 +1135,14 @@ class EMLECalculator:
         # Write out the QM region to the xyz trajectory file.
         if self._qm_xyz_frequency > 0 and self._step % self._qm_xyz_frequency == 0:
             atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
-            atoms.info['total_charge'] = charge
+            atoms.info["total_charge"] = charge
             if hasattr(self._backend, "_max_f_std"):
                 atoms.info = {"max_f_std": self._backend._max_f_std}
             if getattr(self._backends[0], "emle_values", None) is not None:
                 for key, value in self._backends[0].emle_values.items():
-                    assert len(value) == 1, (
-                        "emle_values xyz export assumes a single frame per forward() call"
-                    )
+                    assert (
+                        len(value) == 1
+                    ), "emle_values xyz export assumes a single frame per forward() call"
                     atoms.arrays[key] = value[0].detach().cpu().numpy()
             _ase_io.write(self._qm_xyz_file, atoms, append=True)
 
@@ -1580,7 +1582,7 @@ class EMLECalculator:
                 xyz_qm,
                 xyz_mm,
                 cell=cell,
-                charge=self._qm_charge
+                charge=self._qm_charge,
             )
         )
 
