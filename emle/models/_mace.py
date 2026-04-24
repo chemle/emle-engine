@@ -69,7 +69,9 @@ try:
     if not hasattr(_mace_models_module, "EnergyEMLEMACE"):
         _mace_models_module.EnergyEMLEMACE = EnergyEMLEMACE
 except Exception:
-    pass  # emle-mace not installed; torch.load() will fail for EnergyEMLEMACE checkpoints
+    # emle-mace not installed; torch.load() will fail for EnergyEMLEMACE checkpoints
+    pass
+
 
 def _is_energy_emle_mace(model) -> bool:
     # TorchScript-compiled models expose the source class name via
@@ -251,7 +253,9 @@ class MACEEMLE(_torch.nn.Module):
             # Dispatch to the appropriate config extractor.
             if _is_energy_emle_mace(source_model):
                 try:
-                    from emle_mace.tools.model_utils import extract_config_emle_mace_model
+                    from emle_mace.tools.model_utils import (
+                        extract_config_emle_mace_model,
+                    )
                     config = extract_config_emle_mace_model(source_model)
                 except ImportError as e:
                     raise ImportError(
@@ -541,8 +545,8 @@ class MACEEMLE(_torch.nn.Module):
         Returns
         -------
 
-        result: torch.Tensor (3,)
-            The ANI2x and static and induced EMLE energy components in Hartree.
+        result: torch.Tensor (3,) or (3, BATCH)
+            The MACE and static and induced EMLE energy components in Hartree.
         """
         # Get the device.
         device = xyz_qm.device
@@ -714,8 +718,8 @@ class MACEEMLEJoint(_torch.nn.Module):
         ----------
 
         emle_model: str
-            Path to a custom EMLE model parameter file. If None, then the
-            default model for the specified 'alpha_mode' will be used.
+            Path to a custom EMLE model parameter file. If None, the default
+            model will be used.
 
         emle_method: str
             The desired embedding method. Options are:
@@ -756,6 +760,12 @@ class MACEEMLEJoint(_torch.nn.Module):
 
         atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor (N_ATOMS,)
             List of atomic numbers to use in the MACE model.
+
+        use_dipoles: bool
+            Whether to include the MACE-predicted atomic dipoles 'mu' in the
+            static electrostatic energy. When True, 'mu' is passed to EMLE as
+            part of the external parameters. The calculator only permits this
+            flag with the 'emle-mace' backend.
 
         device: torch.device
             The device on which to run the model.
@@ -826,10 +836,19 @@ class MACEEMLEJoint(_torch.nn.Module):
         )
 
         if not isinstance(mace_model, (list, tuple)):
-            mace_model = [mace_model] if mace_model is None or isinstance(mace_model, str) else None
+            mace_model = (
+                [mace_model]
+                if mace_model is None or isinstance(mace_model, str)
+                else None
+            )
 
-        if mace_model is None or any(not isinstance(i, (str, type(None))) for i in mace_model):
-            raise TypeError("'mace_model' must be a list, tuple, or str, with elements of type str or None")
+        if mace_model is None or any(
+            not isinstance(i, (str, type(None))) for i in mace_model
+        ):
+            raise TypeError(
+                "'mace_model' must be a list, tuple, or str, with elements "
+                "of type str or None"
+            )
 
         from mace.tools.scripts_utils import extract_config_mace_model
         self._mace_models = _torch.nn.ModuleList()
@@ -846,7 +865,9 @@ class MACEEMLEJoint(_torch.nn.Module):
             # Dispatch to the appropriate config extractor.
             if _is_energy_emle_mace(source_model):
                 try:
-                    from emle_mace.tools.model_utils import extract_config_emle_mace_model
+                    from emle_mace.tools.model_utils import (
+                        extract_config_emle_mace_model,
+                    )
                     config = extract_config_emle_mace_model(source_model)
                 except ImportError as e:
                     raise ImportError(
@@ -1007,7 +1028,7 @@ class MACEEMLEJoint(_torch.nn.Module):
 
     @staticmethod
     def _atomic_numbers_to_indices(
-            atomic_numbers: _torch.Tensor, z_table: List[int]
+        atomic_numbers: _torch.Tensor, z_table: List[int]
     ) -> _torch.Tensor:
         """
         Get the indices of the atomic numbers in the z_table.
@@ -1056,9 +1077,9 @@ class MACEEMLEJoint(_torch.nn.Module):
         """
         self._emle = self._emle.to(*args, **kwargs)
         self._mace = self._mace.to(*args, **kwargs)
-        self._mace_models = _torch.nn.ModuleList([
-            model.to(*args, **kwargs) for model in self._mace_models
-        ])
+        self._mace_models = _torch.nn.ModuleList(
+            [model.to(*args, **kwargs) for model in self._mace_models]
+        )
         return self
 
     def cpu(self, **kwargs):
@@ -1069,9 +1090,9 @@ class MACEEMLEJoint(_torch.nn.Module):
         self._mace = self._mace.cpu(**kwargs)
         if self._atomic_numbers is not None:
             self._atomic_numbers = self._atomic_numbers.cpu(**kwargs)
-        self._mace_models = _torch.nn.ModuleList([
-            model.cpu(**kwargs) for model in self._mace_models
-        ])
+        self._mace_models = _torch.nn.ModuleList(
+            [model.cpu(**kwargs) for model in self._mace_models]
+        )
         return self
 
     def cuda(self, **kwargs):
@@ -1082,9 +1103,9 @@ class MACEEMLEJoint(_torch.nn.Module):
         self._mace = self._mace.cuda(**kwargs)
         if self._atomic_numbers is not None:
             self._atomic_numbers = self._atomic_numbers.cuda(**kwargs)
-        self._mace_models = _torch.nn.ModuleList([
-            model.cuda(**kwargs) for model in self._mace_models
-        ])
+        self._mace_models = _torch.nn.ModuleList(
+            [model.cuda(**kwargs) for model in self._mace_models]
+        )
         return self
 
     def double(self):
@@ -1093,9 +1114,9 @@ class MACEEMLEJoint(_torch.nn.Module):
         """
         self._emle = self._emle.double()
         self._mace = self._mace.double()
-        self._mace_models = _torch.nn.ModuleList([
-            model.double() for model in self._mace_models
-        ])
+        self._mace_models = _torch.nn.ModuleList(
+            [model.double() for model in self._mace_models]
+        )
         return self
 
     def float(self):
@@ -1104,22 +1125,22 @@ class MACEEMLEJoint(_torch.nn.Module):
         """
         self._emle = self._emle.float()
         self._mace = self._mace.float()
-        self._mace_models = _torch.nn.ModuleList([
-            model.float() for model in self._mace_models
-        ])
+        self._mace_models = _torch.nn.ModuleList(
+            [model.float() for model in self._mace_models]
+        )
         return self
 
     def forward(
-            self,
-            atomic_numbers: Tensor,
-            charges_mm: Tensor,
-            xyz_qm: Tensor,
-            xyz_mm: Tensor,
-            cell: Optional[Tensor] = None,
-            qm_charge: int = 0,
+        self,
+        atomic_numbers: Tensor,
+        charges_mm: Tensor,
+        xyz_qm: Tensor,
+        xyz_mm: Tensor,
+        cell: Optional[Tensor] = None,
+        qm_charge: int = 0,
     ) -> Tensor:
         """
-        Compute the the MACE and static and induced EMLE energy components.
+        Compute the MACE and static and induced EMLE energy components.
 
         Parameters
         ----------
@@ -1145,8 +1166,8 @@ class MACEEMLEJoint(_torch.nn.Module):
         Returns
         -------
 
-        result: torch.Tensor (3,)
-            The ANI2x and static and induced EMLE energy components in Hartree.
+        result: torch.Tensor (3,) or (3, BATCH)
+            The MACE and static and induced EMLE energy components in Hartree.
         """
         # Get the device.
         device = xyz_qm.device
@@ -1169,8 +1190,17 @@ class MACEEMLEJoint(_torch.nn.Module):
         num_models = len(self._mace_models)
 
         # Create tensors to store the data for QbC.
-        self._E_vac_qbc = _torch.empty(num_models, num_batches, dtype=self._dtype, device=device)
-        self._grads_qbc = _torch.empty(num_models, num_batches, xyz_qm.shape[1], 3, dtype=self._dtype, device=device)
+        self._E_vac_qbc = _torch.empty(
+            num_models, num_batches, dtype=self._dtype, device=device
+        )
+        self._grads_qbc = _torch.empty(
+            num_models,
+            num_batches,
+            xyz_qm.shape[1],
+            3,
+            dtype=self._dtype,
+            device=device,
+        )
 
         # Create tensors to store the results.
         results_E_vac = _torch.empty(num_batches, dtype=self._dtype, device=device)
@@ -1223,11 +1253,10 @@ class MACEEMLEJoint(_torch.nn.Module):
                 "edge_index": edge_index,
                 "shifts": shifts,
                 "cell": self._cell if cell is None else cell,
-                "total_charge": _torch.tensor(qm_charge, dtype=self._dtype).to(device)
+                "total_charge": _torch.tensor(qm_charge, dtype=self._dtype).to(device),
             }
 
-            # Here, instead of just getting the energy, store the output and get all the params. Then
-            # pass them to EMLE with "use_external_props".
+            # Run MACE once, reusing its output to feed EMLE via external_params.
             output = self._mace(input_dict, compute_force=False)
 
             E_vac = output["interaction_energy"]
@@ -1242,6 +1271,8 @@ class MACEEMLEJoint(_torch.nn.Module):
             assert mu is not None
 
             # Store to be included in qm.xyz
+            # Store per-batch-element tensors so the calculator can write them
+            # into the QM xyz trajectory. Keys match EMLE.forward conventions.
             self.emle_values['s'].append(s)
             self.emle_values['q_core'].append(q_core)
             self.emle_values['q'].append(q)
@@ -1254,25 +1285,31 @@ class MACEEMLEJoint(_torch.nn.Module):
             mu = mu.view(1, -1, 3) if self.use_dipoles else None
 
             assert (
-                    E_vac is not None
+                E_vac is not None
             ), "The model did not return any energy. Please check the input."
 
             results_E_vac[i] = E_vac[0] * EV_TO_HARTREE
 
             # Decouple the positions from the computation graph for the next models.
-            input_dict["positions"] = input_dict["positions"].clone().detach().requires_grad_(True)
+            input_dict["positions"] = (
+                input_dict["positions"].clone().detach().requires_grad_(True)
+            )
 
             # Do inference for the other models.
             if len(self._mace_models) > 1:
                 for j, mace in enumerate(self._mace_models):
-                    E_vac_qbc = mace(input_dict, compute_force=False)["interaction_energy"]
+                    E_vac_qbc = mace(input_dict, compute_force=False)[
+                        "interaction_energy"
+                    ]
 
                     assert (
-                            E_vac_qbc is not None
+                        E_vac_qbc is not None
                     ), "The model did not return any energy. Please check the input."
 
                     # Calculate the gradients
-                    grads_qbc = _torch.autograd.grad([E_vac_qbc], [input_dict["positions"]])[0]
+                    grads_qbc = _torch.autograd.grad(
+                        [E_vac_qbc], [input_dict["positions"]]
+                    )[0]
                     assert grads_qbc is not None, "Gradient computation failed"
 
                     # Store the results.
@@ -1311,6 +1348,14 @@ class MACEEMLEJoint(_torch.nn.Module):
         )
 
     def reset_emle(self) -> None:
+        """
+        Clear the per-frame EMLE output buffers.
+
+        Called at the start of each forward() so emle_values exposes only the
+        quantities produced by the current call (one tensor per batch element,
+        per key). The calculator reads these values to write QM xyz trajectory
+        frames; see emle/calculator.py.
+        """
         self.emle_values['s'] = []
         self.emle_values['q_core'] = []
         self.emle_values['q'] = []
