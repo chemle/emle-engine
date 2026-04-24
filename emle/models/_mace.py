@@ -672,9 +672,16 @@ class MACEEMLE(_torch.nn.Module):
                 results_E_emle_static[i] = zero
                 results_E_emle_induced[i] = zero
             else:
-                # Get the EMLE energy components.
+                # Get the EMLE energy components. Pass only batch element i so
+                # that the coordinate tensors inside EMLE.forward are batch=1
+                # and consistent with the per-element loop here.
                 E_emle = self._emle(
-                    atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell, qm_charge
+                    atomic_numbers[i:i + 1],
+                    charges_mm[i:i + 1],
+                    xyz_qm[i:i + 1],
+                    xyz_mm[i:i + 1],
+                    cell,
+                    qm_charge,
                 )
                 results_E_emle_static[i] = E_emle[0][0]
                 results_E_emle_induced[i] = E_emle[1][0]
