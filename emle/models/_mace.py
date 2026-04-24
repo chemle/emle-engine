@@ -1193,6 +1193,10 @@ class MACEEMLEJoint(_torch.nn.Module):
         # Store the number of models.
         num_models = len(self._mace_models)
 
+        # Fixed model parameters, pulled out of the per-batch loop.
+        a_Thole = self._mace.a_Thole
+        k_Z = self._mace.elements_alpha_v_ratios
+
         # Create tensors to store the data for QbC.
         self._E_vac_qbc = _torch.empty(
             num_models, num_batches, dtype=self._dtype, device=device
@@ -1324,11 +1328,13 @@ class MACEEMLEJoint(_torch.nn.Module):
                 results_E_emle_static[i] = zero
                 results_E_emle_induced[i] = zero
             else:
-                external_params = {'s': s,
-                                   'q_core': q_core,
-                                   'q_val': q_val,
-                                   'a_Thole': self._mace.a_Thole,
-                                   'k_Z': self._mace.elements_alpha_v_ratios}
+                external_params = {
+                    's': s,
+                    'q_core': q_core,
+                    'q_val': q_val,
+                    'a_Thole': a_Thole,
+                    'k_Z': k_Z,
+                }
                 if mu is not None:
                     external_params['mu'] = mu
                 # Get the EMLE energy components. Pass only batch element i so
