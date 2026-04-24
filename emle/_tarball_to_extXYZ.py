@@ -1,5 +1,8 @@
 """Functions for converting ORCA tarball files to extXYZ format."""
 
+__author__ = "Laetitia Kantin"
+__email__ = "kantin@ibpc.fr"
+
 import sys
 from pathlib import Path
 
@@ -11,27 +14,40 @@ from ase.data import chemical_symbols
 from ._orca_parser import ORCAParser
 
 
-def orca_to_extxyz(orca_tarball_path, output_path=None, total_charge=0, 
-                   parse_alpha=True, verbose=False):
+def orca_to_extxyz(
+    orca_tarball_path,
+    output_path=None,
+    total_charge=0,
+    parse_alpha=True,
+    verbose=False,
+):
     """
     Convert ORCA tarball to extXYZ format using ORCAParser and ASE.
-    
-    Parameters:
-    -----------
-    orca_tarball_path : str or Path
-        Path to the ORCA tarball file
-    output_path : str or Path, optional
-        Output path for the extXYZ file. If None, uses input name with .xyz extension
-    total_charge : int, optional
-        Total charge of the system (default: 0)
-    parse_alpha : bool, optional
-        Whether to parse polarizability data (default: True)
-    verbose : bool, optional
-        Enable verbose output (default: False)
-    
-    Returns:
-    --------
-    str : Path to the created extXYZ file
+
+    Parameters
+    ----------
+
+    orca_tarball_path: str or Path
+        Path to the ORCA tarball file.
+
+    output_path: str or Path, optional
+        Output path for the extXYZ file. If None, uses the input name with a
+        '.xyz' extension.
+
+    total_charge: int
+        Total charge of the system (default: 0).
+
+    parse_alpha: bool
+        Whether to parse polarizability data (default: True).
+
+    verbose: bool
+        Enable verbose output (default: False).
+
+    Returns
+    -------
+
+    output_path: str
+        Path to the created extXYZ file.
     """
     orca_tarball_path = Path(orca_tarball_path)
     
@@ -151,7 +167,6 @@ def main():
     parser = argparse.ArgumentParser(
         description="Convert ORCA tarball files to extXYZ format",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="LK, 11/10/2025"
     )
     
     parser.add_argument(
