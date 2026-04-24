@@ -32,7 +32,6 @@ import os as _os
 import scipy.io as _scipy_io
 import torch as _torch
 import torchani as _torchani
-from emle.models import EMLEBase
 
 from torch import Tensor
 from typing import Union, Optional, Dict
@@ -445,6 +444,29 @@ class EMLE(_torch.nn.Module):
 
         qm_charge: int or torch.Tensor (BATCH,)
             The charge on the QM region.
+
+        external_params: Optional[Dict[str, torch.Tensor]]
+            Pre-computed EMLE parameters supplied by an external model (for
+            example MACEEMLEJoint, where MACE predicts these quantities). When
+            provided, they replace the values that EMLEBase would otherwise
+            predict internally. Required keys and shapes:
+
+                's': torch.Tensor (1, N_QM_ATOMS)
+                    Valence widths.
+                'q_core': torch.Tensor (1, N_QM_ATOMS)
+                    Core charges.
+                'q_val': torch.Tensor (1, N_QM_ATOMS)
+                    Valence charges.
+                'a_Thole': torch.Tensor (scalar)
+                    Thole damping parameter.
+                'k_Z': torch.Tensor (N_SPECIES,)
+                    Per-species alpha/volume ratios.
+                'mu': Optional[torch.Tensor] (1, N_QM_ATOMS, 3)
+                    Static atomic dipoles (optional; included in the static
+                    energy when present).
+
+            When None, 's', 'q_core', 'q_val', and the Thole tensor are
+            predicted by EMLEBase (original behaviour).
 
         Returns
         -------
