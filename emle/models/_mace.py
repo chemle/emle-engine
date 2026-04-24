@@ -1341,10 +1341,13 @@ class MACEEMLEJoint(_torch.nn.Module):
                 # that external_params (batch=1) and the coordinate tensors are
                 # consistent inside EMLE's forward.
                 E_emle = self._emle(
-                    atomic_numbers[i:i+1], charges_mm[i:i+1],
-                    xyz_qm[i:i+1], xyz_mm[i:i+1],
-                    cell, qm_charge,
-                    external_params
+                    atomic_numbers[i:i + 1],
+                    charges_mm[i:i + 1],
+                    xyz_qm[i:i + 1],
+                    xyz_mm[i:i + 1],
+                    cell,
+                    qm_charge,
+                    external_params,
                 )
                 results_E_emle_static[i] = E_emle[0][0]
                 results_E_emle_induced[i] = E_emle[1][0]
