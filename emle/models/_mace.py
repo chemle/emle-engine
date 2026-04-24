@@ -548,6 +548,9 @@ class MACEEMLE(_torch.nn.Module):
         result: torch.Tensor (3,) or (3, BATCH)
             The MACE and static and induced EMLE energy components in Hartree.
         """
+        # TorchScript requires constants to be local variables.
+        EV_TO_HARTREE = 0.0367492929
+
         # Get the device.
         device = xyz_qm.device
 
@@ -613,9 +616,6 @@ class MACEEMLE(_torch.nn.Module):
                     self._node_attrs.shape[0], dtype=_torch.long
                 ).to(device)
                 self._atomic_numbers = atomic_numbers[i]
-
-            # Get the in vacuo energy.
-            EV_TO_HARTREE = 0.0367492929
 
             positions = xyz_qm[i].to(self._dtype)
 
@@ -1169,6 +1169,9 @@ class MACEEMLEJoint(_torch.nn.Module):
         result: torch.Tensor (3,) or (3, BATCH)
             The MACE and static and induced EMLE energy components in Hartree.
         """
+        # TorchScript requires constants to be local variables.
+        EV_TO_HARTREE = 0.0367492929
+
         # Get the device.
         device = xyz_qm.device
 
@@ -1236,9 +1239,6 @@ class MACEEMLEJoint(_torch.nn.Module):
                     self._node_attrs.shape[0], dtype=_torch.long
                 ).to(device)
                 self._atomic_numbers = atomic_numbers[i]
-
-            # Get the in vacuo energy.
-            EV_TO_HARTREE = 0.0367492929
 
             positions = xyz_qm[i].to(self._dtype)
 
