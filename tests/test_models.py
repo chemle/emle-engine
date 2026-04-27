@@ -116,6 +116,24 @@ def deepmd_model_path(tmp_path_factory):
     return str(p)
 
 
+@pytest.fixture(scope="session")
+def deepmd_model_path_2(tmp_path_factory):
+    if not has_deepmd:
+        pytest.skip("deepmd-kit not installed")
+    p = tmp_path_factory.mktemp("dp2") / "tiny.pth"
+    torch.jit.save(_build_tiny_deepmd_model(seed=2), str(p))
+    return str(p)
+
+
+@pytest.fixture(scope="session")
+def deepmd_model_path_partial_typemap(tmp_path_factory):
+    if not has_deepmd:
+        pytest.skip("deepmd-kit not installed")
+    p = tmp_path_factory.mktemp("dp_partial") / "tiny.pth"
+    torch.jit.save(_build_tiny_deepmd_model(seed=3, type_map=("H", "C")), str(p))
+    return str(p)
+
+
 # Reference values computed with float64 to serve as a regression baseline
 # for the EMLE single-point energy and gradients.
 _EMLE_REFERENCE = {
@@ -462,3 +480,71 @@ def test_deepmd_buffer_device(deepmd_model_path):
     model = model.cpu()
     assert model._z_to_type.device.type == "cpu"
     assert model._atomic_numbers.device.type == "cpu"
+
+
+@pytest.mark.skipif(not has_deepmd, reason="deepmd-kit not installed")
+def test_deepmd_qbc(
+    deepmd_model_path,
+    deepmd_model_path_2,
+    deepmd_atomic_numbers,
+    deepmd_charges_mm,
+    deepmd_xyz_qm,
+    deepmd_xyz_mm,
+):
+    """
+    Two-model ensemble must populate _E_vac_qbc and _grads_qbc with the
+    shapes consumed by EMLECalculator (calculator.py:1351-1352). Different
+    seeds must produce non-zero per-model deviations.
+    """
+    model = DeePMDEMLE(
+        deepmd_model=[deepmd_model_path, deepmd_model_path_2],
+        dtype=torch.float64,
+    )
+    energy = model(
+        deepmd_atomic_numbers,
+        deepmd_charges_mm,
+        deepmd_xyz_qm,
+        deepmd_xyz_mm,
+    )
+    assert energy.shape == (3, 1)
+    n_qm = deepmd_atomic_numbers.shape[0]
+    assert model._E_vac_qbc.shape == (2, 1)
+    assert model._grads_qbc.shape == (2, 1, n_qm, 3)
+    # Different seeds -> the two members must disagree somewhere.
+    assert not torch.allclose(model._E_vac_qbc[0], model._E_vac_qbc[1])
+    assert not torch.allclose(model._grads_qbc[0], model._grads_qbc[1])
+
+    # Replicates the calculator's deviation computation
+    # (calculator.py:1351-1352) - must produce a finite scalar.
+    e_std = torch.std(model._E_vac_qbc).item()
+    max_f_std = torch.max(torch.std(model._grads_qbc, dim=0)).item()
+    assert numpy.isfinite(e_std)
+    assert numpy.isfinite(max_f_std)
+
+    energy_b = model(
+        deepmd_atomic_numbers.unsqueeze(0).repeat(2, 1),
+        deepmd_charges_mm.unsqueeze(0).repeat(2, 1),
+        deepmd_xyz_qm.unsqueeze(0).repeat(2, 1, 1),
+        deepmd_xyz_mm.unsqueeze(0).repeat(2, 1, 1),
+    )
+    assert energy_b.shape == (3, 2)
+    assert model._E_vac_qbc.shape == (2, 2)
+    assert model._grads_qbc.shape == (2, 2, n_qm, 3)
+
+    torch.jit.script(model)
+
+
+@pytest.mark.skipif(not has_deepmd, reason="deepmd-kit not installed")
+def test_deepmd_type_map_mismatch(deepmd_model_path, deepmd_model_path_partial_typemap):
+    """
+    Ensemble members must share a type map; otherwise the same atype
+    tensor would be silently misinterpreted by the secondaries.
+    """
+    with pytest.raises(ValueError, match="type_map"):
+        DeePMDEMLE(
+            deepmd_model=[
+                deepmd_model_path,
+                deepmd_model_path_partial_typemap,
+            ],
+            dtype=torch.float64,
+        )

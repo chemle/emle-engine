@@ -30,7 +30,7 @@ import ase as _ase
 import numpy as _np
 import torch as _torch
 
-from typing import Optional
+from typing import List, Optional, Tuple, Union
 
 from torch import Tensor
 
@@ -91,10 +91,14 @@ class DeePMDEMLE(_torch.nn.Module):
             The charge on the QM region. Can also be passed via the forward
             method; the non-default value takes precedence.
 
-        deepmd_model: str
+        deepmd_model: str or list/tuple of str
             Path to a DeePMD-kit v3 PyTorch-backend ``.pth`` (TorchScript)
             model file. ``.pb`` (TensorFlow) models are not supported by this
-            wrapper; use the runtime DeePMD backend instead.
+            wrapper; use the runtime DeePMD backend instead. If a list (or
+            tuple) of paths is given, the first one is used for the returned
+            in-vacuo energy and the full ensemble drives query-by-committee
+            force/energy deviation monitoring (exposed as ``_E_vac_qbc`` /
+            ``_grads_qbc``).
 
         atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor
             Atomic numbers of the QM region. Used to enable optimised AEV
@@ -162,12 +166,57 @@ class DeePMDEMLE(_torch.nn.Module):
             create_aev_calculator=True,
         )
 
-        # Load the DeePMD model.
-        self._deepmd = self._load_deepmd_model(deepmd_model, device).to(self._dtype)
+        # Normalise deepmd_model to a list of paths. A single str path keeps
+        # backward compatibility with the compile-path (single-model only);
+        # a list/tuple enables QbC ensemble support at the constructor API.
+        if deepmd_model is None:
+            raise ValueError(
+                "'deepmd_model' must be a path (or list of paths) to a "
+                "DeePMD-kit v3 PyTorch-backend '.pth' (TorchScript) model file"
+            )
+        if isinstance(deepmd_model, (list, tuple)):
+            deepmd_model_list = list(deepmd_model)
+        else:
+            deepmd_model_list = [deepmd_model]
+        if not deepmd_model_list or any(
+            not isinstance(m, str) for m in deepmd_model_list
+        ):
+            raise TypeError(
+                "'deepmd_model' must be a str or a non-empty list/tuple of str"
+            )
 
-        # Build the atomic-number -> DeePMD-type-index lookup tensor.
+        # Load each model; first one is the primary used for the returned
+        # in-vacuo energy.
+        self._deepmd_models = _torch.nn.ModuleList()
+        for path in deepmd_model_list:
+            self._deepmd_models.append(
+                self._load_deepmd_model(path, device).to(self._dtype)
+            )
+        self._deepmd = self._deepmd_models[0]
+
+        # Build the atomic-number -> DeePMD-type-index lookup tensor from
+        # the primary model.
         z_to_type = self._build_z_to_type(self._deepmd)
         self.register_buffer("_z_to_type", z_to_type.to(device))
+
+        # Cross-check: every additional model must share the primary's type
+        # map so the same atype tensor is valid for all of them. Otherwise
+        # we'd silently feed wrong indices to the secondaries.
+        primary_type_map = self._deepmd.get_type_map()
+        for i, m in enumerate(self._deepmd_models[1:], start=1):
+            other = m.get_type_map()
+            if list(other) != list(primary_type_map):
+                raise ValueError(
+                    f"DeePMD model {i} has type_map {list(other)} which does "
+                    f"not match the primary model's type_map "
+                    f"{list(primary_type_map)}; all ensemble members must "
+                    f"share the same type map."
+                )
+
+        # QbC scratch tensors. Allocated empty here and re-shaped in forward
+        # the first time an ensemble call is made (mirrors MACEEMLE).
+        self._E_vac_qbc = _torch.empty(0, dtype=self._dtype, device=device)
+        self._grads_qbc = _torch.empty(0, dtype=self._dtype, device=device)
 
     @staticmethod
     def _load_deepmd_model(deepmd_model, device: _torch.device):
@@ -242,10 +291,12 @@ class DeePMDEMLE(_torch.nn.Module):
         Performs Tensor dtype and/or device conversion on the model.
         """
         # super().to() handles the directly-registered buffers
-        # (_atomic_numbers, _z_to_type).
+        # (_atomic_numbers, _z_to_type, _E_vac_qbc, _grads_qbc).
         super().to(*args, **kwargs)
         self._emle = self._emle.to(*args, **kwargs)
-        self._deepmd = self._deepmd.to(*args, **kwargs)
+        for i in range(len(self._deepmd_models)):
+            self._deepmd_models[i] = self._deepmd_models[i].to(*args, **kwargs)
+        self._deepmd = self._deepmd_models[0]
         for arg in args:
             if isinstance(arg, _torch.device):
                 self._device = arg
@@ -263,7 +314,9 @@ class DeePMDEMLE(_torch.nn.Module):
         """
         super().cpu(**kwargs)
         self._emle = self._emle.cpu(**kwargs)
-        self._deepmd = self._deepmd.cpu(**kwargs)
+        for i in range(len(self._deepmd_models)):
+            self._deepmd_models[i] = self._deepmd_models[i].cpu(**kwargs)
+        self._deepmd = self._deepmd_models[0]
         self._device = _torch.device("cpu")
         return self
 
@@ -273,7 +326,9 @@ class DeePMDEMLE(_torch.nn.Module):
         """
         super().cuda(**kwargs)
         self._emle = self._emle.cuda(**kwargs)
-        self._deepmd = self._deepmd.cuda(**kwargs)
+        for i in range(len(self._deepmd_models)):
+            self._deepmd_models[i] = self._deepmd_models[i].cuda(**kwargs)
+        self._deepmd = self._deepmd_models[0]
         self._device = _torch.device("cuda")
         return self
 
@@ -283,7 +338,9 @@ class DeePMDEMLE(_torch.nn.Module):
         """
         super().double()
         self._emle = self._emle.double()
-        self._deepmd = self._deepmd.double()
+        for i in range(len(self._deepmd_models)):
+            self._deepmd_models[i] = self._deepmd_models[i].double()
+        self._deepmd = self._deepmd_models[0]
         self._dtype = _torch.float64
         return self
 
@@ -293,7 +350,9 @@ class DeePMDEMLE(_torch.nn.Module):
         """
         super().float()
         self._emle = self._emle.float()
-        self._deepmd = self._deepmd.float()
+        for i in range(len(self._deepmd_models)):
+            self._deepmd_models[i] = self._deepmd_models[i].float()
+        self._deepmd = self._deepmd_models[0]
         self._dtype = _torch.float32
         return self
 
@@ -374,6 +433,31 @@ class DeePMDEMLE(_torch.nn.Module):
         EV_TO_HARTREE = 0.0367492929
         out = self._deepmd(coord, atype, box)
         E_vac = (out["energy"].reshape(num_batches) * EV_TO_HARTREE).to(self._dtype)
+
+        # Query-by-committee: run every ensemble member and store per-model
+        # energies and gradients. DeePMD natively returns forces, so we use
+        # them directly rather than reconstructing via autograd as MACEEMLE
+        # does. grads = -force matches MACE's autograd-of-energy convention.
+        num_models = len(self._deepmd_models)
+        if num_models > 1:
+            n_qm = atomic_numbers.shape[1]
+            self._E_vac_qbc = _torch.empty(
+                num_models, num_batches, dtype=self._dtype, device=device
+            )
+            self._grads_qbc = _torch.empty(
+                num_models,
+                num_batches,
+                n_qm,
+                3,
+                dtype=self._dtype,
+                device=device,
+            )
+            for j, dp in enumerate(self._deepmd_models):
+                out_j = dp(coord, atype, box)
+                self._E_vac_qbc[j] = (
+                    out_j["energy"].reshape(num_batches) * EV_TO_HARTREE
+                ).to(self._dtype)
+                self._grads_qbc[j] = (-out_j["force"] * EV_TO_HARTREE).to(self._dtype)
 
         # Static and induced EMLE components for the whole batch.
         if xyz_mm.shape[1] == 0:
