@@ -86,13 +86,14 @@ class EMLECompiler:
     EMLE embedding head) into a TorchScript ``.pt`` file conforming to the
     torchani-amber custom ML/MM contract.
 
-    Only backends that emle-engine already compiles to TorchScript for
-    production use (``torchani``, ``mace``) are supported. Runtime-only
-    backends (ACE, DeePMD, SQM, ORCA, XTB, Sander, Rascal, external) cannot
-    be compiled to a self-contained ``.pt`` and are rejected.
+    Three in-vacuo backends are scriptable: ``torchani``, ``mace``, and
+    ``deepmd`` (DeePMD-kit v3 PyTorch backend, ``.pth`` TorchScript models
+    only). Runtime-only backends (ACE, SQM, ORCA, XTB, Sander, Rascal,
+    external, and DeePMD TensorFlow ``.pb`` models) cannot be compiled to a
+    self-contained ``.pt`` and are rejected.
     """
 
-    _supported_backends = ("torchani", "mace")
+    _supported_backends = ("torchani", "mace", "deepmd")
 
     def __init__(
         self,
@@ -106,13 +107,15 @@ class EMLECompiler:
         qm_charge: int = 0,
         ani2x_model_index: Optional[int] = None,
         mace_model: Optional[str] = None,
+        deepmd_model: Optional[str] = None,
         device: Optional[str] = None,
     ):
         """
         Parameters
         ----------
         backend : str
-            In-vacuo ML backend. One of ``"torchani"`` or ``"mace"``.
+            In-vacuo ML backend. One of ``"torchani"``, ``"mace"``, or
+            ``"deepmd"``.
 
         model : str, optional
             Path to a custom EMLE model parameter file. If ``None``, the
@@ -147,6 +150,12 @@ class EMLECompiler:
             MACE model name (``"mace-off23-small"`` etc.) or path to a
             local MACE model file. Only relevant for ``backend="mace"``.
 
+        deepmd_model : str, optional
+            Path to a DeePMD-kit v3 PyTorch-backend ``.pth`` (TorchScript)
+            model file. Only relevant for ``backend="deepmd"``. TensorFlow
+            ``.pb`` models are not scriptable and must be used through the
+            runtime DeePMD backend.
+
         device : str, optional
             ``"cpu"`` or ``"cuda"``. Defaults to CPU.
         """
@@ -167,6 +176,7 @@ class EMLECompiler:
             qm_charge=qm_charge,
             ani2x_model_index=ani2x_model_index,
             mace_model=mace_model,
+            deepmd_model=deepmd_model,
         )
 
     def _build_composite(
@@ -181,6 +191,7 @@ class EMLECompiler:
         qm_charge,
         ani2x_model_index,
         mace_model,
+        deepmd_model,
     ):
         if backend == "torchani":
             from .models import ANI2xEMLE
@@ -196,15 +207,29 @@ class EMLECompiler:
                 device=self._device,
             )
 
-        from .models import MACEEMLE
+        if backend == "mace":
+            from .models import MACEEMLE
 
-        return MACEEMLE(
+            return MACEEMLE(
+                emle_model=model,
+                emle_method=method,
+                alpha_mode=alpha_mode,
+                mm_charges=mm_charges,
+                qm_charge=qm_charge,
+                mace_model=mace_model,
+                atomic_numbers=atomic_numbers,
+                device=self._device,
+            )
+
+        from .models import DeePMDEMLE
+
+        return DeePMDEMLE(
             emle_model=model,
             emle_method=method,
             alpha_mode=alpha_mode,
             mm_charges=mm_charges,
             qm_charge=qm_charge,
-            mace_model=mace_model,
+            deepmd_model=deepmd_model,
             atomic_numbers=atomic_numbers,
             device=self._device,
         )

@@ -32,7 +32,7 @@ import yaml
 from emle._compiler import EMLECompiler
 
 
-_SUPPORTED_BACKENDS = ("torchani", "mace")
+_SUPPORTED_BACKENDS = ("torchani", "mace", "deepmd")
 
 
 def _parse_int_list(raw, name):
@@ -126,6 +126,14 @@ def _build_parser():
     p.add_argument(
         "--mace-model", type=str, required=False,
         help="MACE-OFF23 model name or path to a local MACE .model file."
+    )
+    p.add_argument(
+        "--deepmd-model", type=str, required=False,
+        help=(
+            "Path to a DeePMD-kit v3 PyTorch-backend .pth (TorchScript) model "
+            "file. Required when --backend=deepmd. TensorFlow .pb models are "
+            "not scriptable."
+        ),
     )
     p.add_argument(
         "--device", type=str, required=False, choices=["cpu", "cuda"],
