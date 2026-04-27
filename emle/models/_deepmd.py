@@ -246,6 +246,14 @@ class DeePMDEMLE(_torch.nn.Module):
             )
 
         try:
+            import deepmd.pt  # noqa: F401  (registers torch.ops.deepmd.*)
+        except ImportError as e:
+            raise RuntimeError(
+                "deepmd-kit (PyTorch backend) is required to load DeePMD TorchScript "
+                "models; install with `pip install deepmd-kit`."
+            ) from e
+
+        try:
             model = _torch.jit.load(deepmd_model, map_location=device)
         except Exception as e:
             raise RuntimeError(
