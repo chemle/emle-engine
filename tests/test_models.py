@@ -330,7 +330,9 @@ def test_mace(alpha_mode, mace_model, atomic_numbers, charges_mm, xyz_qm, xyz_mm
 # `GLOBAL_PT_FLOAT_PRECISION = float64`; calling `.to(torch.float32)` on the
 # loaded model breaks DeePMD's internal type-cast contract (input is upcast
 # to float64 but parameters are float32). The DeePMDEMLE composite is
-# expected to be used at float64 in practice.
+# expected to be used at float64 in practice. The dtype-fix in forward
+# (cast E_vac to self._dtype, use self._dtype for empty-MM zeros) is locked
+# in by the output-dtype assertions below.
 # ---------------------------------------------------------------------------
 
 
@@ -410,3 +412,53 @@ def test_deepmd_scripts_and_runs(
     )
     assert energy_b.shape == (3, 2)
     assert energy_b.dtype == torch.float64
+
+
+@pytest.mark.skipif(not has_deepmd, reason="deepmd-kit not installed")
+def test_deepmd_empty_mm(
+    deepmd_model_path,
+    deepmd_atomic_numbers,
+    deepmd_xyz_qm,
+):
+    """
+    The empty-MM branch must return a tensor whose dtype matches the
+    composite's _dtype. Catches the original bug where the zeros row was
+    built from xyz_qm.dtype, leading to silent dtype promotion in
+    torch.stack when xyz_qm.dtype != self._dtype.
+    """
+    model = DeePMDEMLE(deepmd_model=deepmd_model_path, dtype=torch.float64)
+    xyz_mm_empty = torch.zeros(0, 3, dtype=torch.float64)
+    charges_mm_empty = torch.zeros(0, dtype=torch.float64)
+    energy = model(
+        deepmd_atomic_numbers,
+        charges_mm_empty,
+        deepmd_xyz_qm,
+        xyz_mm_empty,
+    )
+    assert energy.shape == (3, 1)
+    assert energy.dtype == model._dtype
+    # Static and induced rows must be exactly zero in the no-MM branch.
+    assert torch.all(energy[1] == 0)
+    assert torch.all(energy[2] == 0)
+
+
+@pytest.mark.skipif(not has_deepmd, reason="deepmd-kit not installed")
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+def test_deepmd_buffer_device(deepmd_model_path):
+    """
+    Calling .cuda()/.cpu() on the composite must move the registered
+    buffers (_atomic_numbers, _z_to_type) — not just the submodules. Before
+    the fix the overrides skipped super().to() and the buffers were
+    stranded, breaking forward at `self._z_to_type[atomic_numbers]`.
+    """
+    model = DeePMDEMLE(deepmd_model=deepmd_model_path, dtype=torch.float64)
+    assert model._z_to_type.device.type == "cpu"
+    assert model._atomic_numbers.device.type == "cpu"
+
+    model = model.cuda()
+    assert model._z_to_type.device.type == "cuda"
+    assert model._atomic_numbers.device.type == "cuda"
+
+    model = model.cpu()
+    assert model._z_to_type.device.type == "cpu"
+    assert model._atomic_numbers.device.type == "cpu"

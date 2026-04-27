@@ -241,18 +241,27 @@ class DeePMDEMLE(_torch.nn.Module):
         """
         Performs Tensor dtype and/or device conversion on the model.
         """
+        # super().to() handles the directly-registered buffers
+        # (_atomic_numbers, _z_to_type).
+        super().to(*args, **kwargs)
         self._emle = self._emle.to(*args, **kwargs)
         self._deepmd = self._deepmd.to(*args, **kwargs)
         for arg in args:
             if isinstance(arg, _torch.device):
                 self._device = arg
-                break
+            elif isinstance(arg, _torch.dtype):
+                self._dtype = arg
+        if "device" in kwargs and kwargs["device"] is not None:
+            self._device = _torch.device(kwargs["device"])
+        if "dtype" in kwargs and kwargs["dtype"] is not None:
+            self._dtype = kwargs["dtype"]
         return self
 
     def cpu(self, **kwargs):
         """
         Move all model parameters and buffers to CPU memory.
         """
+        super().cpu(**kwargs)
         self._emle = self._emle.cpu(**kwargs)
         self._deepmd = self._deepmd.cpu(**kwargs)
         self._device = _torch.device("cpu")
@@ -262,6 +271,7 @@ class DeePMDEMLE(_torch.nn.Module):
         """
         Move all model parameters and buffers to CUDA memory.
         """
+        super().cuda(**kwargs)
         self._emle = self._emle.cuda(**kwargs)
         self._deepmd = self._deepmd.cuda(**kwargs)
         self._device = _torch.device("cuda")
@@ -271,6 +281,7 @@ class DeePMDEMLE(_torch.nn.Module):
         """
         Cast all floating point model parameters and buffers to float64.
         """
+        super().double()
         self._emle = self._emle.double()
         self._deepmd = self._deepmd.double()
         self._dtype = _torch.float64
@@ -280,6 +291,7 @@ class DeePMDEMLE(_torch.nn.Module):
         """
         Cast all floating point model parameters and buffers to float32.
         """
+        super().float()
         self._emle = self._emle.float()
         self._deepmd = self._deepmd.float()
         self._dtype = _torch.float32
@@ -355,20 +367,19 @@ class DeePMDEMLE(_torch.nn.Module):
             box = cell.to(self._dtype).to(device)
 
         # In-vacuo DeePMD energy. The DeePMD v3 PyTorch model returns a dict
-        # keyed on output names; 'energy' is in eV with shape (nframes,).
-        # eV -> Hartree conversion as a literal float so TorchScript can
-        # capture it directly (matches the convention used in MACEEMLE).
+        # keyed on output names; 'energy' is energy_redu of shape (nf, 1)
+        # and is unconditionally cast to float64 (REDU precision) inside
+        # DeePMD, so we cast it back to self._dtype to keep the row dtypes
+        # of the returned stack consistent.
         EV_TO_HARTREE = 0.0367492929
         out = self._deepmd(coord, atype, box)
-        E_vac = out["energy"].reshape(num_batches) * EV_TO_HARTREE
+        E_vac = (out["energy"].reshape(num_batches) * EV_TO_HARTREE).to(self._dtype)
 
         # Static and induced EMLE components for the whole batch.
         if xyz_mm.shape[1] == 0:
-            zeros = _torch.zeros(num_batches, dtype=xyz_qm.dtype, device=device)
+            zeros = _torch.zeros(num_batches, dtype=self._dtype, device=device)
             return _torch.stack((E_vac, zeros, zeros))
 
-        E_emle = self._emle(
-            atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell, qm_charge
-        )
+        E_emle = self._emle(atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell, qm_charge)
 
         return _torch.stack((E_vac, E_emle[0], E_emle[1]))
