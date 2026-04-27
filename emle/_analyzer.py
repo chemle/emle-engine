@@ -33,7 +33,7 @@ import torch as _torch
 
 from ._units import _HARTREE_TO_KCAL_MOL, _ANGSTROM_TO_BOHR
 from ._utils import pad_to_max as _pad_to_max
-from .models import MACEEMLEJoint
+from .models import MACEEMLEJoint as _MACEEMLEJoint
 
 
 class EMLEAnalyzer:
@@ -170,7 +170,7 @@ class EMLEAnalyzer:
         qm_xyz_bohr = self.qm_xyz * _ANGSTROM_TO_BOHR
         pc_xyz_bohr = self.pc_xyz * _ANGSTROM_TO_BOHR
 
-        if isinstance(backend, MACEEMLEJoint):
+        if isinstance(backend, _MACEEMLEJoint):
             self.s = _torch.stack(backend.emle_values["s"])
             self.q_core = _torch.stack(backend.emle_values["q_core"])
             self.q_val = _torch.stack(backend.emle_values["q_val"])

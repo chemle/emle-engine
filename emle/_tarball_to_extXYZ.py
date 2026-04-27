@@ -99,7 +99,7 @@ def orca_to_extxyz(
         if not (hasattr(parser, "mbis") and parser.mbis is not None):
             raise ValueError("MBIS data not available in parser")
 
-        # Core charges, chek if it's present and available for all frames
+        # Core charges, check if it's present and available for all frames
         if not ("q_core" in parser.mbis and len(parser.mbis["q_core"]) > i):
             raise ValueError(f"Core charges not available for frame {frame_number}")
         q_core = parser.mbis["q_core"][i]

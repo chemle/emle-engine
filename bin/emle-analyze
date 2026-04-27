@@ -119,9 +119,11 @@ elif args.backend == "mace":
 elif args.backend == "emle-mace":
     from emle.models import MACEEMLEJoint
 
-    backend = MACEEMLEJoint(emle_model=args.emle_model,
-                            mace_model=args.mace_model,
-                            qm_charge=args.q_total)
+    backend = MACEEMLEJoint(
+        emle_model=args.emle_model,
+        mace_model=args.mace_model,
+        qm_charge=args.q_total,
+    )
 
 elif args.backend == "deepmd":
     from emle._backends import DeePMD
@@ -176,7 +178,7 @@ if orca_parser:
         }
     )
     if args.use_dipoles:
-        result['mu_qm'] = orca_parser.mbis["mu"]
+        result["mu_qm"] = orca_parser.mbis["mu"]
 
 if args.backend:
     result["E_vac_emle"] = analyzer.e_backend
