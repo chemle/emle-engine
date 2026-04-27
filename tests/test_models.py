@@ -67,6 +67,54 @@ try:
 except:
     has_e3nn = False
 
+try:
+    import deepmd  # noqa: F401
+
+    has_deepmd = True
+except:
+    has_deepmd = False
+
+
+def _build_tiny_deepmd_model(seed, type_map=("H", "C", "N", "O")):
+    """
+    Build a tiny untrained DeePMD-kit v3 PyTorch energy model and return its
+    scripted ScriptModule. Used by the on-the-fly fixtures below — never run
+    on real data; the goal is exercising the API contract DeePMDEMLE relies on.
+    """
+    from deepmd.pt.model.model import get_standard_model
+
+    config = {
+        "type_map": list(type_map),
+        "descriptor": {
+            "type": "se_e2_a",
+            "rcut_smth": 0.5,
+            "rcut": 5.0,
+            "sel": [10] * len(type_map),
+            "neuron": [4, 8],
+            "axis_neuron": 4,
+            "resnet_dt": False,
+            "type_one_side": False,
+            "seed": seed,
+        },
+        "fitting_net": {
+            "neuron": [8],
+            "resnet_dt": True,
+            "seed": seed,
+        },
+    }
+    m = get_standard_model(config)
+    m.eval()
+    return torch.jit.script(m)
+
+
+@pytest.fixture(scope="session")
+def deepmd_model_path(tmp_path_factory):
+    if not has_deepmd:
+        pytest.skip("deepmd-kit not installed")
+    p = tmp_path_factory.mktemp("dp1") / "tiny.pth"
+    torch.jit.save(_build_tiny_deepmd_model(seed=1), str(p))
+    return str(p)
+
 
 # Reference values computed with float64 to serve as a regression baseline
 # for the EMLE single-point energy and gradients.
@@ -273,3 +321,92 @@ def test_mace(alpha_mode, mace_model, atomic_numbers, charges_mm, xyz_qm, xyz_mm
         xyz_qm.unsqueeze(0).repeat(2, 1, 1),
         xyz_mm.unsqueeze(0).repeat(2, 1, 1),
     )
+
+
+# ---------------------------------------------------------------------------
+# DeePMDEMLE
+#
+# Run with float64 because DeePMD-kit's PyTorch backend is built around
+# `GLOBAL_PT_FLOAT_PRECISION = float64`; calling `.to(torch.float32)` on the
+# loaded model breaks DeePMD's internal type-cast contract (input is upcast
+# to float64 but parameters are float32). The DeePMDEMLE composite is
+# expected to be used at float64 in practice.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def deepmd_atomic_numbers():
+    return torch.tensor(
+        numpy.load("tests/input/atomic_numbers.npy"),
+        dtype=torch.int64,
+        device=torch.device("cpu"),
+    )
+
+
+@pytest.fixture(scope="module")
+def deepmd_xyz_qm():
+    return torch.tensor(
+        numpy.load("tests/input/xyz_qm.npy"),
+        dtype=torch.float64,
+        device=torch.device("cpu"),
+        requires_grad=True,
+    )
+
+
+@pytest.fixture(scope="module")
+def deepmd_xyz_mm():
+    return torch.tensor(
+        numpy.load("tests/input/xyz_mm.npy"),
+        dtype=torch.float64,
+        device=torch.device("cpu"),
+        requires_grad=True,
+    )
+
+
+@pytest.fixture(scope="module")
+def deepmd_charges_mm():
+    return torch.tensor(
+        numpy.load("tests/input/charges_mm.npy"),
+        dtype=torch.float64,
+        device=torch.device("cpu"),
+    )
+
+
+@pytest.mark.skipif(not has_deepmd, reason="deepmd-kit not installed")
+def test_deepmd_scripts_and_runs(
+    deepmd_model_path,
+    deepmd_atomic_numbers,
+    deepmd_charges_mm,
+    deepmd_xyz_qm,
+    deepmd_xyz_mm,
+):
+    """
+    Mirror of test_mace: the composite must instantiate, script under
+    TorchScript, run forward on unbatched and batched inputs, and produce
+    an autograd-traceable scalar.
+    """
+    model = DeePMDEMLE(deepmd_model=deepmd_model_path, dtype=torch.float64)
+    model = torch.jit.script(model)
+
+    # The composite always returns (3, num_batches); unbatched input is
+    # internally promoted to a batch of 1 (matches MACEEMLE).
+    energy = model(
+        deepmd_atomic_numbers,
+        deepmd_charges_mm,
+        deepmd_xyz_qm,
+        deepmd_xyz_mm,
+    )
+    assert energy.shape == (3, 1)
+    assert energy.dtype == torch.float64
+    grad_qm, grad_mm = torch.autograd.grad(energy.sum(), (deepmd_xyz_qm, deepmd_xyz_mm))
+    assert grad_qm.shape == deepmd_xyz_qm.shape
+    assert grad_mm.shape == deepmd_xyz_mm.shape
+
+    energy_b = model(
+        deepmd_atomic_numbers.unsqueeze(0).repeat(2, 1),
+        deepmd_charges_mm.unsqueeze(0).repeat(2, 1),
+        deepmd_xyz_qm.unsqueeze(0).repeat(2, 1, 1),
+        deepmd_xyz_mm.unsqueeze(0).repeat(2, 1, 1),
+    )
+    assert energy_b.shape == (3, 2)
+    assert energy_b.dtype == torch.float64
