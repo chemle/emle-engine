@@ -33,6 +33,7 @@ import torch as _torch
 
 from ._units import _HARTREE_TO_KCAL_MOL, _ANGSTROM_TO_BOHR
 from ._utils import pad_to_max as _pad_to_max
+from .models import MACEEMLEJoint as _MACEEMLEJoint
 
 
 class EMLEAnalyzer:
@@ -48,6 +49,7 @@ class EMLEAnalyzer:
         backend=None,
         parser=None,
         q_total=None,
+        use_dipoles=False,
         start=None,
         end=None,
     ):
@@ -145,13 +147,18 @@ class EMLEAnalyzer:
             if isinstance(backend, _torch.nn.Module):
                 backend = backend.to(device).to(dtype)
                 atomic_numbers = _torch.tensor(atomic_numbers, device=device)
-                qm_xyz = _torch.tensor(qm_xyz, dtype=dtype, device=device)
+                qm_xyz = _torch.tensor(
+                    qm_xyz, dtype=dtype, device=device, requires_grad=True
+                )
                 charges_mm = _torch.empty((len(qm_xyz), 0), dtype=dtype, device=device)
                 mm_xyz = _torch.empty((len(qm_xyz), 0, 3), dtype=dtype, device=device)
             self.e_backend = (
-                backend(atomic_numbers, charges_mm, qm_xyz, mm_xyz).T
+                backend(atomic_numbers, charges_mm, qm_xyz, mm_xyz, qm_charge=q_total).T
                 * _HARTREE_TO_KCAL_MOL
             )
+            self.grad_backend = _torch.autograd.grad(self.e_backend.T[0].sum(), qm_xyz)[
+                0
+            ]
 
         self.atomic_numbers = _torch.tensor(
             atomic_numbers, dtype=_torch.int, device=device
@@ -163,11 +170,25 @@ class EMLEAnalyzer:
         qm_xyz_bohr = self.qm_xyz * _ANGSTROM_TO_BOHR
         pc_xyz_bohr = self.pc_xyz * _ANGSTROM_TO_BOHR
 
-        self.s, self.q_core, self.q_val, self.A_thole = emle_base(
-            self.atomic_numbers,
-            self.qm_xyz,
-            self.q_total,
-        )
+        if isinstance(backend, _MACEEMLEJoint):
+            self.s = _torch.stack(backend.emle_values["s"])
+            self.q_core = _torch.stack(backend.emle_values["q_core"])
+            self.q_val = _torch.stack(backend.emle_values["q_val"])
+            self.mu = _torch.stack(backend.emle_values["mu"])
+
+            a_Thole = backend._mace.a_Thole
+            species_id = emle_base._species_map[self.atomic_numbers]
+            k = backend._mace.elements_alpha_v_ratios[species_id]
+            r_data = emle_base._get_r_data(qm_xyz_bohr, atomic_numbers > 0)
+            self.A_thole = emle_base._get_A_thole(
+                r_data, self.s, self.q_val, k, a_Thole
+            )
+        else:
+            self.s, self.q_core, self.q_val, self.A_thole = emle_base(
+                self.atomic_numbers,
+                self.qm_xyz,
+                self.q_total,
+            )
         self.atomic_alpha = 1.0 / _torch.diagonal(self.A_thole, dim1=1, dim2=2)[:, ::3]
         self.alpha = self._get_mol_alpha(self.A_thole, self.atomic_numbers)
 
@@ -179,6 +200,13 @@ class EMLEAnalyzer:
             )
             * _HARTREE_TO_KCAL_MOL
         )
+        if use_dipoles:
+            self.e_static_mu = (
+                emle_base.get_static_energy(
+                    self.q_core, self.q_val, self.pc_charges, mesh_data, self.mu
+                )
+                * _HARTREE_TO_KCAL_MOL
+            )
         self.e_induced = (
             emle_base.get_induced_energy(
                 self.A_thole, self.pc_charges, self.s, mesh_data, mask
@@ -203,13 +231,17 @@ class EMLEAnalyzer:
             "s",
             "q_core",
             "q_val",
+            "q",
+            "mu",
             "q_total",
             "atomic_alpha",
             "alpha",
             "e_backend",
             "e_static",
+            "e_static_mu",
             "e_induced",
             "e_static_mbis",
+            "grad_backend",
         ):
             if attr in self.__dict__:
                 setattr(self, attr, getattr(self, attr).detach().cpu().numpy())
