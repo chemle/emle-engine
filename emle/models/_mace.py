@@ -25,13 +25,13 @@
 __author__ = "Joao Morado"
 __email__ = "joaomorado@gmail.com"
 
-__all__ = ["MACEEMLE"]
+__all__ = ["MACEEMLE", "MACEEMLEJoint"]
 
 import os as _os
 import torch as _torch
 import numpy as _np
 
-from typing import List, Optional
+from typing import List, Dict, Optional
 
 from ._emle import EMLE as _EMLE
 from ._emle import _has_nnpops
@@ -52,6 +52,33 @@ try:
     _has_e3nn = True
 except:
     _has_e3nn = False
+
+# Inject EnergyEMLEMACE into mace.modules.models so that torch.load() can
+# deserialize saved EnergyEMLEMACE checkpoints.  Pickle records the class at
+# its original location (mace.modules.models.EnergyEMLEMACE); we restore that
+# binding here without modifying the mace package itself.
+#
+# e3nn loads constants.pt at import time via torch.load.  Under PyTorch >= 2.6
+# the default weights_only=True rejects the slice object stored in that file.
+# Allow slice globally so that e3nn (and therefore emle_mace) can be imported
+# without requiring the TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD environment variable.
+try:
+    _torch.serialization.add_safe_globals([slice])
+    from emle_mace.models import EnergyEMLEMACE as EnergyEMLEMACE  # noqa: F401
+    import mace.modules.models as _mace_models_module
+
+    if not hasattr(_mace_models_module, "EnergyEMLEMACE"):
+        _mace_models_module.EnergyEMLEMACE = EnergyEMLEMACE
+except Exception:
+    # emle-mace not installed; torch.load() will fail for EnergyEMLEMACE checkpoints
+    pass
+
+
+def _is_energy_emle_mace(model) -> bool:
+    # TorchScript-compiled models expose the source class name via
+    # 'original_name'; plain nn.Modules expose it via __class__.__name__.
+    name = getattr(model, "original_name", model.__class__.__name__)
+    return name == "EnergyEMLEMACE"
 
 
 class MACEEMLE(_torch.nn.Module):
@@ -217,11 +244,40 @@ class MACEEMLE(_torch.nn.Module):
         for model in mace_model:
             source_model = self._load_mace_model(model, device)
 
-            # Extract the config from the model.
-            config = extract_config_mace_model(source_model)
+            # Already-compiled models (RecursiveScriptModule) cannot have their
+            # config extracted via attribute introspection (ModuleList indexing
+            # is not supported).  Reuse them directly after dtype conversion.
+            if source_model.__class__.__name__ == "RecursiveScriptModule":
+                self._mace_models.append(source_model.to(self._dtype))
+                continue
+
+            # Dispatch to the appropriate config extractor.
+            if _is_energy_emle_mace(source_model):
+                try:
+                    from emle_mace.tools.model_utils import (
+                        extract_config_emle_mace_model,
+                    )
+
+                    config = extract_config_emle_mace_model(source_model)
+                except ImportError as e:
+                    raise ImportError(
+                        "emle-mace package is required to load EnergyEMLEMACE models. "
+                        "Install it with: pip install emle-mace"
+                    ) from e
+            else:
+                config = extract_config_mace_model(source_model)
+
+            if "error" in config:
+                raise ValueError(f"Failed to extract model config: {config['error']}")
 
             # Create the target model.
-            target_model = source_model.__class__(**config).to(device)
+            if _is_energy_emle_mace(source_model):
+                from emle_mace.models import EnergyEMLEMACE as _EnergyEMLEMACE
+
+                _model_cls = _EnergyEMLEMACE
+            else:
+                _model_cls = source_model.__class__
+            target_model = _model_cls(**config).to(device)
 
             # Load the state dict.
             target_model.load_state_dict(source_model.state_dict(), strict=False)
@@ -315,7 +371,9 @@ class MACEEMLE(_torch.nn.Module):
             else:
                 # Assuming that the model is a local model.
                 if _os.path.exists(mace_model):
-                    source_model = _torch.load(mace_model, map_location=device)
+                    source_model = _torch.load(
+                        mace_model, map_location=device, weights_only=False
+                    )
                 else:
                     raise FileNotFoundError(f"MACE model file not found: {mace_model}")
         else:
@@ -490,9 +548,12 @@ class MACEEMLE(_torch.nn.Module):
         Returns
         -------
 
-        result: torch.Tensor (3,)
-            The ANI2x and static and induced EMLE energy components in Hartree.
+        result: torch.Tensor (3,) or (3, BATCH)
+            The MACE and static and induced EMLE energy components in Hartree.
         """
+        # TorchScript requires constants to be local variables.
+        EV_TO_HARTREE = 0.0367492929
+
         # Get the device.
         device = xyz_qm.device
 
@@ -559,9 +620,6 @@ class MACEEMLE(_torch.nn.Module):
                 ).to(device)
                 self._atomic_numbers = atomic_numbers[i]
 
-            # Get the in vacuo energy.
-            EV_TO_HARTREE = 0.0367492929
-
             positions = xyz_qm[i].to(self._dtype)
 
             # Create the input dictionary
@@ -617,9 +675,16 @@ class MACEEMLE(_torch.nn.Module):
                 results_E_emle_static[i] = zero
                 results_E_emle_induced[i] = zero
             else:
-                # Get the EMLE energy components.
+                # Get the EMLE energy components. Pass only batch element i so
+                # that the coordinate tensors inside EMLE.forward are batch=1
+                # and consistent with the per-element loop here.
                 E_emle = self._emle(
-                    atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell, qm_charge
+                    atomic_numbers[i : i + 1],
+                    charges_mm[i : i + 1],
+                    xyz_qm[i : i + 1],
+                    xyz_mm[i : i + 1],
+                    cell,
+                    qm_charge,
                 )
                 results_E_emle_static[i] = E_emle[0][0]
                 results_E_emle_induced[i] = E_emle[1][0]
@@ -628,3 +693,704 @@ class MACEEMLE(_torch.nn.Module):
         return _torch.stack(
             [results_E_vac, results_E_emle_static, results_E_emle_induced]
         )
+
+
+class MACEEMLEJoint(_torch.nn.Module):
+    """
+    Combined MACE and EMLE model. Predicts the in vacuo MACE energy along with
+    static and induced EMLE energy components from a single MACE EqGNN.
+    """
+
+    # Class attributes.
+
+    # A flag for type inference. TorchScript doesn't support inheritance, so
+    # we need to check for an object of type torch.nn.Module, and that it has
+    # the required _is_emle attribute.
+    _is_emle = True
+
+    def __init__(
+        self,
+        emle_model=None,
+        emle_method="electrostatic",
+        mm_charges=None,
+        qm_charge=0,
+        mace_model=None,
+        atomic_numbers=None,
+        use_dipoles=False,
+        device=None,
+        dtype=None,
+    ):
+        """
+        Constructor.
+
+        Parameters
+        ----------
+
+        emle_model: str
+            Path to a custom EMLE model parameter file. If None, the default
+            model will be used.
+
+        emle_method: str
+            The desired embedding method. Options are:
+                "electrostatic":
+                    Full ML electrostatic embedding.
+                "mechanical":
+                    ML predicted charges for the core, but zero valence charge.
+                "nonpol":
+                    Non-polarisable ML embedding. Here the induced component of
+                    the potential is zeroed.
+                "mm":
+                    MM charges are used for the core charge and valence charges
+                    are set to zero.
+
+        mm_charges: List[float], Tuple[Float], numpy.ndarray, torch.Tensor
+            List of MM charges for atoms in the QM region in units of mod
+            electron charge. This is required if the 'mm' method is specified.
+
+        qm_charge: int
+            The charge on the QM region. This can also be passed when calling
+            the forward method. The non-default value will take precendence.
+
+        mace_model: List[str], Tuple[str], str
+            Name of the MACE model(s) to use.
+            Available pre-trained models are 'mace-off23-small', 'mace-off23-medium', 'mace-off23-large'.
+            To use a locally trained MACE model, provide the path to the model file.
+            If None, the MACE-OFF23(S) model will be used by default.
+            If more than one model is provided, only the energy from the first model will be returned
+            in the forward pass, but the energy and forces from all models will be stored.
+
+        atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor (N_ATOMS,)
+            List of atomic numbers to use in the MACE model.
+
+        use_dipoles: bool
+            Whether to include the MACE-predicted atomic dipoles 'mu' in the
+            static electrostatic energy. When True, 'mu' is passed to EMLE as
+            part of the external parameters. The calculator only permits this
+            flag with the 'emle-mace' backend.
+
+        device: torch.device
+            The device on which to run the model.
+
+        dtype: torch.dtype
+            The data type to use for the models floating point tensors.
+        """
+
+        # Call the base class constructor.
+        super().__init__()
+
+        if not _has_mace:
+            raise ImportError(
+                'mace is required to use the MACEEMLE model. Install it with "pip install mace-torch"'
+            )
+        if not _has_e3nn:
+            raise ImportError("e3nn is required to compile the MACEmodel.")
+        if not _has_nnpops:
+            raise ImportError("NNPOps is required to use the MACEEMLE model.")
+
+        if device is not None:
+            if not isinstance(device, _torch.device):
+                raise TypeError("'device' must be of type 'torch.device'")
+        else:
+            device = _torch.get_default_device()
+
+        if dtype is not None:
+            if not isinstance(dtype, _torch.dtype):
+                raise TypeError("'dtype' must be of type 'torch.dtype'")
+        else:
+            self._dtype = _torch.get_default_dtype()
+
+        if atomic_numbers is not None:
+            if isinstance(atomic_numbers, _np.ndarray):
+                atomic_numbers = atomic_numbers.tolist()
+            if isinstance(atomic_numbers, (list, tuple)):
+                if not all(isinstance(i, int) for i in atomic_numbers):
+                    raise ValueError("'atomic_numbers' must be a list of integers")
+                else:
+                    atomic_numbers = _torch.tensor(
+                        atomic_numbers, dtype=_torch.int64, device=device
+                    )
+            if not isinstance(atomic_numbers, _torch.Tensor):
+                raise TypeError("'atomic_numbers' must be of type 'torch.Tensor'")
+            # Check that they are integers.
+            if atomic_numbers.dtype != _torch.int64:
+                raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
+            self.register_buffer("_atomic_numbers", atomic_numbers.to(device))
+        else:
+            self.register_buffer(
+                "_atomic_numbers",
+                _torch.tensor(
+                    [], dtype=_torch.int64, device=device, requires_grad=False
+                ),
+            )
+
+        # Create an instance of the EMLE model.
+        # alpha_mode is fixed to "species" here: MACEEMLEJoint currently only
+        # supports the species mode. Re-expose as a parameter once reference
+        # mode is wired through MACE.
+        self._emle = _EMLE(
+            model=emle_model,
+            method=emle_method,
+            alpha_mode="species",
+            atomic_numbers=(atomic_numbers if atomic_numbers is not None else None),
+            mm_charges=mm_charges,
+            qm_charge=qm_charge,
+            device=device,
+            dtype=dtype,
+            create_aev_calculator=True,
+        )
+
+        if not isinstance(mace_model, (list, tuple)):
+            mace_model = (
+                [mace_model]
+                if mace_model is None or isinstance(mace_model, str)
+                else None
+            )
+
+        if mace_model is None or any(
+            not isinstance(i, (str, type(None))) for i in mace_model
+        ):
+            raise TypeError(
+                "'mace_model' must be a list, tuple, or str, with elements "
+                "of type str or None"
+            )
+
+        from mace.tools.scripts_utils import extract_config_mace_model
+
+        self._mace_models = _torch.nn.ModuleList()
+        for model in mace_model:
+            source_model = self._load_mace_model(model, device)
+
+            # Already-compiled models (RecursiveScriptModule) cannot have their
+            # config extracted via attribute introspection (ModuleList indexing
+            # is not supported).  Reuse them directly after dtype conversion.
+            if source_model.__class__.__name__ == "RecursiveScriptModule":
+                self._mace_models.append(source_model.to(self._dtype))
+                continue
+
+            # Dispatch to the appropriate config extractor.
+            if _is_energy_emle_mace(source_model):
+                try:
+                    from emle_mace.tools.model_utils import (
+                        extract_config_emle_mace_model,
+                    )
+
+                    config = extract_config_emle_mace_model(source_model)
+                except ImportError as e:
+                    raise ImportError(
+                        "emle-mace package is required to load EnergyEMLEMACE models. "
+                        "Install it with: pip install emle-mace"
+                    ) from e
+            else:
+                config = extract_config_mace_model(source_model)
+
+            if "error" in config:
+                raise ValueError(f"Failed to extract model config: {config['error']}")
+
+            # Create the target model.
+            if _is_energy_emle_mace(source_model):
+                from emle_mace.models import EnergyEMLEMACE as _EnergyEMLEMACE
+
+                _model_cls = _EnergyEMLEMACE
+            else:
+                _model_cls = source_model.__class__
+            target_model = _model_cls(**config).to(device)
+
+            # Load the state dict.
+            target_model.load_state_dict(source_model.state_dict(), strict=False)
+
+            # Compile the model.
+            self._mace_models.append(_e3nn_jit.compile(target_model).to(self._dtype))
+
+        # Set the MACE model to the first model.
+        self._mace = self._mace_models[0]
+
+        self._E_vac_qbc = _torch.empty(0, dtype=self._dtype)
+        self._grads_qbc = _torch.empty(0, dtype=self._dtype)
+
+        # Per-batch-element EMLE quantities predicted by the MACE model,
+        # exposed here so the EMLECalculator can write them into the QM xyz
+        # trajectory (see emle/calculator.py) and the EMLEAnalyzer can
+        # recompute polarisabilities / energies from them. Keys:
+        #   's'      - valence widths
+        #   'q_core' - core charges
+        #   'q_val'  - valence charges (= total MACE charges minus q_core);
+        #              name matches EMLE.forward's `external_params`
+        #   'q'      - total charges (= q_core + q_val); kept for parity with
+        #              the training-data extXYZ produced by tarball-to-extxyz
+        #   'mu'     - static atomic dipoles (3-vectors)
+        # Cleared by reset_emle() at the start of each forward() call, then
+        # one tensor is appended per batch element inside forward().
+        self.emle_values: Dict[str, List[Tensor]] = {
+            "s": [_torch.empty(0, dtype=self._dtype)],
+            "q_core": [_torch.empty(0, dtype=self._dtype)],
+            "q_val": [_torch.empty(0, dtype=self._dtype)],
+            "q": [_torch.empty(0, dtype=self._dtype)],
+            "mu": [_torch.empty(0, dtype=self._dtype)],
+        }
+
+        # Create the z_table of the MACE model.
+        self._z_table = [int(z.item()) for z in self._mace.atomic_numbers]
+        self._r_max = self._mace.r_max.item()
+
+        if len(self._atomic_numbers) > 0:
+            # Get the node attributes.
+            node_attrs = self._get_node_attrs(self._atomic_numbers)
+            self.register_buffer("_node_attrs", node_attrs.to(self._dtype))
+            self.register_buffer(
+                "_ptr",
+                _torch.tensor(
+                    [0, node_attrs.shape[0]], dtype=_torch.long, requires_grad=False
+                ),
+            )
+            self.register_buffer(
+                "_batch",
+                _torch.zeros(
+                    node_attrs.shape[0], dtype=_torch.long, requires_grad=False
+                ),
+            )
+        else:
+            # Initialise the node attributes.
+            self.register_buffer("_node_attrs", _torch.tensor([], dtype=self._dtype))
+            self.register_buffer(
+                "_ptr", _torch.tensor([], dtype=_torch.long, requires_grad=False)
+            )
+            self.register_buffer(
+                "_batch", _torch.tensor([], dtype=_torch.long, requires_grad=False)
+            )
+
+        # No PBCs for now.
+        self.register_buffer(
+            "_pbc",
+            _torch.tensor(
+                [False, False, False], dtype=_torch.bool, requires_grad=False
+            ),
+        )
+        self.register_buffer(
+            "_cell", _torch.zeros((3, 3), dtype=self._dtype, requires_grad=False)
+        )
+
+        # Set the _get_neighbor_pairs method on the instance.
+        self._get_neighbor_pairs = _get_neighbor_pairs
+
+        self.use_dipoles = use_dipoles
+
+    @staticmethod
+    def _load_mace_model(mace_model: str, device: _torch.device):
+        """
+        Load a MACE model.
+
+        Parameters
+        ----------
+        mace_model: str
+            Path to the MACE model file or the name of the pre-trained MACE model.
+        device: torch.device
+            Device on which to load the model.
+
+        Returns
+        -------
+        source_model: torch.nn.Module
+            The MACE model.
+        """
+        # Load the MACE model.
+        if mace_model is not None:
+            if not isinstance(mace_model, str):
+                raise TypeError("'mace_model' must be of type 'str'")
+            # Convert to lower case and remove whitespace.
+            formatted_mace_model = mace_model.lower().replace(" ", "")
+            if formatted_mace_model.startswith("mace-off23"):
+                size = formatted_mace_model.split("-")[-1]
+                if not size in ["small", "medium", "large"]:
+                    raise ValueError(
+                        f"Unsupported MACE model: '{mace_model}'. Available MACE-OFF23 models are "
+                        "'mace-off23-small', 'mace-off23-medium', 'mace-off23-large'"
+                    )
+                source_model = _mace_off(
+                    model=size, device=device, return_raw_model=True
+                )
+            else:
+                # Assuming that the model is a local model.
+                if _os.path.exists(mace_model):
+                    source_model = _torch.load(
+                        mace_model, map_location=device, weights_only=False
+                    )
+                else:
+                    raise FileNotFoundError(f"MACE model file not found: {mace_model}")
+        else:
+            # If no MACE model is provided, use the default MACE-OFF23(S) model.
+            source_model = _mace_off(
+                model="small", device=device, return_raw_model=True
+            )
+
+        return source_model
+
+    @staticmethod
+    def _to_one_hot(indices: _torch.Tensor, num_classes: int) -> _torch.Tensor:
+        """
+        Convert a tensor of indices to one-hot encoding.
+
+        Parameters
+        ----------
+
+        indices: torch.Tensor
+            Tensor of indices.
+
+        num_classes: int
+            Number of classes of atomic numbers.
+
+        Returns
+        -------
+
+        oh: torch.Tensor
+            One-hot encoding of the indices.
+        """
+        shape = indices.shape[:-1] + (num_classes,)
+        oh = _torch.zeros(shape, device=indices.device).view(shape)
+        return oh.scatter_(dim=-1, index=indices, value=1)
+
+    @staticmethod
+    def _atomic_numbers_to_indices(
+        atomic_numbers: _torch.Tensor, z_table: List[int]
+    ) -> _torch.Tensor:
+        """
+        Get the indices of the atomic numbers in the z_table.
+
+        Parameters
+        ----------
+
+        atomic_numbers: torch.Tensor (N_ATOMS,)
+            Atomic numbers of QM atoms.
+
+        z_table: List[int]
+            List of atomic numbers in the MACE model.
+
+        Returns
+        -------
+
+        indices: torch.Tensor (N_ATOMS, 1)
+            Indices of the atomic numbers in the z_table.
+        """
+        return _torch.tensor(
+            [z_table.index(z) for z in atomic_numbers], dtype=_torch.long
+        ).unsqueeze(-1)
+
+    def _get_node_attrs(self, atomic_numbers: _torch.Tensor) -> _torch.Tensor:
+        """
+        Internal method to get the node attributes for the MACE model.
+
+        Parameters
+        ----------
+
+        atomic_numbers: torch.Tensor (N_ATOMS,)
+            Atomic numbers of QM atoms.
+
+        Returns
+        -------
+
+        node_attrs: torch.Tensor (N_ATOMS, N_FEATURES)
+            Node attributes for the MACE model.
+        """
+        ids = self._atomic_numbers_to_indices(atomic_numbers, z_table=self._z_table)
+        return self._to_one_hot(ids, num_classes=len(self._z_table))
+
+    def to(self, *args, **kwargs):
+        """
+        Performs Tensor dtype and/or device conversion on the model.
+        """
+        self._emle = self._emle.to(*args, **kwargs)
+        self._mace = self._mace.to(*args, **kwargs)
+        self._mace_models = _torch.nn.ModuleList(
+            [model.to(*args, **kwargs) for model in self._mace_models]
+        )
+        return self
+
+    def cpu(self, **kwargs):
+        """
+        Move all model parameters and buffers to CPU memory.
+        """
+        self._emle = self._emle.cpu(**kwargs)
+        self._mace = self._mace.cpu(**kwargs)
+        if self._atomic_numbers is not None:
+            self._atomic_numbers = self._atomic_numbers.cpu(**kwargs)
+        self._mace_models = _torch.nn.ModuleList(
+            [model.cpu(**kwargs) for model in self._mace_models]
+        )
+        return self
+
+    def cuda(self, **kwargs):
+        """
+        Move all model parameters and buffers to CUDA memory.
+        """
+        self._emle = self._emle.cuda(**kwargs)
+        self._mace = self._mace.cuda(**kwargs)
+        if self._atomic_numbers is not None:
+            self._atomic_numbers = self._atomic_numbers.cuda(**kwargs)
+        self._mace_models = _torch.nn.ModuleList(
+            [model.cuda(**kwargs) for model in self._mace_models]
+        )
+        return self
+
+    def double(self):
+        """
+        Cast all floating point model parameters and buffers to float64 precision.
+        """
+        self._emle = self._emle.double()
+        self._mace = self._mace.double()
+        self._mace_models = _torch.nn.ModuleList(
+            [model.double() for model in self._mace_models]
+        )
+        return self
+
+    def float(self):
+        """
+        Cast all floating point model parameters and buffers to float32 precision.
+        """
+        self._emle = self._emle.float()
+        self._mace = self._mace.float()
+        self._mace_models = _torch.nn.ModuleList(
+            [model.float() for model in self._mace_models]
+        )
+        return self
+
+    def forward(
+        self,
+        atomic_numbers: Tensor,
+        charges_mm: Tensor,
+        xyz_qm: Tensor,
+        xyz_mm: Tensor,
+        cell: Optional[Tensor] = None,
+        qm_charge: int = 0,
+    ) -> Tensor:
+        """
+        Compute the MACE and static and induced EMLE energy components.
+
+        Parameters
+        ----------
+
+        atomic_numbers: torch.Tensor (N_QM_ATOMS,) or (BATCH, N_QM_ATOMS)
+            Atomic numbers of QM atoms.
+
+        charges_mm: torch.Tensor (max_mm_atoms,) or (BATCH, max_mm_atoms)
+            MM point charges in atomic units.
+
+        xyz_qm: torch.Tensor (N_QM_ATOMS, 3), or (BATCH, N_QM_ATOMS, 3)
+            Positions of QM atoms in Angstrom.
+
+        xyz_mm: torch.Tensor (N_MM_ATOMS, 3) or (BATCH, N_MM_ATOMS, 3)
+            Positions of MM atoms in Angstrom.
+
+        cell: torch.Tensor (3, 3) or (BATCH, 3, 3), optional
+            The simulation cell vectors in Angstrom.
+
+        qm_charge: int
+            The charge on the QM region.
+
+        Returns
+        -------
+
+        result: torch.Tensor (3,) or (3, BATCH)
+            The MACE and static and induced EMLE energy components in Hartree.
+        """
+        # TorchScript requires constants to be local variables.
+        EV_TO_HARTREE = 0.0367492929
+
+        # Get the device.
+        device = xyz_qm.device
+
+        self.reset_emle()
+
+        # Batch the inputs if necessary.
+        if atomic_numbers.ndim == 1:
+            atomic_numbers = atomic_numbers.unsqueeze(0)
+            xyz_qm = xyz_qm.unsqueeze(0)
+            xyz_mm = xyz_mm.unsqueeze(0)
+            charges_mm = charges_mm.unsqueeze(0)
+            if cell is not None and cell.ndim == 2:
+                cell = cell.unsqueeze(0)
+
+        # Store the number of batches.
+        num_batches = atomic_numbers.shape[0]
+
+        # Store the number of models.
+        num_models = len(self._mace_models)
+
+        # Fixed model parameters, pulled out of the per-batch loop.
+        a_Thole = self._mace.a_Thole
+        k_Z = self._mace.elements_alpha_v_ratios
+
+        # Create tensors to store the data for QbC.
+        self._E_vac_qbc = _torch.empty(
+            num_models, num_batches, dtype=self._dtype, device=device
+        )
+        self._grads_qbc = _torch.empty(
+            num_models,
+            num_batches,
+            xyz_qm.shape[1],
+            3,
+            dtype=self._dtype,
+            device=device,
+        )
+
+        # Create tensors to store the results.
+        results_E_vac = _torch.empty(num_batches, dtype=self._dtype, device=device)
+        results_E_emle_static = _torch.empty(
+            num_batches, dtype=self._dtype, device=device
+        )
+        results_E_emle_induced = _torch.empty(
+            num_batches, dtype=self._dtype, device=device
+        )
+
+        # Loop over the batches.
+        for i in range(num_batches):
+            # Get the edge index and shifts for this configuration.
+            edge_index, shifts = self._get_neighbor_pairs(
+                xyz_qm[i], None, self._r_max, self._dtype, device
+            )
+
+            # Get the cell for this configuration.
+            if cell is not None:
+                cell = cell[i].to(self._dtype).to(device)
+
+            if not _torch.equal(atomic_numbers[i], self._atomic_numbers):
+                # Update the node attributes if the atomic numbers have changed.
+                self._node_attrs = (
+                    self._get_node_attrs(atomic_numbers[i]).to(self._dtype).to(device)
+                )
+                self._ptr = _torch.tensor(
+                    [0, self._node_attrs.shape[0]],
+                    dtype=_torch.long,
+                    requires_grad=False,
+                ).to(device)
+                self._batch = _torch.zeros(
+                    self._node_attrs.shape[0], dtype=_torch.long
+                ).to(device)
+                self._atomic_numbers = atomic_numbers[i]
+
+            positions = xyz_qm[i].to(self._dtype)
+
+            # Create the input dictionary
+            input_dict = {
+                "ptr": self._ptr,
+                "node_attrs": self._node_attrs,
+                "batch": self._batch,
+                "head": _torch.zeros(1, dtype=_torch.int).to(device),
+                "pbc": self._pbc,
+                "positions": positions,
+                "edge_index": edge_index,
+                "shifts": shifts,
+                "cell": self._cell if cell is None else cell,
+                "total_charge": _torch.tensor(qm_charge, dtype=self._dtype).to(device),
+            }
+
+            # Run MACE once, reusing its output to feed EMLE via external_params.
+            output = self._mace(input_dict, compute_force=False)
+
+            E_vac = output["interaction_energy"]
+            s = output["valence_widths"]
+            q_core = output["core_charges"]
+            q = output["charges"]
+            mu = output["atomic_dipoles"]
+
+            assert s is not None
+            assert q_core is not None
+            assert q is not None
+            assert mu is not None
+
+            q_val = q - q_core
+
+            # Store per-batch-element tensors so the calculator can write them
+            # into the QM xyz trajectory. Both q_val (EMLE.forward convention)
+            # and q (total, for parity with the training-data extXYZ written
+            # by tarball-to-extxyz) are stored.
+            self.emle_values["s"].append(s)
+            self.emle_values["q_core"].append(q_core)
+            self.emle_values["q_val"].append(q_val)
+            self.emle_values["q"].append(q)
+            self.emle_values["mu"].append(mu)
+
+            s = s.view(1, -1)
+            q_core = q_core.view(1, -1)
+            q_val = q_val.view(1, -1)
+            mu = mu.view(1, -1, 3) if self.use_dipoles else None
+
+            assert (
+                E_vac is not None
+            ), "The model did not return any energy. Please check the input."
+
+            results_E_vac[i] = E_vac[0] * EV_TO_HARTREE
+
+            # Decouple the positions from the computation graph for the next models.
+            input_dict["positions"] = (
+                input_dict["positions"].clone().detach().requires_grad_(True)
+            )
+
+            # Do inference for the other models.
+            if len(self._mace_models) > 1:
+                for j, mace in enumerate(self._mace_models):
+                    E_vac_qbc = mace(input_dict, compute_force=False)[
+                        "interaction_energy"
+                    ]
+
+                    assert (
+                        E_vac_qbc is not None
+                    ), "The model did not return any energy. Please check the input."
+
+                    # Calculate the gradients
+                    grads_qbc = _torch.autograd.grad(
+                        [E_vac_qbc], [input_dict["positions"]]
+                    )[0]
+                    assert grads_qbc is not None, "Gradient computation failed"
+
+                    # Store the results.
+                    self._E_vac_qbc[j, i] = E_vac_qbc[0] * EV_TO_HARTREE
+                    self._grads_qbc[j, i] = grads_qbc * EV_TO_HARTREE
+
+            # If there are no point charges, return the in vacuo energy and zeros
+            # for the static and induced terms.
+            if len(xyz_mm[i]) == 0:
+                zero = _torch.tensor(0.0, dtype=xyz_qm.dtype, device=device)
+                results_E_emle_static[i] = zero
+                results_E_emle_induced[i] = zero
+            else:
+                external_params = {
+                    "s": s,
+                    "q_core": q_core,
+                    "q_val": q_val,
+                    "a_Thole": a_Thole,
+                    "k_Z": k_Z,
+                }
+                if mu is not None:
+                    external_params["mu"] = mu
+                # Get the EMLE energy components. Pass only batch element i so
+                # that external_params (batch=1) and the coordinate tensors are
+                # consistent inside EMLE's forward.
+                E_emle = self._emle(
+                    atomic_numbers[i : i + 1],
+                    charges_mm[i : i + 1],
+                    xyz_qm[i : i + 1],
+                    xyz_mm[i : i + 1],
+                    cell,
+                    qm_charge,
+                    external_params,
+                )
+                results_E_emle_static[i] = E_emle[0][0]
+                results_E_emle_induced[i] = E_emle[1][0]
+
+        # Return the MACE and EMLE energy components.
+        return _torch.stack(
+            [results_E_vac, results_E_emle_static, results_E_emle_induced]
+        )
+
+    def reset_emle(self) -> None:
+        """
+        Clear the per-frame EMLE output buffers.
+
+        Called at the start of each forward() so emle_values exposes only the
+        quantities produced by the current call (one tensor per batch element,
+        per key). The calculator reads these values to write QM xyz trajectory
+        frames; see emle/calculator.py.
+        """
+        self.emle_values["s"] = []
+        self.emle_values["q_core"] = []
+        self.emle_values["q_val"] = []
+        self.emle_values["q"] = []
+        self.emle_values["mu"] = []

@@ -36,7 +36,7 @@ parser.add_argument(
 parser.add_argument(
     "--backend",
     type=str,
-    choices=["torchani", "mace", "deepmd"],
+    choices=["torchani", "mace", "emle-mace", "deepmd"],
     help="Gas phase ML backend",
 )
 parser.add_argument(
@@ -48,7 +48,7 @@ parser.add_argument(
 parser.add_argument(
     "--mace-model",
     type=str,
-    help="MACE model file (for backend='mace')",
+    help="MACE model file (for 'mace' and 'emle-mace' backends)",
 )
 parser.add_argument(
     "--qm-xyz", type=str, metavar="name.xyz", required=True, help="QM xyz file"
@@ -73,7 +73,13 @@ parser.add_argument(
 parser.add_argument(
     "--q-total",
     type=int,
+    default=0,
     help="Total charge of the QM region",
+)
+parser.add_argument(
+    "--use-dipoles",
+    action="store_true",
+    help="Whether to include static atomic dipoles",
 )
 parser.add_argument(
     "--start",
@@ -97,8 +103,8 @@ from emle._orca_parser import ORCAParser
 
 if args.backend == "deepmd" and not args.deepmd_model:
     parser.error("--deepmd-model is required when backend='deepmd'")
-if args.backend == "mace" and not args.mace_model:
-    parser.error("--mace-model is required when backend='mace'")
+if args.backend in ("mace", "emle-mace") and not args.mace_model:
+    parser.error("--mace-model is required when backend is 'mace' or 'emle-mace'")
 
 backend = None
 if args.backend == "torchani":
@@ -110,10 +116,14 @@ elif args.backend == "mace":
 
     backend = MACEEMLE(emle_model=args.emle_model, mace_model=args.mace_model)
 
-elif args.backend == "maceemle":
+elif args.backend == "emle-mace":
     from emle.models import MACEEMLEJoint
 
-    backend = MACEEMLEJoint(emle_model=args.emle_model, mace_model=args.mace_model)
+    backend = MACEEMLEJoint(
+        emle_model=args.emle_model,
+        mace_model=args.mace_model,
+        qm_charge=args.q_total,
+    )
 
 elif args.backend == "deepmd":
     from emle._backends import DeePMD
@@ -133,6 +143,7 @@ analyzer = EMLEAnalyzer(
     backend,
     orca_parser,
     args.q_total,
+    args.use_dipoles,
     start=args.start,
     end=args.end,
 )
@@ -148,6 +159,9 @@ result = {
     "atomic_alpha_emle": analyzer.atomic_alpha,
     "alpha_emle": analyzer.alpha,
 }
+if args.use_dipoles:
+    result["mu_emle"] = analyzer.mu
+    result["E_static_mu_emle"] = analyzer.e_static_mu
 
 if orca_parser:
     result.update(
@@ -163,9 +177,12 @@ if orca_parser:
             "E_static_mbis": analyzer.e_static_mbis,
         }
     )
+    if args.use_dipoles:
+        result["mu_qm"] = orca_parser.mbis["mu"]
 
 if args.backend:
     result["E_vac_emle"] = analyzer.e_backend
+    result["grad_vac_emle"] = analyzer.grad_backend
 if args.alpha:
     result["alpha_qm"] = orca_parser.alpha
 

@@ -34,7 +34,7 @@ import torch as _torch
 import torchani as _torchani
 
 from torch import Tensor
-from typing import Optional, Union
+from typing import Union, Optional, Dict
 
 from . import EMLEBase as _EMLEBase
 
@@ -410,6 +410,7 @@ class EMLE(_torch.nn.Module):
         xyz_mm: Tensor,
         cell: Optional[Tensor] = None,
         qm_charge: Union[int, Tensor] = 0,
+        external_params: Optional[Dict[str, Tensor]] = None,
     ) -> Tensor:
         """
         Computes the static and induced EMLE energy components.
@@ -434,6 +435,29 @@ class EMLE(_torch.nn.Module):
 
         qm_charge: int or torch.Tensor (BATCH,)
             The charge on the QM region.
+
+        external_params: Optional[Dict[str, torch.Tensor]]
+            Pre-computed EMLE parameters supplied by an external model (for
+            example MACEEMLEJoint, where MACE predicts these quantities). When
+            provided, they replace the values that EMLEBase would otherwise
+            predict internally. Required keys and shapes:
+
+                's': torch.Tensor (1, N_QM_ATOMS)
+                    Valence widths.
+                'q_core': torch.Tensor (1, N_QM_ATOMS)
+                    Core charges.
+                'q_val': torch.Tensor (1, N_QM_ATOMS)
+                    Valence charges.
+                'a_Thole': torch.Tensor (scalar)
+                    Thole damping parameter.
+                'k_Z': torch.Tensor (N_SPECIES,)
+                    Per-species alpha/volume ratios.
+                'mu': Optional[torch.Tensor] (1, N_QM_ATOMS, 3)
+                    Static atomic dipoles (optional; included in the static
+                    energy when present).
+
+            When None, 's', 'q_core', 'q_val', and the Thole tensor are
+            predicted by EMLEBase (original behaviour).
 
         Returns
         -------
@@ -482,18 +506,36 @@ class EMLE(_torch.nn.Module):
                 2, batch_size, dtype=self._xyz_qm.dtype, device=self._xyz_qm.device
             )
 
+        ANGSTROM_TO_BOHR = 1.8897261258369282
         # Get the parameters from the base model:
         #    valence widths, core charges, valence charges, A_thole tensor
         # These are returned as batched tensors, so we need to extract the
         # first element of each.
-        s, q_core, q_val, A_thole = self._emle_base(
-            self._atomic_numbers,
-            self._xyz_qm,
-            qm_charge,
-        )
+        if external_params is not None:
+            s = external_params["s"]
+            q_core = external_params["q_core"]
+            q_val = external_params["q_val"]
+            mu = external_params.get("mu")
+
+            xyz_qm_bohr = self._xyz_qm * ANGSTROM_TO_BOHR
+            mask = atomic_numbers > 0
+
+            species_id = self._emle_base._species_map[atomic_numbers]
+            k = external_params["k_Z"][species_id]
+
+            r_data = self._emle_base._get_r_data(xyz_qm_bohr, mask)
+            A_thole = self._emle_base._get_A_thole(
+                r_data, s, q_val, k, external_params["a_Thole"]
+            )
+        else:
+            s, q_core, q_val, A_thole = self._emle_base(
+                self._atomic_numbers,
+                self._xyz_qm,
+                qm_charge,
+            )
+            mu = None
 
         # Convert coordinates to Bohr.
-        ANGSTROM_TO_BOHR = 1.8897261258369282
         xyz_qm_bohr = self._xyz_qm * ANGSTROM_TO_BOHR
         xyz_mm_bohr = self._xyz_mm * ANGSTROM_TO_BOHR
 
@@ -513,7 +555,7 @@ class EMLE(_torch.nn.Module):
                 q_core, dtype=self._charges_mm.dtype, device=self._device
             )
         E_static = self._emle_base.get_static_energy(
-            q_core, q_val, self._charges_mm, mesh_data
+            q_core, q_val, self._charges_mm, mesh_data, mu
         )
 
         # Compute the induced energy.

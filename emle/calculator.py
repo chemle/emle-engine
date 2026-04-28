@@ -80,6 +80,7 @@ class EMLECalculator:
         model=None,
         method="electrostatic",
         alpha_mode="species",
+        use_dipoles=False,
         atomic_numbers=None,
         qm_charge=0,
         backend="torchani",
@@ -153,6 +154,9 @@ class EMLECalculator:
                 "reference":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
+
+        use_dipoles: bool
+            Whether static atomic dipoles should be used
 
         atomic_numbers: List[int], Tuple[int], numpy.ndarray
             Atomic numbers for the QM region. This allows use of optimised AEV
@@ -507,6 +511,15 @@ class EMLECalculator:
         else:
             self._backend = None
 
+        if use_dipoles:
+            for backend in formatted_backends:
+                if backend != "emle-mace":
+                    msg = f"Static dipoles can only be used with emle-mace backend"
+                    _logger.error(msg)
+                    raise ValueError(msg)
+
+        self._use_dipoles = use_dipoles
+
         # Validate the external backend.
         if external_backend is not None:
             if not isinstance(external_backend, str):
@@ -646,19 +659,33 @@ class EMLECalculator:
                     self._ani2x_model_index = ani2x_model_index
 
                 # Initialise the MACEMLE model.
-                elif backend == "mace":
-                    from .models import MACEEMLE as _MACEEMLE
+                elif backend in ["mace", "emle-mace"]:
+                    if backend == "mace":
+                        from .models import MACEEMLE as _MACEEMLE
 
-                    mace_emle = _MACEEMLE(
-                        emle_model=model,
-                        emle_method=method,
-                        alpha_mode=alpha_mode,
-                        mm_charges=self._mm_charges,
-                        qm_charge=self._qm_charge,
-                        mace_model=mace_model,
-                        atomic_numbers=atomic_numbers,
-                        device=self._device,
-                    )
+                        mace_emle = _MACEEMLE(
+                            emle_model=model,
+                            emle_method=method,
+                            alpha_mode=alpha_mode,
+                            mm_charges=self._mm_charges,
+                            qm_charge=self._qm_charge,
+                            mace_model=mace_model,
+                            atomic_numbers=atomic_numbers,
+                            device=self._device,
+                        )
+                    else:  # emle-mace
+                        from .models import MACEEMLEJoint as _MACEEMLE
+
+                        mace_emle = _MACEEMLE(
+                            emle_model=model,
+                            emle_method=method,
+                            use_dipoles=self._use_dipoles,
+                            mm_charges=self._mm_charges,
+                            qm_charge=self._qm_charge,
+                            mace_model=mace_model,
+                            atomic_numbers=atomic_numbers,
+                            device=self._device,
+                        )
 
                     # Convert to TorchScript.
                     b = _torch.jit.script(mace_emle).eval()
@@ -1108,8 +1135,15 @@ class EMLECalculator:
         # Write out the QM region to the xyz trajectory file.
         if self._qm_xyz_frequency > 0 and self._step % self._qm_xyz_frequency == 0:
             atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
+            atoms.info["total_charge"] = charge
             if hasattr(self._backend, "_max_f_std"):
                 atoms.info = {"max_f_std": self._backend._max_f_std}
+            if getattr(self._backends[0], "emle_values", None) is not None:
+                for key, value in self._backends[0].emle_values.items():
+                    assert (
+                        len(value) == 1
+                    ), "emle_values xyz export assumes a single frame per forward() call"
+                    atoms.arrays[key] = value[0].detach().cpu().numpy()
             _ase_io.write(self._qm_xyz_file, atoms, append=True)
 
             pc_data = _np.hstack((charges_mm[:, None], xyz_mm))
@@ -1340,7 +1374,8 @@ class EMLECalculator:
                     if dE_dxyz_mm is not None
                     else _np.zeros_like(xyz_mm.cpu().numpy())
                 )
-                E_tot = E_vac + E.sum().detach().cpu().numpy()
+                E_vac, E_static, E_induced = E.sum(axis=1).detach().cpu().numpy()
+                E_tot = E_vac + E_static + E_induced
 
             except Exception as e:
                 msg = f"Failed to compute {model} energies and gradients: {e}"
@@ -1547,7 +1582,7 @@ class EMLECalculator:
                 xyz_qm,
                 xyz_mm,
                 cell=cell,
-                charge=self._qm_charge
+                charge=self._qm_charge,
             )
         )
 
