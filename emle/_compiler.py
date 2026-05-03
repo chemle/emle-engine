@@ -93,7 +93,7 @@ class EMLECompiler:
     self-contained ``.pt`` and are rejected.
     """
 
-    _supported_backends = ("torchani", "mace", "deepmd")
+    _supported_backends = ("torchani", "mace", "emle-mace", "deepmd")
 
     def __init__(
         self,
@@ -101,13 +101,14 @@ class EMLECompiler:
         backend: str = "torchani",
         model: Optional[str] = None,
         method: str = "electrostatic",
-        alpha_mode: str = "species",
+        alpha_mode: Optional[str] = None,
         atomic_numbers: Optional[Union[List[int], Tuple[int, ...]]] = None,
         mm_charges: Optional[Union[List[float], Tuple[float, ...]]] = None,
         qm_charge: int = 0,
         ani2x_model_index: Optional[int] = None,
         mace_model: Optional[str] = None,
         deepmd_model: Optional[str] = None,
+        use_dipoles: bool = False,
         device: Optional[str] = None,
     ):
         """
@@ -125,8 +126,10 @@ class EMLECompiler:
             EMLE embedding method: ``"electrostatic"``, ``"mechanical"``,
             ``"nonpol"``, or ``"mm"``.
 
-        alpha_mode : str
-            Polarizability mode: ``"species"`` or ``"reference"``.
+        alpha_mode : str, optional
+            Polarizability mode: ``"species"`` or ``"reference"``. Defaults
+            to ``"species"`` when omitted. Must be ``"species"`` (or omitted)
+            for the ``"emle-mace"`` backend, which hard-codes that mode.
 
         atomic_numbers : list of int, optional
             If given, enables NNPOps optimisation for a fixed ML region and
@@ -148,13 +151,23 @@ class EMLECompiler:
 
         mace_model : str, optional
             MACE model name (``"mace-off23-small"`` etc.) or path to a
-            local MACE model file. Only relevant for ``backend="mace"``.
+            local MACE model file. Relevant for ``backend="mace"`` and
+            ``backend="emle-mace"``. For ``"emle-mace"`` this must be a
+            path to an ``EnergyEMLEMACE`` checkpoint (i.e. a MACE model
+            that also predicts EMLE properties — valence widths, core
+            charges, total charges, atomic dipoles). Vanilla MACE-OFF23
+            checkpoints are not valid inputs for ``"emle-mace"``.
 
         deepmd_model : str, optional
             Path to a DeePMD-kit v3 PyTorch-backend ``.pth`` (TorchScript)
             model file. Only relevant for ``backend="deepmd"``. TensorFlow
             ``.pb`` models are not scriptable and must be used through the
             runtime DeePMD backend.
+
+        use_dipoles : bool
+            Only relevant for ``backend="emle-mace"``. When ``True``, the
+            MACE-predicted atomic dipoles are included in the static
+            electrostatic energy. Must be ``False`` for any other backend.
 
         device : str, optional
             ``"cpu"`` or ``"cuda"``. Defaults to CPU.
@@ -164,6 +177,21 @@ class EMLECompiler:
                 f"backend={backend!r} is not scriptable. "
                 f"Supported backends for compilation: {self._supported_backends}"
             )
+
+        if use_dipoles and backend != "emle-mace":
+            raise ValueError(
+                "'use_dipoles' is only valid for backend='emle-mace'."
+            )
+
+        if backend == "emle-mace":
+            if alpha_mode is not None and alpha_mode != "species":
+                raise ValueError(
+                    "backend='emle-mace' requires alpha_mode='species' "
+                    "(MACEEMLEJoint hard-codes the species mode)."
+                )
+        else:
+            if alpha_mode is None:
+                alpha_mode = "species"
 
         self._device = _torch.device(device) if device else _torch.device("cpu")
         self._composite = self._build_composite(
@@ -177,6 +205,7 @@ class EMLECompiler:
             ani2x_model_index=ani2x_model_index,
             mace_model=mace_model,
             deepmd_model=deepmd_model,
+            use_dipoles=use_dipoles,
         )
 
     def _build_composite(
@@ -192,6 +221,7 @@ class EMLECompiler:
         ani2x_model_index,
         mace_model,
         deepmd_model,
+        use_dipoles,
     ):
         if backend == "torchani":
             from .models import ANI2xEMLE
@@ -218,6 +248,20 @@ class EMLECompiler:
                 qm_charge=qm_charge,
                 mace_model=mace_model,
                 atomic_numbers=atomic_numbers,
+                device=self._device,
+            )
+
+        if backend == "emle-mace":
+            from .models import MACEEMLEJoint
+
+            return MACEEMLEJoint(
+                emle_model=model,
+                emle_method=method,
+                mm_charges=mm_charges,
+                qm_charge=qm_charge,
+                mace_model=mace_model,
+                atomic_numbers=atomic_numbers,
+                use_dipoles=use_dipoles,
                 device=self._device,
             )
 

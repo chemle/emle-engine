@@ -32,7 +32,7 @@ import yaml
 from emle._compiler import EMLECompiler
 
 
-_SUPPORTED_BACKENDS = ("torchani", "mace", "deepmd")
+_SUPPORTED_BACKENDS = ("torchani", "mace", "emle-mace", "deepmd")
 
 
 def _parse_int_list(raw, name):
@@ -83,7 +83,12 @@ def _build_parser():
     )
     p.add_argument(
         "--backend", type=str, choices=_SUPPORTED_BACKENDS, required=False,
-        help="In-vacuo ML backend. Default: torchani."
+        help=(
+            "In-vacuo ML backend. One of: 'torchani' (ANI2xEMLE), 'mace' "
+            "(wrapping a vanilla MACE model), 'emle-mace' (model that jointly "
+            "predicts the in-vacuo energy and the EMLE properties), "
+            "'deepmd' (DeePMDEMLE). Default: torchani."
+        )
     )
     p.add_argument(
         "--model", type=str, required=False,
@@ -125,7 +130,21 @@ def _build_parser():
     )
     p.add_argument(
         "--mace-model", type=str, required=False,
-        help="MACE-OFF23 model name or path to a local MACE .model file."
+        help=(
+            "MACE-OFF23 model name or path to a local MACE .model file. "
+            "For --backend=emle-mace this must point to an EnergyEMLEMACE "
+            "checkpoint (a MACE model trained to also predict EMLE "
+            "properties); vanilla MACE-OFF23 checkpoints are not valid "
+            "for emle-mace backend."
+        )
+    )
+    p.add_argument(
+        "--use-dipoles", action="store_true", default=False,
+        help=(
+            "Only valid with --backend=emle-mace. Include the "
+            "MACE-predicted atomic dipoles in the static electrostatic "
+            "energy."
+        )
     )
     p.add_argument(
         "--deepmd-model", type=str, required=False,
@@ -168,10 +187,13 @@ def main(argv=None):
         args["backend"] = "torchani"
     if args.get("method") is None:
         args["method"] = "electrostatic"
-    if args.get("alpha_mode") is None:
-        args["alpha_mode"] = "species"
+    # alpha_mode default is resolved inside EMLECompiler so the emle-mace
+    # backend can reject an explicit non-"species" choice.
     if args.get("qm_charge") is None:
         args["qm_charge"] = 0
+
+    if args.get("use_dipoles") and args["backend"] != "emle-mace":
+        parser.error("--use-dipoles is only valid with --backend=emle-mace")
 
     args["atomic_numbers"] = _parse_int_list(args.get("atomic_numbers"), "atomic_numbers")
     args["mm_charges"] = _parse_float_list(args.get("mm_charges"), "mm_charges")
