@@ -61,6 +61,10 @@ except:
 model = os.getenv("EMLE_MODEL")
 method = os.getenv("EMLE_METHOD")
 alpha_mode = os.getenv("EMLE_ALPHA_MODE")
+try:
+    use_dipoles = strtobool(os.getenv("EMLE_USE_DIPOLES"))
+except:
+    use_dipoles = False
 atomic_numbers = os.getenv("EMLE_ATOMIC_NUMBERS")
 mm_charges = os.getenv("EMLE_MM_CHARGES")
 try:
@@ -144,6 +148,7 @@ env = {
     "model": model,
     "method": method,
     "alpha_mode": alpha_mode,
+    "use_dipoles": use_dipoles,
     "atomic_numbers": atomic_numbers,
     "mm_charges": mm_charges,
     "num_clients": num_clients,
