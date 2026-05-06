@@ -11,11 +11,11 @@ dependencies:
   - pip
   - psutil
   - pygit2
-  - pytorch >= 2.7
+  - pytorch
+  - torchani >= 2.7
   - python
   - pyyaml
   - setuptools < 81
   - xtb-python
   - pip:
     - mace-torch
-    - torchani >= 2.7
