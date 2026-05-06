@@ -460,7 +460,9 @@ class DeePMDEMLE(_torch.nn.Module):
                 dtype=self._dtype,
                 device=device,
             )
-            for j, dp in enumerate(self._deepmd_models):
+            self._E_vac_qbc[0] = E_vac
+            self._grads_qbc[0] = (-out["force"] * EV_TO_HARTREE).to(self._dtype)
+            for j, dp in enumerate(self._deepmd_models[1:], start=1):
                 out_j = dp(coord, atype, box)
                 self._E_vac_qbc[j] = (
                     out_j["energy"].reshape(num_batches) * EV_TO_HARTREE
