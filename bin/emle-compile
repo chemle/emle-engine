@@ -32,9 +32,6 @@ import yaml
 from emle._compiler import EMLECompiler
 
 
-_SUPPORTED_BACKENDS = ("torchani", "mace", "emle-mace", "deepmd")
-
-
 def _parse_int_list(raw, name):
     if raw is None:
         return None
@@ -82,7 +79,7 @@ def _build_parser():
         help="Path of the output .pt file (required)."
     )
     p.add_argument(
-        "--backend", type=str, choices=_SUPPORTED_BACKENDS, required=False,
+        "--backend", type=str, choices=EMLECompiler._supported_backends, required=False,
         help=(
             "In-vacuo ML backend. One of: 'torchani' (ANI2xEMLE), 'mace' "
             "(wrapping a vanilla MACE model), 'emle-mace' (model that jointly "
