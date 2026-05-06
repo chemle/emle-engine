@@ -179,9 +179,7 @@ class EMLECompiler:
             )
 
         if use_dipoles and backend != "emle-mace":
-            raise ValueError(
-                "'use_dipoles' is only valid for backend='emle-mace'."
-            )
+            raise ValueError("'use_dipoles' is only valid for backend='emle-mace'.")
 
         if backend == "emle-mace":
             if alpha_mode is not None and alpha_mode != "species":
