@@ -8,14 +8,14 @@ dependencies:
   - ase
   - deepmd-kit
   - loguru
-  - nnpops
   - pip
   - psutil
   - pygit2
   - pytorch
+  - torchani >= 2.7
   - python
   - pyyaml
-  - torchani
+  - setuptools < 81
   - xtb-python
   - pip:
     - mace-torch

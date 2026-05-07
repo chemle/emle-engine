@@ -1,0 +1,203 @@
+#!/usr/bin/env python
+
+#######################################################################
+# EMLE-Engine: https://github.com/chemle/emle-engine
+#
+# Copyright: 2023-2025
+#
+# Authors: Lester Hedges   <lester.hedges@gmail.com>
+#          Kirill Zinovjev <kzinovjev@gmail.com>
+#
+# EMLE-Engine is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+#
+# EMLE-Engine is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
+#####################################################################
+
+import argparse
+import os
+import sys
+
+import numpy as np
+import yaml
+
+from emle._compiler import EMLECompiler
+
+
+def _parse_int_list(raw, name):
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        raw = raw.split(",")
+    if isinstance(raw, (list, tuple)):
+        if len(raw) == 1 and isinstance(raw[0], str) and os.path.isfile(raw[0]):
+            return np.loadtxt(raw[0], dtype=int).tolist()
+        try:
+            return [int(x) for x in raw]
+        except Exception as exc:
+            raise TypeError(f"Unable to parse '{name}' as a list of ints") from exc
+    raise TypeError(f"'{name}' must be a comma-separated string, list, or file path")
+
+
+def _parse_float_list(raw, name):
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        raw = raw.split(",")
+    if isinstance(raw, (list, tuple)):
+        if len(raw) == 1 and isinstance(raw[0], str) and os.path.isfile(raw[0]):
+            return np.loadtxt(raw[0], dtype=float).tolist()
+        try:
+            return [float(x) for x in raw]
+        except Exception as exc:
+            raise TypeError(f"Unable to parse '{name}' as a list of floats") from exc
+    raise TypeError(f"'{name}' must be a comma-separated string, list, or file path")
+
+
+def _build_parser():
+    p = argparse.ArgumentParser(
+        description=(
+            "Compile an EMLE composite model (in-vacuo backend + EMLE "
+            "embedding) into a TorchScript .pt file conforming to the "
+            "torchani-amber custom ML/MM contract (compute_mlmm method)."
+        )
+    )
+    p.add_argument(
+        "--config", type=str, required=False,
+        help="Path to a YAML configuration file. CLI flags override YAML entries."
+    )
+    p.add_argument(
+        "--output", type=str, required=False,
+        help="Path of the output .pt file (required)."
+    )
+    p.add_argument(
+        "--backend", type=str, choices=EMLECompiler._supported_backends, required=False,
+        help=(
+            "In-vacuo ML backend. One of: 'torchani' (ANI2xEMLE), 'mace' "
+            "(wrapping a vanilla MACE model), 'emle-mace' (model that jointly "
+            "predicts the in-vacuo energy and the EMLE properties), "
+            "'deepmd' (DeePMDEMLE). Default: torchani."
+        )
+    )
+    p.add_argument(
+        "--model", type=str, required=False,
+        help="Path to a custom EMLE model parameter file. Default: built-in."
+    )
+    p.add_argument(
+        "--method", type=str, required=False,
+        choices=["electrostatic", "mechanical", "nonpol", "mm"],
+        help="EMLE embedding method. Default: electrostatic."
+    )
+    p.add_argument(
+        "--alpha-mode", type=str, required=False,
+        choices=["species", "reference"],
+        help="Polarizability mode. Default: species."
+    )
+    p.add_argument(
+        "--atomic-numbers", type=str, nargs="*", required=False,
+        help=(
+            "Optional. Atomic numbers of the ML region. Supplying this bakes "
+            "a fixed ML composition into the compiled model and enables "
+            "NNPOps optimisation. OMIT for a generic model that works for "
+            "any ML region at runtime (recommended)."
+        ),
+    )
+    p.add_argument(
+        "--mm-charges", type=str, nargs="*", required=False,
+        help=(
+            "Per-atom MM charges for the ML region in units of electron "
+            "charge. Only used when --method=mm."
+        ),
+    )
+    p.add_argument(
+        "--qm-charge", type=int, required=False,
+        help="Net charge on the ML region (used when the model requires it)."
+    )
+    p.add_argument(
+        "--ani2x-model-index", type=int, required=False,
+        help="Index (0-7) into the ANI-2x ensemble. Default: full ensemble."
+    )
+    p.add_argument(
+        "--mace-model", type=str, required=False,
+        help=(
+            "MACE-OFF23 model name or path to a local MACE .model file. "
+            "For --backend=emle-mace this must point to an EnergyEMLEMACE "
+            "checkpoint (a MACE model trained to also predict EMLE "
+            "properties); vanilla MACE-OFF23 checkpoints are not valid "
+            "for emle-mace backend."
+        )
+    )
+    p.add_argument(
+        "--use-dipoles", action="store_true", default=False,
+        help=(
+            "Only valid with --backend=emle-mace. Include the "
+            "MACE-predicted atomic dipoles in the static electrostatic "
+            "energy."
+        )
+    )
+    p.add_argument(
+        "--deepmd-model", type=str, required=False,
+        help=(
+            "Path to a DeePMD-kit v3 PyTorch-backend .pth (TorchScript) model "
+            "file. Required when --backend=deepmd. TensorFlow .pb models are "
+            "not scriptable."
+        ),
+    )
+    p.add_argument(
+        "--device", type=str, required=False, choices=["cpu", "cuda"],
+        help="PyTorch device. Default: cpu."
+    )
+    return p
+
+
+def main(argv=None):
+    parser = _build_parser()
+    args = vars(parser.parse_args(argv))
+
+    # Optional YAML config: re-parse so CLI args override YAML entries
+    # (same trick emle-server uses).
+    cfg_path = args.get("config")
+    if cfg_path is not None:
+        try:
+            with open(cfg_path, "r") as f:
+                cfg = yaml.safe_load(f) or {}
+        except Exception as exc:
+            raise ValueError(f"Could not load YAML config file: {exc}") from exc
+        args = vars(parser.parse_args(argv, namespace=argparse.Namespace(**cfg)))
+
+    args.pop("config", None)
+
+    output_path = args.pop("output", None)
+    if not output_path:
+        parser.error("--output is required")
+
+    # Defaults
+    if args.get("backend") is None:
+        args["backend"] = "torchani"
+    if args.get("method") is None:
+        args["method"] = "electrostatic"
+    # alpha_mode default is resolved inside EMLECompiler so the emle-mace
+    # backend can reject an explicit non-"species" choice.
+    if args.get("qm_charge") is None:
+        args["qm_charge"] = 0
+
+    if args.get("use_dipoles") and args["backend"] != "emle-mace":
+        parser.error("--use-dipoles is only valid with --backend=emle-mace")
+
+    args["atomic_numbers"] = _parse_int_list(args.get("atomic_numbers"), "atomic_numbers")
+    args["mm_charges"] = _parse_float_list(args.get("mm_charges"), "mm_charges")
+
+    EMLECompiler(**args).compile(output_path)
+    print(f"Wrote compiled model to {output_path}")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

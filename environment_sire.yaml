@@ -18,7 +18,7 @@ dependencies:
   - python
   - pyyaml
   - sire
-  - torchani
+  - torchani >= 2.7
   - xtb-python
   - pip:
     - mace-torch
