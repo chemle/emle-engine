@@ -654,7 +654,13 @@ class MACEEMLE(_torch.nn.Module):
 
             # Do inference for the other models. Iterate over the full
             # ModuleList (TorchScript can't slice it) and branch on j == 0
-            # to reuse the primary forward instead of recomputing it.
+            # to reuse the primary forward instead of recomputing it. The
+            # autograd.grad call is hoisted out of the if/else so the
+            # grads_qbc assignment site is unconditional within the loop
+            # body — TorchScript's loop-carried type analysis requires this
+            # to keep the variable typed as Optional[Tensor] across
+            # iterations (otherwise the post-assert narrowing to Tensor
+            # leaks into the next iteration's entry type).
             if len(self._mace_models) > 1:
                 for j, mace in enumerate(self._mace_models):
                     if j == 0:
@@ -662,19 +668,21 @@ class MACEEMLE(_torch.nn.Module):
                         # keeps the xyz_qm -> results_E_vac graph alive for
                         # upstream backward.
                         E_vac_qbc = E_vac
-                        grads_qbc = _torch.autograd.grad(
-                            [E_vac_qbc], [primary_positions], retain_graph=True
-                        )[0]
+                        target_positions = primary_positions
+                        retain = True
                     else:
-                        E_vac_qbc = mace(input_dict, compute_force=False)[
+                        E_vac_qbc_opt = mace(input_dict, compute_force=False)[
                             "interaction_energy"
                         ]
                         assert (
-                            E_vac_qbc is not None
+                            E_vac_qbc_opt is not None
                         ), "The model did not return any energy. Please check the input."
-                        grads_qbc = _torch.autograd.grad(
-                            [E_vac_qbc], [input_dict["positions"]]
-                        )[0]
+                        E_vac_qbc = E_vac_qbc_opt
+                        target_positions = input_dict["positions"]
+                        retain = False
+                    grads_qbc = _torch.autograd.grad(
+                        [E_vac_qbc], [target_positions], retain_graph=retain
+                    )[0]
                     assert grads_qbc is not None, "Gradient computation failed"
 
                     # Store the results.
@@ -1343,7 +1351,13 @@ class MACEEMLEJoint(_torch.nn.Module):
 
             # Do inference for the other models. Iterate over the full
             # ModuleList (TorchScript can't slice it) and branch on j == 0
-            # to reuse the primary forward instead of recomputing it.
+            # to reuse the primary forward instead of recomputing it. The
+            # autograd.grad call is hoisted out of the if/else so the
+            # grads_qbc assignment site is unconditional within the loop
+            # body — TorchScript's loop-carried type analysis requires this
+            # to keep the variable typed as Optional[Tensor] across
+            # iterations (otherwise the post-assert narrowing to Tensor
+            # leaks into the next iteration's entry type).
             if len(self._mace_models) > 1:
                 for j, mace in enumerate(self._mace_models):
                     if j == 0:
@@ -1351,19 +1365,21 @@ class MACEEMLEJoint(_torch.nn.Module):
                         # keeps the xyz_qm -> results_E_vac graph alive for
                         # upstream backward.
                         E_vac_qbc = E_vac
-                        grads_qbc = _torch.autograd.grad(
-                            [E_vac_qbc], [primary_positions], retain_graph=True
-                        )[0]
+                        target_positions = primary_positions
+                        retain = True
                     else:
-                        E_vac_qbc = mace(input_dict, compute_force=False)[
+                        E_vac_qbc_opt = mace(input_dict, compute_force=False)[
                             "interaction_energy"
                         ]
                         assert (
-                            E_vac_qbc is not None
+                            E_vac_qbc_opt is not None
                         ), "The model did not return any energy. Please check the input."
-                        grads_qbc = _torch.autograd.grad(
-                            [E_vac_qbc], [input_dict["positions"]]
-                        )[0]
+                        E_vac_qbc = E_vac_qbc_opt
+                        target_positions = input_dict["positions"]
+                        retain = False
+                    grads_qbc = _torch.autograd.grad(
+                        [E_vac_qbc], [target_positions], retain_graph=retain
+                    )[0]
                     assert grads_qbc is not None, "Gradient computation failed"
 
                     # Store the results.
