@@ -460,10 +460,14 @@ class DeePMDEMLE(_torch.nn.Module):
                 dtype=self._dtype,
                 device=device,
             )
-            self._E_vac_qbc[0] = E_vac
-            self._grads_qbc[0] = (-out["force"] * EV_TO_HARTREE).to(self._dtype)
-            for j, dp in enumerate(self._deepmd_models[1:], start=1):
-                out_j = dp(coord, atype, box)
+            # Iterate over the full ModuleList so TorchScript can unroll the
+            # loop; reuse the primary call's output for slot 0 instead of
+            # slicing (`self._deepmd_models[1:]`), which TorchScript rejects.
+            for j, dp in enumerate(self._deepmd_models):
+                if j == 0:
+                    out_j = out
+                else:
+                    out_j = dp(coord, atype, box)
                 self._E_vac_qbc[j] = (
                     out_j["energy"].reshape(num_batches) * EV_TO_HARTREE
                 ).to(self._dtype)
