@@ -298,13 +298,11 @@ class DeePMDEMLE(_torch.nn.Module):
         """
         Performs Tensor dtype and/or device conversion on the model.
         """
-        # super().to() handles the directly-registered buffers
-        # (_atomic_numbers, _z_to_type, _E_vac_qbc, _grads_qbc).
+        # super().to() handles directly-registered buffers and recurses
+        # into the _deepmd_models ModuleList. The explicit _emle hop is
+        # still needed to refresh EMLE's cached _device attribute.
         super().to(*args, **kwargs)
         self._emle = self._emle.to(*args, **kwargs)
-        for i in range(len(self._deepmd_models)):
-            self._deepmd_models[i] = self._deepmd_models[i].to(*args, **kwargs)
-        self._deepmd = self._deepmd_models[0]
         for arg in args:
             if isinstance(arg, _torch.device):
                 self._device = arg
@@ -322,9 +320,6 @@ class DeePMDEMLE(_torch.nn.Module):
         """
         super().cpu(**kwargs)
         self._emle = self._emle.cpu(**kwargs)
-        for i in range(len(self._deepmd_models)):
-            self._deepmd_models[i] = self._deepmd_models[i].cpu(**kwargs)
-        self._deepmd = self._deepmd_models[0]
         self._device = _torch.device("cpu")
         return self
 
@@ -334,9 +329,6 @@ class DeePMDEMLE(_torch.nn.Module):
         """
         super().cuda(**kwargs)
         self._emle = self._emle.cuda(**kwargs)
-        for i in range(len(self._deepmd_models)):
-            self._deepmd_models[i] = self._deepmd_models[i].cuda(**kwargs)
-        self._deepmd = self._deepmd_models[0]
         self._device = _torch.device("cuda")
         return self
 
@@ -346,9 +338,6 @@ class DeePMDEMLE(_torch.nn.Module):
         """
         super().double()
         self._emle = self._emle.double()
-        for i in range(len(self._deepmd_models)):
-            self._deepmd_models[i] = self._deepmd_models[i].double()
-        self._deepmd = self._deepmd_models[0]
         self._dtype = _torch.float64
         return self
 
@@ -358,9 +347,6 @@ class DeePMDEMLE(_torch.nn.Module):
         """
         super().float()
         self._emle = self._emle.float()
-        for i in range(len(self._deepmd_models)):
-            self._deepmd_models[i] = self._deepmd_models[i].float()
-        self._deepmd = self._deepmd_models[0]
         self._dtype = _torch.float32
         return self
 
