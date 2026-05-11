@@ -1070,7 +1070,7 @@ class EMLECalculator:
                 raise ValueError(msg)
 
         # Compute the energy and gradients.
-        E_vac, grad_vac, E_tot, grad_qm, grad_mm, lam, E_mm, E_emle = (
+        E_vac, grad_vac, E_tot, grad_qm, grad_mm, lam, E_mm, E_emle, _ = (
             self._calculate_energy_and_gradients(
                 atomic_numbers,
                 charges_mm,
@@ -1281,7 +1281,7 @@ class EMLECalculator:
             atomic_numbers, dtype=_torch.int64, device=self._device
         )
         charges_mm = _torch.tensor(
-            charges_mm, dtype=_torch.float32, device=self._device
+            charges_mm, dtype=_torch.float32, device=self._device, requires_grad=True
         )
         xyz_qm = _torch.tensor(
             xyz_qm, dtype=_torch.float32, device=self._device, requires_grad=True
@@ -1331,8 +1331,8 @@ class EMLECalculator:
                     E = self._emle(
                         atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell, charge
                     )
-                    dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
-                        E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
+                    dE_dxyz_qm, dE_dxyz_mm, dE_dcharges_mm = _torch.autograd.grad(
+                        E.sum(), (xyz_qm, xyz_mm, charges_mm), allow_unused=allow_unused
                     )
                     dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
                     dE_dxyz_mm_bohr = (
@@ -1346,6 +1346,7 @@ class EMLECalculator:
                     grad_qm = dE_dxyz_qm_bohr + grad_vac
                     grad_mm = dE_dxyz_mm_bohr
                 else:
+                    dE_dcharges_mm = None
                     E_tot = E_vac
                     grad_qm = grad_vac
                     grad_mm = None
@@ -1364,8 +1365,10 @@ class EMLECalculator:
                     E = base_model(
                         atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell, charge
                     )
-                    dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
-                        E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
+                    dE_dxyz_qm, dE_dxyz_mm, dE_dcharges_mm = _torch.autograd.grad(
+                        E.sum(),
+                        (xyz_qm, xyz_mm, charges_mm),
+                        allow_unused=allow_unused,
                     )
 
                 grad_qm = grad_vac + dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
@@ -1413,8 +1416,8 @@ class EMLECalculator:
 
             # Compute the embedding contributions.
             E = self._emle_mm(atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell, charge)
-            dE_dxyz_qm, dE_dxyz_mm = _torch.autograd.grad(
-                E.sum(), (xyz_qm, xyz_mm), allow_unused=allow_unused
+            dE_dxyz_qm, dE_dxyz_mm, dE_dcharges_mm_mm = _torch.autograd.grad(
+                E.sum(), (xyz_qm, xyz_mm, charges_mm), allow_unused=allow_unused
             )
             dE_dxyz_qm_bohr = dE_dxyz_qm.cpu().numpy() * _BOHR_TO_ANGSTROM
             dE_dxyz_mm_bohr = (
@@ -1445,9 +1448,45 @@ class EMLECalculator:
             grad_qm = lam * grad_qm + (1 - lam) * (grad_mm_qm_vac + dE_dxyz_qm_bohr)
             grad_mm = lam * grad_mm + (1 - lam) * dE_dxyz_mm_bohr
 
-            return E_vac, grad_vac, E_tot, grad_qm, grad_mm, lam, E_mm, E_emle
+            # Compute the lambda-weighted dE/dcharges_mm for the chain-rule correction.
+            if dE_dcharges_mm is not None and dE_dcharges_mm_mm is not None:
+                dE_dcharges_mm_interp = (
+                    lam * dE_dcharges_mm.cpu().numpy()
+                    + (1 - lam) * dE_dcharges_mm_mm.cpu().numpy()
+                )
+            elif dE_dcharges_mm is not None:
+                dE_dcharges_mm_interp = lam * dE_dcharges_mm.cpu().numpy()
+            elif dE_dcharges_mm_mm is not None:
+                dE_dcharges_mm_interp = (1 - lam) * dE_dcharges_mm_mm.cpu().numpy()
+            else:
+                dE_dcharges_mm_interp = None
 
-        return E_vac, grad_vac, E_tot, grad_qm, grad_mm, None, None, None
+            return (
+                E_vac,
+                grad_vac,
+                E_tot,
+                grad_qm,
+                grad_mm,
+                lam,
+                E_mm,
+                E_emle,
+                dE_dcharges_mm_interp,
+            )
+
+        dE_dcharges_mm_np = (
+            dE_dcharges_mm.cpu().numpy() if dE_dcharges_mm is not None else None
+        )
+        return (
+            E_vac,
+            grad_vac,
+            E_tot,
+            grad_qm,
+            grad_mm,
+            None,
+            None,
+            None,
+            dE_dcharges_mm_np,
+        )
 
     def set_lambda_interpolate(self, lambda_interpolate):
         """
@@ -1550,6 +1589,12 @@ class EMLECalculator:
 
         force_mm: [[float, float, float]]
             The forces on the MM atoms in kJ/mol/nanometer.
+
+        dE_dcharges_mm: [float], optional
+            The derivative of the total energy with respect to the effective MM
+            charges in kJ/mol/e. Only present when MM atoms exist. Used by
+            Sire to apply the chain-rule force correction for the positional
+            dependence of the charge switching function.
         """
 
         # For performance, we assume that the input is already validated.
@@ -1575,7 +1620,7 @@ class EMLECalculator:
                 raise ValueError(msg)
 
         # Compute the energy and gradients.
-        E_vac, grad_vac, E_tot, grad_qm, grad_mm, lam, E_mm, E_emle = (
+        E_vac, grad_vac, E_tot, grad_qm, grad_mm, lam, E_mm, E_emle, dE_dcharges_mm = (
             self._calculate_energy_and_gradients(
                 atomic_numbers,
                 charges_mm,
@@ -1632,14 +1677,22 @@ class EMLECalculator:
                 _np.savetxt(f, pc_data, fmt="%14.6f")
                 f.write("\n")
 
-        # Return the energy and forces in OpenMM units.
-        return (
+        # Return the energy and forces in OpenMM units, plus optional dE/dcharges_mm
+        # for the chain-rule switching correction in Sire's C++ QM force.
+        result = (
             E_tot.item() * _HARTREE_TO_KJ_MOL,
             (-grad_qm * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_BOHR).tolist(),
             (
                 -grad_mm[:num_mm_atoms] * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_BOHR
             ).tolist(),
         )
+        if dE_dcharges_mm is not None:
+            # dE_dcharges_mm is in Hartree/e; convert to kJ/mol/e to match the
+            # energy units expected by the chain-rule correction in Sire.
+            result = result + (
+                (dE_dcharges_mm[:num_mm_atoms] * _HARTREE_TO_KJ_MOL).tolist(),
+            )
+        return result
 
     @staticmethod
     def _parse_orca_input(orca_input):
