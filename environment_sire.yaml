@@ -10,7 +10,6 @@ dependencies:
   - deepmd-kit
   - loguru
   - openmm >= 8.1
-  - nnpops
   - pip
   - psutil
   - pygit2

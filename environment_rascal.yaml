@@ -10,14 +10,13 @@ dependencies:
   - deepmd-kit
   - eigen
   - loguru
-  - nnpops
   - pip
   - psutil
   - pygit2
   - pytorch
   - python < 3.11
   - pyyaml
-  - torchani
+  - torchani >= 2.7
   - xtb-python
   - pip:
     - git+https://github.com/lab-cosmo/librascal.git
