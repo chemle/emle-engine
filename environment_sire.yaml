@@ -10,7 +10,6 @@ dependencies:
   - deepmd-kit
   - loguru
   - openmm >= 8.1
-  - nnpops
   - pip
   - psutil
   - pygit2
@@ -18,7 +17,7 @@ dependencies:
   - python
   - pyyaml
   - sire
-  - torchani
+  - torchani >= 2.7
   - xtb-python
   - pip:
     - mace-torch

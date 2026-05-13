@@ -28,6 +28,7 @@ __email__ = "kzinovjev@gmail.com"
 import numpy as _np
 import torch as _torch
 import torchani as _torchani
+from torchani.aev import ANIRadial as _ANIRadial, ANIAngular as _ANIAngular
 
 from torch import Tensor
 from typing import Tuple
@@ -178,17 +179,32 @@ class EMLEAEVComputer(_torch.nn.Module):
         # Create the AEV computer.
         if not self._is_external:
             hypers = hypers or get_default_hypers(device, dtype)
-            self._aev_computer = _torchani.AEVComputer(
-                hypers["Rcr"],
-                hypers["Rca"],
-                hypers["EtaR"],
-                hypers["ShfR"],
-                hypers["EtaA"],
-                hypers["Zeta"],
-                hypers["ShfA"],
-                hypers["ShfZ"],
-                num_species=num_species,
-            ).to(device=device, dtype=dtype)
+
+            def _to_float(x):
+                return float(x[0]) if hasattr(x, "__len__") else float(x)
+
+            def _to_list(x):
+                return x.tolist() if hasattr(x, "tolist") else list(x)
+
+            radial = _ANIRadial(
+                _to_float(hypers["EtaR"]),
+                _to_list(hypers["ShfR"]),
+                float(hypers["Rcr"]),
+            )
+            angular = _ANIAngular(
+                _to_float(hypers["EtaA"]),
+                _to_float(hypers["Zeta"]),
+                _to_list(hypers["ShfA"]),
+                _to_list(hypers["ShfZ"]),
+                float(hypers["Rca"]),
+            )
+            self._aev_computer = _torch.jit.script(
+                _torchani.AEVComputer(
+                    radial,
+                    angular,
+                    num_species=num_species,
+                ).to(device=device, dtype=dtype)
+            )
         # Create a dummy function to use in forward.
         else:
             self._aev_computer = self._dummy_aev_computer
@@ -229,7 +245,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if not self._is_external:
             zid_aev = self._zid_map[zid]
-            aev = self._aev_computer((zid_aev, xyz))[1]
+            aev = self._aev_computer(zid_aev, xyz)
         else:
             aev = self._aev
 
@@ -240,17 +256,17 @@ class EMLEAEVComputer(_torch.nn.Module):
         return aev
 
     @staticmethod
-    def _dummy_aev_computer(input: Tuple[Tensor, Tensor]) -> Tensor:
+    def _dummy_aev_computer(elem_idxs: Tensor, coords: Tensor) -> Tensor:
         """
         Dummy function to use in forward if AEVs are computed externally.
 
         Parameters
         ----------
 
-        zid: torch.Tensor (N_BATCH, MAX_N_ATOMS)
+        elem_idxs: torch.Tensor (N_BATCH, MAX_N_ATOMS)
             The species indices.
 
-        xyz: torch.Tensor (N_BATCH, MAX_N_ATOMS, 3)
+        coords: torch.Tensor (N_BATCH, MAX_N_ATOMS, 3)
             The atomic coordinates.
 
         Returns

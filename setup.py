@@ -11,6 +11,7 @@ setup(
     packages=find_packages(include=["emle", "emle.*", "bin/*"]),
     scripts=[
         "bin/emle-analyze",
+        "bin/emle-compile",
         "bin/emle-server",
         "bin/emle-stop",
         "bin/emle-train",
