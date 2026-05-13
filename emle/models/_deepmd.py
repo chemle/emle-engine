@@ -303,15 +303,6 @@ class DeePMDEMLE(_torch.nn.Module):
         # still needed to refresh EMLE's cached _device attribute.
         super().to(*args, **kwargs)
         self._emle = self._emle.to(*args, **kwargs)
-        for arg in args:
-            if isinstance(arg, _torch.device):
-                self._device = arg
-            elif isinstance(arg, _torch.dtype):
-                self._dtype = arg
-        if "device" in kwargs and kwargs["device"] is not None:
-            self._device = _torch.device(kwargs["device"])
-        if "dtype" in kwargs and kwargs["dtype"] is not None:
-            self._dtype = kwargs["dtype"]
         return self
 
     def cpu(self, **kwargs):
