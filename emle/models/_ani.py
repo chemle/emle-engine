@@ -35,7 +35,7 @@ from torch import Tensor
 from typing import Optional, Tuple
 
 from ._emle import EMLE as _EMLE
-from . import _patches as _patches
+from . import _patches
 
 try:
     import NNPOps as _NNPOps
