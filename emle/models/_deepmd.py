@@ -58,7 +58,7 @@ class DeePMDEMLE(_torch.nn.Module):
         self,
         emle_model=None,
         emle_method="electrostatic",
-        alpha_mode="species",
+        alpha_mode="fixed",
         mm_charges=None,
         qm_charge=0,
         deepmd_model=None,

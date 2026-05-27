@@ -63,9 +63,12 @@ parser.add_argument(
 parser.add_argument(
     "--alpha-mode",
     type=str,
-    choices=["species", "reference"],
-    default="species",
-    help="Method for calculating atomic polarizabilities",
+    choices=["fixed", "flexible", "species", "reference"],
+    default="fixed",
+    help=(
+        "Method for calculating atomic polarizabilities. "
+        "('species'/'reference' are deprecated aliases for 'fixed'/'flexible')"
+    ),
 )
 parser.add_argument(
     "--alpha", action="store_true", help="Extract molecular dipolar polarizabilities"

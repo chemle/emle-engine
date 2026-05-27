@@ -37,6 +37,7 @@ from torch import Tensor
 from typing import Union, Optional, Dict
 
 from . import EMLEBase as _EMLEBase
+from ._utils import _sanitize_alpha_mode
 
 try:
     import NNPOps as _NNPOps
@@ -73,7 +74,7 @@ class EMLE(_torch.nn.Module):
         self,
         model=None,
         method="electrostatic",
-        alpha_mode="species",
+        alpha_mode="fixed",
         atomic_numbers=None,
         qm_charge=0,
         mm_charges=None,
@@ -108,9 +109,9 @@ class EMLE(_torch.nn.Module):
 
         alpha_mode: str
             How atomic polarizabilities are calculated.
-                "species":
+                "fixed":
                     one volume scaling factor is used for each species
-                "reference":
+                "flexible":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
 
@@ -161,14 +162,7 @@ class EMLE(_torch.nn.Module):
             )
         self._method = method
 
-        if alpha_mode is None:
-            alpha_mode = "species"
-        if not isinstance(alpha_mode, str):
-            raise TypeError("'alpha_mode' must be of type 'str'")
-        alpha_mode = alpha_mode.lower().replace(" ", "")
-        if alpha_mode not in ["species", "reference"]:
-            raise ValueError("'alpha_mode' must be 'species' or 'reference'")
-        self._alpha_mode = alpha_mode
+        self._alpha_mode = _sanitize_alpha_mode(alpha_mode)
 
         if atomic_numbers is not None:
             if isinstance(atomic_numbers, (_np.ndarray, _torch.Tensor)):

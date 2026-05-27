@@ -27,12 +27,34 @@ __email__ = "lester.hedges@gmail.com"
 
 import torch as _torch
 
+from loguru import logger as _logger
+
 from typing import Optional, Tuple
 
 try:
     import NNPOps.neighbors.getNeighborPairs as _getNeighborPairs
 except:
     pass
+
+
+_DEPRECATED_ALPHA_MODES = {"species": "fixed", "reference": "flexible"}
+
+
+def _sanitize_alpha_mode(alpha_mode, default="fixed"):
+    if alpha_mode is None:
+        return default
+    if not isinstance(alpha_mode, str):
+        raise TypeError("'alpha_mode' must be of type 'str'")
+    alpha_mode = alpha_mode.lower().replace(" ", "")
+    if alpha_mode in _DEPRECATED_ALPHA_MODES:
+        new_mode = _DEPRECATED_ALPHA_MODES[alpha_mode]
+        _logger.warning(
+            f"alpha_mode='{alpha_mode}' is deprecated; use '{new_mode}' instead."
+        )
+        alpha_mode = new_mode
+    if alpha_mode not in ("fixed", "flexible"):
+        raise ValueError("'alpha_mode' must be 'fixed' or 'flexible'")
+    return alpha_mode
 
 
 def _get_neighbor_pairs(

@@ -98,7 +98,7 @@ class MACEEMLE(_torch.nn.Module):
         self,
         emle_model=None,
         emle_method="electrostatic",
-        alpha_mode="species",
+        alpha_mode="fixed",
         mm_charges=None,
         qm_charge=0,
         mace_model=None,
@@ -131,9 +131,9 @@ class MACEEMLE(_torch.nn.Module):
 
         alpha_mode: str
             How atomic polarizabilities are calculated.
-                "species":
+                "fixed":
                     one volume scaling factor is used for each species
-                "reference":
+                "flexible":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environmentw
 
@@ -845,13 +845,12 @@ class MACEEMLEJoint(_torch.nn.Module):
             )
 
         # Create an instance of the EMLE model.
-        # alpha_mode is fixed to "species" here: MACEEMLEJoint currently only
-        # supports the species mode. Re-expose as a parameter once reference
-        # mode is wired through MACE.
+        # alpha_mode is hard-coded to "fixed" here: MACEEMLEJoint currently only
+        # supports the fixed mode.
         self._emle = _EMLE(
             model=emle_model,
             method=emle_method,
-            alpha_mode="species",
+            alpha_mode="fixed",
             atomic_numbers=(atomic_numbers if atomic_numbers is not None else None),
             mm_charges=mm_charges,
             qm_charge=qm_charge,

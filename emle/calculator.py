@@ -79,7 +79,7 @@ class EMLECalculator:
         self,
         model=None,
         method="electrostatic",
-        alpha_mode="species",
+        alpha_mode="fixed",
         use_dipoles=False,
         atomic_numbers=None,
         qm_charge=0,
@@ -149,9 +149,9 @@ class EMLECalculator:
 
         alpha_mode: str
             How atomic polarizabilities are calculated.
-                "species":
+                "fixed":
                     one volume scaling factor is used for each species
-                "reference":
+                "flexible":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
 
