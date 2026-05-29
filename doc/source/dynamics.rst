@@ -248,8 +248,8 @@ Alpha mode
 ----------
 
 We support two methods for the calculation of atomic polarisabilities. The default,
-``species``, uses a single volume scaling factor for each species. Alternatively,
-``reference``, calculates the scaling factors using Gaussian Process Regression
+``fixed``, uses a single volume scaling factor for each species. Alternatively,
+``flexible``, calculates the scaling factors using Gaussian Process Regression
 (GPR) using the values learned for each reference environment. The alpha mode can
 be specified using the ``--alpha-mode`` command-line argument, or via the
 ``EMLE_ALPHA_MODE`` environment variable.

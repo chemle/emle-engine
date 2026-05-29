@@ -31,6 +31,8 @@ from typing import List, Optional, Tuple, Union
 import torch as _torch
 from torch import Tensor as _Tensor
 
+from .models._utils import _sanitize_alpha_mode
+
 
 class _CustomMLMMWrapper(_torch.nn.Module):
     """Adapts an EMLE composite (ANI2xEMLE / MACEEMLE) to the torchani-amber
@@ -127,8 +129,8 @@ class EMLECompiler:
             ``"nonpol"``, or ``"mm"``.
 
         alpha_mode : str, optional
-            Polarizability mode: ``"species"`` or ``"reference"``. Defaults
-            to ``"species"`` when omitted. Must be ``"species"`` (or omitted)
+            Polarizability mode: ``"fixed"`` or ``"flexible"``. Defaults
+            to ``"fixed"`` when omitted. Must be ``"fixed"`` (or omitted)
             for the ``"emle-mace"`` backend, which hard-codes that mode.
 
         atomic_numbers : list of int, optional
@@ -181,15 +183,17 @@ class EMLECompiler:
         if use_dipoles and backend != "emle-mace":
             raise ValueError("'use_dipoles' is only valid for backend='emle-mace'.")
 
+        alpha_mode = _sanitize_alpha_mode(alpha_mode, default=None)
+
         if backend == "emle-mace":
-            if alpha_mode is not None and alpha_mode != "species":
+            if alpha_mode is not None and alpha_mode != "fixed":
                 raise ValueError(
-                    "backend='emle-mace' requires alpha_mode='species' "
-                    "(MACEEMLEJoint hard-codes the species mode)."
+                    "backend='emle-mace' requires alpha_mode='fixed' "
+                    "(MACEEMLEJoint hard-codes the fixed mode)."
                 )
         else:
             if alpha_mode is None:
-                alpha_mode = "species"
+                alpha_mode = "fixed"
 
         self._device = _torch.device(device) if device else _torch.device("cpu")
         self._composite = self._build_composite(

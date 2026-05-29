@@ -73,7 +73,7 @@ class ANI2xEMLE(_torch.nn.Module):
         self,
         emle_model=None,
         emle_method="electrostatic",
-        alpha_mode="species",
+        alpha_mode="fixed",
         mm_charges=None,
         qm_charge=0,
         model_index=None,
@@ -107,9 +107,9 @@ class ANI2xEMLE(_torch.nn.Module):
 
         alpha_mode: str
             How atomic polarizabilities are calculated.
-                "species":
+                "fixed":
                     one volume scaling factor is used for each species
-                "reference":
+                "flexible":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
 

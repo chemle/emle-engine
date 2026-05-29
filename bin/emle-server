@@ -218,8 +218,11 @@ parser.add_argument(
 parser.add_argument(
     "--alpha-mode",
     type=str,
-    help="the alpha mode to use for the embedding method",
-    choices=["species", "reference"],
+    help=(
+        "the alpha mode to use for the embedding method "
+        "('species'/'reference' are deprecated aliases for 'fixed'/'flexible')"
+    ),
+    choices=["fixed", "flexible", "species", "reference"],
     required=False,
 )
 parser.add_argument(

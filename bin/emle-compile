@@ -98,8 +98,11 @@ def _build_parser():
     )
     p.add_argument(
         "--alpha-mode", type=str, required=False,
-        choices=["species", "reference"],
-        help="Polarizability mode. Default: species."
+        choices=["fixed", "flexible", "species", "reference"],
+        help=(
+            "Polarizability mode. Default: fixed. "
+            "('species'/'reference' are deprecated aliases for 'fixed'/'flexible')"
+        )
     )
     p.add_argument(
         "--atomic-numbers", type=str, nargs="*", required=False,
@@ -185,7 +188,7 @@ def main(argv=None):
     if args.get("method") is None:
         args["method"] = "electrostatic"
     # alpha_mode default is resolved inside EMLECompiler so the emle-mace
-    # backend can reject an explicit non-"species" choice.
+    # backend can reject an explicit non-"fixed" choice.
     if args.get("qm_charge") is None:
         args["qm_charge"] = 0
 

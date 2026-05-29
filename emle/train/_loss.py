@@ -24,6 +24,8 @@
 
 import torch as _torch
 
+from ..models._utils import _sanitize_alpha_mode
+
 
 class _BaseLoss(_torch.nn.Module):
     """
@@ -165,8 +167,8 @@ class TholeLoss(_BaseLoss):
     emle_base: EMLEBase
         EMLEBase object.
 
-    mode: str, optional, default='species'
-        Alpha mode. Either 'species' or 'reference'.
+    mode: str, optional, default='fixed'
+        Alpha mode. Either 'fixed' or 'flexible'.
 
     loss: torch.nn.Module, optional, default=torch.nn.MSELoss()
         Loss function.
@@ -181,7 +183,7 @@ class TholeLoss(_BaseLoss):
         Loss function.
     """
 
-    def __init__(self, emle_base, mode="species", loss=_torch.nn.MSELoss()):
+    def __init__(self, emle_base, mode="fixed", loss=_torch.nn.MSELoss()):
         super().__init__()
 
         from ..models._emle_base import EMLEBase
@@ -274,12 +276,9 @@ class TholeLoss(_BaseLoss):
         Parameters
         ----------
         mode: str
-            Alpha mode. Either 'species' or 'reference'.
+            Alpha mode. Either 'fixed' or 'flexible'.
         """
-        mode = mode.lower().replace(" ", "")
-        if mode not in ("species", "reference"):
-            raise ValueError("TholeLoss: mode must be either 'species' or 'reference'")
-        self._emle_base.alpha_mode = mode
+        self._emle_base.alpha_mode = _sanitize_alpha_mode(mode)
 
     def forward(
         self,

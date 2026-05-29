@@ -36,6 +36,8 @@ from typing import Tuple, Optional
 
 import torchani as _torchani
 
+from ._utils import _sanitize_alpha_mode
+
 try:
     import NNPOps as _NNPOps
 
@@ -65,7 +67,7 @@ class EMLEBase(_torch.nn.Module):
         q_core,
         emle_aev_computer=None,
         species=None,
-        alpha_mode="species",
+        alpha_mode="fixed",
         device=None,
         dtype=None,
     ):
@@ -89,9 +91,9 @@ class EMLEBase(_torch.nn.Module):
 
         alpha_mode: str
             How atomic polarizabilities are calculated.
-                "species":
+                "fixed":
                     one volume scaling factor is used for each species
-                "reference":
+                "flexible":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
 
@@ -151,14 +153,7 @@ class EMLEBase(_torch.nn.Module):
             )
 
         # Validate the alpha mode.
-        if alpha_mode is None:
-            alpha_mode = "species"
-        if not isinstance(alpha_mode, str):
-            raise TypeError("'alpha_mode' must be of type 'str'")
-        alpha_mode = alpha_mode.lower().replace(" ", "")
-        if alpha_mode not in ["species", "reference"]:
-            raise ValueError("'alpha_mode' must be 'species' or 'reference'")
-        self._alpha_mode = alpha_mode
+        self._alpha_mode = _sanitize_alpha_mode(alpha_mode)
 
         # Validate the AEV computer.
         if emle_aev_computer is not None:
@@ -196,13 +191,13 @@ class EMLEBase(_torch.nn.Module):
         self.ref_values_chi = _torch.nn.Parameter(params["ref_values_chi"])
         self.k_Z = _torch.nn.Parameter(params["k_Z"])
 
-        if self._alpha_mode == "reference":
+        if self._alpha_mode == "flexible":
             try:
                 self.ref_values_sqrtk = _torch.nn.Parameter(params["sqrtk_ref"])
             except:
                 msg = (
                     "Missing 'sqrtk_ref' key in params. This is required when "
-                    "using 'reference' alpha mode."
+                    "using 'flexible' alpha mode."
                 )
                 raise ValueError(msg)
 
@@ -236,7 +231,7 @@ class EMLEBase(_torch.nn.Module):
         ref_mean_s, c_s = self._get_c(n_ref, self.ref_values_s, Kinv)
         ref_mean_chi, c_chi = self._get_c(n_ref, self.ref_values_chi, Kinv)
 
-        if self._alpha_mode == "species":
+        if self._alpha_mode == "fixed":
             ref_mean_sqrtk = _torch.zeros_like(ref_mean_s, dtype=dtype, device=device)
             c_sqrtk = _torch.zeros_like(c_s, dtype=dtype, device=device)
         else:
@@ -435,7 +430,7 @@ class EMLEBase(_torch.nn.Module):
 
         k = self.k_Z[species_id]
 
-        if self._alpha_mode == "reference":
+        if self._alpha_mode == "flexible":
             k_scale = (
                 self._gpr(aev, self._ref_mean_sqrtk, self._c_sqrtk, species_id) ** 2
             )
