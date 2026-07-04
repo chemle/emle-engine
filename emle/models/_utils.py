@@ -32,9 +32,11 @@ from loguru import logger as _logger
 from typing import Optional, Tuple
 
 try:
-    import NNPOps.neighbors.getNeighborPairs as _getNeighborPairs
+    from NNPOps.neighbors import getNeighborPairs as _getNeighborPairs
+
+    _has_neighbor_pairs = True
 except:
-    pass
+    _has_neighbor_pairs = False
 
 
 _DEPRECATED_ALPHA_MODES = {"species": "fixed", "reference": "flexible"}
