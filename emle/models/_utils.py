@@ -30,9 +30,11 @@ import torch as _torch
 from typing import Optional, Tuple
 
 try:
-    import NNPOps.neighbors.getNeighborPairs as _getNeighborPairs
+    from NNPOps.neighbors import getNeighborPairs as _getNeighborPairs
+
+    _has_neighbor_pairs = True
 except:
-    pass
+    _has_neighbor_pairs = False
 
 
 def _get_neighbor_pairs(
