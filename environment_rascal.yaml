@@ -18,7 +18,7 @@ dependencies:
   - python < 3.11
   - pyyaml
   - setuptools < 81
-  - torchani < 2.7
+  - torchani >=2.6,<2.7
   - xtb-python
   - pip:
     - git+https://github.com/lab-cosmo/librascal.git
