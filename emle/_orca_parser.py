@@ -254,30 +254,51 @@ class ORCAParser:
     def _get_file(self, name, suffix):
         return self._tar.extractfile(f"{name}.{suffix}")
 
-    def get_E_vac(self):
+    def get_E_vac(self, energy_unit=_ase.units.eV):
         """
         Parse the gas-phase ORCA output for each configuration and return the
-        total energy in Hartree.
+        total energy.
+
+        Parameters
+        ----------
+
+        energy_unit: float
+            ASE energy unit for the returned values (e.g. ase.units.eV or
+            ase.units.Hartree). Defaults to ase.units.eV; eV is the default
+            because this method is used mainly for MACE model training, which
+            works in eV.
 
         Returns
         -------
 
         E_tot: numpy.ndarray (N_CONFIGS,)
-            Total gas-phase energy per configuration, in Hartree.
+            Total gas-phase energy per configuration, in energy_unit (eV by
+            default).
         """
         E_tot = [
-            self._get_E_vac_from_out(self._get_file(name, "vac.orca"))
+            self._get_E_vac_from_out(self._get_file(name, "vac.orca"), energy_unit)
             for name in self.names
         ]
         return _np.array(E_tot)
 
-    def _get_E_vac_from_out(self, f):
+    def _get_E_vac_from_out(self, f, energy_unit=_ase.units.eV):
         """
         Extract the total energy from an ORCA gas-phase output file.
+
+        Reads the FINAL SINGLE POINT ENERGY, which includes the D3BJ dispersion
+        correction, not the SCF "Total Energy", which does not.
+
+        Parameters
+        ----------
+
+        energy_unit: float
+            ASE energy unit for the returned value. Defaults to ase.units.eV;
+            eV is the default because this function is used mainly for MACE
+            model training, which works in eV.
         """
-        E_prefix = b"Total Energy       :"
+        E_prefix = b"FINAL SINGLE POINT ENERGY"
         E_line = [line for line in f if line.startswith(E_prefix)]
-        return float(E_line[0].split()[-2])
+        return float(E_line[0].split()[-1]) * _ase.units.Hartree / energy_unit
 
     def get_forces(self):
         """
