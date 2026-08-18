@@ -201,6 +201,12 @@ class EMLEAnalyzer:
         self.atomic_alpha = 1.0 / _torch.diagonal(self.A_thole, dim1=1, dim2=2)[:, ::3]
         self.alpha = self._get_mol_alpha(self.A_thole, self.atomic_numbers)
 
+        self.mu_vac = _torch.sum(
+            (self.q_core + self.q_val)[:, :, None] * qm_xyz_bohr, dim=1
+        )
+        if use_dipoles:
+            self.mu_vac = self.mu_vac + _torch.sum(self.mu, dim=1)
+
         mask = (self.atomic_numbers > 0).unsqueeze(-1)
         mesh_data = emle_base._get_mesh_data(qm_xyz_bohr, pc_xyz_bohr, self.s, mask)
         self.e_static = (
@@ -222,6 +228,10 @@ class EMLEAnalyzer:
             )
             * _HARTREE_TO_KCAL_MOL
         )
+        mu_ind = EMLEBase._get_mu_ind(
+            self.A_thole, mesh_data, self.pc_charges, self.s, mask
+        )
+        self.mu_induced = _torch.sum(mu_ind, dim=1)
 
         if parser:
             self.e_static_mbis = (
@@ -245,6 +255,8 @@ class EMLEAnalyzer:
             "q_total",
             "atomic_alpha",
             "alpha",
+            "mu_vac",
+            "mu_induced",
             "e_backend",
             "e_static",
             "e_static_mu",
