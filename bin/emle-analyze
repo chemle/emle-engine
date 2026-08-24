@@ -161,6 +161,8 @@ result = {
     "q_val_emle": analyzer.q_val,
     "atomic_alpha_emle": analyzer.atomic_alpha,
     "alpha_emle": analyzer.alpha,
+    "mu_vac_emle": analyzer.mu_vac,
+    "mu_induced_emle": analyzer.mu_induced,
 }
 if args.use_dipoles:
     result["mu_emle"] = analyzer.mu
