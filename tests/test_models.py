@@ -1,8 +1,8 @@
 import os
+
 import numpy
 import pytest
 import torch
-
 from emle.models import *
 
 dtype = torch.float32
@@ -67,6 +67,13 @@ try:
     has_e3nn = True
 except:
     has_e3nn = False
+
+try:
+    import sire as _sire
+
+    has_sire = True
+except:
+    has_sire = False
 
 MACE_EMLE_MODEL = "tests/input/mace-emle.model"
 has_emle_mace_model = os.path.exists(MACE_EMLE_MODEL)
@@ -221,3 +228,111 @@ def test_emle_mace(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
         xyz_qm.unsqueeze(0).repeat(2, 1, 1),
         xyz_mm.unsqueeze(0).repeat(2, 1, 1),
     )
+
+
+@pytest.mark.skipif(not has_sire, reason="sire is not installed")
+@pytest.mark.parametrize("use_switching_function", [False, True])
+def test_preprocess_vs_sire(tmp_path, monkeypatch, use_switching_function):
+    """
+    Check that the pre-processing performed by EMLE.forward when
+    'preprocess=True' (make whole, minimum image, hard cutoff) reproduces
+    the electrostatic embedding energy computed by a real Sire QM/MM engine.
+    """
+    import ase
+    import openmm
+
+    import sire as sr
+
+    mols = sr.load_test_files("ala.crd", "ala.top")
+    cutoff = 7.5
+    switch_width = 0.2
+
+    # Instantiate the default EMLE model.
+    model = EMLE(cutoff=cutoff, switch_width=switch_width, dtype=dtype, device=device)
+
+    # 'sr.qm.emle' writes a TorchScript copy of the model to a file named
+    # after the model's class in the current working directory.
+    monkeypatch.chdir(tmp_path)
+
+    # Reference calculation.
+    qm_mols, engine = sr.qm.emle(
+        mols,
+        mols[0],
+        model,
+        cutoff=f"{cutoff}A",
+        neighbour_list_frequency=0,
+        switch_width=switch_width if use_switching_function else 0.0,
+    )
+
+    # Build the OpenMM system/context.
+    d = qm_mols.dynamics(
+        timestep="1fs",
+        constraint="none",
+        platform="cpu",
+        qm_engine=engine,
+        lambda_interpolate=1.0,
+    )
+    context = d._d._omm_mols
+
+    # Get the EMLE force from the OpenMM system.
+    qm_forces = [f for f in context.getSystem().getForces() if "QMForce" in f.getName()]
+    assert len(qm_forces) == 1, "Could not find the QM force in the OpenMM system"
+    qm_force = qm_forces[0]
+
+    # Get the EMLE energy from the OpenMM context.
+    state = context.getState(getEnergy=True, groups={qm_force.getForceGroup()})
+    energy_ref_kj_mol = state.getPotentialEnergy().value_in_unit(
+        openmm.unit.kilojoule_per_mole
+    )
+
+    # Convert from kJ/mol to Hartree, the energy unit used by the EMLE model.
+    hartree_to_kj_mol = ase.units.Hartree / ase.units.kJ * ase.units.mol
+    energy_ref = torch.tensor(
+        energy_ref_kj_mol / hartree_to_kj_mol, dtype=dtype, device=device
+    )
+
+    # Test calculation.
+    atomic_numbers = torch.tensor(
+        [element.num_protons() for element in mols[0].property("element")],
+        dtype=torch.int64,
+        device=device,
+    )
+    xyz_qm = torch.tensor(sr.io.get_coords_array(mols[0]), dtype=dtype, device=device)
+
+    mm_atoms_all = mols["water"].atoms()
+
+    charges_mm_all = torch.tensor(
+        [atom.property("charge").value() for atom in mm_atoms_all],
+        dtype=dtype,
+        device=device,
+    )
+    xyz_mm_all = torch.tensor(
+        sr.io.get_coords_array(mm_atoms_all), dtype=dtype, device=device
+    )
+
+    # Get the cell.
+    dims = mols.property("space").dimensions()
+    cell = torch.diag(
+        torch.tensor(
+            [dims.x().value(), dims.y().value(), dims.z().value()],
+            dtype=dtype,
+            device=device,
+        )
+    )
+
+    # Make sure the model can be converted to TorchScript.
+    model = torch.jit.script(model)
+
+    energy_test = model(
+        atomic_numbers,
+        charges_mm_all,
+        xyz_qm,
+        xyz_mm_all,
+        cell,
+        0,
+        None,
+        True,
+        use_switching_function,
+    )
+
+    assert torch.allclose(energy_ref, energy_test.sum(), atol=1e-3)
