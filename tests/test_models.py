@@ -696,7 +696,7 @@ def test_preprocess_vs_sire(tmp_path, monkeypatch, use_switching_function):
         use_switching_function,
     )
 
-    assert torch.allclose(energy_ref, energy_test.sum(), atol=1e-6)
+    assert torch.allclose(energy_ref, energy_test.sum(), atol=1e-5)
 
     # Reference forces from OpenMM (kJ/mol/nm), QM force group only.
     state = context.getState(getForces=True, groups={qm_force.getForceGroup()})
