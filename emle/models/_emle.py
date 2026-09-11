@@ -27,17 +27,18 @@ __email__ = "lester.hedges@gmail.com"
 
 __all__ = ["EMLE"]
 
-import numpy as _np
 import os as _os
+from typing import Dict, Optional, Union
+
+import numpy as _np
 import scipy.io as _scipy_io
 import torch as _torch
 import torchani as _torchani
-
 from torch import Tensor
-from typing import Union, Optional, Dict
 
-from . import _patches
 from . import EMLEBase as _EMLEBase
+from . import _patches
+from ._utils import _apply_switching_function, _preprocess_coordinates
 
 # Monkey-patch the TorchANI BuiltInModel and BuiltinEnsemble classes so that
 # they call self.aev_computer using args only to allow forward hooks to work
@@ -86,6 +87,8 @@ class EMLE(_torch.nn.Module):
         atomic_numbers=None,
         qm_charge=0,
         mm_charges=None,
+        cutoff=None,
+        switch_width=0.2,
         device=None,
         dtype=None,
         create_aev_calculator=True,
@@ -136,6 +139,18 @@ class EMLE(_torch.nn.Module):
         mm_charges: List[float], Tuple[Float], numpy.ndarray, torch.Tensor
             List of MM charges for atoms in the QM region in units of mod
             electron charge. This is required if the 'mm' method is specified.
+
+        cutoff: float
+            The QM/MM cutoff distance in Angstrom. This is only used when
+            'preprocess' or 'use_switching_function' is requested when
+            calling the forward method, in which case it is required. MM
+            atoms further than this distance from the nearest QM atom will
+            not contribute to the embedding.
+
+        switch_width: float
+            The fraction of 'cutoff' over which the switching function (if
+            requested) scales the MM charges smoothly to zero, i.e. the
+            switching region is [(1 - switch_width) * cutoff, cutoff].
 
         device: torch.device
             The device on which to run the model.
@@ -213,6 +228,20 @@ class EMLE(_torch.nn.Module):
                 raise ValueError("'mm_charges' must be of type 'numpy.float64'")
             if mm_charges.ndim != 1:
                 raise ValueError("'mm_charges' must be a 1D array")
+
+        if cutoff is not None:
+            if not isinstance(cutoff, (int, float)):
+                raise TypeError("'cutoff' must be of type 'float'")
+            if cutoff <= 0.0:
+                raise ValueError("'cutoff' must be greater than zero")
+            cutoff = float(cutoff)
+        self._cutoff = cutoff
+
+        if not isinstance(switch_width, (int, float)):
+            raise TypeError("'switch_width' must be of type 'float'")
+        if not 0.0 < switch_width <= 1.0:
+            raise ValueError("'switch_width' must be in the range (0, 1]")
+        self._switch_width = float(switch_width)
 
         if model is not None:
             if not isinstance(model, str):
@@ -420,6 +449,8 @@ class EMLE(_torch.nn.Module):
         cell: Optional[Tensor] = None,
         qm_charge: Union[int, Tensor] = 0,
         external_params: Optional[Dict[str, Tensor]] = None,
+        preprocess: bool = False,
+        use_switching_function: bool = False,
     ) -> Tensor:
         """
         Computes the static and induced EMLE energy components.
@@ -468,6 +499,20 @@ class EMLE(_torch.nn.Module):
             When None, 's', 'q_core', 'q_val', and the Thole tensor are
             predicted by EMLEBase (original behaviour).
 
+        preprocess: bool
+            Whether to pre-process the input coordinates.
+            This makes whole the QM region, re-images the MM atoms
+            to their minimum image position with respect to the QM region
+            centre, and applies a hard distance cutoff, zeroing the charges
+            of MM atoms further than 'cutoff' (set in the constructor) from
+            the nearest QM atom. Requires 'cell' to be specified and 'cutoff'
+            to have been set when the model was created.
+
+        use_switching_function: bool
+            Whether to scale the MM charges using a smooth switching
+            function.
+            Requires 'cutoff' to have been set when the model was created.
+
         Returns
         -------
 
@@ -496,6 +541,42 @@ class EMLE(_torch.nn.Module):
                     cell = cell.repeat(batch_size, 1, 1).to(self._device)
             else:
                 raise TypeError("'cell' must be of type 'torch.Tensor'")
+
+        # Pre-process the coordinates.
+        if preprocess:
+            if cell is None:
+                raise ValueError("'cell' must be specified when 'preprocess' is True")
+            cutoff = self._cutoff
+            if cutoff is None:
+                raise ValueError(
+                    "'cutoff' must be specified when creating the EMLE model "
+                    "in order to use 'preprocess'"
+                )
+            self._xyz_qm, self._xyz_mm, self._charges_mm = _preprocess_coordinates(
+                self._atomic_numbers,
+                self._charges_mm,
+                self._xyz_qm,
+                self._xyz_mm,
+                cell,
+                cutoff,
+            )
+
+        # Apply the switching function to the MM charges.
+        if use_switching_function:
+            cutoff = self._cutoff
+            if cutoff is None:
+                raise ValueError(
+                    "'cutoff' must be specified when creating the EMLE model "
+                    "in order to use 'use_switching_function'"
+                )
+            self._charges_mm = _apply_switching_function(
+                self._atomic_numbers,
+                self._charges_mm,
+                self._xyz_qm,
+                self._xyz_mm,
+                cutoff,
+                self._switch_width,
+            )
 
         # Ensure qm_charge is a tensor and repeat for batch size if necessary
         if isinstance(qm_charge, int):
