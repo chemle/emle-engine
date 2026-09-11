@@ -652,7 +652,7 @@ def test_preprocess_vs_sire(tmp_path, monkeypatch, use_switching_function):
         energy_ref_kj_mol / hartree_to_kj_mol, dtype=dtype, device=device
     )
 
-    # Test calculation.
+    # Test energies.
     atomic_numbers = torch.tensor(
         [element.num_protons() for element in mols[0].property("element")],
         dtype=torch.int64,
@@ -696,4 +696,36 @@ def test_preprocess_vs_sire(tmp_path, monkeypatch, use_switching_function):
         use_switching_function,
     )
 
-    assert torch.allclose(energy_ref, energy_test.sum(), atol=1e-3)
+    assert torch.allclose(energy_ref, energy_test.sum(), atol=1e-6)
+
+    # Reference forces from OpenMM (kJ/mol/nm), QM force group only.
+    state = context.getState(getForces=True, groups={qm_force.getForceGroup()})
+    forces_ref = torch.tensor(
+        state.getForces(asNumpy=True).value_in_unit(
+            openmm.unit.kilojoule_per_mole / openmm.unit.nanometer
+        ),
+        dtype=dtype,
+        device=device,
+    )
+
+    # Convert to Hartree/Å.
+    forces_ref = forces_ref / hartree_to_kj_mol / 10.0
+
+    # Model forces via autograd.
+    xyz_qm.requires_grad_(True)
+    xyz_mm_all.requires_grad_(True)
+    energy_test = model(
+        atomic_numbers,
+        charges_mm_all,
+        xyz_qm,
+        xyz_mm_all,
+        cell,
+        0,
+        None,
+        True,
+        use_switching_function,
+    )
+    grad_qm, grad_mm = torch.autograd.grad(energy_test.sum(), [xyz_qm, xyz_mm_all])
+    forces_test = -torch.cat([grad_qm, grad_mm])
+
+    assert torch.allclose(forces_ref, forces_test, atol=1e-6)
