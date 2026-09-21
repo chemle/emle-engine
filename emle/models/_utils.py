@@ -123,7 +123,9 @@ def _get_neighbor_pairs(
     return edge_index, shifts
 
 
-def _minimum_image(delta: _torch.Tensor, cell: _torch.Tensor) -> _torch.Tensor:
+def _minimum_image(
+    delta: _torch.Tensor, cell: Optional[_torch.Tensor]
+) -> _torch.Tensor:
     """
     Apply the minimum image convention to a batch of displacement vectors.
 
@@ -133,8 +135,10 @@ def _minimum_image(delta: _torch.Tensor, cell: _torch.Tensor) -> _torch.Tensor:
     delta: torch.Tensor (BATCH, N, 3)
         Displacement vectors.
 
-    cell: torch.Tensor (BATCH, 3, 3)
-        The simulation cell vectors. Rows are the lattice vectors.
+    cell: Optional[torch.Tensor] (BATCH, 3, 3)
+        The simulation cell vectors. Rows are the lattice vectors. If None,
+        the system is treated as non-periodic and 'delta' is returned
+        unchanged.
 
     Returns
     -------
@@ -143,12 +147,14 @@ def _minimum_image(delta: _torch.Tensor, cell: _torch.Tensor) -> _torch.Tensor:
         The displacement vectors re-imaged so that each lies within half
         a cell width of the origin along each lattice direction.
     """
+    if cell is None:
+        return delta
     frac = _torch.matmul(delta, _torch.linalg.inv(cell))
     frac = frac - _torch.round(frac)
     return _torch.matmul(frac, cell)
 
 
-def _make_whole(xyz_qm: _torch.Tensor, cell: _torch.Tensor) -> _torch.Tensor:
+def _make_whole(xyz_qm: _torch.Tensor, cell: Optional[_torch.Tensor]) -> _torch.Tensor:
     """
     Unwrap the QM region so that it isn't split across periodic boundaries.
 
@@ -158,8 +164,9 @@ def _make_whole(xyz_qm: _torch.Tensor, cell: _torch.Tensor) -> _torch.Tensor:
     xyz_qm: torch.Tensor (BATCH, N_QM_ATOMS, 3)
         The (possibly wrapped) positions of the QM atoms in Angstrom.
 
-    cell: torch.Tensor (BATCH, 3, 3)
-        The simulation cell vectors in Angstrom.
+    cell: Optional[torch.Tensor] (BATCH, 3, 3)
+        The simulation cell vectors in Angstrom. If None, the system is
+        treated as non-periodic and 'xyz_qm' is returned unchanged.
 
     Returns
     -------
@@ -167,6 +174,8 @@ def _make_whole(xyz_qm: _torch.Tensor, cell: _torch.Tensor) -> _torch.Tensor:
     torch.Tensor (BATCH, N_QM_ATOMS, 3)
         The unwrapped ("whole") positions of the QM atoms.
     """
+    if cell is None:
+        return xyz_qm
     # The first atom in each batch is used as the reference.
     # This follows the approach used by Sire.
     reference = xyz_qm[:, :1, :]
@@ -209,14 +218,15 @@ def _preprocess_coordinates(
     charges_mm: _torch.Tensor,
     xyz_qm: _torch.Tensor,
     xyz_mm: _torch.Tensor,
-    cell: _torch.Tensor,
+    cell: Optional[_torch.Tensor],
     cutoff: float,
 ) -> Tuple[_torch.Tensor, _torch.Tensor, _torch.Tensor]:
     """
     Pre-process the coordinates.
 
     This makes whole the QM region, re-images the MM atoms to
-    their minimum image position with respect to the QM region centre, and
+    their minimum image position with respect to the QM region centre (both
+    skipped if 'cell' is None, i.e. for non-periodic systems), and
     applies a hard distance cutoff, zeroing the charges of MM atoms further
     than 'cutoff' from the nearest QM atom.
 
@@ -236,8 +246,10 @@ def _preprocess_coordinates(
     xyz_mm: torch.Tensor (BATCH, N_MM_ATOMS, 3)
         Positions of the MM atoms in Angstrom.
 
-    cell: torch.Tensor (BATCH, 3, 3)
-        The simulation cell vectors in Angstrom.
+    cell: Optional[torch.Tensor] (BATCH, 3, 3)
+        The simulation cell vectors in Angstrom. Can be None for
+        non-periodic systems, in which case no minimum-image wrapping is
+        performed.
 
     cutoff: float
         The QM/MM cutoff distance in Angstrom.
