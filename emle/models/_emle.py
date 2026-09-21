@@ -494,10 +494,9 @@ class EMLE(_torch.nn.Module):
             centre, and applies a hard distance cutoff, zeroing the charges
             of MM atoms further than 'cutoff' (set in the constructor) from
             the nearest QM atom. Requires 'cutoff' to have been set when the
-            model was created. If 'cell' is not specified, the system is
-            treated as non-periodic, meaning that the QM region is assumed to already be
-            whole and the MM atoms are not re-imaged, but centering and the
-            cutoff are still applied.
+            model was created. If 'cell' is None the system is treated as
+            non-periodic: the QM region is assumed to already be whole, no
+            re-imaging is performed, and only the cutoff is applied.
 
         use_switching_function: bool
             Whether to scale the MM charges using a smooth switching
