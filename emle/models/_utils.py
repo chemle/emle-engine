@@ -272,7 +272,7 @@ def _preprocess_coordinates(
     qm_mask = (atomic_numbers > 0).unsqueeze(-1).to(dtype=xyz_qm.dtype)
     center = (xyz_qm * qm_mask).sum(dim=1, keepdim=True) / qm_mask.sum(
         dim=1, keepdim=True
-    ).clamp(min=1.0)
+    )
 
     # Re-image the MM atoms with respect to the QM region centre.
     xyz_mm = center + _minimum_image(xyz_mm - center, cell)
