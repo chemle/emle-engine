@@ -366,6 +366,26 @@ def test_mace(alpha_mode, mace_model, atomic_numbers, charges_mm, xyz_qm, xyz_mm
     )
 
 
+@pytest.mark.skipif(not has_mace, reason="mace-torch not installed")
+@pytest.mark.skipif(not has_e3nn, reason="e3nn not installed")
+def test_mace_pickle(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    """
+    Check that a MACEEMLE model can be pickled and still gives the same energy.
+    """
+    import pickle
+
+    try:
+        model = MACEEMLE()
+    except RuntimeError as e:
+        pytest.skip(f"MACE model unavailable: {e}")
+    unpickled = pickle.loads(pickle.dumps(model))
+
+    energy = model(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+    assert torch.allclose(
+        energy, unpickled(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+    )
+
+
 # ---------------------------------------------------------------------------
 # DeePMDEMLE
 #

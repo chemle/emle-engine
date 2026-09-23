@@ -27,6 +27,7 @@ __email__ = "joaomorado@gmail.com"
 
 __all__ = ["MACEEMLE", "MACEEMLEJoint"]
 
+import io as _io
 import os as _os
 import torch as _torch
 import numpy as _np
@@ -78,6 +79,31 @@ def _is_energy_emle_mace(model) -> bool:
     # 'original_name'; plain nn.Modules expose it via __class__.__name__.
     name = getattr(model, "original_name", model.__class__.__name__)
     return name == "EnergyEMLEMACE"
+
+
+def _get_mace_state(model) -> dict:
+    # Compiled MACE models are ScriptModules, which can't be pickled, so
+    # serialise them to bytes with torch.jit.save.
+    state = model.__dict__.copy()
+    modules = model._modules.copy()
+    del modules["_mace"]
+    mace_models = []
+    for mace in modules.pop("_mace_models"):
+        buffer = _io.BytesIO()
+        _torch.jit.save(mace, buffer)
+        mace_models.append(buffer.getvalue())
+    state["_modules"] = modules
+    state["_mace_model_bytes"] = mace_models
+    return state
+
+
+def _set_mace_state(model, state: dict) -> None:
+    mace_models = state.pop("_mace_model_bytes")
+    _torch.nn.Module.__setstate__(model, state)
+    model._mace_models = _torch.nn.ModuleList(
+        [_torch.jit.load(_io.BytesIO(b)) for b in mace_models]
+    )
+    model._mace = model._mace_models[0]
 
 
 class MACEEMLE(_torch.nn.Module):
@@ -449,6 +475,12 @@ class MACEEMLE(_torch.nn.Module):
         """
         ids = self._atomic_numbers_to_indices(atomic_numbers, z_table=self._z_table)
         return self._to_one_hot(ids, num_classes=len(self._z_table))
+
+    def __getstate__(self):
+        return _get_mace_state(self)
+
+    def __setstate__(self, state):
+        _set_mace_state(self, state)
 
     def to(self, *args, **kwargs):
         """
@@ -1106,6 +1138,12 @@ class MACEEMLEJoint(_torch.nn.Module):
         """
         ids = self._atomic_numbers_to_indices(atomic_numbers, z_table=self._z_table)
         return self._to_one_hot(ids, num_classes=len(self._z_table))
+
+    def __getstate__(self):
+        return _get_mace_state(self)
+
+    def __setstate__(self, state):
+        _set_mace_state(self, state)
 
     def to(self, *args, **kwargs):
         """
