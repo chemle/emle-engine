@@ -75,6 +75,13 @@ try:
 except:
     has_sire = False
 
+try:
+    import emle_mace  # noqa: F401
+
+    has_emle_mace = True
+except:
+    has_emle_mace = False
+
 MACE_EMLE_MODEL = "tests/input/mace-emle.model"
 has_emle_mace_model = os.path.exists(MACE_EMLE_MODEL)
 
@@ -597,6 +604,7 @@ def test_deepmd_type_map_mismatch(deepmd_model_path, deepmd_model_path_partial_t
 
 @pytest.mark.skipif(not has_mace, reason="mace-torch not installed")
 @pytest.mark.skipif(not has_e3nn, reason="e3nn not installed")
+@pytest.mark.skipif(not has_emle_mace, reason="emle-mace not installed")
 @pytest.mark.skipif(not has_emle_mace_model, reason="Test emle-mace model not found")
 def test_emle_mace(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     """
