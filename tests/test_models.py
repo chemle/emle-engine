@@ -255,6 +255,21 @@ def test_emle(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     )
 
 
+def test_emle_pickle(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    """
+    Check that an EMLE model can be pickled and still gives the same energy.
+    """
+    import pickle
+
+    model = EMLE()
+    unpickled = pickle.loads(pickle.dumps(model))
+
+    energy = model(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+    assert torch.allclose(
+        energy, unpickled(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+    )
+
+
 @pytest.mark.parametrize("alpha_mode", ["fixed", "flexible"])
 def test_ani2x(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     """
