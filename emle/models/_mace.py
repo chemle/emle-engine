@@ -35,7 +35,6 @@ from typing import List, Dict, Optional
 
 from ._emle import EMLE as _EMLE
 from ._utils import _get_neighbor_pairs
-from ._utils import _has_neighbor_pairs
 
 from torch import Tensor
 
@@ -172,10 +171,6 @@ class MACEEMLE(_torch.nn.Module):
             )
         if not _has_e3nn:
             raise ImportError("e3nn is required to compile the MACEmodel.")
-        if not _has_neighbor_pairs:
-            raise ImportError(
-                "NNPOps.neighbors.getNeighborPairs is required to use the MACEEMLE model."
-            )
 
         if device is not None:
             if not isinstance(device, _torch.device):
@@ -807,10 +802,6 @@ class MACEEMLEJoint(_torch.nn.Module):
             )
         if not _has_e3nn:
             raise ImportError("e3nn is required to compile the MACEmodel.")
-        if not _has_neighbor_pairs:
-            raise ImportError(
-                "NNPOps.neighbors.getNeighborPairs is required to use the MACEEMLE model."
-            )
 
         if device is not None:
             if not isinstance(device, _torch.device):

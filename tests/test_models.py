@@ -335,7 +335,6 @@ def test_ani2x_nnpops(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
 
 @pytest.mark.skipif(not has_mace, reason="mace-torch not installed")
 @pytest.mark.skipif(not has_e3nn, reason="e3nn not installed")
-@pytest.mark.skipif(not has_nnpops, reason="NNPOps not installed")
 @pytest.mark.parametrize("alpha_mode", ["fixed", "flexible"])
 @pytest.mark.parametrize(
     "mace_model", ["mace-off23-small", "mace-off23-medium", "mace-off23-large"]

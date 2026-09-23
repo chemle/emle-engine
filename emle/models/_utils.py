@@ -123,6 +123,43 @@ def _get_neighbor_pairs(
     return edge_index, shifts
 
 
+def _get_neighbor_pairs_torch(
+    positions: _torch.Tensor,
+    cell: Optional[_torch.Tensor],
+    cutoff: float,
+    dtype: _torch.dtype,
+    device: _torch.device,
+) -> Tuple[_torch.Tensor, _torch.Tensor]:
+    """
+    Pure PyTorch fallback for _get_neighbor_pairs, used when NNPOps is not
+    available. Has the same signature and return values.
+    """
+    num_atoms = positions.shape[0]
+    pairs = _torch.triu_indices(num_atoms, num_atoms, 1, device=positions.device)
+    i = pairs[0]
+    j = pairs[1]
+    deltas = positions[i] - positions[j]
+    wrapped_deltas = _minimum_image(deltas, cell)
+    mask = _torch.linalg.norm(wrapped_deltas, dim=1) < cutoff
+    i = i[mask]
+    j = j[mask]
+
+    edge_index = _torch.stack((_torch.cat((i, j)), _torch.cat((j, i)))).to(
+        _torch.int64
+    )
+    if cell is not None:
+        shifts = deltas[mask] - wrapped_deltas[mask]
+        shifts = _torch.vstack((shifts, -shifts))
+    else:
+        shifts = _torch.zeros((edge_index.shape[1], 3), dtype=dtype, device=device)
+
+    return edge_index, shifts
+
+
+if not _has_neighbor_pairs:
+    _get_neighbor_pairs = _get_neighbor_pairs_torch
+
+
 def _minimum_image(
     delta: _torch.Tensor, cell: Optional[_torch.Tensor]
 ) -> _torch.Tensor:
