@@ -75,6 +75,13 @@ try:
 except:
     has_sire = False
 
+try:
+    import emle_mace  # noqa: F401
+
+    has_emle_mace = True
+except:
+    has_emle_mace = False
+
 MACE_EMLE_MODEL = "tests/input/mace-emle.model"
 has_emle_mace_model = os.path.exists(MACE_EMLE_MODEL)
 
@@ -202,6 +209,27 @@ def test_mace(alpha_mode, mace_model, atomic_numbers, charges_mm, xyz_qm, xyz_mm
 
 @pytest.mark.skipif(not has_mace, reason="mace-torch not installed")
 @pytest.mark.skipif(not has_e3nn, reason="e3nn not installed")
+def test_mace_pickle(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    """
+    Check that a MACEEMLE model can be pickled and still gives the same energy.
+    """
+    import pickle
+
+    try:
+        model = MACEEMLE()
+    except RuntimeError as e:
+        pytest.skip(f"MACE model unavailable: {e}")
+    unpickled = pickle.loads(pickle.dumps(model))
+
+    energy = model(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+    assert torch.allclose(
+        energy, unpickled(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+    )
+
+
+@pytest.mark.skipif(not has_mace, reason="mace-torch not installed")
+@pytest.mark.skipif(not has_e3nn, reason="e3nn not installed")
+@pytest.mark.skipif(not has_emle_mace, reason="emle-mace not installed")
 @pytest.mark.skipif(not has_emle_mace_model, reason="Test emle-mace model not found")
 def test_emle_mace(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     """
