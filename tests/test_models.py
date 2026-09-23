@@ -75,6 +75,13 @@ try:
 except:
     has_sire = False
 
+try:
+    import emle_mace  # noqa: F401
+
+    has_emle_mace = True
+except:
+    has_emle_mace = False
+
 MACE_EMLE_MODEL = "tests/input/mace-emle.model"
 has_emle_mace_model = os.path.exists(MACE_EMLE_MODEL)
 
@@ -255,6 +262,21 @@ def test_emle(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     )
 
 
+def test_emle_pickle(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    """
+    Check that an EMLE model can be pickled and still gives the same energy.
+    """
+    import pickle
+
+    model = EMLE()
+    unpickled = pickle.loads(pickle.dumps(model))
+
+    energy = model(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+    assert torch.allclose(
+        energy, unpickled(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+    )
+
+
 @pytest.mark.parametrize("alpha_mode", ["fixed", "flexible"])
 def test_ani2x(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     """
@@ -320,7 +342,6 @@ def test_ani2x_nnpops(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
 
 @pytest.mark.skipif(not has_mace, reason="mace-torch not installed")
 @pytest.mark.skipif(not has_e3nn, reason="e3nn not installed")
-@pytest.mark.skipif(not has_nnpops, reason="NNPOps not installed")
 @pytest.mark.parametrize("alpha_mode", ["fixed", "flexible"])
 @pytest.mark.parametrize(
     "mace_model", ["mace-off23-small", "mace-off23-medium", "mace-off23-large"]
@@ -349,6 +370,26 @@ def test_mace(alpha_mode, mace_model, atomic_numbers, charges_mm, xyz_qm, xyz_mm
         charges_mm.unsqueeze(0).repeat(2, 1),
         xyz_qm.unsqueeze(0).repeat(2, 1, 1),
         xyz_mm.unsqueeze(0).repeat(2, 1, 1),
+    )
+
+
+@pytest.mark.skipif(not has_mace, reason="mace-torch not installed")
+@pytest.mark.skipif(not has_e3nn, reason="e3nn not installed")
+def test_mace_pickle(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    """
+    Check that a MACEEMLE model can be pickled and still gives the same energy.
+    """
+    import pickle
+
+    try:
+        model = MACEEMLE()
+    except RuntimeError as e:
+        pytest.skip(f"MACE model unavailable: {e}")
+    unpickled = pickle.loads(pickle.dumps(model))
+
+    energy = model(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+    assert torch.allclose(
+        energy, unpickled(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
     )
 
 
@@ -563,6 +604,7 @@ def test_deepmd_type_map_mismatch(deepmd_model_path, deepmd_model_path_partial_t
 
 @pytest.mark.skipif(not has_mace, reason="mace-torch not installed")
 @pytest.mark.skipif(not has_e3nn, reason="e3nn not installed")
+@pytest.mark.skipif(not has_emle_mace, reason="emle-mace not installed")
 @pytest.mark.skipif(not has_emle_mace_model, reason="Test emle-mace model not found")
 def test_emle_mace(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     """

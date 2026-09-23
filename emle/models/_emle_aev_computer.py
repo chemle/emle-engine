@@ -198,13 +198,11 @@ class EMLEAEVComputer(_torch.nn.Module):
                 _to_list(hypers["ShfZ"]),
                 float(hypers["Rca"]),
             )
-            self._aev_computer = _torch.jit.script(
-                _torchani.AEVComputer(
-                    radial,
-                    angular,
-                    num_species=num_species,
-                ).to(device=device, dtype=dtype)
-            )
+            self._aev_computer = _torchani.AEVComputer(
+                radial,
+                angular,
+                num_species=num_species,
+            ).to(device=device, dtype=dtype)
         # Create a dummy function to use in forward.
         else:
             self._aev_computer = self._dummy_aev_computer
