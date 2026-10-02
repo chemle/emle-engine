@@ -45,7 +45,7 @@ _supported_backends = [
     "xtb",
 ]
 
-from ._version import get_versions
+from importlib.metadata import version as _version
 
-__version__ = get_versions()["version"]
-del get_versions
+__version__ = _version("emle-engine")
+del _version
