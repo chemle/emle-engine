@@ -107,7 +107,6 @@ try:
     ace_model = os.getenv("EMLE_ACE_MODEL")
 except:
     ace_model = None
-rascal_model = os.getenv("EMLE_RASCAL_MODEL")
 parm7 = os.getenv("EMLE_PARM7")
 try:
     lambda_interpolate = [
@@ -167,7 +166,6 @@ env = {
     "ani2x_model_index": ani2x_model_index,
     "mace_model": mace_model,
     "ace_model": ace_model,
-    "rascal_model": rascal_model,
     "lambda_interpolate": lambda_interpolate,
     "interpolate_steps": interpolate_steps,
     "parm7": parm7,
@@ -332,12 +330,6 @@ parser.add_argument(
     "--qm-xyz-frequency",
     type=int,
     help="the frequency of writing the QM region coordinates to file (0 to disable)",
-    required=False,
-)
-parser.add_argument(
-    "--rascal-model",
-    type=str,
-    help="path to Rascal model file",
     required=False,
 )
 parser.add_argument(

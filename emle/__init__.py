@@ -40,7 +40,6 @@ _supported_backends = [
     "ace",
     "deepmd",
     "orca",
-    "rascal",
     "sqm",
     "sander",
     "xtb",

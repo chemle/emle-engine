@@ -13,11 +13,6 @@ First create a conda environment with all of the required dependencies:
 
 .. note::
 
-    If you wish to use `librascal <https://github.com/lab-cosmo/librascal>`__ for
-    delta-learning you will need to use the ``environment_rascal.yaml`` file instead.
-
-.. note::
-
     If you wisth to use ``emle-engine`` with ``OpenMM``, please use the
     ``environment_sire.yaml`` file instead. (This is required as ``sire``
     provides the interface between ``emle-engine`` and ``OpenMM``.)
