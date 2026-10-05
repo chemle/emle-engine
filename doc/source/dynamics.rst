@@ -368,18 +368,12 @@ This allows QM/MM simulations to be run with ``OpenMM`` using ``EMLE`` for the
 embedding model. This provides greatly improved performance and flexibility in
 comparison to the ``sander`` interface.
 
-To use, first create an ``emle-sire`` conda environment:
+To use, first create and activate the pixi ``sire`` environment, which adds
+``sire`` and ``openmm`` on top of the base ``emle-engine`` dependencies:
 
 .. code-block:: bash
 
-    conda env create -f environment_sire.yaml
-    conda activate emle-sire
-
-Next install ``emle-engine`` into the environment:
-
-.. code-block:: bash
-
-    pip install .
+    pixi shell -e sire
 
 For full instructions on how to use the ``emle-sire`` interface, see the tutorial
 documentation `here <https://sire.openbiosim.org/tutorial/part08/02_emle.html>`__.
