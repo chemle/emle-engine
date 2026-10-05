@@ -1,5 +1,6 @@
 import math
 import os
+import pytest
 import shlex
 import shutil
 import subprocess
@@ -8,7 +9,10 @@ import yaml
 
 from conftest import start_server
 
+has_sander = shutil.which("sander") is not None
 
+
+@pytest.mark.skipif(not has_sander, reason="sander executable not found")
 def test_delta_learning():
     """
     Make sure that the server can run using two backends for the in vacuo

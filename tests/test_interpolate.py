@@ -1,11 +1,14 @@
 import math
 import os
+import pytest
 import shlex
 import shutil
 import subprocess
 import tempfile
 
 from conftest import start_server
+
+has_sander = shutil.which("sander") is not None
 
 
 def parse_mdinfo(mdinfo_file):
@@ -19,6 +22,7 @@ def parse_mdinfo(mdinfo_file):
                 return float(line.split()[-1])
 
 
+@pytest.mark.skipif(not has_sander, reason="sander executable not found")
 def test_interpolate():
     """
     Make sure interpolated energies at lambda=0 agree with pure MM and those at
@@ -107,6 +111,7 @@ def test_interpolate():
         server.terminate()
 
 
+@pytest.mark.skipif(not has_sander, reason="sander executable not found")
 def test_interpolate_steps():
     """
     Make sure interpolated energies are correct when linearly interpolating lambda
@@ -168,6 +173,7 @@ def test_interpolate_steps():
         server.terminate()
 
 
+@pytest.mark.skipif(not has_sander, reason="sander executable not found")
 def test_interpolate_steps_config():
     """
     Make sure interpolated energies are correct when linearly interpolating lambda

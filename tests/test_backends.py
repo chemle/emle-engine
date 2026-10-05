@@ -6,6 +6,20 @@ import tempfile
 
 from emle._backends import *
 
+try:
+    import sander as _sander
+
+    has_sander = True
+except ImportError:
+    has_sander = False
+
+try:
+    import xtb as _xtb
+
+    has_xtb = True
+except ImportError:
+    has_xtb = False
+
 
 @pytest.fixture(scope="module")
 def data():
@@ -24,9 +38,6 @@ def data():
     return atomic_numbers, xyz
 
 
-@pytest.mark.xfail(
-    reason="SQM from the conda-forge AmberTools pacakge is currently broken."
-)
 def test_sqm(data):
     """
     Test the SQM backend.
@@ -42,6 +53,7 @@ def test_sqm(data):
     energy, forces = backend(atomic_numbers, xyz)
 
 
+@pytest.mark.skipif(not has_sander, reason="sander not installed")
 def test_sander(data):
     """
     Test the Sander backend.
@@ -57,6 +69,7 @@ def test_sander(data):
     energy, forces = backend(atomic_numbers, xyz)
 
 
+@pytest.mark.skipif(not has_xtb, reason="xtb-python not installed")
 def test_xtb(data):
     """
     Test the XTB backend.
