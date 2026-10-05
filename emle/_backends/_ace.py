@@ -22,12 +22,12 @@
 
 """ACE in-vacuo backend implementation."""
 
+__all__ = ["ACE"]
+
 try:
     import pyjulip as _pyjulip
-
-    __all__ = ["ACE"]
-except:
-    __all__ = []
+except ImportError:
+    _pyjulip = None
 
 import ase as _ase
 import os as _os
@@ -54,6 +54,12 @@ class ACE(_Backend):
         model: str
             The path to the ACE model.
         """
+
+        if _pyjulip is None:
+            raise ImportError(
+                "pyjulip does not appear to be installed, but is required "
+                "to use the ACE backend."
+            )
 
         # Validate the model path.
         if not isinstance(model, str):

@@ -24,6 +24,11 @@
 
 __all__ = ["XTB"]
 
+try:
+    import xtb as _xtb
+except ImportError:
+    _xtb = None
+
 import ase as _ase
 import numpy as _np
 
@@ -36,6 +41,13 @@ class XTB(_Backend):
     """
     XTB in-vacuo backend implementation.
     """
+
+    def __init__(self):
+        if _xtb is None:
+            raise ImportError(
+                "xtb-python does not appear to be installed, but is "
+                "required to use the XTB backend."
+            )
 
     @staticmethod
     def calculate(atomic_numbers, xyz, forces=True):

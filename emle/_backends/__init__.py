@@ -26,7 +26,6 @@ Backends for in-vacuo calculations.
 
 from ._deepmd import *
 from ._orca import *
-from ._rascal import *
 from ._sander import *
 from ._sqm import *
 from ._xtb import *
