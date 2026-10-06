@@ -91,9 +91,6 @@ sire = "*"
 openmm = ">=8.1"
 ambertools = "*"
 
-[tool.pixi.feature.full]
-platforms = ["linux-64", "osx-arm64"]
-
 [tool.pixi.feature.dev.dependencies]
 pytest = "*"
 ruff = "*"
@@ -111,7 +108,7 @@ ambertools = { features = ["ambertools", "dev"], solve-group = "default" }
 mace = { features = ["mace", "dev"], solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
 deepmd = { features = ["deepmd", "dev"] }
-full = { features = ["deepmd", "xtb", "ambertools", "mace", "sire", "full", "dev"] }
+full = { features = ["deepmd", "xtb", "ambertools", "mace", "sire", "dev"] }
 sire = { features = ["sire", "dev"] }
 docs = { features = ["docs"] }
 
