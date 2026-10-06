@@ -24,6 +24,11 @@
 
 __all__ = ["DeePMD"]
 
+try:
+    from deepmd.infer import DeepPot as _DeepPot
+except ImportError:
+    _DeepPot = None
+
 import ase as _ase
 import numpy as _np
 import os as _os
@@ -39,6 +44,14 @@ class DeePMD(_Backend):
     """
 
     def __init__(self, model, deviation=None, deviation_threshold=None):
+        super().__init__()
+
+        if _DeepPot is None:
+            raise ImportError(
+                "deepmd-kit does not appear to be installed, but is "
+                "required to use the DeePMD backend."
+            )
+
         # We support a str, or list/tuple of strings.
         if not isinstance(model, (str, list, tuple)):
             raise TypeError("'model' must be of type 'str', or a list of 'str' types")
@@ -86,8 +99,6 @@ class DeePMD(_Backend):
 
             # Initialise DeePMD backend attributes.
             try:
-                from deepmd.infer import DeepPot as _DeepPot
-
                 self._potential = [_DeepPot(m) for m in self._model]
                 self._z_map = []
                 for dp in self._potential:
@@ -97,8 +108,8 @@ class DeePMD(_Backend):
                             for index, element in enumerate(dp.get_type_map())
                         }
                     )
-            except:
-                raise RuntimeError("Unable to create the DeePMD potentials!")
+            except Exception as e:
+                raise RuntimeError(f"Unable to create the DeePMD potentials: {e}") from e
 
         self._max_f_std = None
 

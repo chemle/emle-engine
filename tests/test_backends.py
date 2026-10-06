@@ -7,11 +7,18 @@ import tempfile
 from emle._backends import *
 
 try:
-    import rascal
+    import sander as _sander
 
-    has_rascal = True
+    has_sander = True
 except ImportError:
-    has_rascal = False
+    has_sander = False
+
+try:
+    import xtb as _xtb
+
+    has_xtb = True
+except ImportError:
+    has_xtb = False
 
 
 @pytest.fixture(scope="module")
@@ -31,9 +38,7 @@ def data():
     return atomic_numbers, xyz
 
 
-@pytest.mark.xfail(
-    reason="SQM from the conda-forge AmberTools pacakge is currently broken."
-)
+@pytest.mark.skipif(not has_sander, reason="sander not installed")
 def test_sqm(data):
     """
     Test the SQM backend.
@@ -49,6 +54,7 @@ def test_sqm(data):
     energy, forces = backend(atomic_numbers, xyz)
 
 
+@pytest.mark.skipif(not has_sander, reason="sander not installed")
 def test_sander(data):
     """
     Test the Sander backend.
@@ -64,6 +70,7 @@ def test_sander(data):
     energy, forces = backend(atomic_numbers, xyz)
 
 
+@pytest.mark.skipif(not has_xtb, reason="xtb-python not installed")
 def test_xtb(data):
     """
     Test the XTB backend.
@@ -132,26 +139,3 @@ def test_deepmd(data):
         # Make sure the deviation is calculated.
         with open(tmp.name, "r") as f:
             deviation = float(f.read())
-
-
-@pytest.mark.skipif(not has_rascal, reason="Rascal not installed.")
-@pytest.mark.skipif(
-    socket.gethostname() != "porridge",
-    reason="Local test requiring a Rascal model file.",
-)
-def test_rascal(data):
-    """
-    Test the Rascal backend.
-    """
-
-    # Set up the data.
-    atomic_numbers, xyz = data
-
-    model = "tests/input/rascal/deltaL.sav"
-
-    with tempfile.NamedTemporaryFile() as tmp:
-        # Instantiate the Rascal backend.
-        backend = Rascal(model)
-
-        # Calculate the energy and forces.
-        energy, forces = backend(atomic_numbers, xyz)

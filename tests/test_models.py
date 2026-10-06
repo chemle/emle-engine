@@ -50,7 +50,7 @@ def xyz_mm():
 try:
     import NNPOps
 
-    has_nnpops = True
+    has_nnpops = hasattr(NNPOps, "OptimizedTorchANI")
 except:
     has_nnpops = False
 
@@ -76,7 +76,7 @@ except:
     has_sire = False
 
 try:
-    import emle_mace  # noqa: F401
+    import emle_mace
 
     has_emle_mace = True
 except:
@@ -86,7 +86,7 @@ MACE_EMLE_MODEL = "tests/input/mace-emle.model"
 has_emle_mace_model = os.path.exists(MACE_EMLE_MODEL)
 
 try:
-    import deepmd  # noqa: F401
+    import deepmd
 
     has_deepmd = True
 except:

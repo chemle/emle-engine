@@ -1,4 +1,5 @@
 import os
+import pytest
 import shlex
 import shutil
 import subprocess
@@ -6,7 +7,10 @@ import tempfile
 
 from conftest import start_server
 
+has_sander = shutil.which("sander") is not None
 
+
+@pytest.mark.skipif(not has_sander, reason="sander executable not found")
 def test_qm_xyz():
     """
     Make sure that an xyz file for the QM region is written when requested.

@@ -16,9 +16,6 @@ and :ref:`ref-analyzer` modules.
 .. autoclass:: emle._backends.ORCA
    :no-show-inheritance:
 
-.. autoclass:: emle._backends.Rascal
-   :no-show-inheritance:
-
 .. autoclass:: emle._backends.Sander
    :no-show-inheritance:
 

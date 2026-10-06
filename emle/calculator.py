@@ -99,7 +99,6 @@ class EMLECalculator:
         qbc_deviation=None,
         qbc_deviation_threshold=None,
         ace_model=None,
-        rascal_model=None,
         parm7=None,
         qm_indices=None,
         orca_path=None,
@@ -243,10 +242,6 @@ class EMLECalculator:
             Path to the ACE model file to use for in vacuo calculations. This
             must be specified if 'ace' is the selected backend.
 
-        rascal_model: str
-            Path to the Rascal model file to use for in vacuo calculations. This
-            must be specified if "rascal" is the selected backend.
-
         lambda_interpolate: float, [float, float]
             The value of lambda to use for end-state correction calculations. This
             must be between 0 and 1, which is used to interpolate between a full MM
@@ -259,8 +254,7 @@ class EMLECalculator:
 
         parm7: str
             The path to an AMBER parm7 file for the QM region. This is needed to
-            compute in vacuo MM energies for the QM region when using the Rascal
-            backend, or when interpolating.
+            compute in vacuo MM energies for the QM region when interpolating.
 
         qm_indices: list, str
             A list of atom indices for the QM region. This must be specified when
@@ -767,16 +761,6 @@ class EMLECalculator:
                         _logger.error(msg)
                         raise RuntimeError(msg)
 
-                elif backend == "rascal":
-                    try:
-                        from ._backends import Rascal
-
-                        b = Rascal(rascal_model)
-                    except Exception as e:
-                        msg = f"Unable to create Rascal backend: {e}"
-                        _logger.error(msg)
-                        raise RuntimeError(msg)
-
                 # Append the backend to the list.
                 self._backends.append(b)
 
@@ -808,11 +792,6 @@ class EMLECalculator:
 
         # Validate the interpolation lambda parameter.
         if lambda_interpolate is not None:
-            if self._backend == "rascal":
-                msg = "'lambda_interpolate' is currently unsupported when using the the Rascal backend!"
-                _logger.error(msg)
-                raise ValueError(msg)
-
             self._is_interpolate = True
             self.set_lambda_interpolate(lambda_interpolate)
 
@@ -998,7 +977,6 @@ class EMLECalculator:
             "mace_model": None if mace_model is None else self._mace_model,
             "qbc_deviation": qbc_deviation,
             "qbc_deviation_threshold": qbc_deviation_threshold,
-            "rascal_model": rascal_model,
             "parm7": parm7,
             "qm_indices": None if qm_indices is None else self._qm_indices,
             "orca_path": orca_path,

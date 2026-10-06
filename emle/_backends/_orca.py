@@ -54,6 +54,8 @@ class ORCA(_Backend):
             The path to the ORCA template file.
         """
 
+        super().__init__()
+
         if not isinstance(exe, str):
             raise TypeError("'exe' must be of type 'str'")
 

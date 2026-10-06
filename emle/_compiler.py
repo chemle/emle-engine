@@ -90,7 +90,7 @@ class EMLECompiler:
 
     Three in-vacuo backends are scriptable: ``torchani``, ``mace``, and
     ``deepmd`` (DeePMD-kit v3 PyTorch backend, ``.pth`` TorchScript models
-    only). Runtime-only backends (ACE, SQM, ORCA, XTB, Sander, Rascal,
+    only). Runtime-only backends (ACE, SQM, ORCA, XTB, Sander,
     external, and DeePMD TensorFlow ``.pb`` models) cannot be compiled to a
     self-contained ``.pt`` and are rejected.
     """

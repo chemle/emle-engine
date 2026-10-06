@@ -1,0 +1,140 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "emle-engine"
+description = "An engine for electrostatic machine learned embedding potentials"
+authors = [
+    { name = "Lester Hedges", email = "lester.hedges@gmail.com" },
+]
+license = { text = "GPL-2.0-only" }
+requires-python = ">=3.10"
+dependencies = [
+    "ase",
+    "h5py",
+    "loguru",
+    "numpy",
+    "pygit2",
+    "pyyaml",
+    "scipy",
+    "setuptools<81",
+    "torch",
+    "torchani>=2.7",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/chemle/emle-engine"
+
+[tool.setuptools]
+include-package-data = true
+zip-safe = false
+script-files = [
+    "bin/emle-analyze",
+    "bin/emle-compile",
+    "bin/emle-server",
+    "bin/emle-stop",
+    "bin/emle-train",
+    "bin/orca",
+    "bin/tarball-to-extxyz",
+]
+
+[tool.setuptools.packages.find]
+include = ["emle", "emle.*"]
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+
+# ------------------------------------------------------------------------ #
+#                            Pixi Workspace                                #
+#                                                                          #
+#         Use e.g. `pixi shell -e deepmd` to pick an environment.          #
+# ------------------------------------------------------------------------ #
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+emle-engine = { path = ".", editable = true }
+
+[tool.pixi.dependencies]
+python = ">=3.10"
+ase = "*"
+h5py = "*"
+loguru = "*"
+nnpops = "*"
+numpy = "*"
+pygit2 = "*"
+pytorch = "*"
+pyyaml = "*"
+scipy = "*"
+setuptools = "<81"
+torchani = ">=2.7"
+
+# osx-64 deepmd-kit builds cap pytorch<2.7, incompatible with torchani>=2.7.
+[tool.pixi.feature.deepmd]
+platforms = ["linux-64", "osx-arm64"]
+
+[tool.pixi.feature.deepmd.dependencies]
+deepmd-kit = "*"
+
+[tool.pixi.feature.xtb.dependencies]
+xtb-python = "*"
+
+[tool.pixi.feature.ambertools.dependencies]
+ambertools = "*"
+
+# mace-torch pins e3nn==0.4.4.
+[tool.pixi.feature.mace.dependencies]
+e3nn = "==0.4.4"
+
+[tool.pixi.feature.mace.pypi-dependencies]
+mace-torch = "*"
+emle-mace = { git = "https://github.com/kzinovjev/emle-mace" }
+
+# sire is not published for osx-64.
+[tool.pixi.feature.sire]
+channels = ["conda-forge", "openbiosim/label/dev"]
+platforms = ["linux-64", "osx-arm64"]
+
+[tool.pixi.feature.sire.dependencies]
+sire = "*"
+openmm = ">=8.1"
+ambertools = "*"
+
+[tool.pixi.feature.dev.dependencies]
+pytest = "*"
+ruff = "*"
+
+[tool.pixi.feature.docs.dependencies]
+sphinx = "*"
+furo = "*"
+sphinxcontrib-programoutput = "*"
+sphinx-issues = "*"
+
+[tool.pixi.environments]
+default = { features = [], solve-group = "default" }
+xtb = { features = ["xtb", "dev"], solve-group = "default" }
+ambertools = { features = ["ambertools", "dev"], solve-group = "default" }
+mace = { features = ["mace", "dev"], solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
+deepmd = { features = ["deepmd", "dev"] }
+full = { features = ["deepmd", "xtb", "ambertools", "mace", "sire", "dev"] }
+sire = { features = ["sire", "dev"] }
+docs = { features = ["docs"] }
+
+# ------------------------------------------------------------------------ #
+#                                  Tasks                                   #
+#                                                                          #
+#         Use e.g. `pixi run -e full test` to run the test suite.          #
+# ------------------------------------------------------------------------ #
+
+[tool.pixi.feature.dev.tasks]
+test = { cmd = "pytest -svvv --color=yes tests", description = "Run the test suite" }
+lint = { cmd = "ruff check emle", description = "Lint the package with ruff" }
+format = { cmd = "ruff format emle && ruff check --fix --select I emle", description = "Format code and sort imports with ruff" }
+
+[tool.pixi.feature.docs.tasks]
+docs-build = { cmd = "make html", cwd = "doc", description = "Build the Sphinx documentation" }

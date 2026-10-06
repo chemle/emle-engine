@@ -24,15 +24,19 @@
 
 __all__ = ["Sander"]
 
+try:
+    import sander as _sander
+except ImportError:
+    _sander = None
+
+import os as _os
+
 import ase as _ase
+import numpy as _np
 from ase.calculators.calculator import Calculator as _Calculator
 from ase.calculators.calculator import all_changes as _all_changes
-import os as _os
-import numpy as _np
-import sander as _sander
 
-from .._units import _KCAL_MOL_TO_HARTREE, _BOHR_TO_ANGSTROM
-
+from .._units import _BOHR_TO_ANGSTROM, _KCAL_MOL_TO_HARTREE
 from ._backend import Backend as _Backend
 
 
@@ -124,6 +128,14 @@ class Sander(_Backend):
         """
         Constructor.
         """
+
+        super().__init__()
+
+        if _sander is None:
+            raise ImportError(
+                "sander (part of AmberTools) does not appear to be "
+                "installed, but is required to use the Sander backend."
+            )
 
         if not isinstance(parm7, str):
             raise TypeError("'parm7' must be of type 'str'")

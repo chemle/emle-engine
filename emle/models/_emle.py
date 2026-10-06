@@ -36,7 +36,7 @@ import torch as _torch
 import torchani as _torchani
 from torch import Tensor
 
-from . import EMLEBase as _EMLEBase
+from ._emle_base import EMLEBase as _EMLEBase
 from ._utils import (
     _apply_switching_function,
     _preprocess_coordinates,

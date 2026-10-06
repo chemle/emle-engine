@@ -57,6 +57,8 @@ class SQM(_Backend):
             The charge on the QM region.
         """
 
+        super().__init__()
+
         # Make sure a topology file has been set.
         if parm7 is None:
             raise ValueError("'parm7' must be specified when using the SQM backend")

@@ -40,13 +40,17 @@ _supported_backends = [
     "ace",
     "deepmd",
     "orca",
-    "rascal",
     "sqm",
     "sander",
     "xtb",
 ]
 
-from ._version import get_versions
+from importlib.metadata import PackageNotFoundError, version as _version
 
-__version__ = get_versions()["version"]
-del get_versions
+try:
+    __version__ = _version("emle-engine")
+except PackageNotFoundError:
+    # The package metadata isn't available, e.g. when running from an
+    # uninstalled source checkout, so fall back to an unknown version.
+    __version__ = "unknown"
+del _version, PackageNotFoundError
