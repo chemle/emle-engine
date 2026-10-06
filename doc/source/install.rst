@@ -43,7 +43,7 @@ environments for each of the optional in-vacuo backends:
     pixi install -e ambertools  # adds the sander and sqm backends
     pixi install -e mace    # adds the MACE/emle-mace backends
     pixi install -e sire    # adds the OpenMM/Sire integration
-    pixi install -e full    # deepmd + xtb + ambertools + mace combined
+    pixi install -e full    # deepmd + xtb + ambertools + mace + sire combined
 
 Then run commands inside an environment with ``pixi run -e <name> <command>``,
 or activate one with ``pixi shell -e <name>``. (Omit ``-e <name>`` to use the
