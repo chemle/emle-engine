@@ -27,11 +27,17 @@ import numpy as np
 import os
 import sys
 import time
+import warnings
 
 from glob import glob
 
 from emle import _supported_backends
 from emle._socket import Socket
+
+# Deprecated options previously accepted by EMLECalculator / emle-server.
+DEPRECATED_OPTIONS = {
+    "rascal_model": "the Rascal backend has been removed",
+}
 
 
 # Copied from distutils.util.strtobool, which is deprecated.
@@ -440,6 +446,17 @@ if config is not None:
 
     except Exception as e:
         raise ValueError(f"Could not load YAML config file: {e}")
+
+    # Remove deprecated options that are no longer accepted by EMLECalculator,
+    # warning the user that they are being ignored.
+    for option, reason in DEPRECATED_OPTIONS.items():
+        if option in config:
+            warnings.warn(
+                f"'{option}' is deprecated since {reason}. "
+                "This setting will be ignored.",
+                FutureWarning,
+            )
+            del config[option]
 
     # Reparse the command-line arguments using the existing config
     # as a Namespace. Any non-default arguments from the command line
