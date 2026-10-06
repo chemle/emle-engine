@@ -45,7 +45,12 @@ _supported_backends = [
     "xtb",
 ]
 
-from importlib.metadata import version as _version
+from importlib.metadata import PackageNotFoundError, version as _version
 
-__version__ = _version("emle-engine")
-del _version
+try:
+    __version__ = _version("emle-engine")
+except PackageNotFoundError:
+    # The package metadata isn't available, e.g. when running from an
+    # uninstalled source checkout, so fall back to an unknown version.
+    __version__ = "unknown"
+del _version, PackageNotFoundError
