@@ -129,6 +129,8 @@ class Sander(_Backend):
         Constructor.
         """
 
+        super().__init__()
+
         if _sander is None:
             raise ImportError(
                 "sander (part of AmberTools) does not appear to be "

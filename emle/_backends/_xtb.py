@@ -43,6 +43,8 @@ class XTB(_Backend):
     """
 
     def __init__(self):
+        super().__init__()
+
         if _xtb is None:
             raise ImportError(
                 "xtb-python does not appear to be installed, but is "

@@ -44,6 +44,8 @@ class DeePMD(_Backend):
     """
 
     def __init__(self, model, deviation=None, deviation_threshold=None):
+        super().__init__()
+
         if _DeepPot is None:
             raise ImportError(
                 "deepmd-kit does not appear to be installed, but is "

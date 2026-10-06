@@ -55,6 +55,8 @@ class ACE(_Backend):
             The path to the ACE model.
         """
 
+        super().__init__()
+
         if _pyjulip is None:
             raise ImportError(
                 "pyjulip does not appear to be installed, but is required "
