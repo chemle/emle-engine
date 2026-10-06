@@ -38,6 +38,7 @@ def data():
     return atomic_numbers, xyz
 
 
+@pytest.mark.skipif(not has_sander, reason="sander not installed")
 def test_sqm(data):
     """
     Test the SQM backend.
