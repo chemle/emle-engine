@@ -9,6 +9,19 @@ authors = [
     { name = "Lester Hedges", email = "lester.hedges@gmail.com" },
 ]
 license = { text = "GPL-2.0-only" }
+requires-python = ">=3.10"
+dependencies = [
+    "ase",
+    "h5py",
+    "loguru",
+    "numpy",
+    "pygit2",
+    "pyyaml",
+    "scipy",
+    "setuptools<81",
+    "torch",
+    "torchani>=2.7",
+]
 dynamic = ["version"]
 
 [project.urls]
