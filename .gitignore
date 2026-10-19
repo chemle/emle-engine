@@ -40,3 +40,7 @@ results/
 
 # Local test input.
 tests/input/deepmd
+
+# Release build artifacts.
+emle-engine-source.tar.gz
+output/
