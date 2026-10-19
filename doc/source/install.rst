@@ -9,20 +9,33 @@ Application users
 
 If you just want to use ``emle-engine``, e.g. as a dependency of another
 package, the recommended installation route is via a pre-built package from
-`conda-forge <https://conda-forge.org>`__ or `PyPI <https://pypi.org>`__:
+the `chemle <https://anaconda.org/chemle>`__ conda channel or from
+`PyPI <https://pypi.org/project/emle-engine>`__:
 
 .. code-block:: bash
 
-    conda install -c conda-forge emle-engine
+    conda install -c chemle -c conda-forge emle-engine
 
     # or
 
     pip install emle-engine
 
-.. note::
+The ``conda-forge`` channel is needed alongside ``chemle``, since that is
+where the dependencies of ``emle-engine`` (e.g. PyTorch and TorchANI) are
+published.
 
-    These packages are not yet available. Support for this installation
-    route is planned, but isn't part of the current release.
+These packages contain the minimal set of dependencies required to run
+``emle-engine`` with the TorchANI/ANI2x and EMLE models. The optional
+in-vacuo backends are not installed automatically, and can be added to the
+same environment from ``conda-forge`` as required, e.g.:
+
+.. code-block:: bash
+
+    conda install -c conda-forge nnpops       # faster ANI2x symmetry functions
+    conda install -c conda-forge xtb-python   # xtb backend
+    conda install -c conda-forge ambertools   # sander and sqm backends
+    conda install -c conda-forge deepmd-kit   # DeePMD-kit backend
+
 
 Developers
 --------------------------

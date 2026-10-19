@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the built packages to PyPI and the chemle Anaconda.org channel?"
+        type: boolean
+        default: false
+
+jobs:
+  build-pypi:
+    name: Build PyPI distributions
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    env:
+      # PyPI and conda reject local version labels ("+g<hash>.d<date>"), so
+      # drop them for release builds only. Local/dev installs keep them, so
+      # that bug reports from modified checkouts are identifiable.
+      SETUPTOOLS_SCM_OVERRIDES_FOR_EMLE_ENGINE: '{local_scheme = "no-local-version"}'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tooling
+        run: python -m pip install --upgrade build setuptools-scm
+      - name: Build sdist and wheel
+        run: python -m build
+      - name: Determine package version
+        id: version
+        run: echo "version=$(python -m setuptools_scm)" >> "$GITHUB_OUTPUT"
+      - name: Copy sdist for conda build
+        run: cp dist/*.tar.gz emle-engine-source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pypi-dist
+          path: dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: conda-source
+          path: emle-engine-source.tar.gz
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build-pypi
+    if: github.event_name == 'release' || inputs.publish
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/emle-engine/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pypi-dist
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  build-conda:
+    name: Build conda package (noarch)
+    needs: build-pypi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: conda-source
+          path: .
+      - name: Build conda package with rattler-build
+        uses: prefix-dev/rattler-build-action@v0.2.39
+        with:
+          recipe-path: recipes/emle-engine/recipe.yaml
+        env:
+          PKG_VERSION: ${{ needs.build-pypi.outputs.version }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: conda-dist
+          path: output/**/*.conda
+
+  publish-conda:
+    name: Publish to chemle Anaconda.org channel
+    needs: build-conda
+    if: github.event_name == 'release' || inputs.publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: conda-dist
+          path: conda-dist
+      - name: Install anaconda-client
+        run: python -m pip install anaconda-client
+      - name: Upload to the chemle Anaconda.org channel
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
+        run: |
+          shopt -s globstar
+          anaconda --token "$ANACONDA_API_TOKEN" upload --user chemle --force conda-dist/**/*.conda
