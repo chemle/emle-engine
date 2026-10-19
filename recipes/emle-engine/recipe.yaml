@@ -1,0 +1,62 @@
+context:
+  name: emle-engine
+  version: ${{ env.get("PKG_VERSION") }}
+
+package:
+  name: ${{ name }}
+  version: ${{ version }}
+
+source:
+  path: ../../emle-engine-source.tar.gz
+
+build:
+  number: 0
+  noarch: python
+  script: python -m pip install . --no-deps --ignore-installed -vv
+
+requirements:
+  host:
+    - pip
+    - python >=3.10
+    - setuptools >=77.0.0,<81
+    - setuptools-scm >=8.0
+  run:
+    - python >=3.10
+    - ase
+    - h5py
+    - loguru
+    - numpy
+    - pygit2
+    - pytorch
+    - pyyaml
+    - scipy
+    - setuptools <81
+    - torchani >=2.7
+
+tests:
+  - python:
+      imports:
+        - emle
+        - emle.models
+        - emle.train
+  - script:
+      - emle-server --help
+      - emle-analyze --help
+      - emle-compile --help
+      - emle-train --help
+
+about:
+  homepage: https://chemle.github.io/emle-engine
+  license: GPL-2.0-only
+  license_file: LICENSE
+  summary: An engine for electrostatic machine learned embedding potentials.
+  description: |
+    emle-engine implements a Python API and server for embedding electrostatic
+    machine learned (EMLE) potentials in QM/MM molecular dynamics simulations.
+  repository: https://github.com/chemle/emle-engine
+  documentation: https://chemle.github.io/emle-engine
+
+extra:
+  recipe-maintainers:
+    - lohedges
+    - JMorado
