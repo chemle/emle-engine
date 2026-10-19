@@ -1,14 +1,37 @@
 [build-system]
-requires = ["setuptools>=61.0.0", "setuptools-scm>=8.0"]
+requires = ["setuptools>=77.0.0,<81", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "emle-engine"
 description = "An engine for electrostatic machine learned embedding potentials"
+readme = "README.md"
 authors = [
     { name = "Lester Hedges", email = "lester.hedges@gmail.com" },
 ]
-license = { text = "GPL-2.0-only" }
+license = "GPL-2.0-only"
+license-files = ["LICENSE"]
+keywords = [
+    "machine-learning",
+    "molecular-dynamics",
+    "mlip",
+    "ml/mm",
+    "qm/mm",
+    "electrostatic-embedding",
+]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+]
 requires-python = ">=3.10"
 dependencies = [
     "ase",
@@ -25,7 +48,10 @@ dependencies = [
 dynamic = ["version"]
 
 [project.urls]
-Homepage = "https://github.com/chemle/emle-engine"
+Homepage = "https://chemle.github.io/emle-engine"
+Repository = "https://github.com/chemle/emle-engine"
+Issues = "https://github.com/chemle/emle-engine/issues"
+Documentation = "https://chemle.github.io/emle-engine"
 
 [tool.setuptools]
 include-package-data = true
