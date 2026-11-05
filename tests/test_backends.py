@@ -20,6 +20,13 @@ try:
 except ImportError:
     has_xtb = False
 
+try:
+    import aimnet as _aimnet
+
+    has_aimnet = True
+except ImportError:
+    has_aimnet = False
+
 
 @pytest.fixture(scope="module")
 def data():
@@ -84,6 +91,25 @@ def test_xtb(data):
 
     # Calculate the energy and forces.
     energy, forces = backend(atomic_numbers, xyz)
+
+
+@pytest.mark.skipif(not has_aimnet, reason="aimnet not installed")
+def test_aimnet2(data):
+    """
+    Test the AIMNet2 backend.
+    """
+
+    # Set up the data.
+    atomic_numbers, xyz = data
+
+    # Instantiate the AIMNet2 backend.
+    backend = AIMNet2(device="cpu")
+
+    # Calculate the energy and forces.
+    energy, forces = backend(atomic_numbers, xyz)
+
+    assert energy.shape == (1,)
+    assert forces.shape == xyz.shape
 
 
 @pytest.mark.skipif(

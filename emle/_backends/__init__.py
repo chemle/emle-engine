@@ -24,6 +24,7 @@
 Backends for in-vacuo calculations.
 """
 
+from ._aimnet2 import *
 from ._deepmd import *
 from ._orca import *
 from ._sander import *

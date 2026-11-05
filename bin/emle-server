@@ -126,6 +126,7 @@ except:
     interpolate_steps = None
 qm_indices = os.getenv("EMLE_QM_INDICES")
 sqm_theory = os.getenv("EMLE_SQM_THEORY")
+aimnet2_model = os.getenv("EMLE_AIMNET2_MODEL")
 orca_path = os.getenv("EMLE_ORCA_PATH")
 try:
     restart = strtobool(os.getenv("EMLE_RESTART"))
@@ -176,6 +177,7 @@ env = {
     "parm7": parm7,
     "qm_indices": qm_indices,
     "sqm_theory": sqm_theory,
+    "aimnet2_model": aimnet2_model,
     "orca_path": orca_path,
     "restart": restart,
     "orca_template": orca_template,
@@ -366,6 +368,12 @@ parser.add_argument(
     "--sqm-theory",
     type=str,
     help="the semi-empirical theory to use for the QM region when using the SQM backend",
+    required=False,
+)
+parser.add_argument(
+    "--aimnet2-model",
+    type=str,
+    help="the AIMNet2 model name or file to use when using the AIMNet2 backend",
     required=False,
 )
 parser.add_argument(

@@ -140,6 +140,13 @@ When multiple files are specified, energies and gradients will be averaged over
 the models. The model files need to be visible to the ``emle-server``, so we
 recommend the use of absolute paths.
 
+When using ``aimnet2`` as the backend you can choose the model with the
+``--aimnet2-model`` command-line argument, or using the ``EMLE_AIMNET2_MODEL``
+environment variable. This can be a model name from the
+`aimnet <https://github.com/isayevlab/aimnetcentral>`__ model registry, or the
+path to a model file. The default is ``aimnet2``. Model files are downloaded
+on first use.
+
 When using ``sander`` or ``sqm`` as the backend you will also need to specify
 the path to an AMBER parm7 topology file for the QM region. The can be specified
 using the ``--parm7`` command-line argument, or via the ``EMLE_PARM7`` environment

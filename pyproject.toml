@@ -79,6 +79,16 @@ platforms = ["linux-64", "osx-arm64"]
 [tool.pixi.feature.deepmd.dependencies]
 deepmd-kit = "*"
 
+# aimnet requires Python >=3.11; warp-lang has no osx-64 wheels.
+[tool.pixi.feature.aimnet2]
+platforms = ["linux-64", "osx-arm64"]
+
+[tool.pixi.feature.aimnet2.dependencies]
+python = ">=3.11"
+
+[tool.pixi.feature.aimnet2.pypi-dependencies]
+aimnet = "*"
+
 [tool.pixi.feature.xtb.dependencies]
 xtb-python = "*"
 
@@ -120,6 +130,7 @@ ambertools = { features = ["ambertools", "dev"], solve-group = "default" }
 mace = { features = ["mace", "dev"], solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
 deepmd = { features = ["deepmd", "dev"] }
+aimnet2 = { features = ["aimnet2", "dev"] }
 full = { features = ["deepmd", "xtb", "ambertools", "mace", "sire", "dev"] }
 sire = { features = ["sire", "dev"] }
 docs = { features = ["docs"] }
