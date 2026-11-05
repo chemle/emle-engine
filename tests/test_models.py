@@ -48,13 +48,6 @@ def xyz_mm():
 
 
 try:
-    import NNPOps
-
-    has_nnpops = hasattr(NNPOps, "OptimizedTorchANI")
-except:
-    has_nnpops = False
-
-try:
     from mace.calculators.foundations_models import mace_off as _mace_off
 
     has_mace = True
@@ -311,33 +304,6 @@ def test_ani2x(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
         xyz_qm.unsqueeze(0).repeat(2, 1, 1),
         xyz_mm.unsqueeze(0).repeat(2, 1, 1),
     )
-
-
-@pytest.mark.skipif(not has_nnpops, reason="NNPOps not installed")
-@pytest.mark.parametrize("alpha_mode", ["fixed", "flexible"])
-def test_ani2x_nnpops(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
-    """
-    Check that we can instantiate the default ANI2xEMLE model with NNPOps,
-    convert to TorchScript, then compute energies and gradients.
-    """
-    # Instantiate the ANI2xEMLE model using NNPOps.
-    model = ANI2xEMLE(alpha_mode=alpha_mode, atomic_numbers=atomic_numbers)
-
-    # Make sure the model can be converted to TorchScript.
-    model = torch.jit.script(model)
-
-    # Get the energy and gradients.
-    energy = model(atomic_numbers, charges_mm, xyz_qm, xyz_mm)
-    grad_qm, grad_mm = torch.autograd.grad(energy.sum(), (xyz_qm, xyz_mm))
-
-    # Make sure that batched inputs raise an exception.
-    with pytest.raises(torch.jit.Error):
-        energy = model(
-            atomic_numbers.unsqueeze(0).repeat(2, 1),
-            charges_mm.unsqueeze(0).repeat(2, 1),
-            xyz_qm.unsqueeze(0).repeat(2, 1, 1),
-            xyz_mm.unsqueeze(0).repeat(2, 1, 1),
-        )
 
 
 @pytest.mark.skipif(not has_mace, reason="mace-torch not installed")

@@ -134,8 +134,8 @@ class EMLECompiler:
             for the ``"emle-mace"`` backend, which hard-codes that mode.
 
         atomic_numbers : list of int, optional
-            If given, enables NNPOps optimisation for a fixed ML region and
-            bakes those species into the compiled model. Leave as ``None``
+            If given, bakes the species of a fixed ML region into the
+            compiled model. Leave as ``None``
             to produce a **generic** model usable for any ML region at
             runtime (species are supplied per-call by torchani-amber).
 
@@ -235,7 +235,6 @@ class EMLECompiler:
                 mm_charges=mm_charges,
                 qm_charge=qm_charge,
                 model_index=ani2x_model_index,
-                atomic_numbers=atomic_numbers,
                 device=self._device,
             )
 

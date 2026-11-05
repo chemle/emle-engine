@@ -108,8 +108,7 @@ def _build_parser():
         "--atomic-numbers", type=str, nargs="*", required=False,
         help=(
             "Optional. Atomic numbers of the ML region. Supplying this bakes "
-            "a fixed ML composition into the compiled model and enables "
-            "NNPOps optimisation. OMIT for a generic model that works for "
+            "a fixed ML composition into the compiled model. OMIT for a generic model that works for "
             "any ML region at runtime (recommended)."
         ),
     )

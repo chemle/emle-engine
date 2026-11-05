@@ -158,9 +158,8 @@ class EMLECalculator:
             Whether static atomic dipoles should be used
 
         atomic_numbers: List[int], Tuple[int], numpy.ndarray
-            Atomic numbers for the QM region. This allows use of optimised AEV
-            symmetry functions from the NNPOps package. Only use this option if
-            you are using a fixed QM region, i.e. the same QM region for each
+            Atomic numbers for the QM region. Only use this option if you are
+            using a fixed QM region, i.e. the same QM region for each
             call to the calculator.
 
         qm_charge: int
@@ -462,7 +461,6 @@ class EMLECalculator:
             model=model,
             method=method,
             alpha_mode=alpha_mode,
-            atomic_numbers=atomic_numbers,
             mm_charges=self._mm_charges,
             qm_charge=self._qm_charge,
             device=self._device,
@@ -642,7 +640,6 @@ class EMLECalculator:
                         mm_charges=self._mm_charges,
                         qm_charge=self._qm_charge,
                         model_index=ani2x_model_index,
-                        atomic_numbers=atomic_numbers,
                         device=self._device,
                     )
 
@@ -870,7 +867,6 @@ class EMLECalculator:
             self._emle_mm = _EMLE(
                 model=model,
                 alpha_mode=alpha_mode,
-                atomic_numbers=atomic_numbers,
                 method="mm",
                 mm_charges=self._mm_charges,
                 device=self._device,

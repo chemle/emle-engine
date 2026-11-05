@@ -158,7 +158,6 @@ class DeePMDEMLE(_torch.nn.Module):
             model=emle_model,
             method=emle_method,
             alpha_mode=alpha_mode,
-            atomic_numbers=(atomic_numbers if atomic_numbers is not None else None),
             mm_charges=mm_charges,
             qm_charge=qm_charge,
             device=device,
