@@ -483,21 +483,18 @@ def test_deepmd_empty_mm(
 def test_deepmd_buffer_device(deepmd_model_path):
     """
     Calling .cuda()/.cpu() on the composite must move the registered
-    buffers (_atomic_numbers, _z_to_type) — not just the submodules. Before
+    buffers (_z_to_type) — not just the submodules. Before
     the fix the overrides skipped super().to() and the buffers were
     stranded, breaking forward at `self._z_to_type[atomic_numbers]`.
     """
     model = DeePMDEMLE(deepmd_model=deepmd_model_path, dtype=torch.float64)
     assert model._z_to_type.device.type == "cpu"
-    assert model._atomic_numbers.device.type == "cpu"
 
     model = model.cuda()
     assert model._z_to_type.device.type == "cuda"
-    assert model._atomic_numbers.device.type == "cuda"
 
     model = model.cpu()
     assert model._z_to_type.device.type == "cpu"
-    assert model._atomic_numbers.device.type == "cpu"
 
 
 @pytest.mark.skipif(not has_deepmd, reason="deepmd-kit not installed")

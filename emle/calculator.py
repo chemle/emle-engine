@@ -81,7 +81,6 @@ class EMLECalculator:
         method="electrostatic",
         alpha_mode="fixed",
         use_dipoles=False,
-        atomic_numbers=None,
         qm_charge=0,
         backend="torchani",
         external_backend=None,
@@ -156,11 +155,6 @@ class EMLECalculator:
 
         use_dipoles: bool
             Whether static atomic dipoles should be used
-
-        atomic_numbers: List[int], Tuple[int], numpy.ndarray
-            Atomic numbers for the QM region. Only use this option if you are
-            using a fixed QM region, i.e. the same QM region for each
-            call to the calculator.
 
         qm_charge: int
             The charge on the QM region. This is required when using an
@@ -661,7 +655,6 @@ class EMLECalculator:
                             mm_charges=self._mm_charges,
                             qm_charge=self._qm_charge,
                             mace_model=mace_model,
-                            atomic_numbers=atomic_numbers,
                             device=self._device,
                         )
                     else:  # emle-mace
@@ -674,7 +667,6 @@ class EMLECalculator:
                             mm_charges=self._mm_charges,
                             qm_charge=self._qm_charge,
                             mace_model=mace_model,
-                            atomic_numbers=atomic_numbers,
                             device=self._device,
                         )
 
@@ -947,17 +939,11 @@ class EMLECalculator:
         self._model = self._emle._model
         self._method = self._emle._method
         self._alpha_mode = self._emle._alpha_mode
-        self._atomic_numbers = self._emle._atomic_numbers
-
-        if isinstance(atomic_numbers, _np.ndarray):
-            atomic_numbers = atomic_numbers.tolist()
-
         # Store the settings as a dictionary.
         self._settings = {
             "model": None if model is None else self._model,
             "method": self._method,
             "alpha_mode": self._alpha_mode,
-            "atomic_numbers": None if atomic_numbers is None else atomic_numbers,
             "qm_charge": self._qm_charge,
             "backend": self._backend,
             "external_backend": None if external_backend is None else external_backend,

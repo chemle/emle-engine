@@ -32,21 +32,6 @@ import yaml
 from emle._compiler import EMLECompiler
 
 
-def _parse_int_list(raw, name):
-    if raw is None:
-        return None
-    if isinstance(raw, str):
-        raw = raw.split(",")
-    if isinstance(raw, (list, tuple)):
-        if len(raw) == 1 and isinstance(raw[0], str) and os.path.isfile(raw[0]):
-            return np.loadtxt(raw[0], dtype=int).tolist()
-        try:
-            return [int(x) for x in raw]
-        except Exception as exc:
-            raise TypeError(f"Unable to parse '{name}' as a list of ints") from exc
-    raise TypeError(f"'{name}' must be a comma-separated string, list, or file path")
-
-
 def _parse_float_list(raw, name):
     if raw is None:
         return None
@@ -103,14 +88,6 @@ def _build_parser():
             "Polarizability mode. Default: fixed. "
             "('species'/'reference' are deprecated aliases for 'fixed'/'flexible')"
         )
-    )
-    p.add_argument(
-        "--atomic-numbers", type=str, nargs="*", required=False,
-        help=(
-            "Optional. Atomic numbers of the ML region. Supplying this bakes "
-            "a fixed ML composition into the compiled model. OMIT for a generic model that works for "
-            "any ML region at runtime (recommended)."
-        ),
     )
     p.add_argument(
         "--mm-charges", type=str, nargs="*", required=False,
@@ -194,7 +171,6 @@ def main(argv=None):
     if args.get("use_dipoles") and args["backend"] != "emle-mace":
         parser.error("--use-dipoles is only valid with --backend=emle-mace")
 
-    args["atomic_numbers"] = _parse_int_list(args.get("atomic_numbers"), "atomic_numbers")
     args["mm_charges"] = _parse_float_list(args.get("mm_charges"), "mm_charges")
 
     EMLECompiler(**args).compile(output_path)

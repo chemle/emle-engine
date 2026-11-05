@@ -30,7 +30,6 @@ __all__ = ["MACEEMLE", "MACEEMLEJoint"]
 import io as _io
 import os as _os
 import torch as _torch
-import numpy as _np
 
 from typing import List, Dict, Optional
 
@@ -127,7 +126,6 @@ class MACEEMLE(_torch.nn.Module):
         mm_charges=None,
         qm_charge=0,
         mace_model=None,
-        atomic_numbers=None,
         device=None,
         dtype=None,
     ):
@@ -178,9 +176,6 @@ class MACEEMLE(_torch.nn.Module):
             If more than one model is provided, only the energy from the first model will be returned
             in the forward pass, but the energy and forces from all models will be stored.
 
-        atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor (N_ATOMS,)
-            List of atomic numbers to use in the MACE model.
-
         device: torch.device
             The device on which to run the model.
 
@@ -210,29 +205,10 @@ class MACEEMLE(_torch.nn.Module):
         else:
             self._dtype = _torch.get_default_dtype()
 
-        if atomic_numbers is not None:
-            if isinstance(atomic_numbers, _np.ndarray):
-                atomic_numbers = atomic_numbers.tolist()
-            if isinstance(atomic_numbers, (list, tuple)):
-                if not all(isinstance(i, int) for i in atomic_numbers):
-                    raise ValueError("'atomic_numbers' must be a list of integers")
-                else:
-                    atomic_numbers = _torch.tensor(
-                        atomic_numbers, dtype=_torch.int64, device=device
-                    )
-            if not isinstance(atomic_numbers, _torch.Tensor):
-                raise TypeError("'atomic_numbers' must be of type 'torch.Tensor'")
-            # Check that they are integers.
-            if atomic_numbers.dtype != _torch.int64:
-                raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
-            self.register_buffer("_atomic_numbers", atomic_numbers.to(device))
-        else:
-            self.register_buffer(
-                "_atomic_numbers",
-                _torch.tensor(
-                    [], dtype=_torch.int64, device=device, requires_grad=False
-                ),
-            )
+        self.register_buffer(
+            "_atomic_numbers",
+            _torch.tensor([], dtype=_torch.int64, device=device, requires_grad=False),
+        )
 
         # Create an instance of the EMLE model.
         self._emle = _EMLE(
@@ -317,31 +293,14 @@ class MACEEMLE(_torch.nn.Module):
         self._z_table = [int(z.item()) for z in self._mace.atomic_numbers]
         self._r_max = self._mace.r_max.item()
 
-        if len(self._atomic_numbers) > 0:
-            # Get the node attributes.
-            node_attrs = self._get_node_attrs(self._atomic_numbers)
-            self.register_buffer("_node_attrs", node_attrs.to(self._dtype))
-            self.register_buffer(
-                "_ptr",
-                _torch.tensor(
-                    [0, node_attrs.shape[0]], dtype=_torch.long, requires_grad=False
-                ),
-            )
-            self.register_buffer(
-                "_batch",
-                _torch.zeros(
-                    node_attrs.shape[0], dtype=_torch.long, requires_grad=False
-                ),
-            )
-        else:
-            # Initialise the node attributes.
-            self.register_buffer("_node_attrs", _torch.tensor([], dtype=self._dtype))
-            self.register_buffer(
-                "_ptr", _torch.tensor([], dtype=_torch.long, requires_grad=False)
-            )
-            self.register_buffer(
-                "_batch", _torch.tensor([], dtype=_torch.long, requires_grad=False)
-            )
+        # Initialise the node attributes.
+        self.register_buffer("_node_attrs", _torch.tensor([], dtype=self._dtype))
+        self.register_buffer(
+            "_ptr", _torch.tensor([], dtype=_torch.long, requires_grad=False)
+        )
+        self.register_buffer(
+            "_batch", _torch.tensor([], dtype=_torch.long, requires_grad=False)
+        )
 
         # No PBCs for now.
         self.register_buffer(
@@ -764,7 +723,6 @@ class MACEEMLEJoint(_torch.nn.Module):
         mm_charges=None,
         qm_charge=0,
         mace_model=None,
-        atomic_numbers=None,
         use_dipoles=False,
         device=None,
         dtype=None,
@@ -808,9 +766,6 @@ class MACEEMLEJoint(_torch.nn.Module):
             If more than one model is provided, only the energy from the first model will be returned
             in the forward pass, but the energy and forces from all models will be stored.
 
-        atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor (N_ATOMS,)
-            List of atomic numbers to use in the MACE model.
-
         use_dipoles: bool
             Whether to include the MACE-predicted atomic dipoles 'mu' in the
             static electrostatic energy. When True, 'mu' is passed to EMLE as
@@ -846,29 +801,10 @@ class MACEEMLEJoint(_torch.nn.Module):
         else:
             self._dtype = _torch.get_default_dtype()
 
-        if atomic_numbers is not None:
-            if isinstance(atomic_numbers, _np.ndarray):
-                atomic_numbers = atomic_numbers.tolist()
-            if isinstance(atomic_numbers, (list, tuple)):
-                if not all(isinstance(i, int) for i in atomic_numbers):
-                    raise ValueError("'atomic_numbers' must be a list of integers")
-                else:
-                    atomic_numbers = _torch.tensor(
-                        atomic_numbers, dtype=_torch.int64, device=device
-                    )
-            if not isinstance(atomic_numbers, _torch.Tensor):
-                raise TypeError("'atomic_numbers' must be of type 'torch.Tensor'")
-            # Check that they are integers.
-            if atomic_numbers.dtype != _torch.int64:
-                raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
-            self.register_buffer("_atomic_numbers", atomic_numbers.to(device))
-        else:
-            self.register_buffer(
-                "_atomic_numbers",
-                _torch.tensor(
-                    [], dtype=_torch.int64, device=device, requires_grad=False
-                ),
-            )
+        self.register_buffer(
+            "_atomic_numbers",
+            _torch.tensor([], dtype=_torch.int64, device=device, requires_grad=False),
+        )
 
         # Create an instance of the EMLE model.
         # alpha_mode is hard-coded to "fixed" here: MACEEMLEJoint currently only
@@ -977,31 +913,14 @@ class MACEEMLEJoint(_torch.nn.Module):
         self._z_table = [int(z.item()) for z in self._mace.atomic_numbers]
         self._r_max = self._mace.r_max.item()
 
-        if len(self._atomic_numbers) > 0:
-            # Get the node attributes.
-            node_attrs = self._get_node_attrs(self._atomic_numbers)
-            self.register_buffer("_node_attrs", node_attrs.to(self._dtype))
-            self.register_buffer(
-                "_ptr",
-                _torch.tensor(
-                    [0, node_attrs.shape[0]], dtype=_torch.long, requires_grad=False
-                ),
-            )
-            self.register_buffer(
-                "_batch",
-                _torch.zeros(
-                    node_attrs.shape[0], dtype=_torch.long, requires_grad=False
-                ),
-            )
-        else:
-            # Initialise the node attributes.
-            self.register_buffer("_node_attrs", _torch.tensor([], dtype=self._dtype))
-            self.register_buffer(
-                "_ptr", _torch.tensor([], dtype=_torch.long, requires_grad=False)
-            )
-            self.register_buffer(
-                "_batch", _torch.tensor([], dtype=_torch.long, requires_grad=False)
-            )
+        # Initialise the node attributes.
+        self.register_buffer("_node_attrs", _torch.tensor([], dtype=self._dtype))
+        self.register_buffer(
+            "_ptr", _torch.tensor([], dtype=_torch.long, requires_grad=False)
+        )
+        self.register_buffer(
+            "_batch", _torch.tensor([], dtype=_torch.long, requires_grad=False)
+        )
 
         # No PBCs for now.
         self.register_buffer(

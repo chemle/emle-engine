@@ -27,7 +27,6 @@ __all__ = ["DeePMDEMLE"]
 import os as _os
 
 import ase as _ase
-import numpy as _np
 import torch as _torch
 
 from typing import List, Optional, Tuple, Union
@@ -62,7 +61,6 @@ class DeePMDEMLE(_torch.nn.Module):
         mm_charges=None,
         qm_charge=0,
         deepmd_model=None,
-        atomic_numbers=None,
         device=None,
         dtype=None,
     ):
@@ -100,11 +98,6 @@ class DeePMDEMLE(_torch.nn.Module):
             force/energy deviation monitoring (exposed as ``_E_vac_qbc`` /
             ``_grads_qbc``).
 
-        atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor
-            Atomic numbers of the QM region. Used to enable optimised AEV
-            computation in the EMLE submodule. Only set this for a fixed QM
-            region.
-
         device: torch.device
             The device on which to run the model.
 
@@ -127,29 +120,6 @@ class DeePMDEMLE(_torch.nn.Module):
             self._dtype = dtype
         else:
             self._dtype = _torch.get_default_dtype()
-
-        # Validate atomic_numbers and store as a buffer (mirrors MACEEMLE).
-        if atomic_numbers is not None:
-            if isinstance(atomic_numbers, _np.ndarray):
-                atomic_numbers = atomic_numbers.tolist()
-            if isinstance(atomic_numbers, (list, tuple)):
-                if not all(isinstance(i, int) for i in atomic_numbers):
-                    raise ValueError("'atomic_numbers' must be a list of integers")
-                atomic_numbers = _torch.tensor(
-                    atomic_numbers, dtype=_torch.int64, device=device
-                )
-            if not isinstance(atomic_numbers, _torch.Tensor):
-                raise TypeError("'atomic_numbers' must be of type 'torch.Tensor'")
-            if atomic_numbers.dtype != _torch.int64:
-                raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
-            self.register_buffer("_atomic_numbers", atomic_numbers.to(device))
-        else:
-            self.register_buffer(
-                "_atomic_numbers",
-                _torch.tensor(
-                    [], dtype=_torch.int64, device=device, requires_grad=False
-                ),
-            )
 
         # Create the EMLE submodule. We always create our own AEV calculator
         # since DeePMD descriptors are not interchangeable with EMLE's
