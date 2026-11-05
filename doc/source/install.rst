@@ -42,6 +42,7 @@ environments for each of the optional in-vacuo backends:
     pixi install -e xtb     # adds the xtb-python backend
     pixi install -e ambertools  # adds the sander and sqm backends
     pixi install -e mace    # adds the MACE/emle-mace backends
+    pixi install -e aimnet2 # adds the AIMNet2 backend
     pixi install -e sire    # adds the OpenMM/Sire integration
     pixi install -e full    # deepmd + xtb + ambertools + mace + sire combined
 

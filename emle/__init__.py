@@ -43,6 +43,7 @@ _supported_backends = [
     "sqm",
     "sander",
     "xtb",
+    "aimnet2",
 ]
 
 from importlib.metadata import PackageNotFoundError, version as _version

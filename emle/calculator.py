@@ -102,6 +102,7 @@ class EMLECalculator:
         qm_indices=None,
         orca_path=None,
         sqm_theory="DFTB3",
+        aimnet2_model="aimnet2",
         lambda_interpolate=None,
         interpolate_steps=None,
         restart=False,
@@ -262,6 +263,10 @@ class EMLECalculator:
         sqm_theory: str
             The QM theory to use when using the SQM backend. See the AmberTools
             manual for the supported theory levels for your version of AmberTools.
+
+        aimnet2_model: str
+            The AIMNet2 model to use when using the AIMNet2 backend: a name from
+            the aimnet model registry, e.g. "aimnet2", or the path to a model file.
 
         restart: bool
             Whether this is a restart simulation with sander. If True, then energies
@@ -740,6 +745,20 @@ class EMLECalculator:
                         _logger.error(msg)
                         raise RuntimeError(msg)
 
+                elif backend == "aimnet2":
+                    try:
+                        from ._backends import AIMNet2
+
+                        b = AIMNet2(
+                            model=aimnet2_model,
+                            qm_charge=self._qm_charge,
+                            device=self._device,
+                        )
+                    except Exception as e:
+                        msg = f"Unable to create AIMNet2 backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
                 elif backend == "sander":
                     try:
                         from ._backends import Sander
@@ -963,6 +982,7 @@ class EMLECalculator:
             "qm_indices": None if qm_indices is None else self._qm_indices,
             "orca_path": orca_path,
             "sqm_theory": sqm_theory,
+            "aimnet2_model": aimnet2_model,
             "lambda_interpolate": lambda_interpolate,
             "interpolate_steps": interpolate_steps,
             "restart": restart,
