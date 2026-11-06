@@ -127,6 +127,11 @@ except:
 qm_indices = os.getenv("EMLE_QM_INDICES")
 sqm_theory = os.getenv("EMLE_SQM_THEORY")
 aimnet2_model = os.getenv("EMLE_AIMNET2_MODEL")
+omnip2x_model = os.getenv("EMLE_OMNIP2X_MODEL")
+try:
+    omnip2x_state = int(os.getenv("EMLE_OMNIP2X_STATE"))
+except:
+    omnip2x_state = None
 orca_path = os.getenv("EMLE_ORCA_PATH")
 try:
     restart = strtobool(os.getenv("EMLE_RESTART"))
@@ -178,6 +183,8 @@ env = {
     "qm_indices": qm_indices,
     "sqm_theory": sqm_theory,
     "aimnet2_model": aimnet2_model,
+    "omnip2x_model": omnip2x_model,
+    "omnip2x_state": omnip2x_state,
     "orca_path": orca_path,
     "restart": restart,
     "orca_template": orca_template,
@@ -374,6 +381,19 @@ parser.add_argument(
     "--aimnet2-model",
     type=str,
     help="the AIMNet2 model name or file to use when using the AIMNet2 backend",
+    required=False,
+)
+parser.add_argument(
+    "--omnip2x-model",
+    type=str,
+    nargs="*",
+    help="path to OMNI-P2x model file(s) to use when using the OMNI-P2x backend",
+    required=False,
+)
+parser.add_argument(
+    "--omnip2x-state",
+    type=int,
+    help="the electronic state index to use when using the OMNI-P2x backend",
     required=False,
 )
 parser.add_argument(
@@ -617,35 +637,37 @@ else:
         except:
             raise TypeError("Unable to parse QM indices as a list of indices")
 
-# Work out the DeePMD model. We allow the following formatting:
+# Work out the DeePMD and OMNI-P2x models. We allow the following formatting:
 #    1) A path to a single file.
 #    2) Multiple files specified using wildcards.
 #    3) A list of files, comma-separated.
 #
 # The first two can be found using glob, if empty then try splitting on ",".
-if args["deepmd_model"] is not None:
-    if isinstance(args["deepmd_model"], list) and len(args["deepmd_model"]) == 1:
-        args["deepmd_model"] = args["deepmd_model"][0]
-    if isinstance(args["deepmd_model"], str):
+for key, name in (("deepmd_model", "DeePMD"), ("omnip2x_model", "OMNI-P2x")):
+    if args[key] is None:
+        continue
+    if isinstance(args[key], list) and len(args[key]) == 1:
+        args[key] = args[key][0]
+    if isinstance(args[key], str):
         # Remove whitespace.
-        args["deepmd_model"] = args["deepmd_model"].replace(" ", "")
+        args[key] = args[key].replace(" ", "")
 
         # Try globbing.
-        models = glob(args["deepmd_model"])
+        models = glob(args[key])
 
         # No matches.
         if not models:
-            models = args["deepmd_model"].split(",")
+            models = args[key].split(",")
 
             # Invalid formatting.
             if len(models) == 1:
                 raise ValueError(
-                    f"DeePMD model not found, or invalid formatting: '{args['deepmd_model']}'"
+                    f"{name} model not found, or invalid formatting: '{args[key]}'"
                 )
             else:
-                args["deepmd_model"] = models
+                args[key] = models
         else:
-            args["deepmd_model"] = models
+            args[key] = models
 
 # Log errors by default.
 if args["log_file"] is None:
