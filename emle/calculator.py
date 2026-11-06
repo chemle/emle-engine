@@ -104,7 +104,7 @@ class EMLECalculator:
         sqm_theory="DFTB3",
         aimnet2_model="aimnet2",
         omnip2x_model=None,
-        omnip2x_state=0,
+        electronic_state=None,
         lambda_interpolate=None,
         interpolate_steps=None,
         restart=False,
@@ -276,10 +276,11 @@ class EMLECalculator:
             averaged over the models. If None, the official OMNI-P2x models
             are downloaded on first use.
 
-        omnip2x_state: int
-            The electronic state index to use when using the OMNI-P2x backend
-            (0 is the ground state). For excited states, an EMLE model trained
-            for that state should be passed as 'model'.
+        electronic_state: int
+            The electronic state index (0 is the ground state), for backends
+            that support it (currently OMNI-P2x). If None, the backend default
+            (the ground state) is used. For excited states, an EMLE model
+            trained for that state should be passed as 'model'.
 
         restart: bool
             Whether this is a restart simulation with sander. If True, then energies
@@ -776,11 +777,7 @@ class EMLECalculator:
                     try:
                         from ._backends import OMNIP2x
 
-                        b = OMNIP2x(
-                            model=omnip2x_model,
-                            state=0 if omnip2x_state is None else omnip2x_state,
-                            device=self._device,
-                        )
+                        b = OMNIP2x(model=omnip2x_model, device=self._device)
                     except Exception as e:
                         msg = f"Unable to create OMNI-P2x backend: {e}"
                         _logger.error(msg)
@@ -798,6 +795,9 @@ class EMLECalculator:
 
                 # Append the backend to the list.
                 self._backends.append(b)
+
+        if electronic_state is not None:
+            self.set_electronic_state(electronic_state)
 
         if qbc_deviation is not None:
             if not isinstance(qbc_deviation, str):
@@ -1011,7 +1011,7 @@ class EMLECalculator:
             "sqm_theory": sqm_theory,
             "aimnet2_model": aimnet2_model,
             "omnip2x_model": omnip2x_model,
-            "omnip2x_state": omnip2x_state,
+            "electronic_state": electronic_state,
             "lambda_interpolate": lambda_interpolate,
             "interpolate_steps": interpolate_steps,
             "restart": restart,
@@ -1557,9 +1557,9 @@ class EMLECalculator:
         # Reset the first step flag.
         self._is_first_step = not self._restart
 
-    def set_omnip2x_state(self, state):
+    def set_electronic_state(self, state):
         """
-        Set the electronic state used by the OMNI-P2x backend.
+        Set the electronic state for all backends that support it.
 
         Parameters
         ----------
@@ -1567,11 +1567,10 @@ class EMLECalculator:
         state: int
             The electronic state index (0 is the ground state).
         """
-        from ._backends import OMNIP2x
-
-        backends = [b for b in self._backends if isinstance(b, OMNIP2x)]
+        # Backends that support electronic states have a 'state' attribute.
+        backends = [b for b in self._backends if hasattr(b, "state")]
         if not backends:
-            msg = "The OMNI-P2x backend is not in use!"
+            msg = "None of the backends supports choosing the electronic state!"
             _logger.error(msg)
             raise Exception(msg)
 

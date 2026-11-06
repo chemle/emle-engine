@@ -38,7 +38,7 @@ from torchani.aev import ANIAngular as _ANIAngular
 from torchani.aev import ANIRadial as _ANIRadial
 
 from .._units import _BOHR_TO_ANGSTROM
-from ._backend import Backend as _Backend
+from ._backend import MultistateBackend as _MultistateBackend
 
 # Official OMNI-P2x weights, pinned to an omni-p2x commit, with their sha256.
 _WEIGHTS_URL = (
@@ -240,7 +240,7 @@ class _OMNIP2xNetwork(_torch.nn.Module):
         )
 
 
-class OMNIP2x(_Backend):
+class OMNIP2x(_MultistateBackend):
     """
     OMNI-P2x in-vacuo backend implementation.
     """
@@ -264,7 +264,7 @@ class OMNIP2x(_Backend):
             The device to run the model on, e.g. "cpu" or "cuda". If None,
             CUDA is used when available.
         """
-        super().__init__()
+        super().__init__(state)
 
         if model is None:
             directory = _os.path.join(_torch.hub.get_dir(), "omnip2x")
@@ -288,8 +288,6 @@ class OMNIP2x(_Backend):
                 raise IOError(f"Unable to locate OMNI-P2x model file: '{m}'")
         self._model = list(model)
 
-        self.state = state
-
         if device is None:
             device = "cuda" if _torch.cuda.is_available() else "cpu"
         self._device = _torch.device(device)
@@ -301,19 +299,6 @@ class OMNIP2x(_Backend):
             ]
         except Exception as e:
             raise RuntimeError(f"Unable to load the OMNI-P2x models: {e}") from e
-
-    @property
-    def state(self):
-        """The electronic state index (0 is the ground state)."""
-        return self._state
-
-    @state.setter
-    def state(self, state):
-        if not isinstance(state, int) or isinstance(state, bool):
-            raise TypeError("'state' must be of type 'int'")
-        if state < 0:
-            raise ValueError("'state' must be greater than or equal to 0")
-        self._state = state
 
     def calculate(self, atomic_numbers, xyz, forces=True):
         """
@@ -374,7 +359,7 @@ class OMNIP2x(_Backend):
         )
 
         energy = sum(
-            network(atomic_numbers, xyz, self._state) for network in self._networks
+            network(atomic_numbers, xyz, self.state) for network in self._networks
         ) / len(self._networks)
 
         if not forces:
