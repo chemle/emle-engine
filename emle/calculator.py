@@ -103,6 +103,8 @@ class EMLECalculator:
         orca_path=None,
         sqm_theory="DFTB3",
         aimnet2_model="aimnet2",
+        omnip2x_model=None,
+        omnip2x_state=0,
         lambda_interpolate=None,
         interpolate_steps=None,
         restart=False,
@@ -267,6 +269,17 @@ class EMLECalculator:
         aimnet2_model: str
             The AIMNet2 model to use when using the AIMNet2 backend: a name from
             the aimnet model registry, e.g. "aimnet2", or the path to a model file.
+
+        omnip2x_model: str, [str]
+            Path(s) to OMNI-P2x model files to use when using the OMNI-P2x
+            backend, e.g. fine-tuned models saved by MLatom. The energy is
+            averaged over the models. If None, the official OMNI-P2x models
+            are downloaded on first use.
+
+        omnip2x_state: int
+            The electronic state index to use when using the OMNI-P2x backend
+            (0 is the ground state). For excited states, an EMLE model trained
+            for that state should be passed as 'model'.
 
         restart: bool
             Whether this is a restart simulation with sander. If True, then energies
@@ -759,6 +772,20 @@ class EMLECalculator:
                         _logger.error(msg)
                         raise RuntimeError(msg)
 
+                elif backend == "omnip2x":
+                    try:
+                        from ._backends import OMNIP2x
+
+                        b = OMNIP2x(
+                            model=omnip2x_model,
+                            state=0 if omnip2x_state is None else omnip2x_state,
+                            device=self._device,
+                        )
+                    except Exception as e:
+                        msg = f"Unable to create OMNI-P2x backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
                 elif backend == "sander":
                     try:
                         from ._backends import Sander
@@ -983,6 +1010,8 @@ class EMLECalculator:
             "orca_path": orca_path,
             "sqm_theory": sqm_theory,
             "aimnet2_model": aimnet2_model,
+            "omnip2x_model": omnip2x_model,
+            "omnip2x_state": omnip2x_state,
             "lambda_interpolate": lambda_interpolate,
             "interpolate_steps": interpolate_steps,
             "restart": restart,
@@ -1527,6 +1556,31 @@ class EMLECalculator:
 
         # Reset the first step flag.
         self._is_first_step = not self._restart
+
+    def set_omnip2x_state(self, state):
+        """
+        Set the electronic state used by the OMNI-P2x backend.
+
+        Parameters
+        ----------
+
+        state: int
+            The electronic state index (0 is the ground state).
+        """
+        from ._backends import OMNIP2x
+
+        backends = [b for b in self._backends if isinstance(b, OMNIP2x)]
+        if not backends:
+            msg = "The OMNI-P2x backend is not in use!"
+            _logger.error(msg)
+            raise Exception(msg)
+
+        for b in backends:
+            try:
+                b.state = state
+            except Exception as e:
+                _logger.error(str(e))
+                raise
 
     def _sire_callback(
         self, atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell=None, idx_mm=None

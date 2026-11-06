@@ -44,6 +44,7 @@ _supported_backends = [
     "sander",
     "xtb",
     "aimnet2",
+    "omnip2x",
 ]
 
 from importlib.metadata import PackageNotFoundError, version as _version
