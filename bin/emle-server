@@ -129,9 +129,9 @@ sqm_theory = os.getenv("EMLE_SQM_THEORY")
 aimnet2_model = os.getenv("EMLE_AIMNET2_MODEL")
 omnip2x_model = os.getenv("EMLE_OMNIP2X_MODEL")
 try:
-    omnip2x_state = int(os.getenv("EMLE_OMNIP2X_STATE"))
+    electronic_state = int(os.getenv("EMLE_ELECTRONIC_STATE"))
 except:
-    omnip2x_state = None
+    electronic_state = None
 orca_path = os.getenv("EMLE_ORCA_PATH")
 try:
     restart = strtobool(os.getenv("EMLE_RESTART"))
@@ -184,7 +184,7 @@ env = {
     "sqm_theory": sqm_theory,
     "aimnet2_model": aimnet2_model,
     "omnip2x_model": omnip2x_model,
-    "omnip2x_state": omnip2x_state,
+    "electronic_state": electronic_state,
     "orca_path": orca_path,
     "restart": restart,
     "orca_template": orca_template,
@@ -391,9 +391,9 @@ parser.add_argument(
     required=False,
 )
 parser.add_argument(
-    "--omnip2x-state",
+    "--electronic-state",
     type=int,
-    help="the electronic state index to use when using the OMNI-P2x backend",
+    help="the electronic state index, for backends that support it (OMNI-P2x)",
     required=False,
 )
 parser.add_argument(

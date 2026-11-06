@@ -153,7 +153,7 @@ first use. Other OMNI-P2x model files, e.g. models fine-tuned with MLatom, can b
 passed with the ``--omnip2x-model`` command-line argument, or using the
 ``EMLE_OMNIP2X_MODEL`` environment variable, in the same way as DeePMD model
 files. Energies and gradients are averaged over the models. The electronic state
-is chosen with ``--omnip2x-state`` or ``EMLE_OMNIP2X_STATE`` (default 0, the
+is chosen with ``--electronic-state`` or ``EMLE_ELECTRONIC_STATE`` (default 0, the
 ground state). For excited states, pass an EMLE model trained for that state
 with ``--model``. MLatom's fragment correction for excited states is not
 supported.
