@@ -24,11 +24,7 @@
 
 __all__ = ["OMNIP2x"]
 
-import collections as _collections
-import io as _io
 import os as _os
-import pickle as _pickle
-import zipfile as _zipfile
 
 import numpy as _np
 import torch as _torch
@@ -51,24 +47,15 @@ _WEIGHTS = {
     "OMNIP2x_CV_3.pt": "e98b78d78aed21f5e1a0db50cfc5405fe0b80ad90a5a289758336cecef1c939e",
 }
 
-_STORAGE_DTYPES = {
-    "FloatStorage": _torch.float32,
-    "DoubleStorage": _torch.float64,
-    "LongStorage": _torch.int64,
-}
-
-
-class _Inert:
-    """
-    Stand-in for any other pickled class: nothing from the file runs, and
-    the pickled state is only stored as data.
-    """
-
-    def __init__(self, *args, **kwargs):
-        pass
-
-    def __setstate__(self, state):
-        self.state = state
+# Classes pickled in the checkpoints, loaded as empty classes holding their state.
+_CLASSES = (
+    "torch.nn.modules.container.Sequential",
+    "torch.nn.modules.linear.Linear",
+    "torch.nn.modules.activation.CELU",
+    "torch.nn.modules.activation.GELU",
+    "torchani.aev.AEVComputer",
+    "torchani.utils.EnergyShifter",
+)
 
 
 def _load_checkpoint(path):
@@ -76,43 +63,21 @@ def _load_checkpoint(path):
     Read the plain data (tensors, numbers, strings, dicts) from an OMNI-P2x
     checkpoint without executing any code from it.
 
-    The checkpoints pickle whole torchani<2.3 objects, which need
-    torch.load(weights_only=False). Every other class is replaced by an
-    inert stand-in that keeps only its pickled state.
+    The checkpoints pickle whole torchani<2.3 objects. torch's weights-only
+    loader reads them, with each of these classes replaced by an empty one,
+    so their pickled state only becomes instance attributes.
     """
-    with _zipfile.ZipFile(path) as archive:
-        pkl = next(n for n in archive.namelist() if n.endswith("data.pkl"))
-        prefix = pkl[: -len("data.pkl")]
-
-        def tensor_from_storage(storage, offset, size, stride, *args):
-            return storage.as_strided(tuple(size), tuple(stride), offset)
-
-        class Unpickler(_pickle.Unpickler):
-            def find_class(self, module, name):
-                if module == "torch" and name in _STORAGE_DTYPES:
-                    return _STORAGE_DTYPES[name]
-                if (module, name) == ("torch._utils", "_rebuild_tensor_v2"):
-                    return tensor_from_storage
-                if (module, name) == ("torch._utils", "_rebuild_parameter"):
-                    return lambda tensor, *args: tensor
-                if (module, name) == ("collections", "OrderedDict"):
-                    return _collections.OrderedDict
-                if (module, name) == ("numpy", "dtype"):
-                    return _np.dtype
-                if name == "scalar" and module.startswith("numpy"):
-                    return lambda dtype, data: _np.frombuffer(data, dtype)[0]
-                if (module, name) == ("_codecs", "encode"):
-                    return lambda text, encoding: text.encode(encoding)
-                return type(name, (_Inert,), {})
-
-            def persistent_load(self, pid):
-                _, dtype, key, _, numel = pid
-                if numel == 0:
-                    return _torch.empty(0, dtype=dtype)
-                data = bytearray(archive.read(f"{prefix}data/{key}"))
-                return _torch.frombuffer(data, dtype=dtype, count=numel)
-
-        return Unpickler(_io.BytesIO(archive.read(pkl))).load()
+    safe = [(type(name.rsplit(".", 1)[1], (), {}), name) for name in _CLASSES]
+    safe += [
+        (
+            lambda dtype, data: _np.frombuffer(data, dtype)[0],
+            "numpy.core.multiarray.scalar",
+        ),
+        _np.dtype,
+        type(_np.dtype("U1")),  # numpy.dtypes.StrDType in numpy 2
+    ]
+    with _torch.serialization.safe_globals(safe):
+        return _torch.load(path, map_location="cpu", weights_only=True)
 
 
 class _OMNIP2xNetwork(_torch.nn.Module):
@@ -203,16 +168,16 @@ def _from_checkpoint(path):
     networks = []
     for symbol in species:
         layers = []
-        pickled = checkpoint["network"][symbol].state["_modules"]
+        pickled = checkpoint["network"][symbol]._modules
         for layer in pickled.values():
             kind = type(layer).__name__
             if kind == "Linear":
-                weight = layer.state["_parameters"]["weight"]
+                weight = layer._parameters["weight"]
                 layers.append(_torch.nn.Linear(weight.shape[1], weight.shape[0]))
             elif kind == "CELU":
-                layers.append(_torch.nn.CELU(layer.state["alpha"]))
+                layers.append(_torch.nn.CELU(layer.alpha))
             elif kind == "GELU":
-                layers.append(_torch.nn.GELU(layer.state["approximate"]))
+                layers.append(_torch.nn.GELU(layer.approximate))
             else:
                 raise ValueError(f"Unsupported OMNI-P2x layer type: {kind}")
         network = _torch.nn.Sequential(*layers)
@@ -233,9 +198,9 @@ def _from_checkpoint(path):
     else:
         shifter = None
     if shifter is not None:
-        if shifter.state.get("fit_intercept", False):
+        if getattr(shifter, "fit_intercept", False):
             raise ValueError("OMNI-P2x checkpoints with an intercept are not supported")
-        self_energies = shifter.state["_buffers"]["self_energies"]
+        self_energies = shifter._buffers["self_energies"]
     elif "self_energies_train" in args:
         self_energies = args["self_energies_train"]
     elif "self_energies" in args:
