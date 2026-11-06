@@ -43,13 +43,6 @@ from ._utils import (
     _sanitize_alpha_mode,
 )
 
-try:
-    import NNPOps as _NNPOps
-
-    _has_nnpops = True
-except:
-    _has_nnpops = False
-
 
 class EMLE(_torch.nn.Module):
     """
@@ -79,7 +72,6 @@ class EMLE(_torch.nn.Module):
         model=None,
         method="electrostatic",
         alpha_mode="fixed",
-        atomic_numbers=None,
         qm_charge=0,
         mm_charges=None,
         cutoff=None,
@@ -120,12 +112,6 @@ class EMLE(_torch.nn.Module):
                 "flexible":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
-
-        atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor
-            Atomic numbers for the QM region. This allows use of optimised AEV
-            symmetry functions from the NNPOps package. Only use this option
-            if you are using a fixed QM region, i.e. the same QM region for each
-            evalulation of the module.
 
         qm_charge: int
             The charge on the QM region. This can also be passed when calling
@@ -182,23 +168,6 @@ class EMLE(_torch.nn.Module):
 
         self._alpha_mode = _sanitize_alpha_mode(alpha_mode)
 
-        if atomic_numbers is not None:
-            if isinstance(atomic_numbers, (_np.ndarray, _torch.Tensor)):
-                atomic_numbers = atomic_numbers.tolist()
-            if not isinstance(atomic_numbers, (tuple, list)):
-                raise TypeError(
-                    "'atomic_numbers' must be of type 'list', 'tuple', or 'numpy.ndarray'"
-                )
-            if not all(isinstance(a, int) for a in atomic_numbers):
-                raise TypeError(
-                    "All elements of 'atomic_numbers' must be of type 'int'"
-                )
-            if not all(a > 0 for a in atomic_numbers):
-                raise ValueError(
-                    "All elements of 'atomic_numbers' must be greater than zero"
-                )
-        self._atomic_numbers = atomic_numbers
-
         if not isinstance(qm_charge, int):
             raise TypeError("'qm_charge' must be of type 'int'")
         self._qm_charge = qm_charge
@@ -247,9 +216,6 @@ class EMLE(_torch.nn.Module):
 
             # Use the default model.
             model = self._default_model
-
-            # Use the default species.
-            species = self._species
 
         if device is not None:
             if not isinstance(device, _torch.device):
@@ -317,35 +283,6 @@ class EMLE(_torch.nn.Module):
             emle_aev_computer = EMLEAEVComputer(
                 mask=aev_mask, num_species=num_species, device=device, dtype=dtype
             )
-
-            # Optimise the AEV computer using NNPOps if available.
-            if _has_nnpops and atomic_numbers is not None:
-                try:
-                    import ase
-                    from torchani import SpeciesConverter
-
-                    # Work out the species.
-                    species = [ase.Atom(i).symbol for i in atomic_numbers]
-
-                    # Create a species converter.
-                    species_converter = SpeciesConverter(species).to(device)
-
-                    atomic_numbers = _torch.tensor(
-                        atomic_numbers, dtype=_torch.int64, device=device
-                    )
-
-                    atomic_numbers = atomic_numbers.reshape(1, *atomic_numbers.shape)
-                    emle_aev_computer._aev_computer = (
-                        _NNPOps.SymmetryFunctions.TorchANISymmetryFunctions(
-                            species_converter,
-                            emle_aev_computer._aev_computer,
-                            atomic_numbers,
-                        )
-                    )
-                except Exception as e:
-                    raise RuntimeError(
-                        "Unable to create optimised AEVComputer using NNPOps."
-                    ) from e
         else:
             emle_aev_computer = EMLEAEVComputer(
                 is_external=True,

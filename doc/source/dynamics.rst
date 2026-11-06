@@ -108,20 +108,6 @@ will use the ``emle_pid.txt`` file to find the process ID of the server to stop.
 If no ``emle_pid.txt`` file is found, then all ``emle-server`` processes will be
 terminated.
 
-NNPOps
-------
-
-The ``EMLE`` Torch model uses Atomic Environment Vectors (AEVs) for the
-calculation of the electrostatic embeddign energy. For performannce, it's
-desirable to use the optimised symmetry functions provided by the
-`NNPOps <https://github.com/openmm/NNPOps>`__ package. This requires a *static*
-compute graph, so needs to know the atomic numbers for the atoms in the QM
-region in advance. These can be specified using the ``EMLE_ATOMIC_NUMBERS``
-environment variable, or the ``--atomic-numbers`` command-line argument when
-launching the server. This option shuld only be used if the QM region is fixed,
-i.e. the atoms in the QM region do not change each time a calculation is sent
-to the server.
-
 Backends
 --------
 

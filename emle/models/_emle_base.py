@@ -38,15 +38,6 @@ import torchani as _torchani
 
 from ._utils import _sanitize_alpha_mode
 
-try:
-    import NNPOps as _NNPOps
-
-    _NNPOps.OptimizedTorchANI = _patches.OptimizedTorchANI
-
-    _has_nnpops = True
-except:
-    _has_nnpops = False
-
 
 class EMLEBase(_torch.nn.Module):
     """
@@ -160,15 +151,8 @@ class EMLEBase(_torch.nn.Module):
             from ._emle_aev_computer import EMLEAEVComputer
 
             allowed_types = [EMLEAEVComputer, _torchani.AEVComputer]
-            if _has_nnpops:
-                allowed_types.append(
-                    _NNPOps.SymmetryFunctions.TorchANISymmetryFunctions
-                )
             if not isinstance(emle_aev_computer, tuple(allowed_types)):
-                raise TypeError(
-                    "'aev_computer' must be of type 'torchani.AEVComputer' or "
-                    "'NNPOps.SymmetryFunctions.TorchANISymmetryFunctions'"
-                )
+                raise TypeError("'aev_computer' must be of type 'torchani.AEVComputer'")
         self._emle_aev_computer = emle_aev_computer
 
         if device is not None:

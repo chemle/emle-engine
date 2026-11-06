@@ -27,7 +27,6 @@ __email__ = "lester.hedges@gmail.com"
 
 __all__ = ["ANI2xEMLE"]
 
-import numpy as _np
 import torch as _torch
 import torchani as _torchani
 
@@ -36,14 +35,6 @@ from typing import Optional, Tuple
 
 from ._emle import EMLE as _EMLE
 from . import _patches
-
-try:
-    import NNPOps as _NNPOps
-
-    _has_nnpops = True
-except:
-    _has_nnpops = False
-    pass
 
 
 # Module-level hook so TorchScript can access its source during compilation.
@@ -78,7 +69,6 @@ class ANI2xEMLE(_torch.nn.Module):
         qm_charge=0,
         model_index=None,
         ani2x_model=None,
-        atomic_numbers=None,
         device=None,
         dtype=None,
     ):
@@ -125,17 +115,10 @@ class ANI2xEMLE(_torch.nn.Module):
             The index of the ANI2x model to use. If None, then the full 8 model
             ensemble will be used.
 
-        ani2x_model: torchani.models.ANI2x, NNPOPS.OptimizedTorchANI
+        ani2x_model: torchani.models.ANI2x
             An existing ANI2x model to use. If None, a new ANI2x model will be
-            created. If using an OptimizedTorchANI model, please ensure that
-            the ANI2x model from which it derived was created using
+            created. Please ensure that the model was created using
             periodic_table_index=True.
-
-        atomic_numbers: List[float], Tuple[float], numpy.ndarray, torch.Tensor (N_ATOMS,)
-            Atomic numbers for the QM region. This allows use of optimised AEV
-            symmetry functions from the NNPOps package. Only use this option
-            if you are using a fixed QM region, i.e. the same QM region for each
-            evalulation of the module.
 
         device: torch.device
             The device on which to run the model.
@@ -167,38 +150,17 @@ class ANI2xEMLE(_torch.nn.Module):
         else:
             dtype = _torch.get_default_dtype()
 
-        if atomic_numbers is not None:
-            if isinstance(atomic_numbers, _np.ndarray):
-                atomic_numbers = atomic_numbers.tolist()
-            if isinstance(atomic_numbers, (list, tuple)):
-                if not all(isinstance(i, int) for i in atomic_numbers):
-                    raise ValueError("'atomic_numbers' must be a list of integers")
-                else:
-                    atomic_numbers = _torch.tensor(atomic_numbers, dtype=_torch.int64)
-            if not isinstance(atomic_numbers, _torch.Tensor):
-                raise TypeError("'atomic_numbers' must be of type 'torch.Tensor'")
-            # Check that they are integers.
-            if atomic_numbers.dtype != _torch.int64:
-                raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
-            self._atomic_numbers = atomic_numbers.to(device)
-        else:
-            self._atomic_numbers = None
-
         # Create an instance of the EMLE model.
         self._emle = _EMLE(
             model=emle_model,
             method=emle_method,
             alpha_mode=alpha_mode,
-            atomic_numbers=(atomic_numbers if atomic_numbers is not None else None),
             mm_charges=mm_charges,
             qm_charge=qm_charge,
             device=device,
             dtype=dtype,
             create_aev_calculator=False,
         )
-
-        # Initialise the NNOps flag.
-        self._is_nnpops = False
 
         if ani2x_model is not None:
             if not isinstance(ani2x_model, _torch.nn.Module):
@@ -222,23 +184,6 @@ class ANI2xEMLE(_torch.nn.Module):
             ).to(device)
             if dtype == _torch.float64:
                 raw_ani2x = raw_ani2x.double()
-
-            # Optimise the ANI2x model if atomic_numbers are specified.
-            if _has_nnpops and atomic_numbers is not None:
-                try:
-                    atomic_numbers = atomic_numbers.reshape(
-                        1, *atomic_numbers.shape
-                    ).to(self._device)
-                    raw_ani2x = _NNPOps.OptimizedTorchANI(raw_ani2x, atomic_numbers).to(
-                        device
-                    )
-
-                    # Flag that the model has been optimised with NNPOps.
-                    self._is_nnpops = True
-                except Exception as e:
-                    raise RuntimeError(
-                        "Failed to optimise the ANI2x model with NNPOps."
-                    ) from e
 
         # Wrap in PatchedANI2x so that aev_computer is a direct attribute
         # (not a property) — this gives TorchScript a single unambiguous path
@@ -299,15 +244,6 @@ class ANI2xEMLE(_torch.nn.Module):
         raw_ani2x = _torchani.models.ANI2x(
             periodic_table_index=True, model_index=self._model_index
         ).to(self._device)
-        # Optimise the ANI2x model if atomic_numbers were specified.
-        if self._atomic_numbers is not None:
-            try:
-                from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
-
-                species = self._atomic_numbers.reshape(1, *self._atomic_numbers.shape)
-                raw_ani2x = _OptimizedTorchANI(raw_ani2x, species).to(self._device)
-            except:
-                pass
 
         self._ani2x = _patches.PatchedANI2x(raw_ani2x)
         self._ani2x.aev_computer._aev = _torch.empty(0, device=self._device)
@@ -360,10 +296,6 @@ class ANI2xEMLE(_torch.nn.Module):
             xyz_qm = xyz_qm.unsqueeze(0)
             xyz_mm = xyz_mm.unsqueeze(0)
             charges_mm = charges_mm.unsqueeze(0)
-        elif self._is_nnpops:
-            raise RuntimeError(
-                "Batched inputs are not supported when using NNPOps optimised models."
-            )
 
         # Get the in vacuo energy.
         E_vac = self._ani2x((atomic_numbers, xyz_qm)).energies

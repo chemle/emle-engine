@@ -104,7 +104,6 @@ class EMLECompiler:
         model: Optional[str] = None,
         method: str = "electrostatic",
         alpha_mode: Optional[str] = None,
-        atomic_numbers: Optional[Union[List[int], Tuple[int, ...]]] = None,
         mm_charges: Optional[Union[List[float], Tuple[float, ...]]] = None,
         qm_charge: int = 0,
         ani2x_model_index: Optional[int] = None,
@@ -132,12 +131,6 @@ class EMLECompiler:
             Polarizability mode: ``"fixed"`` or ``"flexible"``. Defaults
             to ``"fixed"`` when omitted. Must be ``"fixed"`` (or omitted)
             for the ``"emle-mace"`` backend, which hard-codes that mode.
-
-        atomic_numbers : list of int, optional
-            If given, enables NNPOps optimisation for a fixed ML region and
-            bakes those species into the compiled model. Leave as ``None``
-            to produce a **generic** model usable for any ML region at
-            runtime (species are supplied per-call by torchani-amber).
 
         mm_charges : list of float, optional
             Per-atom MM charges for the ML region (only used when
@@ -201,7 +194,6 @@ class EMLECompiler:
             model=model,
             method=method,
             alpha_mode=alpha_mode,
-            atomic_numbers=atomic_numbers,
             mm_charges=mm_charges,
             qm_charge=qm_charge,
             ani2x_model_index=ani2x_model_index,
@@ -217,7 +209,6 @@ class EMLECompiler:
         model,
         method,
         alpha_mode,
-        atomic_numbers,
         mm_charges,
         qm_charge,
         ani2x_model_index,
@@ -235,7 +226,6 @@ class EMLECompiler:
                 mm_charges=mm_charges,
                 qm_charge=qm_charge,
                 model_index=ani2x_model_index,
-                atomic_numbers=atomic_numbers,
                 device=self._device,
             )
 
@@ -249,7 +239,6 @@ class EMLECompiler:
                 mm_charges=mm_charges,
                 qm_charge=qm_charge,
                 mace_model=mace_model,
-                atomic_numbers=atomic_numbers,
                 device=self._device,
             )
 
@@ -262,7 +251,6 @@ class EMLECompiler:
                 mm_charges=mm_charges,
                 qm_charge=qm_charge,
                 mace_model=mace_model,
-                atomic_numbers=atomic_numbers,
                 use_dipoles=use_dipoles,
                 device=self._device,
             )
@@ -276,7 +264,6 @@ class EMLECompiler:
             mm_charges=mm_charges,
             qm_charge=qm_charge,
             deepmd_model=deepmd_model,
-            atomic_numbers=atomic_numbers,
             device=self._device,
         )
 
