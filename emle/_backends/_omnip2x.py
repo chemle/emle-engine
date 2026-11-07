@@ -36,17 +36,6 @@ from torchani.aev import ANIRadial as _ANIRadial
 from .._units import _BOHR_TO_ANGSTROM
 from ._backend import MultistateBackend as _MultistateBackend
 
-# Official OMNI-P2x weights, pinned to an omni-p2x commit, with their sha256.
-_WEIGHTS_URL = (
-    "https://github.com/dralgroup/omni-p2x/raw/"
-    "320c963038be74166cb89c6fc9f3986b0381c5ae/model_weights/"
-)
-_WEIGHTS = {
-    "OMNIP2x_CV_1.pt": "a65acf68b74c8b56b98c51734d6d2bf9a3b49e3b25a3fb9cf82212c0d4b47abc",
-    "OMNIP2x_CV_2.pt": "9ec6820841acae90d50146af9bd35c2f1406a39eff49da1f0d8a7c707d73955f",
-    "OMNIP2x_CV_3.pt": "e98b78d78aed21f5e1a0db50cfc5405fe0b80ad90a5a289758336cecef1c939e",
-}
-
 # Classes pickled in the checkpoints, loaded as empty classes holding their state.
 _CLASSES = (
     "torch.nn.modules.container.Sequential",
@@ -229,6 +218,17 @@ class OMNIP2x(_MultistateBackend):
     OMNI-P2x in-vacuo backend implementation.
     """
 
+    # Official OMNI-P2x weights, pinned to an omni-p2x commit, with their sha256.
+    _WEIGHTS_URL = (
+        "https://github.com/dralgroup/omni-p2x/raw/"
+        "320c963038be74166cb89c6fc9f3986b0381c5ae/model_weights/"
+    )
+    _WEIGHTS = {
+        "OMNIP2x_CV_1.pt": "a65acf68b74c8b56b98c51734d6d2bf9a3b49e3b25a3fb9cf82212c0d4b47abc",
+        "OMNIP2x_CV_2.pt": "9ec6820841acae90d50146af9bd35c2f1406a39eff49da1f0d8a7c707d73955f",
+        "OMNIP2x_CV_3.pt": "e98b78d78aed21f5e1a0db50cfc5405fe0b80ad90a5a289758336cecef1c939e",
+    }
+
     def __init__(self, model=None, state=0, device=None):
         """
         Constructor.
@@ -254,11 +254,11 @@ class OMNIP2x(_MultistateBackend):
             directory = _os.path.join(_torch.hub.get_dir(), "omnip2x")
             _os.makedirs(directory, exist_ok=True)
             model = []
-            for name, sha256 in _WEIGHTS.items():
+            for name, sha256 in self._WEIGHTS.items():
                 path = _os.path.join(directory, name)
                 if not _os.path.isfile(path):
                     _torch.hub.download_url_to_file(
-                        _WEIGHTS_URL + name, path, hash_prefix=sha256
+                        self._WEIGHTS_URL + name, path, hash_prefix=sha256
                     )
                 model.append(path)
         elif isinstance(model, str):
