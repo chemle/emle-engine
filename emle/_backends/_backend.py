@@ -22,7 +22,7 @@
 
 """In-vacuo backend base class."""
 
-__all__ = ["Backend"]
+__all__ = ["Backend", "MultistateBackend"]
 
 
 class Backend:
@@ -97,3 +97,37 @@ class Backend:
             The in-vacuo forces in Eh/Bohr.
         """
         raise NotImplementedError
+
+
+class MultistateBackend(Backend):
+    """
+    Base class for in-vacuo backends that can compute different electronic
+    states. The 'state' attribute holds the electronic state index (0 is the
+    ground state).
+    """
+
+    def __init__(self, state=0):
+        """
+        Constructor.
+
+        Parameters
+        ----------
+
+        state: int
+            The electronic state index (0 is the ground state).
+        """
+        super().__init__()
+        self.state = state
+
+    @property
+    def state(self):
+        """The electronic state index (0 is the ground state)."""
+        return self._state
+
+    @state.setter
+    def state(self, state):
+        if not isinstance(state, int) or isinstance(state, bool):
+            raise TypeError("'state' must be of type 'int'")
+        if state < 0:
+            raise ValueError("'state' must be greater than or equal to 0")
+        self._state = state

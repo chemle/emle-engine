@@ -102,6 +102,9 @@ class EMLECalculator:
         qm_indices=None,
         orca_path=None,
         sqm_theory="DFTB3",
+        aimnet2_model="aimnet2",
+        omnip2x_model=None,
+        electronic_state=None,
         lambda_interpolate=None,
         interpolate_steps=None,
         restart=False,
@@ -262,6 +265,22 @@ class EMLECalculator:
         sqm_theory: str
             The QM theory to use when using the SQM backend. See the AmberTools
             manual for the supported theory levels for your version of AmberTools.
+
+        aimnet2_model: str
+            The AIMNet2 model to use when using the AIMNet2 backend: a name from
+            the aimnet model registry, e.g. "aimnet2", or the path to a model file.
+
+        omnip2x_model: str, [str]
+            Path(s) to OMNI-P2x model files to use when using the OMNI-P2x
+            backend, e.g. fine-tuned models saved by MLatom. The energy is
+            averaged over the models. If None, the official OMNI-P2x models
+            are downloaded on first use.
+
+        electronic_state: int
+            The electronic state index (0 is the ground state), for backends
+            that support it (currently OMNI-P2x). If None, the backend default
+            (the ground state) is used. For excited states, an EMLE model
+            trained for that state should be passed as 'model'.
 
         restart: bool
             Whether this is a restart simulation with sander. If True, then energies
@@ -740,6 +759,30 @@ class EMLECalculator:
                         _logger.error(msg)
                         raise RuntimeError(msg)
 
+                elif backend == "aimnet2":
+                    try:
+                        from ._backends import AIMNet2
+
+                        b = AIMNet2(
+                            model=aimnet2_model,
+                            qm_charge=self._qm_charge,
+                            device=self._device,
+                        )
+                    except Exception as e:
+                        msg = f"Unable to create AIMNet2 backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
+                elif backend == "omnip2x":
+                    try:
+                        from ._backends import OMNIP2x
+
+                        b = OMNIP2x(model=omnip2x_model, device=self._device)
+                    except Exception as e:
+                        msg = f"Unable to create OMNI-P2x backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
                 elif backend == "sander":
                     try:
                         from ._backends import Sander
@@ -752,6 +795,9 @@ class EMLECalculator:
 
                 # Append the backend to the list.
                 self._backends.append(b)
+
+        if electronic_state is not None:
+            self.set_electronic_state(electronic_state)
 
         if qbc_deviation is not None:
             if not isinstance(qbc_deviation, str):
@@ -963,6 +1009,9 @@ class EMLECalculator:
             "qm_indices": None if qm_indices is None else self._qm_indices,
             "orca_path": orca_path,
             "sqm_theory": sqm_theory,
+            "aimnet2_model": aimnet2_model,
+            "omnip2x_model": omnip2x_model,
+            "electronic_state": electronic_state,
             "lambda_interpolate": lambda_interpolate,
             "interpolate_steps": interpolate_steps,
             "restart": restart,
@@ -1507,6 +1556,30 @@ class EMLECalculator:
 
         # Reset the first step flag.
         self._is_first_step = not self._restart
+
+    def set_electronic_state(self, state):
+        """
+        Set the electronic state for all backends that support it.
+
+        Parameters
+        ----------
+
+        state: int
+            The electronic state index (0 is the ground state).
+        """
+        # Backends that support electronic states have a 'state' attribute.
+        backends = [b for b in self._backends if hasattr(b, "state")]
+        if not backends:
+            msg = "None of the backends supports choosing the electronic state!"
+            _logger.error(msg)
+            raise Exception(msg)
+
+        for b in backends:
+            try:
+                b.state = state
+            except Exception as e:
+                _logger.error(str(e))
+                raise
 
     def _sire_callback(
         self, atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell=None, idx_mm=None

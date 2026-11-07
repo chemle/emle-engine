@@ -140,6 +140,24 @@ When multiple files are specified, energies and gradients will be averaged over
 the models. The model files need to be visible to the ``emle-server``, so we
 recommend the use of absolute paths.
 
+When using ``aimnet2`` as the backend you can choose the model with the
+``--aimnet2-model`` command-line argument, or using the ``EMLE_AIMNET2_MODEL``
+environment variable. This can be a model name from the
+`aimnet <https://github.com/isayevlab/aimnetcentral>`__ model registry, or the
+path to a model file. The default is ``aimnet2``. Model files are downloaded
+on first use.
+
+When using ``omnip2x`` as the backend, the official
+`OMNI-P2x <https://github.com/dralgroup/omni-p2x>`__ models are downloaded on
+first use. Other OMNI-P2x model files, e.g. models fine-tuned with MLatom, can be
+passed with the ``--omnip2x-model`` command-line argument, or using the
+``EMLE_OMNIP2X_MODEL`` environment variable, in the same way as DeePMD model
+files. Energies and gradients are averaged over the models. The electronic state
+is chosen with ``--electronic-state`` or ``EMLE_ELECTRONIC_STATE`` (default 0, the
+ground state). For excited states, pass an EMLE model trained for that state
+with ``--model``. MLatom's fragment correction for excited states is not
+supported.
+
 When using ``sander`` or ``sqm`` as the backend you will also need to specify
 the path to an AMBER parm7 topology file for the QM region. The can be specified
 using the ``--parm7`` command-line argument, or via the ``EMLE_PARM7`` environment
