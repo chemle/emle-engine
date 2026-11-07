@@ -32,8 +32,12 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 
-parser.add_argument(
-    "--orca-tarball", type=str, metavar="name.tar", required=True, help="ORCA tarball"
+input_group = parser.add_mutually_exclusive_group(required=True)
+input_group.add_argument(
+    "--orca-tarball", type=str, metavar="name.tar", help="ORCA tarball"
+)
+input_group.add_argument(
+    "--extxyz", type=str, metavar="name.xyz", help="extXYZ file with training data"
 )
 parser.add_argument("--train-mask", type=str, metavar="", help="Mask for training set")
 parser.add_argument(
@@ -96,13 +100,18 @@ args = parser.parse_args()
 
 
 import scipy.io
+import ase.io
 
-from emle._orca_parser import ORCAParser
+from emle._tarball_to_extXYZ import tarball_to_atoms
 from emle.train import EMLETrainer
+from emle.train._extxyz import atoms_to_train_data
 
 zid_map = ast.literal_eval(args.computer_zid_map) if args.computer_zid_map else None
 
-parser = ORCAParser(args.orca_tarball, decompose=False, alpha=True)
+if args.orca_tarball:
+    atoms_list = tarball_to_atoms(args.orca_tarball)
+else:
+    atoms_list = ase.io.read(args.extxyz, index=":")
 
 train_mask = None
 if args.train_mask:
@@ -110,12 +119,7 @@ if args.train_mask:
 
 trainer = EMLETrainer()
 trainer.train(
-    z=parser.z,
-    xyz=parser.xyz,
-    s=parser.mbis["s"],
-    q_core=parser.mbis["q_core"],
-    q_val=parser.mbis["q_val"],
-    alpha=parser.alpha,
+    **atoms_to_train_data(atoms_list),
     sigma=args.sigma,
     ivm_thr=args.ivm_thr,
     epochs=args.epochs,
