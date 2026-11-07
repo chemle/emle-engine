@@ -42,7 +42,7 @@ _CLASSES = (
     "torch.nn.modules.linear.Linear",
     "torch.nn.modules.activation.CELU",
     "torch.nn.modules.activation.GELU",
-    "torchani.aev.AEVComputer",
+    "torchani.aev.AEVComputer",  # pickled but not read: the AEV is rebuilt from args
     "torchani.utils.EnergyShifter",
 )
 
@@ -56,14 +56,16 @@ def _load_checkpoint(path):
     loader reads them, with each of these classes replaced by an empty one,
     so their pickled state only becomes instance attributes.
     """
+    # Empty classes with the original names: from_checkpoint dispatches on them.
     safe = [(type(name.rsplit(".", 1)[1], (), {}), name) for name in _CLASSES]
+    # species_order holds numpy str_ scalars, rebuilt from their raw bytes.
     safe += [
         (
             lambda dtype, data: _np.frombuffer(data, dtype)[0],
             "numpy.core.multiarray.scalar",
         ),
         _np.dtype,
-        type(_np.dtype("U1")),  # numpy.dtypes.StrDType in numpy 2
+        type(_np.dtype("U1")),  # numpy.dtypes.StrDType, checked by torch on BUILD
     ]
     with _torch.serialization.safe_globals(safe):
         return _torch.load(path, map_location="cpu", weights_only=True)
@@ -125,92 +127,94 @@ class _OMNIP2xNetwork(_torch.nn.Module):
             dim=1
         )
 
+    @classmethod
+    def from_checkpoint(cls, path):
+        """
+        Build the network from an OMNI-P2x checkpoint saved by MLatom.
+        """
+        checkpoint = _load_checkpoint(path)
+        args = checkpoint["args"]
+        species = [str(s) for s in args["species_order"]]
 
-def _from_checkpoint(path):
-    """
-    Build an _OMNIP2xNetwork from an OMNI-P2x checkpoint saved by MLatom.
-    """
-    checkpoint = _load_checkpoint(path)
-    args = checkpoint["args"]
-    species = [str(s) for s in args["species_order"]]
-
-    radial = _ANIRadial(
-        float(args["EtaR"].reshape(-1)[0]),
-        args["ShfR"].reshape(-1).tolist(),
-        float(args["Rcr"]),
-    )
-    angular = _ANIAngular(
-        float(args["EtaA"].reshape(-1)[0]),
-        float(args["Zeta"].reshape(-1)[0]),
-        args["ShfA"].reshape(-1).tolist(),
-        args["ShfZ"].reshape(-1).tolist(),
-        float(args["Rca"]),
-    )
-    aev = _AEVComputer(radial, angular, num_species=len(species))
-
-    # Per-element MLPs, rebuilt layer by layer from the pickled Sequential
-    # (the CV models differ in activation: CELU or GELU).
-    if isinstance(checkpoint["network"], list):
-        raise ValueError(
-            "OMNI-P2x checkpoints with network ensembles are not supported"
+        radial = _ANIRadial(
+            float(args["EtaR"].reshape(-1)[0]),
+            args["ShfR"].reshape(-1).tolist(),
+            float(args["Rcr"]),
         )
-    networks = []
-    for symbol in species:
-        layers = []
-        pickled = checkpoint["network"][symbol]._modules
-        for layer in pickled.values():
-            kind = type(layer).__name__
-            if kind == "Linear":
-                weight = layer._parameters["weight"]
-                layers.append(_torch.nn.Linear(weight.shape[1], weight.shape[0]))
-            elif kind == "CELU":
-                layers.append(_torch.nn.CELU(layer.alpha))
-            elif kind == "GELU":
-                layers.append(_torch.nn.GELU(layer.approximate))
-            else:
-                raise ValueError(f"Unsupported OMNI-P2x layer type: {kind}")
-        network = _torch.nn.Sequential(*layers)
-        network.load_state_dict(
-            {
-                key[len(symbol) + 1 :]: value
-                for key, value in checkpoint["nn"].items()
-                if key.startswith(f"{symbol}.")
-            }
+        angular = _ANIAngular(
+            float(args["EtaA"].reshape(-1)[0]),
+            float(args["Zeta"].reshape(-1)[0]),
+            args["ShfA"].reshape(-1).tolist(),
+            args["ShfZ"].reshape(-1).tolist(),
+            float(args["Rca"]),
         )
-        networks.append(network)
+        aev = _AEVComputer(radial, angular, num_species=len(species))
 
-    # Self energies, looked up in the same order as MLatom.
-    if "energy_shifter" in checkpoint:
-        shifter = checkpoint["energy_shifter"]
-    elif "energy_shifter_train" in args:
-        shifter = args["energy_shifter_train"]
-    else:
-        shifter = None
-    if shifter is not None:
-        if getattr(shifter, "fit_intercept", False):
-            raise ValueError("OMNI-P2x checkpoints with an intercept are not supported")
-        self_energies = shifter._buffers["self_energies"]
-    elif "self_energies_train" in args:
-        self_energies = args["self_energies_train"]
-    elif "self_energies" in args:
-        self_energies = args["self_energies"]
-    else:
-        raise ValueError("The OMNI-P2x checkpoint has no self energies")
+        # Per-element MLPs, rebuilt layer by layer from the pickled Sequential
+        # (the CV models differ in activation: CELU or GELU).
+        if isinstance(checkpoint["network"], list):
+            raise ValueError(
+                "OMNI-P2x checkpoints with network ensembles are not supported"
+            )
+        networks = []
+        for symbol in species:
+            layers = []
+            pickled = checkpoint["network"][symbol]._modules
+            for layer in pickled.values():
+                kind = type(layer).__name__
+                if kind == "Linear":
+                    weight = layer._parameters["weight"]
+                    layers.append(_torch.nn.Linear(weight.shape[1], weight.shape[0]))
+                elif kind == "CELU":
+                    layers.append(_torch.nn.CELU(layer.alpha))
+                elif kind == "GELU":
+                    layers.append(_torch.nn.GELU(layer.approximate))
+                else:
+                    raise ValueError(f"Unsupported OMNI-P2x layer type: {kind}")
+            network = _torch.nn.Sequential(*layers)
+            network.load_state_dict(
+                {
+                    key[len(symbol) + 1 :]: value
+                    for key, value in checkpoint["nn"].items()
+                    if key.startswith(f"{symbol}.")
+                }
+            )
+            networks.append(network)
 
-    # Level descriptor default used by MLatom: one-hot on the last entry.
-    n_extra = checkpoint.get(
-        "descriptor_dim", networks[0][0].in_features - aev.out_dim - 1
-    )
-    descriptor = _torch.zeros(n_extra)
-    descriptor[-1] = 1.0
+        # Self energies, looked up in the same order as MLatom.
+        if "energy_shifter" in checkpoint:
+            shifter = checkpoint["energy_shifter"]
+        elif "energy_shifter_train" in args:
+            shifter = args["energy_shifter_train"]
+        else:
+            shifter = None
+        if shifter is not None:
+            if getattr(shifter, "fit_intercept", False):
+                raise ValueError(
+                    "OMNI-P2x checkpoints with an intercept are not supported"
+                )
+            self_energies = shifter._buffers["self_energies"]
+        elif "self_energies_train" in args:
+            self_energies = args["self_energies_train"]
+        elif "self_energies" in args:
+            self_energies = args["self_energies"]
+        else:
+            raise ValueError("The OMNI-P2x checkpoint has no self energies")
 
-    return _OMNIP2xNetwork(
-        [_SYMBOL_TO_Z[s] for s in species],
-        aev,
-        networks,
-        _torch.as_tensor(self_energies, dtype=_torch.float64),
-        descriptor,
-    )
+        # Level descriptor default used by MLatom: one-hot on the last entry.
+        n_extra = checkpoint.get(
+            "descriptor_dim", networks[0][0].in_features - aev.out_dim - 1
+        )
+        descriptor = _torch.zeros(n_extra)
+        descriptor[-1] = 1.0
+
+        return cls(
+            [_SYMBOL_TO_Z[s] for s in species],
+            aev,
+            networks,
+            _torch.as_tensor(self_energies, dtype=_torch.float64),
+            descriptor,
+        )
 
 
 class OMNIP2x(_MultistateBackend):
@@ -271,7 +275,9 @@ class OMNIP2x(_MultistateBackend):
         self._device = _torch.device(device)
 
         try:
-            self._networks = [_from_checkpoint(m).to(self._device) for m in self._model]
+            self._networks = [
+                _OMNIP2xNetwork.from_checkpoint(m).to(self._device) for m in self._model
+            ]
         except Exception as e:
             raise RuntimeError(f"Unable to load the OMNI-P2x models: {e}") from e
 
