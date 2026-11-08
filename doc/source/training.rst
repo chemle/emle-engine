@@ -75,6 +75,7 @@ printed with ``emle-train -h``:
     usage: emle-train [-h] (--orca-tarball name.tar | --extxyz name.xyz) [--train-mask] [--sigma]
                       [--ivm-thr] [--epochs] [--lr-qeq] [--lr-thole] [--lr-sqrtk] [--print-every]
                       [--computer-n-species] [--computer-zid-map] [--plot-data name.mat]
+                      [--device {cpu,cuda}]
                       output
 
     EMLE training script
@@ -98,6 +99,8 @@ printed with ``emle-train -h``:
     --computer-n-species  Number of species supported by AEV computer (default: None)
     --computer-zid-map    Map between EMLE and AEV computer zid values (default: None)
     --plot-data name.mat  Data for plotting (default: None)
+    --device {cpu,cuda}   PyTorch device. If not set, cuda if available, otherwise cpu (default:
+                          None)
 
 Here ``train-mask`` is a boolean file containing zeros and ones that defines the
 subset of the full training set (provided as ``--extxyz`` or ``--orca-tarball``,

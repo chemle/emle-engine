@@ -94,6 +94,13 @@ parser.add_argument(
 parser.add_argument(
     "--plot-data", type=str, metavar="name.mat", default=None, help="Data for plotting"
 )
+parser.add_argument(
+    "--device",
+    type=str,
+    choices=["cpu", "cuda"],
+    default=None,
+    help="PyTorch device. If not set, cuda if available, otherwise cpu",
+)
 
 parser.add_argument("output", type=str, help="Output model file")
 args = parser.parse_args()
@@ -101,6 +108,7 @@ args = parser.parse_args()
 
 import scipy.io
 import ase.io
+import torch
 
 from emle._tarball_to_extXYZ import tarball_to_atoms
 from emle.train import EMLETrainer
@@ -132,4 +140,7 @@ trainer.train(
     print_every=args.print_every,
     model_filename=args.output,
     plot_data_filename=args.plot_data,
+    device=torch.device(
+        args.device or ("cuda" if torch.cuda.is_available() else "cpu")
+    ),
 )
