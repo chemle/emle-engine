@@ -3,6 +3,7 @@ import os
 import pytest
 import socket
 import tempfile
+import urllib.error
 
 from emle._backends import *
 
@@ -112,7 +113,18 @@ def test_aimnet2(data):
     assert forces.shape == xyz.shape
 
 
-def test_omnip2x(data):
+@pytest.fixture(scope="module")
+def omnip2x():
+    # The official models are downloaded on first use.
+    try:
+        return OMNIP2x(device="cpu")
+    except urllib.error.HTTPError:
+        raise
+    except urllib.error.URLError as e:
+        pytest.xfail(f"Unable to download the OMNI-P2x weights: {e.reason}")
+
+
+def test_omnip2x(data, omnip2x):
     """
     Test the OMNI-P2x backend against MLatom 3.25.5 reference values.
     """
@@ -140,13 +152,9 @@ def test_omnip2x(data):
     # Set up the data.
     atomic_numbers, xyz = data
 
-    # Instantiate the OMNI-P2x backend. The official models are downloaded
-    # on first use.
-    backend = OMNIP2x(device="cpu")
-
     for state in (0, 1):
-        backend.state = state
-        energy, forces = backend(atomic_numbers, xyz)
+        omnip2x.state = state
+        energy, forces = omnip2x(atomic_numbers, xyz)
         assert np.allclose(energy, ref_energy[state], rtol=0, atol=1e-6)
         assert np.allclose(
             forces[0],
