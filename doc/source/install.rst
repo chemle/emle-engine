@@ -50,6 +50,9 @@ Then run commands inside an environment with ``pixi run -e <name> <command>``,
 or activate one with ``pixi shell -e <name>``. (Omit ``-e <name>`` to use the
 ``default`` environment.)
 
+AIMNet2 is not included in ``full``. It can be added to an existing environment
+with pip, e.g. ``pixi run -e full python -m pip install aimnet``.
+
 Alternatively, you can create a plain conda environment with the minimal
 ``default`` dependencies from ``environment.yaml``:
 
