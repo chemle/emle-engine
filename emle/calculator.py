@@ -82,6 +82,7 @@ class EMLECalculator:
         alpha_mode="fixed",
         use_dipoles=False,
         qm_charge=0,
+        mult=1,
         backend="torchani",
         external_backend=None,
         plugin_path=".",
@@ -103,7 +104,6 @@ class EMLECalculator:
         orca_path=None,
         sqm_theory="DFTB3",
         aimnet2_model="aimnet2",
-        aimnet2_mult=1,
         omnip2x_model=None,
         electronic_state=None,
         lambda_interpolate=None,
@@ -165,6 +165,10 @@ class EMLECalculator:
             EMLECalculator instance with the OpenMM interface. When using
             the sander interface, the QM charge will be taken from the ORCA
             input file.
+
+        mult: int
+            The spin multiplicity of the QM region, for backends that support
+            it (currently AIMNet2).
 
         external_backend: str
             The name of an external backend to use to compute in vacuo energies.
@@ -270,11 +274,6 @@ class EMLECalculator:
         aimnet2_model: str
             The AIMNet2 model to use when using the AIMNet2 backend: a name from
             the aimnet model registry, e.g. "aimnet2", or the path to a model file.
-
-        aimnet2_mult: int
-            The spin multiplicity of the QM region when using the AIMNet2
-            backend. Values other than 1 need an open-shell model, e.g.
-            "aimnet2-nse".
 
         omnip2x_model: str, [str]
             Path(s) to OMNI-P2x model files to use when using the OMNI-P2x
@@ -772,7 +771,7 @@ class EMLECalculator:
                         b = AIMNet2(
                             model=aimnet2_model,
                             qm_charge=self._qm_charge,
-                            mult=aimnet2_mult,
+                            mult=mult,
                             device=self._device,
                         )
                     except Exception as e:
@@ -998,6 +997,7 @@ class EMLECalculator:
             "method": self._method,
             "alpha_mode": self._alpha_mode,
             "qm_charge": self._qm_charge,
+            "mult": mult,
             "backend": self._backend,
             "external_backend": None if external_backend is None else external_backend,
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),
@@ -1017,7 +1017,6 @@ class EMLECalculator:
             "orca_path": orca_path,
             "sqm_theory": sqm_theory,
             "aimnet2_model": aimnet2_model,
-            "aimnet2_mult": aimnet2_mult,
             "omnip2x_model": omnip2x_model,
             "electronic_state": electronic_state,
             "lambda_interpolate": lambda_interpolate,

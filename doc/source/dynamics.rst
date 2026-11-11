@@ -145,9 +145,9 @@ When using ``aimnet2`` as the backend you can choose the model with the
 environment variable. This can be a model name from the
 `aimnet <https://github.com/isayevlab/aimnetcentral>`__ model registry, or the
 path to a model file. The default is ``aimnet2``. Model files are downloaded
-on first use. The spin multiplicity of the QM region is set with
-``--aimnet2-mult`` or ``EMLE_AIMNET2_MULT`` (default 1). Values other than 1
-need an open-shell model, e.g. ``aimnet2-nse``.
+on first use. The spin multiplicity of the QM region is set with ``--mult`` or
+``EMLE_MULT`` (default 1). Values other than 1 need an open-shell model, e.g.
+``aimnet2-nse``.
 
 When using ``omnip2x`` as the backend, the official
 `OMNI-P2x <https://github.com/dralgroup/omni-p2x>`__ models are downloaded on
