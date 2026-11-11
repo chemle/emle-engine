@@ -117,6 +117,13 @@ class MultistateBackend(Backend):
             The electronic state index (0 is the ground state).
         """
         super().__init__()
+
+        # Don't allow user to create an instance of the base class.
+        if type(self) is MultistateBackend:
+            raise NotImplementedError(
+                "'MultistateBackend' is an abstract class and should not be instantiated directly"
+            )
+
         self.state = state
 
     @property
