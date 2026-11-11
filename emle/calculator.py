@@ -1567,8 +1567,9 @@ class EMLECalculator:
         state: int
             The electronic state index (0 is the ground state).
         """
-        # Backends that support electronic states have a 'state' attribute.
-        backends = [b for b in self._backends if hasattr(b, "state")]
+        from ._backends._backend import MultistateBackend
+
+        backends = [b for b in self._backends if isinstance(b, MultistateBackend)]
         if not backends:
             msg = "None of the backends supports choosing the electronic state!"
             _logger.error(msg)
