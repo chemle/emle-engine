@@ -40,7 +40,7 @@ class AIMNet2(_Backend):
     AIMNet2 in-vacuo backend implementation.
     """
 
-    def __init__(self, model="aimnet2", qm_charge=0, device=None):
+    def __init__(self, model="aimnet2", qm_charge=0, mult=1, device=None):
         """
         Constructor.
 
@@ -54,6 +54,10 @@ class AIMNet2(_Backend):
 
         qm_charge: int
             The charge on the QM region.
+
+        mult: int
+            The spin multiplicity of the QM region. Values other than 1
+            need an open-shell model, e.g. "aimnet2-nse". If None, 1 is used.
 
         device: str
             The device to run the model on, e.g. "cpu" or "cuda". If None,
@@ -76,6 +80,14 @@ class AIMNet2(_Backend):
         if not isinstance(qm_charge, int):
             raise TypeError("'qm_charge' must be of type 'int'")
         self._qm_charge = qm_charge
+
+        if mult is None:
+            mult = 1
+        if not isinstance(mult, int) or isinstance(mult, bool):
+            raise TypeError("'mult' must be of type 'int'")
+        if mult < 1:
+            raise ValueError("'mult' must be greater than or equal to 1")
+        self._mult = mult
 
         if device is not None:
             device = str(device)
@@ -134,6 +146,7 @@ class AIMNet2(_Backend):
                 "coord": xyz,
                 "numbers": atomic_numbers,
                 "charge": _np.full(len(atomic_numbers), float(self._qm_charge)),
+                "mult": _np.full(len(atomic_numbers), float(self._mult)),
             },
             forces=forces,
         )

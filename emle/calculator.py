@@ -103,6 +103,7 @@ class EMLECalculator:
         orca_path=None,
         sqm_theory="DFTB3",
         aimnet2_model="aimnet2",
+        aimnet2_mult=1,
         omnip2x_model=None,
         electronic_state=None,
         lambda_interpolate=None,
@@ -269,6 +270,11 @@ class EMLECalculator:
         aimnet2_model: str
             The AIMNet2 model to use when using the AIMNet2 backend: a name from
             the aimnet model registry, e.g. "aimnet2", or the path to a model file.
+
+        aimnet2_mult: int
+            The spin multiplicity of the QM region when using the AIMNet2
+            backend. Values other than 1 need an open-shell model, e.g.
+            "aimnet2-nse".
 
         omnip2x_model: str, [str]
             Path(s) to OMNI-P2x model files to use when using the OMNI-P2x
@@ -766,6 +772,7 @@ class EMLECalculator:
                         b = AIMNet2(
                             model=aimnet2_model,
                             qm_charge=self._qm_charge,
+                            mult=aimnet2_mult,
                             device=self._device,
                         )
                     except Exception as e:
@@ -1010,6 +1017,7 @@ class EMLECalculator:
             "orca_path": orca_path,
             "sqm_theory": sqm_theory,
             "aimnet2_model": aimnet2_model,
+            "aimnet2_mult": aimnet2_mult,
             "omnip2x_model": omnip2x_model,
             "electronic_state": electronic_state,
             "lambda_interpolate": lambda_interpolate,

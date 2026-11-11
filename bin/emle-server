@@ -127,6 +127,10 @@ except:
 qm_indices = os.getenv("EMLE_QM_INDICES")
 sqm_theory = os.getenv("EMLE_SQM_THEORY")
 aimnet2_model = os.getenv("EMLE_AIMNET2_MODEL")
+try:
+    aimnet2_mult = int(os.getenv("EMLE_AIMNET2_MULT"))
+except:
+    aimnet2_mult = None
 omnip2x_model = os.getenv("EMLE_OMNIP2X_MODEL")
 try:
     electronic_state = int(os.getenv("EMLE_ELECTRONIC_STATE"))
@@ -183,6 +187,7 @@ env = {
     "qm_indices": qm_indices,
     "sqm_theory": sqm_theory,
     "aimnet2_model": aimnet2_model,
+    "aimnet2_mult": aimnet2_mult,
     "omnip2x_model": omnip2x_model,
     "electronic_state": electronic_state,
     "orca_path": orca_path,
@@ -381,6 +386,12 @@ parser.add_argument(
     "--aimnet2-model",
     type=str,
     help="the AIMNet2 model name or file to use when using the AIMNet2 backend",
+    required=False,
+)
+parser.add_argument(
+    "--aimnet2-mult",
+    type=int,
+    help="the spin multiplicity of the QM region when using the AIMNet2 backend",
     required=False,
 )
 parser.add_argument(
