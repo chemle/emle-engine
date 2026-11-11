@@ -59,11 +59,11 @@ def _load_checkpoint(path):
     # Empty classes with the original names: from_checkpoint dispatches on them.
     safe = [(type(name.rsplit(".", 1)[1], (), {}), name) for name in _CLASSES]
     # species_order holds numpy str_ scalars, rebuilt from their raw bytes.
+    # NumPy 2 pickles them under numpy._core instead of numpy.core.
+    scalar = lambda dtype, data: _np.frombuffer(data, dtype)[0]
     safe += [
-        (
-            lambda dtype, data: _np.frombuffer(data, dtype)[0],
-            "numpy.core.multiarray.scalar",
-        ),
+        (scalar, "numpy.core.multiarray.scalar"),
+        (scalar, "numpy._core.multiarray.scalar"),
         _np.dtype,
         type(_np.dtype("U1")),  # numpy.dtypes.StrDType, checked by torch on BUILD
     ]
