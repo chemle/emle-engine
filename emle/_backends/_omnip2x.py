@@ -205,6 +205,11 @@ class _OMNIP2xNetwork(_torch.nn.Module):
         n_extra = checkpoint.get(
             "descriptor_dim", networks[0][0].in_features - aev.out_dim - 1
         )
+        if n_extra < 1:
+            raise ValueError(
+                "The checkpoint has no level descriptor inputs, so it does not "
+                "look like an OMNI-P2x model"
+            )
         descriptor = _torch.zeros(n_extra)
         descriptor[-1] = 1.0
 
