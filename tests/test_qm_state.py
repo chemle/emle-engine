@@ -1,9 +1,11 @@
 import functools
+import sys
 import numpy as np
 import pytest
 import tempfile
 
 from emle.calculator import EMLECalculator
+from emle._backends import ORCA
 from emle._backends._backend import Backend
 
 try:
@@ -116,6 +118,21 @@ def test_orca_charge_mult():
         calculator.run(path=tmpdir)
 
         assert kwargs == [{"qm_charge": 1, "mult": 2}]
+
+
+def test_orca_template_mult():
+    """
+    Make sure that ORCA raises for a spin multiplicity that differs from the
+    one in the template.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with open(f"{tmpdir}/orc_job.inp", "w") as f:
+            f.write("! BLYP 6-31G*\n*xyzfile 0 3 inpfile.xyz\n")
+        backend = ORCA(exe=sys.executable, template=f"{tmpdir}/orc_job.inp")
+        with pytest.raises(
+            ValueError, match=r"spin multiplicity 1, supported: \(3,\)"
+        ):
+            backend(np.array([[6, 1, 1, 1]]), np.array([XYZ]))
 
 
 @pytest.mark.parametrize("charge, mult", [(1, 1), (0, 3)])

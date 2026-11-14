@@ -170,7 +170,10 @@ class EMLECalculator:
 
         mult: int
             The spin multiplicity of the QM region. When using the sander
-            interface, it will be taken from the ORCA input file.
+            interface, it will be taken from the ORCA input file. With the
+            ORCA backend, the charge and multiplicity, from this and
+            'qm_charge' or from the ORCA input file, must match the values in
+            'orca_template'.
 
         external_backend: str
             The name of an external backend to use to compute in vacuo energies.
@@ -300,8 +303,9 @@ class EMLECalculator:
             The path to a template ORCA input file. This is required when using
             the ORCA backend when using emle-engine with Sire. This should be a
             full template, including the charge and multiplicity of the QM region,
-            along with a placeholder name for the xyz file that will be replaced
-            with the file generated at runtime, e.g.:
+            which are the only ones supported, along with a placeholder name for
+            the xyz file that will be replaced with the file generated at runtime,
+            e.g.:
 
                 %pal nprocs 4 end
                 !BLYP 6-31G* verytightscf
