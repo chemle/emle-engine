@@ -132,6 +132,18 @@ try:
     electronic_state = int(os.getenv("EMLE_ELECTRONIC_STATE"))
 except:
     electronic_state = None
+try:
+    model_charges = [int(x) for x in os.getenv("EMLE_MODEL_CHARGES").split(",")]
+except:
+    model_charges = None
+try:
+    model_mults = [int(x) for x in os.getenv("EMLE_MODEL_MULTS").split(",")]
+except:
+    model_mults = None
+try:
+    model_states = [int(x) for x in os.getenv("EMLE_MODEL_STATES").split(",")]
+except:
+    model_states = None
 orca_path = os.getenv("EMLE_ORCA_PATH")
 try:
     restart = strtobool(os.getenv("EMLE_RESTART"))
@@ -185,6 +197,9 @@ env = {
     "aimnet2_model": aimnet2_model,
     "omnip2x_model": omnip2x_model,
     "electronic_state": electronic_state,
+    "model_charges": model_charges,
+    "model_mults": model_mults,
+    "model_states": model_states,
     "orca_path": orca_path,
     "restart": restart,
     "orca_template": orca_template,
@@ -394,6 +409,27 @@ parser.add_argument(
     "--electronic-state",
     type=int,
     help="the electronic state index (0 is the ground state)",
+    required=False,
+)
+parser.add_argument(
+    "--model-charges",
+    type=int,
+    nargs="+",
+    help="the QM charges that the in vacuo model supports",
+    required=False,
+)
+parser.add_argument(
+    "--model-mults",
+    type=int,
+    nargs="+",
+    help="the spin multiplicities that the in vacuo model supports",
+    required=False,
+)
+parser.add_argument(
+    "--model-states",
+    type=int,
+    nargs="+",
+    help="the electronic states that the in vacuo model supports",
     required=False,
 )
 parser.add_argument(

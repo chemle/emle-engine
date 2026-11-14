@@ -108,6 +108,9 @@ class EMLECalculator:
         aimnet2_model="aimnet2",
         omnip2x_model=None,
         electronic_state=None,
+        model_charges=None,
+        model_mults=None,
+        model_states=None,
         lambda_interpolate=None,
         interpolate_steps=None,
         restart=False,
@@ -291,6 +294,20 @@ class EMLECalculator:
             ground state is used. For excited states, an EMLE model trained
             for that state should be passed as 'model'.
 
+        model_charges: list of int
+            The QM charges that the in vacuo model supports, replacing those
+            of every backend. Models without a charge input, e.g. DeePMD or
+            MACE, are assumed to support only 0. A charge that is not
+            supported raises an error.
+
+        model_mults: list of int
+            As 'model_charges', for the spin multiplicity (by default 1).
+
+        model_states: list of int
+            As 'model_charges', for the electronic state (by default 0, the
+            ground state), e.g. [0, 1] for an OMNI-P2x model fine-tuned for
+            two states.
+
         restart: bool
             Whether this is a restart simulation with sander. If True, then energies
             are logged immediately.
@@ -303,7 +320,8 @@ class EMLECalculator:
             The path to a template ORCA input file. This is required when using
             the ORCA backend when using emle-engine with Sire. This should be a
             full template, including the charge and multiplicity of the QM region,
-            which are the only ones supported, along with a placeholder name for
+            which are the only ones supported unless declared with
+            'model_charges' and 'model_mults', along with a placeholder name for
             the xyz file that will be replaced with the file generated at runtime,
             e.g.:
 
@@ -818,6 +836,16 @@ class EMLECalculator:
                 b.charges, b.mults, b.states = (0,), (1,), (0,)
         self._external_supported = _SimpleNamespace(charges=(0,), mults=(1,), states=(0,))
 
+        # Apply the supported values that the user declares.
+        targets = [self._external_supported] if self._is_external_backend else self._backends
+        for b in targets:
+            if model_charges is not None:
+                b.charges = tuple(model_charges)
+            if model_mults is not None:
+                b.mults = tuple(model_mults)
+            if model_states is not None:
+                b.states = tuple(model_states)
+
         self._electronic_state = 0
         if electronic_state is not None:
             self.set_electronic_state(electronic_state)
@@ -1036,6 +1064,9 @@ class EMLECalculator:
             "aimnet2_model": aimnet2_model,
             "omnip2x_model": omnip2x_model,
             "electronic_state": electronic_state,
+            "model_charges": None if model_charges is None else list(model_charges),
+            "model_mults": None if model_mults is None else list(model_mults),
+            "model_states": None if model_states is None else list(model_states),
             "lambda_interpolate": lambda_interpolate,
             "interpolate_steps": interpolate_steps,
             "restart": restart,

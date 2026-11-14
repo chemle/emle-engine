@@ -176,3 +176,50 @@ def test_torchani_unsupported_state():
         write_orca_input(tmpdir, 0, 1)
         with pytest.raises(RuntimeError, match="electronic state"):
             calculator.run(path=tmpdir)
+
+
+def test_string_declared():
+    """
+    Make sure that the characters of a declaration passed as a string, e.g.
+    from a YAML config, don't make an undeclared charge supported.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        calculator = EMLECalculator(
+            backend="torchani",
+            device="cpu",
+            model_charges="-1,-2,-3,-4,-5",
+            energy_file=f"{tmpdir}/emle_energy.txt",
+        )
+        write_orca_input(tmpdir, 1, 1)
+        with pytest.raises(RuntimeError, match="unsupported QM charge 1"):
+            calculator.run(path=tmpdir)
+
+
+def test_external_declared():
+    """
+    Make sure that a declared charge is checked for an external backend.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with open(f"{tmpdir}/zero_backend.py", "w") as f:
+            f.write(
+                "import numpy as np\n\n"
+                "def run(atoms):\n"
+                "    return 0.0, np.zeros((len(atoms), 3))\n"
+            )
+        calculator = EMLECalculator(
+            external_backend="zero_backend.run",
+            plugin_path=tmpdir,
+            device="cpu",
+            model_charges=[-1],
+            energy_file=f"{tmpdir}/emle_energy.txt",
+            qm_xyz_file=f"{tmpdir}/qm.xyz",
+            pc_xyz_file=f"{tmpdir}/pc.xyz",
+            qm_xyz_frequency=1,
+        )
+        write_orca_input(tmpdir, -1, 1)
+        calculator.run(path=tmpdir)
+        write_orca_input(tmpdir, 0, 1)
+        with pytest.raises(
+            RuntimeError, match="external backend: unsupported QM charge"
+        ):
+            calculator.run(path=tmpdir)
