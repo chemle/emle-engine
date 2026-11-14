@@ -153,8 +153,7 @@ def test_omnip2x(data, omnip2x):
     atomic_numbers, xyz = data
 
     for state in (0, 1):
-        omnip2x.state = state
-        energy, forces = omnip2x(atomic_numbers, xyz)
+        energy, forces = omnip2x(atomic_numbers, xyz, state=state)
         assert np.allclose(energy, ref_energy[state], rtol=0, atol=1e-6)
         assert np.allclose(
             forces[0],
@@ -162,6 +161,17 @@ def test_omnip2x(data, omnip2x):
             rtol=0,
             atol=1e-5,
         )
+
+    # Both states in one batch.
+    energy, forces = omnip2x(
+        np.concatenate([atomic_numbers] * 2),
+        np.concatenate([xyz] * 2),
+        state=np.array([0, 1]),
+    )
+    assert np.allclose(energy, ref_energy, rtol=0, atol=1e-6)
+    assert np.allclose(
+        forces, -np.array(ref_gradient) * _BOHR_TO_ANGSTROM, rtol=0, atol=1e-5
+    )
 
 
 @pytest.mark.skipif(

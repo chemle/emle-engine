@@ -34,6 +34,7 @@ from loguru import logger as _logger
 import os as _os
 import numpy as _np
 import sys as _sys
+from types import SimpleNamespace as _SimpleNamespace
 import yaml as _yaml
 
 import ase as _ase
@@ -42,6 +43,7 @@ import ase.io as _ase_io
 import torch as _torch
 
 from .models import EMLE as _EMLE
+from ._backends._backend import _check_supported
 
 from emle._units import (
     _NANOMETER_TO_BOHR,
@@ -167,8 +169,8 @@ class EMLECalculator:
             input file.
 
         mult: int
-            The spin multiplicity of the QM region, for backends that support
-            it (currently AIMNet2).
+            The spin multiplicity of the QM region. When using the sander
+            interface, it will be taken from the ORCA input file.
 
         external_backend: str
             The name of an external backend to use to compute in vacuo energies.
@@ -282,10 +284,9 @@ class EMLECalculator:
             are downloaded on first use.
 
         electronic_state: int
-            The electronic state index (0 is the ground state), for backends
-            that support it (currently OMNI-P2x). If None, the backend default
-            (the ground state) is used. For excited states, an EMLE model
-            trained for that state should be passed as 'model'.
+            The electronic state index (0 is the ground state). If None, the
+            ground state is used. For excited states, an EMLE model trained
+            for that state should be passed as 'model'.
 
         restart: bool
             Whether this is a restart simulation with sander. If True, then energies
@@ -473,6 +474,16 @@ class EMLECalculator:
                 _logger.error(msg)
                 raise TypeError(msg)
             self._qm_charge = qm_charge
+
+        if not isinstance(mult, int) or isinstance(mult, bool):
+            msg = "'mult' must be of type 'int'"
+            _logger.error(msg)
+            raise TypeError(msg)
+        if mult < 1:
+            msg = "'mult' must be greater than or equal to 1"
+            _logger.error(msg)
+            raise ValueError(msg)
+        self._mult = mult
 
         # Create the EMLE model instance.
         self._emle = _EMLE(
@@ -768,12 +779,7 @@ class EMLECalculator:
                     try:
                         from ._backends import AIMNet2
 
-                        b = AIMNet2(
-                            model=aimnet2_model,
-                            qm_charge=self._qm_charge,
-                            mult=mult,
-                            device=self._device,
-                        )
+                        b = AIMNet2(model=aimnet2_model, device=self._device)
                     except Exception as e:
                         msg = f"Unable to create AIMNet2 backend: {e}"
                         _logger.error(msg)
@@ -802,6 +808,13 @@ class EMLECalculator:
                 # Append the backend to the list.
                 self._backends.append(b)
 
+        # The Torch and external backends have no inputs.
+        for b in self._backends:
+            if isinstance(b, _torch.nn.Module):
+                b.charges, b.mults, b.states = (0,), (1,), (0,)
+        self._external_supported = _SimpleNamespace(charges=(0,), mults=(1,), states=(0,))
+
+        self._electronic_state = 0
         if electronic_state is not None:
             self.set_electronic_state(electronic_state)
 
@@ -997,7 +1010,7 @@ class EMLECalculator:
             "method": self._method,
             "alpha_mode": self._alpha_mode,
             "qm_charge": self._qm_charge,
-            "mult": mult,
+            "mult": self._mult,
             "backend": self._backend,
             "external_backend": None if external_backend is None else external_backend,
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),
@@ -1064,7 +1077,7 @@ class EMLECalculator:
         (
             dirname,
             charge,
-            multi,
+            mult,
             atoms,
             atomic_numbers,
             xyz_qm,
@@ -1094,6 +1107,8 @@ class EMLECalculator:
                 xyz_mm,
                 atoms=atoms,
                 charge=charge,
+                mult=mult,
+                state=self._electronic_state,
             )
         )
 
@@ -1188,6 +1203,8 @@ class EMLECalculator:
         atoms=None,
         cell=None,
         charge=0,
+        mult=1,
+        state=0,
     ):
         """
         Calculate the energy and gradients.
@@ -1215,6 +1232,12 @@ class EMLECalculator:
 
         charge: int
             The total charge of the QM region.
+
+        mult: int
+            The spin multiplicity of the QM region.
+
+        state: int
+            The electronic state index (0 is the ground state).
 
         Returns
         -------
@@ -1260,6 +1283,13 @@ class EMLECalculator:
                 for i, backend in enumerate(self._backends):
                     # This is an EMLE Torch model.
                     if isinstance(backend, _torch.nn.Module):
+                        try:
+                            _check_supported(backend, charge, mult, state)
+                        except ValueError as e:
+                            msg = f"Failed to calculate in vacuo energies using {self._backend[i]} backend: {e}"
+                            _logger.error(msg)
+                            raise RuntimeError(msg)
+
                         # Base backend is an EMLE Torch model.
                         if i == 0:
                             base_model = backend
@@ -1270,7 +1300,13 @@ class EMLECalculator:
                     else:
                         try:
                             # Add the in vacuo energy and gradients to the total.
-                            energy, forces = backend(atomic_numbers, xyz_qm)
+                            energy, forces = backend(
+                                atomic_numbers,
+                                xyz_qm,
+                                qm_charge=charge,
+                                mult=mult,
+                                state=state,
+                            )
                             E_vac += energy[0]
                             grad_vac += -forces[0]
                         except Exception as e:
@@ -1281,6 +1317,7 @@ class EMLECalculator:
         # External backend.
         else:
             try:
+                _check_supported(self._external_supported, charge, mult, state)
                 if atoms is None:
                     atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
                 E_vac, grad_vac = self._external_backend(atoms)
@@ -1569,7 +1606,7 @@ class EMLECalculator:
 
     def set_electronic_state(self, state):
         """
-        Set the electronic state for all backends that support it.
+        Set the electronic state.
 
         Parameters
         ----------
@@ -1577,20 +1614,15 @@ class EMLECalculator:
         state: int
             The electronic state index (0 is the ground state).
         """
-        from ._backends._backend import MultistateBackend
-
-        backends = [b for b in self._backends if isinstance(b, MultistateBackend)]
-        if not backends:
-            msg = "None of the backends supports choosing the electronic state!"
+        if not isinstance(state, int) or isinstance(state, bool):
+            msg = "'state' must be of type 'int'"
             _logger.error(msg)
-            raise Exception(msg)
-
-        for b in backends:
-            try:
-                b.state = state
-            except Exception as e:
-                _logger.error(str(e))
-                raise
+            raise TypeError(msg)
+        if state < 0:
+            msg = "'state' must be greater than or equal to 0"
+            _logger.error(msg)
+            raise ValueError(msg)
+        self._electronic_state = state
 
     def _sire_callback(
         self, atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell=None, idx_mm=None
@@ -1672,6 +1704,8 @@ class EMLECalculator:
                 xyz_mm,
                 cell=cell,
                 charge=self._qm_charge,
+                mult=self._mult,
+                state=self._electronic_state,
             )
         )
 
@@ -1823,6 +1857,11 @@ class EMLECalculator:
 
         if mult is None:
             msg = "Unable to determine QM spin multiplicity from ORCA input."
+            _logger.error(msg)
+            raise ValueError(msg)
+
+        if mult < 1:
+            msg = f"Invalid QM spin multiplicity in ORCA input: {mult}"
             _logger.error(msg)
             raise ValueError(msg)
 

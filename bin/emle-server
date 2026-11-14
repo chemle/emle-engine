@@ -127,10 +127,6 @@ except:
 qm_indices = os.getenv("EMLE_QM_INDICES")
 sqm_theory = os.getenv("EMLE_SQM_THEORY")
 aimnet2_model = os.getenv("EMLE_AIMNET2_MODEL")
-try:
-    mult = int(os.getenv("EMLE_MULT"))
-except:
-    mult = None
 omnip2x_model = os.getenv("EMLE_OMNIP2X_MODEL")
 try:
     electronic_state = int(os.getenv("EMLE_ELECTRONIC_STATE"))
@@ -187,7 +183,6 @@ env = {
     "qm_indices": qm_indices,
     "sqm_theory": sqm_theory,
     "aimnet2_model": aimnet2_model,
-    "mult": mult,
     "omnip2x_model": omnip2x_model,
     "electronic_state": electronic_state,
     "orca_path": orca_path,
@@ -389,12 +384,6 @@ parser.add_argument(
     required=False,
 )
 parser.add_argument(
-    "--mult",
-    type=int,
-    help="the spin multiplicity of the QM region, for backends that support it",
-    required=False,
-)
-parser.add_argument(
     "--omnip2x-model",
     type=str,
     nargs="*",
@@ -404,7 +393,7 @@ parser.add_argument(
 parser.add_argument(
     "--electronic-state",
     type=int,
-    help="the electronic state index, for backends that support it (OMNI-P2x)",
+    help="the electronic state index (0 is the ground state)",
     required=False,
 )
 parser.add_argument(

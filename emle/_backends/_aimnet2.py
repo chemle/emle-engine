@@ -40,7 +40,7 @@ class AIMNet2(_Backend):
     AIMNet2 in-vacuo backend implementation.
     """
 
-    def __init__(self, model="aimnet2", qm_charge=0, mult=1, device=None):
+    def __init__(self, model="aimnet2", device=None):
         """
         Constructor.
 
@@ -50,20 +50,14 @@ class AIMNet2(_Backend):
         model: str
             The AIMNet2 model to use: a name from the aimnet model registry,
             e.g. "aimnet2" or "aimnet2-b973c", or the path to a model file.
-            If None, "aimnet2" is used.
-
-        qm_charge: int
-            The charge on the QM region.
-
-        mult: int
-            The spin multiplicity of the QM region. Values other than 1
-            need an open-shell model, e.g. "aimnet2-nse". If None, 1 is used.
+            If None, "aimnet2" is used. Spin multiplicities other than 1
+            need an open-shell model, e.g. "aimnet2-nse".
 
         device: str
             The device to run the model on, e.g. "cpu" or "cuda". If None,
             CUDA is used when available.
         """
-        super().__init__()
+        super().__init__(charges=None, mults=None)
 
         if _AIMNet2Calculator is None:
             raise ImportError(
@@ -77,18 +71,6 @@ class AIMNet2(_Backend):
             raise TypeError("'model' must be of type 'str'")
         self._model = model
 
-        if not isinstance(qm_charge, int):
-            raise TypeError("'qm_charge' must be of type 'int'")
-        self._qm_charge = qm_charge
-
-        if mult is None:
-            mult = 1
-        if not isinstance(mult, int) or isinstance(mult, bool):
-            raise TypeError("'mult' must be of type 'int'")
-        if mult < 1:
-            raise ValueError("'mult' must be greater than or equal to 1")
-        self._mult = mult
-
         if device is not None:
             device = str(device)
 
@@ -97,7 +79,11 @@ class AIMNet2(_Backend):
         except Exception as e:
             raise RuntimeError(f"Unable to create the AIMNet2 calculator: {e}") from e
 
-    def calculate(self, atomic_numbers, xyz, forces=True):
+        # Closed-shell models have no spin multiplicity input.
+        if not self._calculator.is_nse:
+            self.mults = (1,)
+
+    def calculate(self, atomic_numbers, xyz, forces=True, qm_charge=0, mult=1):
         """
         Compute the energy and forces.
 
@@ -112,6 +98,12 @@ class AIMNet2(_Backend):
 
         forces: bool
             Whether to calculate and return forces.
+
+        qm_charge: int, numpy.ndarray (N_BATCH,)
+            The charge of the QM region.
+
+        mult: int, numpy.ndarray (N_BATCH,)
+            The spin multiplicity of the QM region.
 
         Returns
         -------
@@ -145,8 +137,8 @@ class AIMNet2(_Backend):
             {
                 "coord": xyz,
                 "numbers": atomic_numbers,
-                "charge": _np.full(len(atomic_numbers), float(self._qm_charge)),
-                "mult": _np.full(len(atomic_numbers), float(self._mult)),
+                "charge": _np.full(len(atomic_numbers), qm_charge, dtype=float),
+                "mult": _np.full(len(atomic_numbers), mult, dtype=float),
             },
             forces=forces,
         )

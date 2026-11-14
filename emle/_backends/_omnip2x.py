@@ -34,7 +34,7 @@ from torchani.aev import ANIAngular as _ANIAngular
 from torchani.aev import ANIRadial as _ANIRadial
 
 from .._units import _BOHR_TO_ANGSTROM
-from ._backend import MultistateBackend as _MultistateBackend
+from ._backend import Backend as _Backend
 
 # Classes pickled in the checkpoints, loaded as empty classes holding their state.
 _CLASSES = (
@@ -102,20 +102,22 @@ class _OMNIP2xNetwork(_torch.nn.Module):
         """
         atomic_numbers: (N_BATCH, N_ATOMS) int64
         xyz: (N_BATCH, N_ATOMS, 3) float32, Angstrom
-        state: int, electronic state index (0 = ground state)
+        state: (N_BATCH,) electronic state indices (0 = ground state)
 
         Returns the energy in Hartree, (N_BATCH,) float64.
         """
         species = self._species_map[atomic_numbers]
         aev = self._aev(species, xyz)
         n_batch, n_atoms = species.shape
+        state = _torch.as_tensor(state, dtype=aev.dtype, device=aev.device)
         extra = _torch.cat(
             (
-                self._descriptor.to(aev.dtype),
-                _torch.tensor([float(state)], dtype=aev.dtype, device=aev.device),
-            )
+                self._descriptor.to(aev.dtype).expand(n_batch, -1),
+                state.reshape(n_batch, 1),
+            ),
+            dim=1,
         )
-        features = _torch.cat((aev, extra.expand(n_batch, n_atoms, -1)), dim=2)
+        features = _torch.cat((aev, extra[:, None].expand(-1, n_atoms, -1)), dim=2)
 
         energy = _torch.zeros(n_batch, n_atoms, dtype=aev.dtype, device=aev.device)
         for i, network in enumerate(self._networks):
@@ -222,7 +224,7 @@ class _OMNIP2xNetwork(_torch.nn.Module):
         )
 
 
-class OMNIP2x(_MultistateBackend):
+class OMNIP2x(_Backend):
     """
     OMNI-P2x in-vacuo backend implementation.
     """
@@ -238,7 +240,7 @@ class OMNIP2x(_MultistateBackend):
         "OMNIP2x_CV_3.pt": "e98b78d78aed21f5e1a0db50cfc5405fe0b80ad90a5a289758336cecef1c939e",
     }
 
-    def __init__(self, model=None, state=0, device=None):
+    def __init__(self, model=None, device=None):
         """
         Constructor.
 
@@ -250,14 +252,13 @@ class OMNIP2x(_MultistateBackend):
             MLatom. The energy is averaged over the models. If None, the
             official OMNI-P2x models are downloaded on first use.
 
-        state: int
-            The electronic state index (0 is the ground state).
-
         device: str
             The device to run the model on, e.g. "cpu" or "cuda". If None,
             CUDA is used when available.
         """
-        super().__init__(state)
+        # The checkpoints don't record how many states the model was trained
+        # on, so any state is supported unless declared otherwise.
+        super().__init__(states=None)
 
         if model is None:
             directory = _os.path.join(_torch.hub.get_dir(), "omnip2x")
@@ -292,7 +293,7 @@ class OMNIP2x(_MultistateBackend):
         except Exception as e:
             raise RuntimeError(f"Unable to load the OMNI-P2x models: {e}") from e
 
-    def calculate(self, atomic_numbers, xyz, forces=True):
+    def calculate(self, atomic_numbers, xyz, forces=True, state=0):
         """
         Compute the energy and forces.
 
@@ -307,6 +308,9 @@ class OMNIP2x(_MultistateBackend):
 
         forces: bool
             Whether to calculate and return forces.
+
+        state: int, numpy.ndarray (N_BATCH,)
+            The electronic state index (0 is the ground state).
 
         Returns
         -------
@@ -350,8 +354,9 @@ class OMNIP2x(_MultistateBackend):
             xyz, dtype=_torch.float32, device=self._device, requires_grad=forces
         )
 
+        state = _np.full(len(atomic_numbers), state)
         energy = sum(
-            network(atomic_numbers, xyz, self.state) for network in self._networks
+            network(atomic_numbers, xyz, state) for network in self._networks
         ) / len(self._networks)
 
         if not forces:
