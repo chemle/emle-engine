@@ -646,7 +646,7 @@ class EMLECalculator:
 
         # Validate and create the backend(s).
         self._backends = []
-        if self._backend is not None:
+        if self._backend is not None and not self._is_external_backend:
             for backend in self._backend:
                 if backend == "torchani":
                     from .models import ANI2xEMLE as _ANI2xEMLE
@@ -1154,7 +1154,10 @@ class EMLECalculator:
             atoms.info["total_charge"] = charge
             if hasattr(self._backend, "_max_f_std"):
                 atoms.info = {"max_f_std": self._backend._max_f_std}
-            if getattr(self._backends[0], "emle_values", None) is not None:
+            if (
+                self._backends
+                and getattr(self._backends[0], "emle_values", None) is not None
+            ):
                 for key, value in self._backends[0].emle_values.items():
                     assert (
                         len(value) == 1
