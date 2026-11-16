@@ -41,6 +41,10 @@ class _CustomMLMMWrapper(_torch.nn.Module):
     The composite returns ``(E_vac, E_static, E_induced)`` in Hartree; this
     wrapper sums them into a scalar total energy and unpacks the
     ``species_coords`` tuple used by torchani-amber.
+
+    ``atomic``, ``ensemble_values`` and ``molecule_idxs`` mirror the TorchANI
+    ``forward`` signature required by the contract. Only their defaults
+    (``False``, ``False``, ``None``) are supported; any other value raises.
     """
 
     def __init__(self, composite: _torch.nn.Module):
