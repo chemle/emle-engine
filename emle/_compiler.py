@@ -56,7 +56,16 @@ class _CustomMLMMWrapper(_torch.nn.Module):
         cell: Optional[_Tensor],
         pbc: Optional[_Tensor],
         charge: int,
+        atomic: bool = False,
+        ensemble_values: bool = False,
+        molecule_idxs: Optional[_Tensor] = None,
     ) -> _Tensor:
+        if atomic:
+            raise ValueError("compute_mlmm does not support 'atomic=True'")
+        if ensemble_values:
+            raise ValueError("compute_mlmm does not support 'ensemble_values=True'")
+        if molecule_idxs is not None:
+            raise ValueError("compute_mlmm does not support 'molecule_idxs'")
         atomic_numbers, xyz_qm = species_coords
         # torch.jit.load(map_location=...) moves tensors but does not rewrite
         # stored torch.device attributes.  Sync EMLE's _device from the actual
@@ -77,9 +86,20 @@ class _CustomMLMMWrapper(_torch.nn.Module):
         cell: Optional[_Tensor],
         pbc: Optional[_Tensor],
         charge: int,
+        atomic: bool = False,
+        ensemble_values: bool = False,
+        molecule_idxs: Optional[_Tensor] = None,
     ) -> _Tensor:
         return self.compute_mlmm(
-            species_coords, mm_coords, mm_charges, cell, pbc, charge
+            species_coords,
+            mm_coords,
+            mm_charges,
+            cell,
+            pbc,
+            charge,
+            atomic,
+            ensemble_values,
+            molecule_idxs,
         )
 
 
