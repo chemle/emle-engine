@@ -15,15 +15,14 @@ from ._orca_parser import ORCAParser
 from ._units import _HARTREE_BOHR_TO_EV_A
 
 
-def orca_to_extxyz(
+def tarball_to_atoms(
     orca_tarball_path,
-    output_path=None,
-    total_charge=0,
+    total_charge=None,
     parse_alpha=True,
     verbose=False,
 ):
     """
-    Convert ORCA tarball to extXYZ format using ORCAParser and ASE.
+    Convert ORCA tarball to a list of ASE Atoms using ORCAParser.
 
     Parameters
     ----------
@@ -31,12 +30,9 @@ def orca_to_extxyz(
     orca_tarball_path: str or Path
         Path to the ORCA tarball file.
 
-    output_path: str or Path, optional
-        Output path for the extXYZ file. If None, uses the input name with a
-        '.xyz' extension.
-
-    total_charge: int
-        Total charge of the system (default: 0).
+    total_charge: int or None
+        Total charge of every frame. If None, the rounded sum of the MBIS
+        charges of each frame is used.
 
     parse_alpha: bool
         Whether to parse polarizability data (default: True).
@@ -47,19 +43,12 @@ def orca_to_extxyz(
     Returns
     -------
 
-    output_path: str
-        Path to the created extXYZ file.
+    atoms_list: List[ase.Atoms]
     """
     orca_tarball_path = Path(orca_tarball_path)
 
     if not orca_tarball_path.exists():
         raise FileNotFoundError(f"ORCA tarball not found: {orca_tarball_path}")
-
-    # Set output path if not provided
-    if output_path is None:
-        output_path = orca_tarball_path.with_suffix(".xyz")
-    else:
-        output_path = Path(output_path)
 
     if verbose:
         print(f"Parsing ORCA tarball: {orca_tarball_path}")
@@ -78,22 +67,21 @@ def orca_to_extxyz(
     if verbose:
         print(f"Found {n_frames} frames")
 
-    # Convert atomic numbers to symbols
-    atomic_numbers = parser.z[0]
-    symbols = [chemical_symbols[int(z)] for z in atomic_numbers]
-
     # Create atoms list
     atoms_list = []
 
     for i in range(n_frames):
         frame_number = i + 1
+        n_atoms = (parser.z[i] > 0).sum()
 
         # Create ASE atoms object from parser data
-        atoms = Atoms(symbols=symbols, positions=parser.xyz[i])
+        symbols = [chemical_symbols[int(z)] for z in parser.z[i][:n_atoms]]
+        atoms = Atoms(symbols=symbols, positions=parser.xyz[i][:n_atoms])
 
         # Add forces (ORCAParser returns Hartree/Bohr; extXYZ stores eV/A
         # for MACE training).
-        atoms.arrays["forces_dft"] = parser.forces[i] * _HARTREE_BOHR_TO_EV_A
+        if parser.forces[i] is not None:
+            atoms.arrays["forces_dft"] = parser.forces[i] * _HARTREE_BOHR_TO_EV_A
 
         # Add MBIS properties
         if not (hasattr(parser, "mbis") and parser.mbis is not None):
@@ -102,12 +90,12 @@ def orca_to_extxyz(
         # Core charges, check if it's present and available for all frames
         if not ("q_core" in parser.mbis and len(parser.mbis["q_core"]) > i):
             raise ValueError(f"Core charges not available for frame {frame_number}")
-        q_core = parser.mbis["q_core"][i]
+        q_core = parser.mbis["q_core"][i][:n_atoms]
 
         # Valence charges
         if not ("q_val" in parser.mbis and len(parser.mbis["q_val"]) > i):
             raise ValueError(f"Valence charges not available for frame {frame_number}")
-        q_val = parser.mbis["q_val"][i]
+        q_val = parser.mbis["q_val"][i][:n_atoms]
 
         # Add q_core and q_val
         atoms.arrays["q_core"] = q_core
@@ -119,21 +107,20 @@ def orca_to_extxyz(
         # Dipole moments (mu)
         if not ("mu" in parser.mbis and len(parser.mbis["mu"]) > i):
             raise ValueError(f"Dipole moments not available for frame {frame_number}")
-        atoms.arrays["mu"] = parser.mbis["mu"][i]
+        atoms.arrays["mu"] = parser.mbis["mu"][i][:n_atoms]
 
         # Valence width (s)
         if not ("s" in parser.mbis and len(parser.mbis["s"]) > i):
             raise ValueError(f"Valence width not available for frame {frame_number}")
-        atoms.arrays["s"] = parser.mbis["s"][i]
-
-        # Add energy
-        if parser.E_vac is None:
-            raise ValueError(f"E_vac not available for frame {frame_number}")
+        atoms.arrays["s"] = parser.mbis["s"][i][:n_atoms]
 
         # Set system properties
         atoms.info["pos_unit"] = "angstrom"
-        atoms.info["energy_dft"] = parser.E_vac[i]
-        atoms.info["total_charge"] = total_charge
+        if not np.isnan(parser.E_vac[i]):
+            atoms.info["energy_dft"] = parser.E_vac[i]
+        atoms.info["total_charge"] = (
+            round((q_core + q_val).sum()) if total_charge is None else total_charge
+        )
         atoms.info["pbc"] = "F F F"
 
         # Add polarizability
@@ -149,14 +136,41 @@ def orca_to_extxyz(
 
             alpha_tensor = parser.alpha[i]
             if isinstance(alpha_tensor, np.ndarray) and alpha_tensor.shape == (3, 3):
-                alpha_json = f"_JSON {alpha_tensor.tolist()}"
-                atoms.info["alpha"] = alpha_json
+                atoms.info["alpha"] = alpha_tensor
             else:
                 raise ValueError(
                     f"Unexpected polarizability format for frame {frame_number}: {type(alpha_tensor)}, shape: {getattr(alpha_tensor, 'shape', 'N/A')}"
                 )
 
         atoms_list.append(atoms)
+
+    return atoms_list
+
+
+def orca_to_extxyz(
+    orca_tarball_path,
+    output_path=None,
+    total_charge=None,
+    parse_alpha=True,
+    verbose=False,
+):
+    """
+    Convert ORCA tarball to extXYZ format.
+
+    output_path: str or Path, optional
+        Output path for the extXYZ file. If None, uses the input name with a
+        '.xyz' extension. Other parameters are as for tarball_to_atoms.
+
+    Returns
+    -------
+
+    output_path: str
+        Path to the created extXYZ file.
+    """
+    if output_path is None:
+        output_path = Path(orca_tarball_path).with_suffix(".xyz")
+
+    atoms_list = tarball_to_atoms(orca_tarball_path, total_charge, parse_alpha, verbose)
 
     if verbose:
         print(f"Writing extXYZ file: {output_path}")
@@ -186,7 +200,10 @@ def main():
     )
 
     parser.add_argument(
-        "--charge", type=int, default=0, help="Total charge of the system (default: 0)"
+        "--charge",
+        type=int,
+        default=None,
+        help="Total charge of every frame (default: rounded sum of MBIS charges per frame)",
     )
 
     parser.add_argument(

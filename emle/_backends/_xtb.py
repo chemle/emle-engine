@@ -43,7 +43,7 @@ class XTB(_Backend):
     """
 
     def __init__(self):
-        super().__init__()
+        super().__init__(charges=None, mults=None)
 
         if _xtb is None:
             raise ImportError(
@@ -51,8 +51,7 @@ class XTB(_Backend):
                 "required to use the XTB backend."
             )
 
-    @staticmethod
-    def calculate(atomic_numbers, xyz, forces=True):
+    def calculate(self, atomic_numbers, xyz, forces=True, qm_charge=0, mult=1):
         """
         Compute the energy and forces.
 
@@ -67,6 +66,12 @@ class XTB(_Backend):
 
         forces: bool
             Whether to calculate and return forces.
+
+        qm_charge: int, numpy.ndarray (N_BATCH,)
+            The charge of the QM region.
+
+        mult: int, numpy.ndarray (N_BATCH,)
+            The spin multiplicity of the QM region.
 
         Returns
         -------
@@ -94,6 +99,9 @@ class XTB(_Backend):
             atomic_numbers = _np.expand_dims(atomic_numbers, axis=0)
             xyz = _np.expand_dims(xyz, axis=0)
 
+        qm_charge = _np.full(len(atomic_numbers), qm_charge)
+        mult = _np.full(len(atomic_numbers), mult)
+
         from xtb.ase.calculator import XTB as _XTB
 
         # Lists to store results.
@@ -113,6 +121,11 @@ class XTB(_Backend):
                 numbers=atomic_numbers_i,
                 positions=xyz_i,
             )
+
+            # The xtb calculator takes the total charge and the number of
+            # unpaired electrons from the sums of these per-atom values.
+            atoms.set_initial_charges([qm_charge[i]] + [0] * (len(atoms) - 1))
+            atoms.set_initial_magnetic_moments([mult[i] - 1] + [0] * (len(atoms) - 1))
 
             # Create the calculator.
             atoms.calc = _XTB(method="GFN2-xTB")
