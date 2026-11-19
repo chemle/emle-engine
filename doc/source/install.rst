@@ -31,7 +31,6 @@ same environment from ``conda-forge`` as required, e.g.:
 
 .. code-block:: bash
 
-    conda install -c conda-forge nnpops       # faster ANI2x symmetry functions
     conda install -c conda-forge xtb-python   # xtb backend
     conda install -c conda-forge ambertools   # sander and sqm backends
     conda install -c conda-forge deepmd-kit   # DeePMD-kit backend
