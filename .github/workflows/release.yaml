@@ -102,4 +102,4 @@ jobs:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
         run: |
           shopt -s globstar
-          anaconda --token "$ANACONDA_API_TOKEN" upload --user chemle --force conda-dist/**/*.conda
+          anaconda --token "$ANACONDA_API_TOKEN" upload --user chemle --skip-existing conda-dist/**/*.conda
