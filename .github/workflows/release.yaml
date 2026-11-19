@@ -78,12 +78,9 @@ jobs:
         uses: prefix-dev/rattler-build-action@v0.2.39
         with:
           recipe-path: recipes/emle-engine/recipe.yaml
+          artifact-name: conda-dist
         env:
           PKG_VERSION: ${{ needs.build-pypi.outputs.version }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: conda-dist
-          path: output/**/*.conda
 
   publish-conda:
     name: Publish to chemle Anaconda.org channel
