@@ -20,6 +20,13 @@ from ase.calculators.calculator import all_changes as _all_changes
 from .._units import _BOHR_TO_ANGSTROM, _KCAL_MOL_TO_HARTREE
 from ._backend import Backend as _Backend
 
+# The system that sander is currently set up for by this module, as a
+# (topology path, topology modification time, gas phase, number of atoms)
+# tuple. sander is a process-wide singleton and setting it up parses the
+# topology, so it is only repeated when the system changes, rather than for
+# every calculation.
+_setup_key = None
+
 
 class SanderCalculator(_Calculator):
     """An ASE calculator for the AMBER Sander molecular dynamics engine."""
@@ -56,6 +63,18 @@ class SanderCalculator(_Calculator):
 
         super().__init__()
 
+        global _setup_key
+        key = (
+            _os.path.abspath(parm7),
+            _os.path.getmtime(parm7),
+            is_gas,
+            len(atoms),
+        )
+        if _sander.is_setup() and key == _setup_key:
+            # Already set up for this system: positions (and the box) are
+            # updated in calculate.
+            return
+
         if _sander.is_setup():
             _sander.cleanup()
 
@@ -66,6 +85,7 @@ class SanderCalculator(_Calculator):
             _sander.setup(parm7, positions, box, _sander.gas_input())
         else:
             _sander.setup(parm7, positions, box, _sander.pme_input())
+        _setup_key = key
 
     def calculate(
         self, atoms, properties=["energy", "forces"], system_changes=_all_changes
