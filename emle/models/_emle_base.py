@@ -377,11 +377,20 @@ class EMLEBase(_torch.nn.Module):
         # Compute the AEVs.
         aev = self._emle_aev_computer(species_id, xyz_qm)
 
-        # Compute the MBIS valence shell widths.
-        s = self._gpr(aev, self._ref_mean_s, self._c_s, species_id)
-
-        # Compute the electronegativities.
-        chi = self._gpr(aev, self._ref_mean_chi, self._c_chi, species_id)
+        # Predict the MBIS valence shell widths, the electronegativities and,
+        # for flexible alpha mode, the polarizability scaling factors with a
+        # single GPR kernel evaluation.
+        if self._alpha_mode == "flexible":
+            ref_mean = _torch.stack(
+                [self._ref_mean_s, self._ref_mean_chi, self._ref_mean_sqrtk]
+            )
+            c = _torch.stack([self._c_s, self._c_chi, self._c_sqrtk])
+        else:
+            ref_mean = _torch.stack([self._ref_mean_s, self._ref_mean_chi])
+            c = _torch.stack([self._c_s, self._c_chi])
+        gpr = self._gpr(aev, ref_mean, c, species_id)
+        s = gpr[0]
+        chi = gpr[1]
 
         # Convert coordinates to Bohr.
         ANGSTROM_TO_BOHR = 1.8897261258369282
@@ -396,9 +405,7 @@ class EMLEBase(_torch.nn.Module):
         k = self.k_Z[species_id]
 
         if self._alpha_mode == "flexible":
-            k_scale = (
-                self._gpr(aev, self._ref_mean_sqrtk, self._c_sqrtk, species_id) ** 2
-            )
+            k_scale = gpr[2] ** 2
             k = k_scale * k
 
         A_thole = self._get_A_thole(r_data, s, q_val, k, self.a_Thole)
@@ -458,13 +465,16 @@ class EMLEBase(_torch.nn.Module):
         mol_features: torch.Tensor (N_BATCH, N_ATOMS, N_FEAT)
             The feature vectors for each atom.
 
-        ref_mean: torch.Tensor (N_Z,)
+        ref_mean: torch.Tensor (N_Z,) or (N_PROPS, N_Z)
             The mean of the reference values for each species.
 
-        c: torch.Tensor (N_Z, MAX_N_REF)
+        c: torch.Tensor (N_Z, MAX_N_REF) or (N_PROPS, N_Z, MAX_N_REF)
             GPR coefficients. Entries beyond n_ref[i] are zeroed by
             _ref_mask at call time, so c can be updated freely by the
             training code without creating stale derived buffers.
+            Several properties can be predicted at once by stacking their
+            coefficients (and reference means), so that the GPR kernel is
+            only evaluated once.
 
         zid: torch.Tensor (N_BATCH, N_ATOMS,)
             The species identity value of each atom.
@@ -472,7 +482,7 @@ class EMLEBase(_torch.nn.Module):
         Returns
         -------
 
-        result: torch.Tensor (N_BATCH, N_ATOMS)
+        result: torch.Tensor (N_BATCH, N_ATOMS) or (N_PROPS, N_BATCH, N_ATOMS)
             The values of the predicted property for each atom.
         """
         n_s = self._ref_features.shape[0]
@@ -481,22 +491,33 @@ class EMLEBase(_torch.nn.Module):
         n_batch = mol_features.shape[0]
         n_atoms = mol_features.shape[1]
 
+        is_single = c.ndim == 2
+        if is_single:
+            c = c.unsqueeze(0)
+            ref_mean = ref_mean.unsqueeze(0)
+
         # Flatten atom and batch dims, compute the kernel against all species
-        # and references in a single batched matmul, then reshape.
-        # K: (n_batch * n_atoms, n_s * n_r) -> (n_batch, n_atoms, n_s, n_r)
+        # and references in a single matmul, then reshape.
+        # K: (n_batch * n_atoms, n_s * n_r) -> (n_batch * n_atoms, n_s, n_r)
         mol_flat = mol_features.reshape(n_batch * n_atoms, n_feat)
         ref_flat = self._ref_features.reshape(n_s * n_r, n_feat)
-        K = (mol_flat @ ref_flat.T).reshape(n_batch, n_atoms, n_s, n_r) ** 2
+        K = (mol_flat @ ref_flat.T).reshape(n_batch * n_atoms, n_s, n_r) ** 2
 
-        # Apply the reference mask inline so the training code can update c
-        # freely.  The multiply is cheap relative to the matmul above.
-        # result_all: (n_batch, n_atoms, n_s)
-        result_all = (K * (c * self._ref_mask)).sum(-1) + ref_mean
+        # Contract with the coefficients of every property. The reference
+        # mask is applied inline so the training code can update c freely.
+        # (A multiply and sum is faster than einsum here, which would copy K
+        # to a permuted layout.)
+        # result_all: (n_props, n_batch * n_atoms, n_s)
+        result_all = (K[None] * (c * self._ref_mask)[:, None]).sum(-1)
+        result_all = result_all + ref_mean[:, None, :]
 
         # Gather each atom's own-species result; clamp handles padding (zid == -1).
-        zid_safe = zid.clamp(min=0)
-        result = result_all.gather(2, zid_safe.unsqueeze(-1)).squeeze(-1)
-        return result * (zid >= 0)
+        n_props = c.shape[0]
+        zid_safe = zid.clamp(min=0).reshape(1, n_batch * n_atoms, 1)
+        result = result_all.gather(2, zid_safe.expand(n_props, -1, -1))
+        result = result.reshape(n_props, n_batch, n_atoms) * (zid >= 0)
+
+        return result[0] if is_single else result
 
     @classmethod
     def _get_r_data(cls, xyz, mask):
