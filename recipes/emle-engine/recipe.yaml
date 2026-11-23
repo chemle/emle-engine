@@ -29,7 +29,6 @@ requirements:
     - h5py
     - loguru
     - numpy
-    - pygit2
     - pytorch
     - pyyaml
     - scipy

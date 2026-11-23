@@ -8,7 +8,6 @@ dependencies:
   - h5py
   - loguru
   - numpy
-  - pygit2
   - python >=3.10
   - pytorch
   - pyyaml
