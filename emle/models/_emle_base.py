@@ -589,7 +589,7 @@ class EMLEBase(_torch.nn.Module):
         """
         A = self._get_A_QEq(r_data, s, mask)
         b = _torch.hstack([-chi, q_total[:, None]])
-        return _torch.linalg.solve(A, b)[:, :-1]
+        return EMLEBase._solve(A, b)[:, :-1]
 
     def _get_A_QEq(self, r_data: Tuple[Tensor, Tensor, Tensor], s, mask):
         """
@@ -904,8 +904,37 @@ class EMLEBase(_torch.nn.Module):
         fields = _torch.einsum("bnmk,bnm->bnk", mesh_data[2], f1 * q[:, None, :])
         fields = fields.reshape(len(s), -1)
 
-        mu_ind = _torch.linalg.solve(A, fields)
+        mu_ind = EMLEBase._solve(A, fields)
         return mu_ind.reshape((mu_ind.shape[0], -1, 3))
+
+    @staticmethod
+    def _solve(A: Tensor, b: Tensor) -> Tensor:
+        """
+        Internal method to solve the linear systems A x = b.
+
+        On CUDA, the check for singular matrices is skipped: it copies an error
+        flag to the host on every call, which synchronises the device and
+        prevents capturing the model in a CUDA graph. A singular matrix then
+        gives non-finite results rather than an exception.
+
+        Parameters
+        ----------
+
+        A: torch.Tensor (N_BATCH, N, N)
+            The matrices.
+
+        b: torch.Tensor (N_BATCH, N)
+            The right-hand sides.
+
+        Returns
+        -------
+
+        result: torch.Tensor (N_BATCH, N)
+            The solutions.
+        """
+        if A.is_cuda:
+            return _torch.linalg.solve_ex(A, b)[0]
+        return _torch.linalg.solve(A, b)
 
     @staticmethod
     def _get_vpot_q(q, T0):
