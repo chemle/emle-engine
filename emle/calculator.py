@@ -34,6 +34,7 @@ from loguru import logger as _logger
 import os as _os
 import numpy as _np
 import sys as _sys
+from types import SimpleNamespace as _SimpleNamespace
 import yaml as _yaml
 
 import ase as _ase
@@ -42,6 +43,7 @@ import ase.io as _ase_io
 import torch as _torch
 
 from .models import EMLE as _EMLE
+from ._backends._backend import _check_supported
 
 from emle._units import (
     _NANOMETER_TO_BOHR,
@@ -82,6 +84,7 @@ class EMLECalculator:
         alpha_mode="fixed",
         use_dipoles=False,
         qm_charge=0,
+        mult=1,
         backend="torchani",
         external_backend=None,
         plugin_path=".",
@@ -102,6 +105,12 @@ class EMLECalculator:
         qm_indices=None,
         orca_path=None,
         sqm_theory="DFTB3",
+        aimnet2_model="aimnet2",
+        omnip2x_model=None,
+        electronic_state=None,
+        model_charges=None,
+        model_mults=None,
+        model_states=None,
         lambda_interpolate=None,
         interpolate_steps=None,
         restart=False,
@@ -161,6 +170,13 @@ class EMLECalculator:
             EMLECalculator instance with the OpenMM interface. When using
             the sander interface, the QM charge will be taken from the ORCA
             input file.
+
+        mult: int
+            The spin multiplicity of the QM region. When using the sander
+            interface, it will be taken from the ORCA input file. With the
+            ORCA backend, the charge and multiplicity, from this and
+            'qm_charge' or from the ORCA input file, must match the values in
+            'orca_template'.
 
         external_backend: str
             The name of an external backend to use to compute in vacuo energies.
@@ -263,6 +279,35 @@ class EMLECalculator:
             The QM theory to use when using the SQM backend. See the AmberTools
             manual for the supported theory levels for your version of AmberTools.
 
+        aimnet2_model: str
+            The AIMNet2 model to use when using the AIMNet2 backend: a name from
+            the aimnet model registry, e.g. "aimnet2", or the path to a model file.
+
+        omnip2x_model: str, [str]
+            Path(s) to OMNI-P2x model files to use when using the OMNI-P2x
+            backend, e.g. fine-tuned models saved by MLatom. The energy is
+            averaged over the models. If None, the official OMNI-P2x models
+            are downloaded on first use.
+
+        electronic_state: int
+            The electronic state index (0 is the ground state). If None, the
+            ground state is used. For excited states, an EMLE model trained
+            for that state should be passed as 'model'.
+
+        model_charges: list of int
+            The QM charges that the in vacuo model supports, replacing those
+            of every backend. Models without a charge input, e.g. DeePMD or
+            MACE, are assumed to support only 0. A charge that is not
+            supported raises an error.
+
+        model_mults: list of int
+            As 'model_charges', for the spin multiplicity (by default 1).
+
+        model_states: list of int
+            As 'model_charges', for the electronic state (by default 0, the
+            ground state), e.g. [0, 1] for an OMNI-P2x model fine-tuned for
+            two states.
+
         restart: bool
             Whether this is a restart simulation with sander. If True, then energies
             are logged immediately.
@@ -275,8 +320,10 @@ class EMLECalculator:
             The path to a template ORCA input file. This is required when using
             the ORCA backend when using emle-engine with Sire. This should be a
             full template, including the charge and multiplicity of the QM region,
-            along with a placeholder name for the xyz file that will be replaced
-            with the file generated at runtime, e.g.:
+            which are the only ones supported unless declared with
+            'model_charges' and 'model_mults', along with a placeholder name for
+            the xyz file that will be replaced with the file generated at runtime,
+            e.g.:
 
                 %pal nprocs 4 end
                 !BLYP 6-31G* verytightscf
@@ -450,6 +497,16 @@ class EMLECalculator:
                 raise TypeError(msg)
             self._qm_charge = qm_charge
 
+        if not isinstance(mult, int) or isinstance(mult, bool):
+            msg = "'mult' must be of type 'int'"
+            _logger.error(msg)
+            raise TypeError(msg)
+        if mult < 1:
+            msg = "'mult' must be greater than or equal to 1"
+            _logger.error(msg)
+            raise ValueError(msg)
+        self._mult = mult
+
         # Create the EMLE model instance.
         self._emle = _EMLE(
             model=model,
@@ -622,7 +679,7 @@ class EMLECalculator:
 
         # Validate and create the backend(s).
         self._backends = []
-        if self._backend is not None:
+        if self._backend is not None and not self._is_external_backend:
             for backend in self._backend:
                 if backend == "torchani":
                     from .models import ANI2xEMLE as _ANI2xEMLE
@@ -740,6 +797,26 @@ class EMLECalculator:
                         _logger.error(msg)
                         raise RuntimeError(msg)
 
+                elif backend == "aimnet2":
+                    try:
+                        from ._backends import AIMNet2
+
+                        b = AIMNet2(model=aimnet2_model, device=self._device)
+                    except Exception as e:
+                        msg = f"Unable to create AIMNet2 backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
+                elif backend == "omnip2x":
+                    try:
+                        from ._backends import OMNIP2x
+
+                        b = OMNIP2x(model=omnip2x_model, device=self._device)
+                    except Exception as e:
+                        msg = f"Unable to create OMNI-P2x backend: {e}"
+                        _logger.error(msg)
+                        raise RuntimeError(msg)
+
                 elif backend == "sander":
                     try:
                         from ._backends import Sander
@@ -752,6 +829,26 @@ class EMLECalculator:
 
                 # Append the backend to the list.
                 self._backends.append(b)
+
+        # The Torch and external backends have no inputs.
+        for b in self._backends:
+            if isinstance(b, _torch.nn.Module):
+                b.charges, b.mults, b.states = (0,), (1,), (0,)
+        self._external_supported = _SimpleNamespace(charges=(0,), mults=(1,), states=(0,))
+
+        # Apply the supported values that the user declares.
+        targets = [self._external_supported] if self._is_external_backend else self._backends
+        for b in targets:
+            if model_charges is not None:
+                b.charges = tuple(model_charges)
+            if model_mults is not None:
+                b.mults = tuple(model_mults)
+            if model_states is not None:
+                b.states = tuple(model_states)
+
+        self._electronic_state = 0
+        if electronic_state is not None:
+            self.set_electronic_state(electronic_state)
 
         if qbc_deviation is not None:
             if not isinstance(qbc_deviation, str):
@@ -945,6 +1042,7 @@ class EMLECalculator:
             "method": self._method,
             "alpha_mode": self._alpha_mode,
             "qm_charge": self._qm_charge,
+            "mult": self._mult,
             "backend": self._backend,
             "external_backend": None if external_backend is None else external_backend,
             "mm_charges": None if mm_charges is None else self._mm_charges.tolist(),
@@ -963,6 +1061,12 @@ class EMLECalculator:
             "qm_indices": None if qm_indices is None else self._qm_indices,
             "orca_path": orca_path,
             "sqm_theory": sqm_theory,
+            "aimnet2_model": aimnet2_model,
+            "omnip2x_model": omnip2x_model,
+            "electronic_state": electronic_state,
+            "model_charges": None if model_charges is None else list(model_charges),
+            "model_mults": None if model_mults is None else list(model_mults),
+            "model_states": None if model_states is None else list(model_states),
             "lambda_interpolate": lambda_interpolate,
             "interpolate_steps": interpolate_steps,
             "restart": restart,
@@ -1008,7 +1112,7 @@ class EMLECalculator:
         (
             dirname,
             charge,
-            multi,
+            mult,
             atoms,
             atomic_numbers,
             xyz_qm,
@@ -1038,6 +1142,8 @@ class EMLECalculator:
                 xyz_mm,
                 atoms=atoms,
                 charge=charge,
+                mult=mult,
+                state=self._electronic_state,
             )
         )
 
@@ -1098,7 +1204,10 @@ class EMLECalculator:
             atoms.info["total_charge"] = charge
             if hasattr(self._backend, "_max_f_std"):
                 atoms.info = {"max_f_std": self._backend._max_f_std}
-            if getattr(self._backends[0], "emle_values", None) is not None:
+            if (
+                self._backends
+                and getattr(self._backends[0], "emle_values", None) is not None
+            ):
                 for key, value in self._backends[0].emle_values.items():
                     assert (
                         len(value) == 1
@@ -1129,6 +1238,8 @@ class EMLECalculator:
         atoms=None,
         cell=None,
         charge=0,
+        mult=1,
+        state=0,
     ):
         """
         Calculate the energy and gradients.
@@ -1156,6 +1267,12 @@ class EMLECalculator:
 
         charge: int
             The total charge of the QM region.
+
+        mult: int
+            The spin multiplicity of the QM region.
+
+        state: int
+            The electronic state index (0 is the ground state).
 
         Returns
         -------
@@ -1201,6 +1318,13 @@ class EMLECalculator:
                 for i, backend in enumerate(self._backends):
                     # This is an EMLE Torch model.
                     if isinstance(backend, _torch.nn.Module):
+                        try:
+                            _check_supported(backend, charge, mult, state)
+                        except ValueError as e:
+                            msg = f"Failed to calculate in vacuo energies using {self._backend[i]} backend: {e}"
+                            _logger.error(msg)
+                            raise RuntimeError(msg)
+
                         # Base backend is an EMLE Torch model.
                         if i == 0:
                             base_model = backend
@@ -1211,7 +1335,13 @@ class EMLECalculator:
                     else:
                         try:
                             # Add the in vacuo energy and gradients to the total.
-                            energy, forces = backend(atomic_numbers, xyz_qm)
+                            energy, forces = backend(
+                                atomic_numbers,
+                                xyz_qm,
+                                qm_charge=charge,
+                                mult=mult,
+                                state=state,
+                            )
                             E_vac += energy[0]
                             grad_vac += -forces[0]
                         except Exception as e:
@@ -1222,6 +1352,7 @@ class EMLECalculator:
         # External backend.
         else:
             try:
+                _check_supported(self._external_supported, charge, mult, state)
                 if atoms is None:
                     atoms = _ase.Atoms(positions=xyz_qm, numbers=atomic_numbers)
                 E_vac, grad_vac = self._external_backend(atoms)
@@ -1508,6 +1639,26 @@ class EMLECalculator:
         # Reset the first step flag.
         self._is_first_step = not self._restart
 
+    def set_electronic_state(self, state):
+        """
+        Set the electronic state.
+
+        Parameters
+        ----------
+
+        state: int
+            The electronic state index (0 is the ground state).
+        """
+        if not isinstance(state, int) or isinstance(state, bool):
+            msg = "'state' must be of type 'int'"
+            _logger.error(msg)
+            raise TypeError(msg)
+        if state < 0:
+            msg = "'state' must be greater than or equal to 0"
+            _logger.error(msg)
+            raise ValueError(msg)
+        self._electronic_state = state
+
     def _sire_callback(
         self, atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell=None, idx_mm=None
     ):
@@ -1588,6 +1739,8 @@ class EMLECalculator:
                 xyz_mm,
                 cell=cell,
                 charge=self._qm_charge,
+                mult=self._mult,
+                state=self._electronic_state,
             )
         )
 
@@ -1739,6 +1892,11 @@ class EMLECalculator:
 
         if mult is None:
             msg = "Unable to determine QM spin multiplicity from ORCA input."
+            _logger.error(msg)
+            raise ValueError(msg)
+
+        if mult < 1:
+            msg = f"Invalid QM spin multiplicity in ORCA input: {mult}"
             _logger.error(msg)
             raise ValueError(msg)
 

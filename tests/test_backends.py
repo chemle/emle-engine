@@ -3,6 +3,7 @@ import os
 import pytest
 import socket
 import tempfile
+import urllib.error
 
 from emle._backends import *
 
@@ -19,6 +20,13 @@ try:
     has_xtb = True
 except ImportError:
     has_xtb = False
+
+try:
+    import aimnet as _aimnet
+
+    has_aimnet = True
+except ImportError:
+    has_aimnet = False
 
 
 @pytest.fixture(scope="module")
@@ -84,6 +92,86 @@ def test_xtb(data):
 
     # Calculate the energy and forces.
     energy, forces = backend(atomic_numbers, xyz)
+
+
+@pytest.mark.skipif(not has_aimnet, reason="aimnet not installed")
+def test_aimnet2(data):
+    """
+    Test the AIMNet2 backend.
+    """
+
+    # Set up the data.
+    atomic_numbers, xyz = data
+
+    # Instantiate the AIMNet2 backend.
+    backend = AIMNet2(device="cpu")
+
+    # Calculate the energy and forces.
+    energy, forces = backend(atomic_numbers, xyz)
+
+    assert energy.shape == (1,)
+    assert forces.shape == xyz.shape
+
+
+@pytest.fixture(scope="module")
+def omnip2x():
+    # The official models are downloaded on first use.
+    try:
+        return OMNIP2x(device="cpu")
+    except urllib.error.HTTPError:
+        raise
+    except urllib.error.URLError as e:
+        pytest.xfail(f"Unable to download the OMNI-P2x weights: {e.reason}")
+
+
+def test_omnip2x(data, omnip2x):
+    """
+    Test the OMNI-P2x backend against MLatom 3.25.5 reference values.
+    """
+    from emle._units import _BOHR_TO_ANGSTROM
+
+    # MLatom energies (Eh) and gradients (Eh/Angstrom) for states 0 and 1.
+    ref_energy = [-40.514477197768294, -40.22064542590777]
+    ref_gradient = [
+        [
+            [-0.0507377976, 0.0031129560, -0.0210413020],
+            [0.0334677659, 0.0092685216, 0.0069551004],
+            [-0.0330027379, -0.0503321141, 0.0220126739],
+            [0.0130663663, 0.0457015174, 0.0646436214],
+            [0.0372064033, -0.0077508797, -0.0725700979],
+        ],
+        [
+            [-0.1207381301, 0.0217056392, -0.0078536086],
+            [0.1239998601, -0.0062912616, 0.0223377924],
+            [0.0415709868, -0.0028536792, 0.0044315883],
+            [-0.0228539936, -0.0228928073, -0.0489761382],
+            [-0.0219787216, 0.0103321075, 0.0300603677],
+        ],
+    ]
+
+    # Set up the data.
+    atomic_numbers, xyz = data
+
+    for state in (0, 1):
+        energy, forces = omnip2x(atomic_numbers, xyz, state=state)
+        assert np.allclose(energy, ref_energy[state], rtol=0, atol=1e-6)
+        assert np.allclose(
+            forces[0],
+            -np.array(ref_gradient[state]) * _BOHR_TO_ANGSTROM,
+            rtol=0,
+            atol=1e-5,
+        )
+
+    # Both states in one batch.
+    energy, forces = omnip2x(
+        np.concatenate([atomic_numbers] * 2),
+        np.concatenate([xyz] * 2),
+        state=np.array([0, 1]),
+    )
+    assert np.allclose(energy, ref_energy, rtol=0, atol=1e-6)
+    assert np.allclose(
+        forces, -np.array(ref_gradient) * _BOHR_TO_ANGSTROM, rtol=0, atol=1e-5
+    )
 
 
 @pytest.mark.skipif(

@@ -40,7 +40,7 @@ class SQM(_Backend):
     SQM in-vacuo backend implementation.
     """
 
-    def __init__(self, parm7, theory="DFTB3", qm_charge=0):
+    def __init__(self, parm7, theory="DFTB3"):
         """
         Constructor.
 
@@ -52,12 +52,10 @@ class SQM(_Backend):
 
         theory: str
             The SQM theory to use.
-
-        qm_charge: int
-            The charge on the QM region.
         """
 
-        super().__init__()
+        # sqm only supports singlets.
+        super().__init__(charges=None)
 
         # Make sure a topology file has been set.
         if parm7 is None:
@@ -80,12 +78,7 @@ class SQM(_Backend):
         # Strip whitespace.
         self._theory = theory.replace(" ", "")
 
-        # Validate the QM charge.
-        if not isinstance(qm_charge, int):
-            raise TypeError("'qm_charge' must be of type 'int'.")
-        self._qm_charge = qm_charge
-
-    def calculate(self, atomic_numbers, xyz, forces=True, qm_charge=None):
+    def calculate(self, atomic_numbers, xyz, forces=True, qm_charge=0):
         """
         Compute the energy and forces.
 
@@ -101,8 +94,8 @@ class SQM(_Backend):
         forces: bool
             Whether to calculate and return forces.
 
-        qm_charge: int
-            The charge on the QM region.
+        qm_charge: int, numpy.ndarray (N_BATCH,)
+            The charge of the QM region.
 
         Returns
         -------
@@ -122,12 +115,6 @@ class SQM(_Backend):
         if not isinstance(atomic_numbers, _np.ndarray):
             raise TypeError("'atomic_numbers' must be of type 'numpy.ndarray'")
 
-        if qm_charge is None:
-            qm_charge = self._qm_charge
-        else:
-            if not isinstance(qm_charge, int):
-                raise TypeError("'qm_charge' must be of type 'int'.")
-
         if len(atomic_numbers) != len(xyz):
             raise ValueError(
                 f"Length of 'atomic_numbers' ({len(atomic_numbers)}) does not "
@@ -138,6 +125,8 @@ class SQM(_Backend):
         if len(atomic_numbers.shape) == 1:
             atomic_numbers = _np.expand_dims(atomic_numbers, axis=0)
             xyz = _np.expand_dims(xyz, axis=0)
+
+        qm_charge = _np.full(len(atomic_numbers), qm_charge)
 
         # Lists to store results.
         results_energy = []
@@ -166,7 +155,7 @@ class SQM(_Backend):
                     f.write("Run semi-empirical minimization\n")
                     f.write(" &qmmm\n")
                     f.write(f" qm_theory='{self._theory}',\n")
-                    f.write(f" qmcharge={qm_charge},\n")
+                    f.write(f" qmcharge={qm_charge[i]},\n")
                     f.write(" maxcyc=0,\n")
                     f.write(" verbosity=4,\n")
                     f.write(f" /\n")

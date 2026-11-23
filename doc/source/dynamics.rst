@@ -91,6 +91,8 @@ To launch a client to send a job to the server:
 where ``orca_input`` is the path to a fully specified `ORCA <https://www.faccts.de/orca/>`__
 input file. When using ``sander``, the ``orca`` executable will be called when
 performing QM/MM, i.e. we are using a *fake* ORCA executable as the QM backend.
+The QM charge and spin multiplicity of each step are taken from the ``*xyzfile``
+line of the ORCA input that ``sander`` writes.
 
 The server and client communicate via a TCP/IP connection, so shuld both connect
 to the same host and port. These can be specified in a script using the
@@ -139,6 +141,37 @@ or a set of model files specified using wildcards, or as a comma-separated list.
 When multiple files are specified, energies and gradients will be averaged over
 the models. The model files need to be visible to the ``emle-server``, so we
 recommend the use of absolute paths.
+
+When using ``aimnet2`` as the backend you can choose the model with the
+``--aimnet2-model`` command-line argument, or using the ``EMLE_AIMNET2_MODEL``
+environment variable. This can be a model name from the
+`aimnet <https://github.com/isayevlab/aimnetcentral>`__ model registry, or the
+path to a model file. The default is ``aimnet2``. Model files are downloaded
+on first use. Spin multiplicities other than 1 need an open-shell model, e.g.
+``aimnet2-nse``.
+
+When using ``omnip2x`` as the backend, the official
+`OMNI-P2x <https://github.com/dralgroup/omni-p2x>`__ models are downloaded on
+first use. Other OMNI-P2x model files, e.g. models fine-tuned with MLatom, can be
+passed with the ``--omnip2x-model`` command-line argument, or using the
+``EMLE_OMNIP2X_MODEL`` environment variable, in the same way as DeePMD model
+files. Energies and gradients are averaged over the models. The electronic state
+is chosen with ``--electronic-state`` or ``EMLE_ELECTRONIC_STATE`` (default 0, the
+ground state). For excited states, pass an EMLE model trained for that state
+with ``--model``. MLatom's fragment correction for excited states is not
+supported.
+
+Models without a charge, spin or electronic state input, e.g. ``deepmd``,
+``mace``, ``sander`` or an external backend, are assumed to be trained for a
+neutral singlet ground state, and other values raise an error. If the model was
+trained for other values, declare them with the ``--model-charges``,
+``--model-mults`` and ``--model-states`` command-line arguments, or as
+comma-separated lists using the ``EMLE_MODEL_CHARGES``, ``EMLE_MODEL_MULTS`` and
+``EMLE_MODEL_STATES`` environment variables. The declaration replaces the values
+that the backend supports, e.g. ``--model-states 0 1`` for an ``omnip2x`` model
+fine-tuned for two states. It applies to every backend in use, and isn't checked
+against what the backend can compute, e.g. a spin multiplicity other than 1 for
+``sqm`` or a closed-shell ``aimnet2`` model.
 
 When using ``sander`` or ``sqm`` as the backend you will also need to specify
 the path to an AMBER parm7 topology file for the QM region. The can be specified
