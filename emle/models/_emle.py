@@ -56,14 +56,6 @@ class EMLE(_torch.nn.Module):
     # the required _is_emle attribute.
     _is_emle = True
 
-    # Store the expected path to the resources directory.
-    _resource_dir = _os.path.join(
-        _os.path.dirname(_os.path.abspath(__file__)), "..", "resources"
-    )
-
-    # Create the name of the default model file.
-    _default_model = _os.path.join(_resource_dir, "emle_qm7_aev.mat")
-
     # Store the list of supported species.
     _species = [1, 6, 7, 8, 16]
 
@@ -149,12 +141,6 @@ class EMLE(_torch.nn.Module):
         # Call the base class constructor.
         super().__init__()
 
-        from .._resources import _fetch_resources
-
-        # Fetch or update the resources.
-        if model is None:
-            _fetch_resources()
-
         if method is None:
             method = "electrostatic"
         if not isinstance(method, str):
@@ -214,8 +200,14 @@ class EMLE(_torch.nn.Module):
             # Set to None as this will be used in any calculator configuration.
             self._model = None
 
-            # Use the default model.
-            model = self._default_model
+            from .._resources import _fetch_default_model
+
+            try:
+                model = _fetch_default_model()
+            except Exception as e:
+                raise IOError(
+                    f"Unable to download the default EMLE embedding model: {e}"
+                ) from e
 
         if device is not None:
             if not isinstance(device, _torch.device):
@@ -233,12 +225,6 @@ class EMLE(_torch.nn.Module):
         try:
             params = _scipy_io.loadmat(model, squeeze_me=True)
         except:
-            if model is self._default_model and not _os.path.isfile(model):
-                raise IOError(
-                    f"Unable to locate default EMLE embedding model file: '{model}'. "
-                    "Please ensure that the resources are installed correctly. For "
-                    "details, see: https://github.com/chemle/emle-models"
-                )
             raise IOError(f"Unable to load model parameters from: '{model}'")
 
         q_core = _torch.tensor(params["q_core"], dtype=dtype, device=device)
