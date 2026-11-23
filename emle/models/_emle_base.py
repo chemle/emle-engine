@@ -515,8 +515,8 @@ class EMLEBase(_torch.nn.Module):
         # (A multiply and sum is faster than einsum here, which would copy K
         # to a permuted layout.)
         # result_all: (n_props, n_batch * n_atoms, n_s)
-        result_all = (K[None] * (c * self._ref_mask)[:, None]).sum(-1)
-        result_all = result_all + ref_mean[:, None, :]
+        result_all = (K.unsqueeze(0) * (c * self._ref_mask).unsqueeze(1)).sum(-1)
+        result_all = result_all + ref_mean.unsqueeze(1)
 
         # Gather each atom's own-species result; clamp handles padding (zid == -1).
         n_props = c.shape[0]
@@ -548,9 +548,9 @@ class EMLEBase(_torch.nn.Module):
             (masked) inverse (N_BATCH, N_ATOMS, N_ATOMS) and the displacement
             vectors r_i - r_j (N_BATCH, N_ATOMS, N_ATOMS, 3).
         """
-        mask_mat = mask[:, :, None] * mask[:, None, :]
+        mask_mat = mask.unsqueeze(2) * mask.unsqueeze(1)
 
-        rr_mat = xyz[:, :, None, :] - xyz[:, None, :, :]
+        rr_mat = xyz.unsqueeze(2) - xyz.unsqueeze(1)
         # cdist handles the zero-distance (self-interaction) gradient correctly.
         r_mat = _torch.where(mask_mat, _torch.cdist(xyz, xyz), 0.0)
         # Gradient-safe inverse: +1e-10 prevents 1/0 in the autograd graph while
@@ -588,7 +588,7 @@ class EMLEBase(_torch.nn.Module):
             Predicted MBIS charges.
         """
         A = self._get_A_QEq(r_data, s, mask)
-        b = _torch.hstack([-chi, q_total[:, None]])
+        b = _torch.hstack([-chi, q_total.unsqueeze(1)])
         return EMLEBase._solve(A, b)[:, :-1]
 
     def _get_A_QEq(self, r_data: Tuple[Tensor, Tensor, Tensor], s, mask):
@@ -614,7 +614,7 @@ class EMLEBase(_torch.nn.Module):
         """
         s_gauss = s * self.a_QEq
         s2 = s_gauss**2
-        s2_mat = s2[:, :, None] + s2[:, None, :]
+        s2_mat = s2.unsqueeze(2) + s2.unsqueeze(1)
         s_mat = _torch.where(s2_mat > 0, _torch.sqrt(s2_mat + 1e-16), 0)
 
         device = r_data[0].device
@@ -639,7 +639,7 @@ class EMLEBase(_torch.nn.Module):
         B = _torch.diag_embed(B_diag)
 
         # Copy A into B.
-        mask_mat = mask[:, :, None] * mask[:, None, :]
+        mask_mat = mask.unsqueeze(2) * mask.unsqueeze(1)
         B[:, :x, :y] = _torch.where(mask_mat, A, B[:, :x, :y])
 
         # Set last row and column to 1 (masked)
@@ -711,7 +711,7 @@ class EMLEBase(_torch.nn.Module):
         alpha = v * k
 
         alphap = alpha * a_Thole
-        alphap_mat = alphap[:, :, None] * alphap[:, None, :]
+        alphap_mat = alphap.unsqueeze(2) * alphap.unsqueeze(1)
 
         au3 = _torch.where(
             alphap_mat > 0, r_data[0] ** 3 / _torch.sqrt(alphap_mat + 1e-16), 0.0
@@ -768,10 +768,9 @@ class EMLEBase(_torch.nn.Module):
         c3 = -lam3 * r_inv3
         c5 = 3 * lam5 * r_inv3 * r_inv**2
         eye = _torch.eye(3, dtype=r_inv.dtype, device=r_inv.device)
-        T2 = (
-            c3[:, :, None, :, None] * eye[None, None, :, None, :]
-            + (c5[..., None] * rr).transpose(2, 3)[..., None] * rr[:, :, None, :, :]
-        )
+        T2 = c3.unsqueeze(2).unsqueeze(4) * eye.unsqueeze(1) + (
+            c5.unsqueeze(-1) * rr
+        ).transpose(2, 3).unsqueeze(-1) * rr.unsqueeze(2)
 
         return T2.reshape(n_batch, n_atoms * 3, n_atoms * 3)
 
@@ -898,10 +897,10 @@ class EMLEBase(_torch.nn.Module):
         """
 
         r = 1.0 / mesh_data[0]
-        f1 = _torch.where(mask, EMLEBase._get_f1_slater(r, s[:, :, None] * 2.0), 0.0)
+        f1 = _torch.where(mask, EMLEBase._get_f1_slater(r, s.unsqueeze(2) * 2.0), 0.0)
         # Contract over the MM atoms directly, rather than materialising the
         # (N_BATCH, N_QM_ATOMS, N_MM_ATOMS, 3) product before summing.
-        fields = _torch.einsum("bnmk,bnm->bnk", mesh_data[2], f1 * q[:, None, :])
+        fields = _torch.einsum("bnmk,bnm->bnk", mesh_data[2], f1 * q.unsqueeze(1))
         fields = fields.reshape(len(s), -1)
 
         mu_ind = EMLEBase._solve(A, fields)
@@ -956,7 +955,7 @@ class EMLEBase(_torch.nn.Module):
         result: torch.Tensor (N_BATCH, MAX_MM_ATOMS)
             Electrostatic potential over MM atoms.
         """
-        return _torch.sum(T0 * q[:, :, None], dim=1)
+        return _torch.sum(T0 * q.unsqueeze(2), dim=1)
 
     @staticmethod
     def _get_vpot_mu(mu: Tensor, T1: Tensor) -> Tensor:
@@ -1009,18 +1008,18 @@ class EMLEBase(_torch.nn.Module):
         result: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
             Tuple of mesh data objects.
         """
-        rr = xyz_mesh[:, None, :, :] - xyz[:, :, None, :]
+        rr = xyz_mesh.unsqueeze(1) - xyz.unsqueeze(2)
         r = (rr * rr).sum(-1).sqrt()
 
         # Mask for padded coordinates; +1e-10 keeps the autograd graph free of
         # inf/nan even where mask is False.
         r_inv = _torch.where(mask, 1.0 / (r + 1e-10), 0.0)
-        T0_slater = _torch.where(mask, EMLEBase._get_T0_slater(r, s[:, :, None]), 0.0)
+        T0_slater = _torch.where(mask, EMLEBase._get_T0_slater(r, s.unsqueeze(2)), 0.0)
 
         return (
             r_inv,
             T0_slater,
-            rr * (-(r_inv**3))[..., None],
+            rr * (-(r_inv**3)).unsqueeze(-1),
         )
 
     @staticmethod
