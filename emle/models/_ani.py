@@ -16,6 +16,7 @@ from typing import Optional, Tuple
 
 from ._emle import EMLE as _EMLE
 from . import _patches
+from ._emle_aev_computer import _set_aev_strategy
 
 
 # Module-level hook so TorchScript can access its source during compilation.
@@ -171,6 +172,12 @@ class ANI2xEMLE(_torch.nn.Module):
         # and allows forward hooks to be shared correctly.
         self._ani2x = _patches.PatchedANI2x(raw_ani2x)
 
+        # Use the fused cuAEV implementation on CUDA when it is installed (for
+        # the ANI2x models created here; a user-supplied model is unchanged).
+        self._own_ani2x = ani2x_model is None
+        if self._own_ani2x:
+            _set_aev_strategy(self._ani2x.aev_computer)
+
         # Register a forward hook on aev_computer to capture AEVs.
         self._ani2x.aev_computer._aev = _torch.empty(0, device=self._device)
         self._aev_hook = self._ani2x.aev_computer.register_forward_hook(_aev_hook)
@@ -181,6 +188,8 @@ class ANI2xEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.to(*args, **kwargs)
         self._ani2x = self._ani2x.to(*args, **kwargs)
+        if self._own_ani2x:
+            _set_aev_strategy(self._ani2x.aev_computer)
 
         # Check for a device type in args and update the device attribute.
         for arg in args:
@@ -196,6 +205,8 @@ class ANI2xEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.cpu(**kwargs)
         self._ani2x = self._ani2x.cpu(**kwargs)
+        if self._own_ani2x:
+            _set_aev_strategy(self._ani2x.aev_computer)
         self._device = _torch.device("cpu")
         return self
 
@@ -205,6 +216,8 @@ class ANI2xEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.cuda(**kwargs)
         self._ani2x = self._ani2x.cuda(**kwargs)
+        if self._own_ani2x:
+            _set_aev_strategy(self._ani2x.aev_computer)
         self._device = _torch.device("cuda")
         return self
 
@@ -223,10 +236,13 @@ class ANI2xEMLE(_torch.nn.Module):
         self._emle = self._emle.float()
         # Using .float() or .to(torch.float32) is broken for ANI2x models.
         raw_ani2x = _torchani.models.ANI2x(
-            periodic_table_index=True, model_index=self._model_index
+            periodic_table_index=True,
+            model_index=self._model_index,
         ).to(self._device)
 
         self._ani2x = _patches.PatchedANI2x(raw_ani2x)
+        self._own_ani2x = True
+        _set_aev_strategy(self._ani2x.aev_computer)
         self._ani2x.aev_computer._aev = _torch.empty(0, device=self._device)
         self._aev_hook = self._ani2x.aev_computer.register_forward_hook(_aev_hook)
 

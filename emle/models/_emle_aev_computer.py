@@ -14,6 +14,27 @@ from torchani.aev import ANIRadial as _ANIRadial, ANIAngular as _ANIAngular
 from torch import Tensor
 from typing import Tuple
 
+
+def _set_aev_strategy(aev_computer):
+    """
+    Use TorchANI's fused cuAEV implementation for CUDA tensors when it is
+    installed, and the pure PyTorch implementation otherwise. (Depending on
+    the TorchANI version, cuAEV either rejects CPU tensors or is not faster
+    on them.) Call this again after moving the AEV computer to a device.
+
+    Parameters
+    ----------
+
+    aev_computer: torchani.AEVComputer
+        The AEV computer to configure.
+    """
+    if not isinstance(aev_computer, _torchani.AEVComputer):
+        return
+    device = next(aev_computer.buffers()).device
+    use_cuaev = device.type == "cuda" and aev_computer._cuaev_is_avail
+    aev_computer.set_strategy("cuaev" if use_cuaev else "pyaev")
+
+
 # Default hyperparameters for AEVComputer. Taken from ANI2x.
 _DEFAULT_HYPERS_DICT = {
     "Rcr": 5.1000e00,
@@ -184,6 +205,10 @@ class EMLEAEVComputer(_torch.nn.Module):
                 angular,
                 num_species=num_species,
             ).to(device=device, dtype=dtype)
+            # On CUDA, use TorchANI's fused cuAEV implementation when it is
+            # installed: it gives the same AEVs and gradients as the pure
+            # PyTorch one, with far fewer kernel launches.
+            _set_aev_strategy(self._aev_computer)
         # Create a dummy function to use in forward.
         else:
             self._aev_computer = self._dummy_aev_computer
@@ -280,6 +305,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if not self._is_external:
             self._aev_computer = self._aev_computer.to(*args, **kwargs)
+            _set_aev_strategy(self._aev_computer)
         if self._mask is not None:
             self._mask = self._mask.to(*args, **kwargs)
         self._zid_map = self._zid_map.to(*args, **kwargs)
@@ -298,6 +324,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if not self._is_external:
             self._aev_computer = self._aev_computer.cuda(**kwargs)
+            _set_aev_strategy(self._aev_computer)
         if self._mask is not None:
             self._mask = self._mask.cuda(**kwargs)
         self._zid_map = self._zid_map.cuda(**kwargs)
@@ -309,6 +336,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if not self._is_external:
             self._aev_computer = self._aev_computer.cpu(**kwargs)
+            _set_aev_strategy(self._aev_computer)
         if self._mask is not None:
             self._mask = self._mask.cpu(**kwargs)
         self._zid_map = self._zid_map.cpu(**kwargs)
