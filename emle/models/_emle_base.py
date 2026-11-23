@@ -188,6 +188,13 @@ class EMLEBase(_torch.nn.Module):
             species_map[s] = i
         species_map = _torch.tensor(species_map, dtype=_torch.int64, device=device)
 
+        # Zero any reference feature values that would be subnormal in single
+        # precision. They make no numerical difference, but arithmetic on
+        # subnormal numbers is very slow on x86 CPUs (the default model has
+        # ~1600 of them, which halves the speed of the GPR kernel matmul).
+        tiny = _torch.finfo(_torch.float32).tiny
+        ref_features = ref_features.masked_fill(ref_features.abs() < tiny, 0.0)
+
         # Compute the inverse of the K matrix.
         Kinv = self._get_Kinv(ref_features, 1e-3)
 
