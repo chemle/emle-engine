@@ -95,6 +95,7 @@ jobs:
     needs: [build-pypi, build-conda]
     if: needs.build-pypi.outputs.label != ''
     runs-on: ubuntu-latest
+    environment: anaconda
     steps:
       - uses: actions/setup-python@v5
         with:
