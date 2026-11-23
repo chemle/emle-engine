@@ -159,6 +159,7 @@ class EMLEAEVComputer(_torch.nn.Module):
             if not mask.dtype == _torch.bool:
                 raise ValueError("'mask' must have dtype 'torch.bool'")
         self._mask = mask
+        self._set_mask_index()
 
         if not isinstance(is_external, bool):
             raise TypeError("'is_external' must be of type 'bool'")
@@ -297,7 +298,19 @@ class EMLEAEVComputer(_torch.nn.Module):
         aev: torch.Tensor
             The masked AEVs.
         """
-        return aev[:, :, self._mask] if self._mask is not None else aev
+        # Select with precomputed indices: indexing with the boolean mask
+        # itself requires a nonzero (and a device synchronisation) on every
+        # call, and has a much more expensive backward.
+        return aev.index_select(2, self._mask_index) if self._mask is not None else aev
+
+    def _set_mask_index(self):
+        """
+        Store the indices of the features selected by the mask.
+        """
+        if self._mask is not None:
+            self._mask_index = _torch.nonzero(self._mask).squeeze(-1)
+        else:
+            self._mask_index = _torch.empty(0, dtype=_torch.int64)
 
     def to(self, *args, **kwargs):
         """
@@ -308,6 +321,7 @@ class EMLEAEVComputer(_torch.nn.Module):
             _set_aev_strategy(self._aev_computer)
         if self._mask is not None:
             self._mask = self._mask.to(*args, **kwargs)
+        self._set_mask_index()
         self._zid_map = self._zid_map.to(*args, **kwargs)
 
         # Check for a device type in args and update the device attribute.
@@ -327,6 +341,7 @@ class EMLEAEVComputer(_torch.nn.Module):
             _set_aev_strategy(self._aev_computer)
         if self._mask is not None:
             self._mask = self._mask.cuda(**kwargs)
+        self._set_mask_index()
         self._zid_map = self._zid_map.cuda(**kwargs)
         return self
 
@@ -339,6 +354,7 @@ class EMLEAEVComputer(_torch.nn.Module):
             _set_aev_strategy(self._aev_computer)
         if self._mask is not None:
             self._mask = self._mask.cpu(**kwargs)
+        self._set_mask_index()
         self._zid_map = self._zid_map.cpu(**kwargs)
         return self
 
