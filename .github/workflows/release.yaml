@@ -4,6 +4,11 @@ on:
   push:
     branches: [devel]
   workflow_dispatch:
+    inputs:
+      build_number:
+        description: "Conda build number, increased to replace a bad release"
+        type: number
+        default: 0
 
 jobs:
   build-pypi:
@@ -89,6 +94,7 @@ jobs:
           artifact-name: conda-dist
         env:
           PKG_VERSION: ${{ needs.build-pypi.outputs.version }}
+          BUILD_NUMBER: ${{ inputs.build_number || 0 }}
 
   publish-conda:
     name: Publish to chemle Anaconda.org channel

@@ -10,7 +10,7 @@ source:
   path: ../../emle-engine-source.tar.gz
 
 build:
-  number: 0
+  number: ${{ env.get("BUILD_NUMBER", default="0") }}
   noarch: python
   script:
     env:
