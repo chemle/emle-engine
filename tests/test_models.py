@@ -255,6 +255,79 @@ def test_emle(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     )
 
 
+@pytest.mark.parametrize("alpha_mode", ["fixed", "flexible"])
+def test_emle_gradients_finite_difference(alpha_mode):
+    """
+    Check the EMLE energy gradients against central finite differences for a
+    QM region with more than 25 atoms, where torch.cdist switches to its
+    matrix-multiplication algorithm and no longer returns exactly zero
+    self-distances.
+    """
+    z = numpy.load("tests/input/atomic_numbers.npy")
+    xyz = numpy.load("tests/input/xyz_qm.npy")
+
+    # Two copies of the molecule, 6 Angstrom apart.
+    atomic_numbers = torch.tensor(numpy.concatenate([z, z]), dtype=torch.int64)
+    xyz_qm = torch.tensor(
+        numpy.concatenate([xyz, xyz + [6.0, 0.0, 0.0]]), dtype=torch.float64
+    )
+    xyz_mm = torch.tensor(numpy.load("tests/input/xyz_mm.npy"), dtype=torch.float64)
+    charges_mm = torch.tensor(
+        numpy.load("tests/input/charges_mm.npy"), dtype=torch.float64
+    )
+
+    model = EMLE(alpha_mode=alpha_mode, device=torch.device("cpu"), dtype=torch.float64)
+
+    def energy(xyz_qm, xyz_mm):
+        return model(atomic_numbers, charges_mm, xyz_qm, xyz_mm).sum()
+
+    xyz_qm.requires_grad_(True)
+    xyz_mm.requires_grad_(True)
+    grad_qm, grad_mm = torch.autograd.grad(energy(xyz_qm, xyz_mm), (xyz_qm, xyz_mm))
+    xyz_qm = xyz_qm.detach()
+    xyz_mm = xyz_mm.detach()
+
+    h = 1e-5
+    # Check every QM atom: only a few atoms get non-zero cdist self-distances.
+    for i in range(len(atomic_numbers)):
+        for k in range(3):
+            d = torch.zeros_like(xyz_qm)
+            d[i, k] = h
+            fd = (energy(xyz_qm + d, xyz_mm) - energy(xyz_qm - d, xyz_mm)) / (2 * h)
+            assert torch.isclose(grad_qm[i, k], fd, rtol=1e-5, atol=1e-8)
+    for i in (0, 100, 418):
+        for k in range(3):
+            d = torch.zeros_like(xyz_mm)
+            d[i, k] = h
+            fd = (energy(xyz_qm, xyz_mm + d) - energy(xyz_qm, xyz_mm - d)) / (2 * h)
+            assert torch.isclose(grad_mm[i, k], fd, rtol=1e-5, atol=1e-8)
+
+    # Also check the gradients of the valence charges and the Thole matrix
+    # (contracted with fixed random weights), which are more sensitive to
+    # spurious gradients on the matrix diagonals than the energy.
+    q_total = torch.zeros(1, dtype=torch.int64)
+    n = len(atomic_numbers)
+    gen = torch.Generator().manual_seed(42)
+    w_q = torch.randn(1, n, dtype=torch.float64, generator=gen)
+    w_A = torch.randn(1, 3 * n, 3 * n, dtype=torch.float64, generator=gen)
+
+    def base(xyz_qm):
+        _, _, q_val, A_thole = model._emle_base(
+            atomic_numbers[None], xyz_qm[None], q_total
+        )
+        return (q_val * w_q).sum() + (A_thole * w_A).sum()
+
+    xyz_qm.requires_grad_(True)
+    (grad,) = torch.autograd.grad(base(xyz_qm), xyz_qm)
+    xyz_qm = xyz_qm.detach()
+    for i in range(n):
+        for k in range(3):
+            d = torch.zeros_like(xyz_qm)
+            d[i, k] = h
+            fd = (base(xyz_qm + d) - base(xyz_qm - d)) / (2 * h)
+            assert torch.isclose(grad[i, k], fd, rtol=1e-5, atol=1e-6)
+
+
 def test_emle_pickle(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     """
     Check that an EMLE model can be pickled and still gives the same energy.
