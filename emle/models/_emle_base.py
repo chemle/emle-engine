@@ -911,9 +911,10 @@ class EMLEBase(_torch.nn.Module):
 
         r = 1.0 / mesh_data[0]
         f1 = _torch.where(mask, EMLEBase._get_f1_slater(r, s[:, :, None] * 2.0), 0.0)
-        fields = _torch.sum(
-            mesh_data[2] * f1[..., None] * q[:, None, :, None], dim=2
-        ).reshape(len(s), -1)
+        # Contract over the MM atoms directly, rather than materialising the
+        # (N_BATCH, N_QM_ATOMS, N_MM_ATOMS, 3) product before summing.
+        fields = _torch.einsum("bnmk,bnm->bnk", mesh_data[2], f1 * q[:, None, :])
+        fields = fields.reshape(len(s), -1)
 
         mu_ind = _torch.linalg.solve(A, fields)
         return mu_ind.reshape((mu_ind.shape[0], -1, 3))
@@ -1002,7 +1003,7 @@ class EMLEBase(_torch.nn.Module):
         return (
             r_inv,
             T0_slater,
-            -rr * r_inv[..., None] ** 3,
+            rr * (-(r_inv**3))[..., None],
         )
 
     @staticmethod
@@ -1024,10 +1025,9 @@ class EMLEBase(_torch.nn.Module):
 
         result: torch.Tensor (N_BATCH, MAX_QM_ATOMS, MAX_MM_ATOMS)
         """
-        return (
-            EMLEBase._get_T0_slater(r, s) * r
-            - _torch.exp(-r / s) / s * (0.5 + r / (s * 2)) * r
-        )
+        # Closed form of T0_slater(r, s) * r - exp(-r / s) / s * (0.5 + r / (2 * s)) * r
+        x = r / s
+        return 1 - (1 + x * (1 + 0.5 * x)) * _torch.exp(-x)
 
     @staticmethod
     def _get_T0_slater(r: Tensor, s: Tensor) -> Tensor:
