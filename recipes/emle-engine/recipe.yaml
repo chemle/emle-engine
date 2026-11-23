@@ -49,7 +49,7 @@ tests:
 
 about:
   homepage: https://chemle.github.io/emle-engine
-  license: GPL-2.0-only
+  license: MIT
   license_file: LICENSE
   summary: An engine for electrostatic machine learned embedding potentials.
   description: |

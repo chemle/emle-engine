@@ -9,7 +9,7 @@ readme = "README.md"
 authors = [
     { name = "Lester Hedges", email = "lester.hedges@gmail.com" },
 ]
-license = "GPL-2.0-only"
+license = "MIT"
 license-files = ["LICENSE"]
 keywords = [
     "machine-learning",

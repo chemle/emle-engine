@@ -5,8 +5,8 @@ EMLE-Engine
    :target: https://github.com/chemle/emle-engine/actions?query=workflow%3ABuild-and-test
    :alt: Build status
 
-.. image:: https://img.shields.io/badge/License-GPL%20v2-blue.svg
-   :target: https://www.gnu.org/licenses/gpl-2.0.html
+.. image:: https://img.shields.io/badge/License-MIT-blue.svg
+   :target: https://opensource.org/licenses/MIT
    :alt: License
 
 An engine for electrostatic embedding of machine learning potentials.
