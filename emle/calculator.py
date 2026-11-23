@@ -358,12 +358,6 @@ class EMLECalculator:
             the calculator.
         """
 
-        from ._resources import _fetch_resources
-
-        # Fetch or update the resources.
-        if model is None:
-            _fetch_resources()
-
         # Validate input.
 
         # First handle the logger.
