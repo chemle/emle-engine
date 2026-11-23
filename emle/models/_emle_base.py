@@ -537,8 +537,10 @@ class EMLEBase(_torch.nn.Module):
         -------
 
         result: r_data object
+            Tuple of the distance matrix (N_BATCH, N_ATOMS, N_ATOMS), its
+            (masked) inverse (N_BATCH, N_ATOMS, N_ATOMS) and the displacement
+            vectors r_i - r_j (N_BATCH, N_ATOMS, N_ATOMS, 3).
         """
-        n_batch, n_atoms_max = xyz.shape[:2]
         mask_mat = mask[:, :, None] * mask[:, None, :]
 
         rr_mat = xyz[:, :, None, :] - xyz[:, None, :, :]
@@ -548,27 +550,9 @@ class EMLEBase(_torch.nn.Module):
         # the where ensures the actual output is zero for masked/diagonal entries.
         r_inv = _torch.where(r_mat > 0.0, 1.0 / (r_mat + 1e-10), 0.0)
 
-        r_inv2 = r_inv.repeat_interleave(3, dim=1).repeat_interleave(3, dim=2)
+        return r_mat, r_inv, rr_mat
 
-        # Get a stacked matrix of outer products over the rr_mat tensors.
-        outer = _torch.einsum("bnik,bnij->bnjik", rr_mat, rr_mat).reshape(
-            (n_batch, n_atoms_max * 3, n_atoms_max * 3)
-        )
-
-        id2 = _torch.tile(
-            _torch.eye(3, dtype=xyz.dtype, device=xyz.device).T,
-            (1, n_atoms_max, n_atoms_max),
-        )
-
-        t01 = r_inv
-        t21 = -id2 * r_inv2**3
-        t22 = 3 * outer * r_inv2**5
-
-        return r_mat, t01, t21, t22
-
-    def _get_q(
-        self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, chi, q_total, mask
-    ):
+    def _get_q(self, r_data: Tuple[Tensor, Tensor, Tensor], s, chi, q_total, mask):
         """
         Internal method that predicts MBIS charges
         (Eq. 16 in 10.1021/acs.jctc.2c00914)
@@ -600,7 +584,7 @@ class EMLEBase(_torch.nn.Module):
         b = _torch.hstack([-chi, q_total[:, None]])
         return _torch.linalg.solve(A, b)[:, :-1]
 
-    def _get_A_QEq(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, mask):
+    def _get_A_QEq(self, r_data: Tuple[Tensor, Tensor, Tensor], s, mask):
         """
         Internal method, generates A matrix for charge prediction
         (Eq. 16 in 10.1021/acs.jctc.2c00914)
@@ -688,9 +672,7 @@ class EMLEBase(_torch.nn.Module):
         )
 
     @classmethod
-    def _get_A_thole(
-        cls, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, q_val, k, a_Thole
-    ):
+    def _get_A_thole(cls, r_data: Tuple[Tensor, Tensor, Tensor], s, q_val, k, a_Thole):
         """
         Internal method, generates A matrix for induced dipoles prediction
         (Eq. 20 in 10.1021/acs.jctc.2c00914)
@@ -730,83 +712,61 @@ class EMLEBase(_torch.nn.Module):
 
         # Compute the damping factors on the compact (n, n) au3 tensor before
         # expanding to (3n, 3n), so the expensive exp runs on 9x fewer elements.
-        A = -cls._get_T2_thole(r_data[2], r_data[3], au3)
+        A = -cls._get_T2_thole(r_data[1], r_data[2], au3)
 
+        # Replace the diagonal with the inverse polarizabilities. This must be a
+        # replacement (rather than an addition) that also blocks the gradient
+        # of the T2 diagonal: cdist doesn't return exactly zero self-distances
+        # for larger systems, so the T2 diagonal can have spurious gradients.
         alpha3 = alpha.repeat_interleave(3, dim=1)
         new_diag = _torch.where(alpha3 > 0, 1.0 / (alpha3 + 1e-16), 1.0)
-        diag_ones = _torch.ones_like(new_diag, dtype=A.dtype, device=A.device)
-        mask = _torch.diag_embed(diag_ones)
-        A = mask * _torch.diag_embed(new_diag) + (1.0 - mask) * A
+        is_diag = _torch.eye(A.shape[-1], dtype=_torch.bool, device=A.device)
 
-        return A
+        return _torch.where(is_diag, _torch.diag_embed(new_diag), A)
 
-    @classmethod
-    def _get_T2_thole(cls, tr21: Tensor, tr22: Tensor, au3: Tensor) -> Tensor:
+    @staticmethod
+    def _get_T2_thole(r_inv: Tensor, rr: Tensor, au3: Tensor) -> Tensor:
         """
         Internal method, calculates T2 tensor with Thole damping.
 
         Parameters
         ----------
 
-        tr21: torch.Tensor (N_BATCH, N_ATOMS * 3, N_ATOMS * 3)
-            r_data[2]
+        r_inv: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS)
+            Inverse distance matrix (r_data[1]).
 
-        tr22: torch.Tensor (N_BATCH, N_ATOMS * 3, N_ATOMS * 3)
-            r_data[3]
+        rr: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS, 3)
+            Displacement vectors r_i - r_j (r_data[2]).
 
         au3: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS)
-            Compact scaled distance matrix (unexpanded). Each element will be
-            broadcast over the 3x3 Cartesian block for that atom pair.
+            Scaled distance matrix (see _get_A_thole).
 
         Returns
         -------
 
         result: torch.Tensor (N_BATCH, N_ATOMS * 3, N_ATOMS * 3)
         """
-        # Compute damping on the compact (n, n) tensor, then expand to (3n, 3n).
-        # This means the exp is evaluated on 9x fewer elements than if au3 were
-        # already expanded.
-        lam3 = cls._lambda3(au3).repeat_interleave(3, dim=1).repeat_interleave(3, dim=2)
-        lam5 = cls._lambda5(au3).repeat_interleave(3, dim=1).repeat_interleave(3, dim=2)
-        return lam3 * tr21 + lam5 * tr22
+        n_batch, n_atoms = r_inv.shape[:2]
 
-    @staticmethod
-    def _lambda3(au3):
-        """
-        Internal method, calculates r^3 component of T2 tensor with Thole
-        damping.
+        # Thole damping factors for the r^-3 and r^-5 components.
+        exp_au3 = _torch.exp(-au3)
+        lam3 = 1 - exp_au3
+        lam5 = 1 - (1 + au3) * exp_au3
 
-        Parameters
-        ----------
+        # The 3x3 block for atoms (i, j) is
+        #     -lam3 / r^3 * I + 3 * lam5 / r^5 * outer(r_ij, r_ij).
+        # Build it as a (N_BATCH, N_ATOMS, 3, N_ATOMS, 3) tensor from the
+        # compact (N_BATCH, N_ATOMS, N_ATOMS) coefficients.
+        r_inv3 = r_inv**3
+        c3 = -lam3 * r_inv3
+        c5 = 3 * lam5 * r_inv3 * r_inv**2
+        eye = _torch.eye(3, dtype=r_inv.dtype, device=r_inv.device)
+        T2 = (
+            c3[:, :, None, :, None] * eye[None, None, :, None, :]
+            + (c5[..., None] * rr).transpose(2, 3)[..., None] * rr[:, :, None, :, :]
+        )
 
-        au3: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
-            Scaled distance matrix (see _get_A_thole).
-
-        Returns
-        -------
-
-        result: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
-        """
-        return 1 - _torch.exp(-au3)
-
-    @staticmethod
-    def _lambda5(au3):
-        """
-        Internal method, calculates r^5 component of T2 tensor with Thole
-        damping.
-
-        Parameters
-        ----------
-
-        au3: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
-            Scaled distance matrix (see _get_A_thole).
-
-        Returns
-        -------
-
-        result: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
-        """
-        return 1 - (1 + au3) * _torch.exp(-au3)
+        return T2.reshape(n_batch, n_atoms * 3, n_atoms * 3)
 
     @staticmethod
     def get_static_energy(
