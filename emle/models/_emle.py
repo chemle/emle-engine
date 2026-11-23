@@ -52,6 +52,7 @@ class EMLE(_torch.nn.Module):
         device=None,
         dtype=None,
         create_aev_calculator=True,
+        dense_aev=False,
     ):
         """
         Constructor.
@@ -117,6 +118,19 @@ class EMLE(_torch.nn.Module):
             to False for derived classes that already have an AEV calculator,
             e.g. ANI2xEMLE. In that case, it's possible to hook the AEV
             calculator to avoid duplicating the computation.
+
+        dense_aev: bool
+            Whether to compute the AEVs with a dense implementation (all atom
+            pairs and triples) instead of TorchANI. This gives the same
+            results and allows the model to be captured in a CUDA graph (for
+            example with OpenMM-Torch's 'useCUDAGraphs' property), which
+            removes almost all of the per-call overhead on GPUs. Its cost and
+            memory grow with the cube of the number of QM atoms, so it is
+            intended for small QM regions (up to ~60 atoms). For batched
+            inputs, PyTorch may solve some batched linear systems with MAGMA,
+            which cannot be captured; calling
+            torch.backends.cuda.preferred_linalg_library("cusolver") before
+            capturing avoids this.
         """
 
         # Call the base class constructor.
@@ -247,8 +261,14 @@ class EMLE(_torch.nn.Module):
 
         if create_aev_calculator:
             num_species = params.get("computer_n_species", len(n_ref))
+            if not isinstance(dense_aev, bool):
+                raise TypeError("'dense_aev' must be of type 'bool'")
             emle_aev_computer = EMLEAEVComputer(
-                mask=aev_mask, num_species=num_species, device=device, dtype=dtype
+                mask=aev_mask,
+                num_species=num_species,
+                device=device,
+                dtype=dtype,
+                dense=dense_aev,
             )
         else:
             emle_aev_computer = EMLEAEVComputer(

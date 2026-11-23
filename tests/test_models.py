@@ -807,3 +807,96 @@ def test_preprocess_vs_sire(tmp_path, monkeypatch, use_switching_function):
     forces_test = -torch.cat([grad_qm, grad_mm])
 
     assert torch.allclose(forces_ref, forces_test, atol=1e-6)
+
+
+def test_emle_dense_aev():
+    """
+    Check that the dense AEV implementation (used for CUDA graph capture)
+    reproduces TorchANI's AEVs and their gradients, including for a
+    zero-padded batch.
+    """
+    z = numpy.load("tests/input/atomic_numbers.npy")
+    xyz = numpy.load("tests/input/xyz_qm.npy")
+
+    model = EMLE(device=torch.device("cpu"), dtype=torch.float64)
+    computer = model._emle_base._emle_aev_computer
+    torchani_computer = computer._aev_computer
+
+    # A batch of the molecule and a padded copy of a fragment of it.
+    atomic_numbers = torch.tensor(numpy.stack([z, z]), dtype=torch.int64)
+    atomic_numbers[1, 15:] = 0
+    positions = torch.tensor(numpy.stack([xyz, xyz]), dtype=torch.float64)
+    positions[1, 15:] = 0.0
+    species = computer._zid_map[model._emle_base._species_map[atomic_numbers]]
+
+    x1 = positions.clone().requires_grad_(True)
+    x2 = positions.clone().requires_grad_(True)
+    aev_ref = torchani_computer(species, x1)
+    radial = torchani_computer.radial
+    angular = torchani_computer.angular
+    aev = computer._dense_aev(
+        species,
+        x2,
+        torchani_computer.num_species,
+        radial.eta,
+        radial.shifts,
+        radial.cutoff,
+        angular.eta,
+        angular.zeta,
+        angular.shifts,
+        angular.sections,
+        angular.cutoff,
+    )
+    assert torch.allclose(aev, aev_ref, rtol=1e-12, atol=1e-14)
+
+    gen = torch.Generator().manual_seed(0)
+    w = torch.randn(aev.shape, dtype=torch.float64, generator=gen)
+    (g_ref,) = torch.autograd.grad((aev_ref * w).sum(), x1)
+    (g,) = torch.autograd.grad((aev * w).sum(), x2)
+    assert torch.allclose(g, g_ref, rtol=1e-10, atol=1e-12)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+def test_emle_cuda_graph(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    """
+    Check that a TorchScript EMLE model with dense AEVs can be captured in a
+    CUDA graph, and that replaying the graph for new coordinates gives the
+    same energy and forces as the standard model.
+    """
+    device = torch.device("cuda")
+    z = atomic_numbers.to(device)
+    q = charges_mm.to(device)
+    reference = EMLE(device=device)
+    model = torch.jit.script(EMLE(device=device, dense_aev=True))
+
+    x = xyz_qm.detach().clone().to(device).requires_grad_(True)
+    y = xyz_mm.detach().clone().to(device).requires_grad_(True)
+
+    def step():
+        energy = model(z, q, x, y).sum()
+        return (energy,) + torch.autograd.grad(energy, (x, y))
+
+    # Warm up on a side stream, as required before capture.
+    stream = torch.cuda.Stream()
+    stream.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(stream):
+        for _ in range(3):
+            step()
+    torch.cuda.current_stream().wait_stream(stream)
+
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
+        outputs = step()
+
+    # Replay with displaced coordinates.
+    with torch.no_grad():
+        x.add_(0.01)
+        y.sub_(0.01)
+    graph.replay()
+
+    x_ref = x.detach().clone().requires_grad_(True)
+    y_ref = y.detach().clone().requires_grad_(True)
+    energy = reference(z, q, x_ref, y_ref).sum()
+    expected = (energy,) + torch.autograd.grad(energy, (x_ref, y_ref))
+    for a, b in zip(outputs, expected):
+        assert torch.allclose(a, b, rtol=1e-3, atol=1e-5)

@@ -636,8 +636,14 @@ class EMLEBase(_torch.nn.Module):
         # Store the dimensions of A.
         n_batch, x, y = A.shape
 
-        # Create an tensor of ones with one more row and column than A.
-        B_diag = _torch.ones((n_batch, x + 1), dtype=dtype, device=device)
+        # Create an identity matrix with one more row and column than A, with
+        # a zero final diagonal entry. (The zero is part of the diagonal, rather
+        # than assigned afterwards, since TorchScript implements assigning a
+        # scalar as a copy from a CPU tensor, which can't be captured in a
+        # CUDA graph.)
+        B_diag = _torch.nn.functional.pad(
+            _torch.ones((n_batch, x), dtype=dtype, device=device), (0, 1)
+        )
         B = _torch.diag_embed(B_diag)
 
         # Copy A into B.
@@ -647,9 +653,6 @@ class EMLEBase(_torch.nn.Module):
         # Set last row and column to 1 (masked)
         B[:, -1, :-1] = mask.float()
         B[:, :-1, -1] = mask.float()
-
-        # Set the final entry on the diagonal to zero.
-        B[:, -1, -1] = 0.0
 
         return B
 

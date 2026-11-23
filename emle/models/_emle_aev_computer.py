@@ -97,6 +97,11 @@ class EMLEAEVComputer(_torch.nn.Module):
     (not a subclass to make sure it works with TorchScript)
     """
 
+    # A TorchScript constant, so that the dense AEV branch of forward is only
+    # compiled when used (it needs a TorchANI AEV computer for its parameters,
+    # which external AEV computers don't have).
+    __constants__ = ["_dense"]
+
     def __init__(
         self,
         num_species=7,
@@ -106,6 +111,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         zid_map=None,
         device=None,
         dtype=None,
+        dense=False,
     ):
         """
         Constructor.
@@ -133,6 +139,15 @@ class EMLEAEVComputer(_torch.nn.Module):
 
         dtype: torch.dtype
             The data type to use for the models floating point tensors.
+
+        dense: bool
+            Whether to compute the AEVs with a dense implementation that
+            evaluates all atom pairs and triples, rather than with TorchANI.
+            It gives the same AEVs, involves no data-dependent shapes or
+            host synchronisation (so a model using it can be captured in a
+            CUDA graph), but its cost and memory grow with the cube of the
+            number of atoms, so it is only suitable for small QM regions
+            (up to ~60 atoms).
         """
         super().__init__()
 
@@ -164,6 +179,10 @@ class EMLEAEVComputer(_torch.nn.Module):
         if not isinstance(is_external, bool):
             raise TypeError("'is_external' must be of type 'bool'")
         self._is_external = is_external
+
+        if not isinstance(dense, bool):
+            raise TypeError("'dense' must be of type 'bool'")
+        self._dense = dense
 
         # Initalise an empty AEV tensor to use to store the AEVs in parent models.
         # If AEVs are computed externally, then this tensor will be set by the
@@ -250,7 +269,24 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if not self._is_external:
             zid_aev = self._zid_map[zid]
-            aev = self._aev_computer(zid_aev, xyz)
+            if self._dense:
+                radial = self._aev_computer.radial
+                angular = self._aev_computer.angular
+                aev = self._dense_aev(
+                    zid_aev,
+                    xyz,
+                    self._aev_computer.num_species,
+                    radial.eta,
+                    radial.shifts,
+                    radial.cutoff,
+                    angular.eta,
+                    angular.zeta,
+                    angular.shifts,
+                    angular.sections,
+                    angular.cutoff,
+                )
+            else:
+                aev = self._aev_computer(zid_aev, xyz)
         else:
             aev = self._aev
 
@@ -259,6 +295,113 @@ class EMLEAEVComputer(_torch.nn.Module):
         aev = self._apply_mask(_torch.where(zid.unsqueeze(2) > -1, aev / norm, 0.0))
 
         return aev
+
+    @staticmethod
+    def _dense_aev(
+        species: Tensor,
+        xyz: Tensor,
+        num_species: int,
+        radial_eta: Tensor,
+        radial_shifts: Tensor,
+        radial_cutoff: float,
+        angular_eta: Tensor,
+        angular_zeta: Tensor,
+        angular_shifts: Tensor,
+        angular_sections: Tensor,
+        angular_cutoff: float,
+    ) -> Tensor:
+        """
+        Compute ANI-style AEVs over all atom pairs and triples, with the same
+        terms and feature layout as TorchANI's AEVComputer (cosine cutoff).
+
+        Parameters
+        ----------
+
+        species: torch.Tensor (N_BATCH, MAX_N_ATOMS)
+            The AEV species indices (-1 for padding).
+
+        xyz: torch.Tensor (N_BATCH, MAX_N_ATOMS, 3)
+            The atomic coordinates.
+
+        num_species, radial_*, angular_*:
+            The AEV parameters (taken from TorchANI's radial and angular
+            terms).
+
+        Returns
+        -------
+
+        aevs: torch.Tensor (N_BATCH, MAX_N_ATOMS, N_AEV_COMPONENTS)
+            The atomic environment vectors.
+        """
+        n_batch, n_atoms = species.shape
+        pi: float = 3.141592653589793
+
+        # One-hot species, and the mask of valid (distinct, real) pairs.
+        real = species >= 0
+        onehot = (
+            species.unsqueeze(-1) == _torch.arange(num_species, device=xyz.device)
+        ).to(xyz.dtype)
+        not_eye = ~_torch.eye(n_atoms, dtype=_torch.bool, device=xyz.device)
+        pair = real.unsqueeze(2) & real.unsqueeze(1) & not_eye
+
+        # Displacements x_j - x_i and distances, made safe for invalid pairs.
+        v = (xyz.unsqueeze(1) - xyz.unsqueeze(2)) * pair.unsqueeze(-1)
+        d2 = (v * v).sum(-1)
+        r = _torch.where(pair, d2, _torch.ones_like(d2)).sqrt()
+
+        # Radial terms, summed over the neighbours of each species.
+        fc = _torch.where(
+            pair & (r <= radial_cutoff),
+            0.5 * _torch.cos(pi * r / radial_cutoff) + 0.5,
+            _torch.zeros_like(r),
+        )
+        terms = (
+            0.25
+            * _torch.exp(-radial_eta * (r.unsqueeze(-1) - radial_shifts) ** 2)
+            * fc.unsqueeze(-1)
+        )
+        radial_aev = _torch.einsum("bijf,bjs->bisf", terms, onehot)
+
+        # Angular terms for all (ordered) pairs of distinct neighbours j, k.
+        fc = _torch.where(
+            pair & (r <= angular_cutoff),
+            0.5 * _torch.cos(pi * r / angular_cutoff) + 0.5,
+            _torch.zeros_like(r),
+        )
+        fc = fc.unsqueeze(3) * fc.unsqueeze(2) * not_eye
+        cos = (v.unsqueeze(3) * v.unsqueeze(2)).sum(-1) / _torch.clamp(
+            r.unsqueeze(3) * r.unsqueeze(2), min=1e-10
+        )
+        angles = _torch.acos(0.95 * cos).unsqueeze(-1)
+        angular = 2 * ((1 + _torch.cos(angles - angular_sections)) / 2) ** angular_zeta
+        mean = 0.5 * (r.unsqueeze(3) + r.unsqueeze(2)).unsqueeze(-1)
+        radial = _torch.exp(-angular_eta * (mean - angular_shifts) ** 2)
+        terms = (radial.unsqueeze(-1) * angular.unsqueeze(-2)).flatten(-2)
+        terms = terms * fc.unsqueeze(-1)
+
+        # Sum over the species of j and k, then over unordered species pairs
+        # (each unordered pair of neighbours appears twice in the sum above).
+        per_pair = _torch.einsum(
+            "bijcf,bja->biacf",
+            _torch.einsum("bijkf,bkc->bijcf", terms, onehot),
+            onehot,
+        )
+        triu = _torch.triu_indices(num_species, num_species, device=xyz.device)
+        a = triu[0]
+        c = triu[1]
+        angular_aev = _torch.where(
+            (a == c).view(1, 1, -1, 1),
+            0.5 * per_pair[:, :, a, c],
+            0.5 * (per_pair[:, :, a, c] + per_pair[:, :, c, a]),
+        )
+
+        return _torch.cat(
+            (
+                radial_aev.reshape(n_batch, n_atoms, -1),
+                angular_aev.reshape(n_batch, n_atoms, -1),
+            ),
+            dim=-1,
+        )
 
     @staticmethod
     def _dummy_aev_computer(elem_idxs: Tensor, coords: Tensor) -> Tensor:
