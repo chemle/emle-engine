@@ -65,6 +65,9 @@ script-files = [
     "bin/tarball-to-extxyz",
 ]
 
+[tool.setuptools.package-data]
+emle = ["csrc/*.cpp", "csrc/*.cu"]
+
 [tool.setuptools.packages.find]
 include = ["emle", "emle.*"]
 

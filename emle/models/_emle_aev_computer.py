@@ -100,7 +100,7 @@ class EMLEAEVComputer(_torch.nn.Module):
     # A TorchScript constant, so that the dense AEV branch of forward is only
     # compiled when used (it needs a TorchANI AEV computer for its parameters,
     # which external AEV computers don't have).
-    __constants__ = ["_dense"]
+    __constants__ = ["_dense", "_fused"]
 
     def __init__(
         self,
@@ -112,6 +112,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         device=None,
         dtype=None,
         dense=False,
+        fused=False,
     ):
         """
         Constructor.
@@ -148,6 +149,12 @@ class EMLEAEVComputer(_torch.nn.Module):
             CUDA graph), but its cost and memory grow with the cube of the
             number of atoms, so it is only suitable for small QM regions
             (up to ~60 atoms).
+
+        fused: bool
+            Whether to compute the AEVs on CUDA devices with the fused
+            torch.ops.emle.aev operator (see emle._ops), which gives the same
+            AEVs, is faster than TorchANI's implementations and can be
+            captured in a CUDA graph. On other devices TorchANI is used.
         """
         super().__init__()
 
@@ -183,6 +190,16 @@ class EMLEAEVComputer(_torch.nn.Module):
         if not isinstance(dense, bool):
             raise TypeError("'dense' must be of type 'bool'")
         self._dense = dense
+
+        if not isinstance(fused, bool):
+            raise TypeError("'fused' must be of type 'bool'")
+        if fused and is_external:
+            raise ValueError("'fused' AEVs cannot be used with external AEVs")
+        self._fused = fused
+        if fused:
+            from .._ops import load_ops
+
+            load_ops()
 
         # Initalise an empty AEV tensor to use to store the AEVs in parent models.
         # If AEVs are computed externally, then this tensor will be set by the
@@ -229,6 +246,26 @@ class EMLEAEVComputer(_torch.nn.Module):
             # installed: it gives the same AEVs and gradients as the pure
             # PyTorch one, with far fewer kernel launches.
             _set_aev_strategy(self._aev_computer)
+
+            # Parameters for the fused AEV operator, taken from TorchANI's
+            # terms so that the AEVs are identical. The operator is compiled
+            # for the ANI-2x AEV layout (7 species, 16 radial shifts, 8
+            # angular shifts and 4 angle sections).
+            if fused:
+                if num_species != 7:
+                    raise ValueError("'fused' AEVs are only supported for 7 species")
+                radial = self._aev_computer.radial
+                angular = self._aev_computer.angular
+                self._fused_params = (
+                    _to_list(radial.shifts.flatten()),
+                    _to_list(angular.shifts.flatten()),
+                    _to_list(angular.sections.flatten()),
+                    float(radial.eta),
+                    float(radial.cutoff),
+                    float(angular.eta),
+                    float(angular.zeta),
+                    float(angular.cutoff),
+                )
         # Create a dummy function to use in forward.
         else:
             self._aev_computer = self._dummy_aev_computer
@@ -269,7 +306,15 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if not self._is_external:
             zid_aev = self._zid_map[zid]
-            if self._dense:
+            if self._fused:
+                if xyz.is_cuda:
+                    p = self._fused_params
+                    aev = _torch.ops.emle.aev(
+                        zid_aev, xyz, p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]
+                    )
+                else:
+                    aev = self._aev_computer(zid_aev, xyz)
+            elif self._dense:
                 radial = self._aev_computer.radial
                 angular = self._aev_computer.angular
                 aev = self._dense_aev(

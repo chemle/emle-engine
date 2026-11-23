@@ -82,3 +82,24 @@ If you are developing and want an editable install, use:
 .. code-block:: bash
 
     pip install -e .
+
+Fused operators
+---------------
+
+``EMLE(use_fused_ops=True)`` uses optional fused C++/CUDA operators for the
+QM/MM electrostatics and the AEVs. By default they are compiled the first
+time they are used, which requires a C++ compiler and, for GPUs, a CUDA
+toolkit matching the CUDA version of PyTorch (set ``CUDA_HOME`` to its
+location), e.g. from ``conda-forge``:
+
+.. code-block:: bash
+
+    conda install -c conda-forge cxx-compiler ninja cuda-toolkit
+
+To compile them when installing ``emle-engine`` instead, use:
+
+.. code-block:: bash
+
+    EMLE_BUILD_EXTENSIONS=1 pip install --no-build-isolation .
+
+(Set ``EMLE_WITH_CUDA=0`` to build only the CPU operators.)

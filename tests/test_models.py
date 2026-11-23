@@ -856,18 +856,45 @@ def test_emle_dense_aev():
     assert torch.allclose(g, g_ref, rtol=1e-10, atol=1e-12)
 
 
+try:
+    from emle._ops import load_ops as _load_ops
+
+    has_fused_cuda_ops = _load_ops() and torch.cuda.is_available()
+    has_fused_ops = True
+except Exception:
+    has_fused_ops = has_fused_cuda_ops = False
+
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-def test_emle_cuda_graph(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+@pytest.mark.parametrize(
+    "use_fused_ops",
+    [
+        False,
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                not has_fused_cuda_ops, reason="fused CUDA operators not available"
+            ),
+        ),
+    ],
+)
+def test_emle_cuda_graph(use_fused_ops, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     """
-    Check that a TorchScript EMLE model with dense AEVs can be captured in a
-    CUDA graph, and that replaying the graph for new coordinates gives the
-    same energy and forces as the standard model.
+    Check that a TorchScript EMLE model with dense AEVs, or with the fused
+    operators, can be captured in a CUDA graph, and that replaying the graph
+    for new coordinates gives the same energy and forces as the standard model.
     """
     device = torch.device("cuda")
     z = atomic_numbers.to(device)
     q = charges_mm.to(device)
     reference = EMLE(device=device)
-    model = torch.jit.script(EMLE(device=device, dense_aev=True))
+    model = torch.jit.script(
+        EMLE(
+            device=device,
+            dense_aev=not use_fused_ops,
+            use_fused_ops=use_fused_ops,
+        )
+    )
 
     x = xyz_qm.detach().clone().to(device).requires_grad_(True)
     y = xyz_mm.detach().clone().to(device).requires_grad_(True)
@@ -900,3 +927,68 @@ def test_emle_cuda_graph(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     expected = (energy,) + torch.autograd.grad(energy, (x_ref, y_ref))
     for a, b in zip(outputs, expected):
         assert torch.allclose(a, b, rtol=1e-3, atol=1e-5)
+
+
+@pytest.mark.skipif(not has_fused_ops, reason="fused EMLE operators could not be built")
+@pytest.mark.parametrize("method", ["electrostatic", "mechanical", "nonpol"])
+@pytest.mark.parametrize("alpha_mode", ["fixed", "flexible"])
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not has_fused_cuda_ops, reason="fused CUDA operators not available"
+            ),
+        ),
+    ],
+)
+def test_emle_fused_ops(device, alpha_mode, method):
+    """
+    Check that a TorchScript EMLE model using the fused operators gives the
+    same energies and gradients as the standard model (float64), and finite
+    gradients for a zero-padded batch.
+    """
+    device = torch.device(device)
+    z = numpy.load("tests/input/atomic_numbers.npy")
+    xyz = numpy.load("tests/input/xyz_qm.npy")
+    xyz_mm = numpy.load("tests/input/xyz_mm.npy")
+    q_mm = numpy.load("tests/input/charges_mm.npy")
+
+    # A batch of the molecule and a zero-padded fragment of it.
+    atomic_numbers = torch.tensor(numpy.stack([z, z]), dtype=torch.int64)
+    atomic_numbers[1, 15:] = 0
+    xyz_qm = torch.tensor(numpy.stack([xyz, xyz]), dtype=torch.float64)
+    xyz_qm[1, 15:] = 0.0
+    xyz_mm = torch.tensor(numpy.stack([xyz_mm, xyz_mm]), dtype=torch.float64)
+    charges_mm = torch.tensor(numpy.stack([q_mm, q_mm]), dtype=torch.float64)
+    atomic_numbers, xyz_qm, xyz_mm, charges_mm = (
+        t.to(device) for t in (atomic_numbers, xyz_qm, xyz_mm, charges_mm)
+    )
+
+    kwargs = dict(
+        alpha_mode=alpha_mode,
+        method=method,
+        device=device,
+        dtype=torch.float64,
+    )
+    reference = EMLE(**kwargs)
+    model = torch.jit.script(EMLE(use_fused_ops=True, **kwargs))
+
+    def run(m):
+        x = xyz_qm.clone().requires_grad_(True)
+        y = xyz_mm.clone().requires_grad_(True)
+        q = charges_mm.clone().requires_grad_(True)
+        energy = m(atomic_numbers, q, x, y)
+        weights = torch.tensor([[1.3], [0.7]], dtype=torch.float64, device=device)
+        grads = torch.autograd.grad((energy * weights).sum(), (x, y, q))
+        return (energy,) + grads
+
+    expected = run(reference)
+    result = run(model)
+    for a, b in zip(result, expected):
+        # The standard model gives NaN gradients for the padded configuration.
+        finite = torch.isfinite(b)
+        assert torch.allclose(a[finite], b[finite], rtol=1e-10, atol=1e-12)
+        assert torch.isfinite(a).all()
