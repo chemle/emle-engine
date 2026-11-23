@@ -1,14 +1,9 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [devel]
   workflow_dispatch:
-    inputs:
-      publish:
-        description: "Publish the built packages to PyPI and the chemle Anaconda.org channel?"
-        type: boolean
-        default: false
 
 jobs:
   build-pypi:
@@ -16,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      label: ${{ steps.label.outputs.label }}
     env:
       # PyPI and conda reject local version labels ("+g<hash>.d<date>"), so
       # drop them for release builds only. Local/dev installs keep them, so
@@ -25,6 +21,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # Release tags on main publish to PyPI and the main label, devel to the
+      # dev label, and anything else (including dev tags) is build only.
+      - name: Determine the publish label
+        id: label
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != *dev* ]]; then
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+              || { echo "::error::$GITHUB_REF_NAME is not on main"; exit 1; }
+            echo "label=main" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_REF" == refs/heads/devel ]]; then
+            echo "label=dev" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -49,7 +57,7 @@ jobs:
   publish-pypi:
     name: Publish to PyPI
     needs: build-pypi
-    if: github.event_name == 'release' || inputs.publish
+    if: needs.build-pypi.outputs.label == 'main'
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -84,8 +92,8 @@ jobs:
 
   publish-conda:
     name: Publish to chemle Anaconda.org channel
-    needs: build-conda
-    if: github.event_name == 'release' || inputs.publish
+    needs: [build-pypi, build-conda]
+    if: needs.build-pypi.outputs.label != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-python@v5
@@ -100,6 +108,8 @@ jobs:
       - name: Upload to the chemle Anaconda.org channel
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
+          LABEL: ${{ needs.build-pypi.outputs.label }}
         run: |
           shopt -s globstar
-          anaconda --token "$ANACONDA_API_TOKEN" upload --user chemle --skip-existing conda-dist/**/*.conda
+          anaconda --token "$ANACONDA_API_TOKEN" upload --user chemle \
+            --label "$LABEL" --skip-existing conda-dist/**/*.conda
