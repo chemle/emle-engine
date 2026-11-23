@@ -615,11 +615,13 @@ class EMLEBase(_torch.nn.Module):
         s_gauss = s * self.a_QEq
         s2 = s_gauss**2
         s2_mat = s2.unsqueeze(2) + s2.unsqueeze(1)
-        s_mat = _torch.where(s2_mat > 0, _torch.sqrt(s2_mat + 1e-16), 0)
+        s_mat = _torch.sqrt(s2_mat + 1e-16)
 
         device = r_data[0].device
         dtype = r_data[0].dtype
 
+        # Entries for pairs involving padded atoms (s = 0) are finite here,
+        # since r and r_inv are zero for them, and are removed below.
         A = self._get_T0_gaussian(r_data[1], r_data[0], s_mat)
 
         diag_ones = _torch.ones_like(
@@ -674,9 +676,7 @@ class EMLEBase(_torch.nn.Module):
         results: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS)
         """
         sqrt2: float = 1.4142135623730951
-        return t01 * _torch.where(
-            s_mat > 0, _torch.erf(r / ((s_mat + 1e-16) * sqrt2)), 0.0
-        )
+        return t01 * _torch.erf(r / ((s_mat + 1e-16) * sqrt2))
 
     @classmethod
     def _get_A_thole(cls, r_data: Tuple[Tensor, Tensor, Tensor], s, q_val, k, a_Thole):
@@ -717,24 +717,24 @@ class EMLEBase(_torch.nn.Module):
             alphap_mat > 0, r_data[0] ** 3 / _torch.sqrt(alphap_mat + 1e-16), 0.0
         )
 
-        # Compute the damping factors on the compact (n, n) au3 tensor before
-        # expanding to (3n, 3n), so the expensive exp runs on 9x fewer elements.
-        A = -cls._get_T2_thole(r_data[1], r_data[2], au3)
+        A = cls._get_minus_T2_thole(r_data[1], r_data[2], au3)
 
         # Replace the diagonal with the inverse polarizabilities. This must be a
         # replacement (rather than an addition) that also blocks the gradient
         # of the T2 diagonal: cdist doesn't return exactly zero self-distances
         # for larger systems, so the T2 diagonal can have spurious gradients.
-        alpha3 = alpha.repeat_interleave(3, dim=1)
+        n_batch, n_atoms = alpha.shape
+        alpha3 = alpha.unsqueeze(-1).expand(n_batch, n_atoms, 3).reshape(n_batch, -1)
         new_diag = _torch.where(alpha3 > 0, 1.0 / (alpha3 + 1e-16), 1.0)
         is_diag = _torch.eye(A.shape[-1], dtype=_torch.bool, device=A.device)
 
         return _torch.where(is_diag, _torch.diag_embed(new_diag), A)
 
     @staticmethod
-    def _get_T2_thole(r_inv: Tensor, rr: Tensor, au3: Tensor) -> Tensor:
+    def _get_minus_T2_thole(r_inv: Tensor, rr: Tensor, au3: Tensor) -> Tensor:
         """
-        Internal method, calculates T2 tensor with Thole damping.
+        Internal method, calculates minus the T2 tensor with Thole damping
+        (the off-diagonal part of the A matrix for induced dipoles).
 
         Parameters
         ----------
@@ -760,19 +760,19 @@ class EMLEBase(_torch.nn.Module):
         lam3 = 1 - exp_au3
         lam5 = 1 - (1 + au3) * exp_au3
 
-        # The 3x3 block for atoms (i, j) is
+        # The 3x3 block of T2 for atoms (i, j) is
         #     -lam3 / r^3 * I + 3 * lam5 / r^5 * outer(r_ij, r_ij).
-        # Build it as a (N_BATCH, N_ATOMS, 3, N_ATOMS, 3) tensor from the
-        # compact (N_BATCH, N_ATOMS, N_ATOMS) coefficients.
+        # Build minus T2 as a (N_BATCH, N_ATOMS, 3, N_ATOMS, 3) tensor from
+        # the compact (N_BATCH, N_ATOMS, N_ATOMS) coefficients.
         r_inv3 = r_inv**3
-        c3 = -lam3 * r_inv3
+        c3 = lam3 * r_inv3
         c5 = 3 * lam5 * r_inv3 * r_inv**2
         eye = _torch.eye(3, dtype=r_inv.dtype, device=r_inv.device)
-        T2 = c3.unsqueeze(2).unsqueeze(4) * eye.unsqueeze(1) + (
+        minus_T2 = c3.unsqueeze(2).unsqueeze(4) * eye.unsqueeze(1) - (
             c5.unsqueeze(-1) * rr
         ).transpose(2, 3).unsqueeze(-1) * rr.unsqueeze(2)
 
-        return T2.reshape(n_batch, n_atoms * 3, n_atoms * 3)
+        return minus_T2.reshape(n_batch, n_atoms * 3, n_atoms * 3)
 
     @staticmethod
     def get_static_energy(
