@@ -652,6 +652,32 @@ class EMLECalculator:
                 raise ValueError(msg)
         self._qm_xyz_frequency = qm_xyz_frequency
 
+        # Validate the supported QM charges, multiplicities and states.
+        declared = {}
+        for name, value in (
+            ("model_charges", model_charges),
+            ("model_mults", model_mults),
+            ("model_states", model_states),
+        ):
+            if value is None:
+                declared[name] = None
+                continue
+            if isinstance(value, str) or not hasattr(value, "__iter__"):
+                values = None
+            else:
+                values = list(value)
+            if values is None or not all(
+                isinstance(x, (int, _np.integer)) and not isinstance(x, bool)
+                for x in values
+            ):
+                msg = f"'{name}' must be a list of int"
+                _logger.error(msg)
+                raise TypeError(msg)
+            declared[name] = tuple(int(x) for x in values)
+        model_charges = declared["model_charges"]
+        model_mults = declared["model_mults"]
+        model_states = declared["model_states"]
+
         # Validate and create the backend(s).
         self._backends = []
         if self._backend is not None and not self._is_external_backend:

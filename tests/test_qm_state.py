@@ -180,19 +180,11 @@ def test_torchani_unsupported_state():
 
 def test_string_declared():
     """
-    Make sure that the characters of a declaration passed as a string, e.g.
-    from a YAML config, don't make an undeclared charge supported.
+    Make sure that a declaration passed as a string, e.g. from a YAML config,
+    is rejected rather than split into characters.
     """
-    with tempfile.TemporaryDirectory() as tmpdir:
-        calculator = EMLECalculator(
-            backend="torchani",
-            device="cpu",
-            model_charges="-1,-2,-3,-4,-5",
-            energy_file=f"{tmpdir}/emle_energy.txt",
-        )
-        write_orca_input(tmpdir, 1, 1)
-        with pytest.raises(RuntimeError, match="unsupported QM charge 1"):
-            calculator.run(path=tmpdir)
+    with pytest.raises(TypeError, match="'model_charges' must be a list of int"):
+        EMLECalculator(backend="torchani", device="cpu", model_charges="-1,-2")
 
 
 def test_external_declared():
