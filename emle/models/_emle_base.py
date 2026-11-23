@@ -898,10 +898,12 @@ class EMLEBase(_torch.nn.Module):
 
         r = 1.0 / mesh_data[0]
         f1 = _torch.where(mask, EMLEBase._get_f1_slater(r, s.unsqueeze(2) * 2.0), 0.0)
-        # Contract over the MM atoms directly, rather than materialising the
-        # (N_BATCH, N_QM_ATOMS, N_MM_ATOMS, 3) product before summing.
-        fields = _torch.einsum("bnmk,bnm->bnk", mesh_data[2], f1 * q.unsqueeze(1))
-        fields = fields.reshape(len(s), -1)
+        # Combine the scalar weights before multiplying the (N_BATCH,
+        # N_QM_ATOMS, N_MM_ATOMS, 3) T1 tensor, so it is only touched once.
+        # (A plain multiply and sum is faster than einsum here, which would
+        # copy T1 to a permuted layout for a batched matrix-vector product.)
+        w = f1 * q.unsqueeze(1)
+        fields = _torch.sum(mesh_data[2] * w.unsqueeze(-1), dim=2).reshape(len(s), -1)
 
         mu_ind = EMLEBase._solve(A, fields)
         return mu_ind.reshape((mu_ind.shape[0], -1, 3))
@@ -978,7 +980,9 @@ class EMLEBase(_torch.nn.Module):
         result: torch.Tensor (N_BATCH, MAX_MM_ATOMS)
             Electrostatic potential over MM atoms.
         """
-        return -_torch.einsum("ijkl,ijl->ik", T1, mu)
+        # A plain multiply and sum is faster than einsum, which would copy T1
+        # to a permuted layout for a batched matrix-vector product.
+        return -_torch.sum(T1 * mu.unsqueeze(2), dim=(1, 3))
 
     @staticmethod
     def _get_mesh_data(
