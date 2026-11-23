@@ -36,14 +36,19 @@ def _check_supported(backend, qm_charge, mult, state):
     object with the 'charges', 'mults' and 'states' attributes described in
     Backend.
     """
-    for label, supported, value in (
-        ("charge", backend.charges, qm_charge),
-        ("spin multiplicity", backend.mults, mult),
-        ("electronic state", backend.states, state),
+    for label, option, supported, value in (
+        ("charge", "model_charges", backend.charges, qm_charge),
+        ("spin multiplicity", "model_mults", backend.mults, mult),
+        ("electronic state", "model_states", backend.states, state),
     ):
         values = set(_np.atleast_1d(value).tolist())
         if supported is not None and not values <= set(supported):
-            raise ValueError(f"unsupported QM {label} {value}, supported: {supported}")
+            raise ValueError(
+                f"unsupported QM {label} {value}, supported: {supported}. "
+                f"If the model supports it, declare it with '{option}' "
+                f"('--{option.replace('_', '-')}' or 'EMLE_{option.upper()}' "
+                "for emle-server)"
+            )
 
 
 class Backend:
