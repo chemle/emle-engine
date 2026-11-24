@@ -1,28 +1,14 @@
-#######################################################################
-# EMLE-Engine: https://github.com/chemle/emle-engine
-#
-# Copyright: 2023-2025
-#
-# Authors: Lester Hedges   <lester.hedges@gmail.com>
-#          Kirill Zinovjev <kzinovjev@gmail.com>
-#
-# EMLE-Engine is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 2 of the License, or
-# (at your option) any later version.
-#
-# EMLE-Engine is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
-#####################################################################
+# SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers
+# SPDX-License-Identifier: MIT
 
 """XTB in-vacuo backend implementation."""
 
 __all__ = ["XTB"]
+
+try:
+    import xtb as _xtb
+except ImportError:
+    _xtb = None
 
 import ase as _ase
 import numpy as _np
@@ -37,8 +23,16 @@ class XTB(_Backend):
     XTB in-vacuo backend implementation.
     """
 
-    @staticmethod
-    def calculate(atomic_numbers, xyz, forces=True):
+    def __init__(self):
+        super().__init__(charges=None, mults=None)
+
+        if _xtb is None:
+            raise ImportError(
+                "xtb-python does not appear to be installed, but is "
+                "required to use the XTB backend."
+            )
+
+    def calculate(self, atomic_numbers, xyz, forces=True, qm_charge=0, mult=1):
         """
         Compute the energy and forces.
 
@@ -53,6 +47,12 @@ class XTB(_Backend):
 
         forces: bool
             Whether to calculate and return forces.
+
+        qm_charge: int, numpy.ndarray (N_BATCH,)
+            The charge of the QM region.
+
+        mult: int, numpy.ndarray (N_BATCH,)
+            The spin multiplicity of the QM region.
 
         Returns
         -------
@@ -80,6 +80,9 @@ class XTB(_Backend):
             atomic_numbers = _np.expand_dims(atomic_numbers, axis=0)
             xyz = _np.expand_dims(xyz, axis=0)
 
+        qm_charge = _np.full(len(atomic_numbers), qm_charge)
+        mult = _np.full(len(atomic_numbers), mult)
+
         from xtb.ase.calculator import XTB as _XTB
 
         # Lists to store results.
@@ -99,6 +102,11 @@ class XTB(_Backend):
                 numbers=atomic_numbers_i,
                 positions=xyz_i,
             )
+
+            # The xtb calculator takes the total charge and the number of
+            # unpaired electrons from the sums of these per-atom values.
+            atoms.set_initial_charges([qm_charge[i]] + [0] * (len(atoms) - 1))
+            atoms.set_initial_magnetic_moments([mult[i] - 1] + [0] * (len(atoms) - 1))
 
             # Create the calculator.
             atoms.calc = _XTB(method="GFN2-xTB")

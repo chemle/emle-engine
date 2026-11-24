@@ -1,24 +1,5 @@
-#######################################################################
-# EMLE-Engine: https://github.com/chemle/emle-engine
-#
-# Copyright: 2023-2025
-#
-# Authors: Lester Hedges   <lester.hedges@gmail.com>
-#          Kirill Zinovjev <kzinovjev@gmail.com>
-#
-# EMLE-Engine is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 2 of the License, or
-# (at your option) any later version.
-#
-# EMLE-Engine is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
-#####################################################################
+# SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers
+# SPDX-License-Identifier: MIT
 
 """EMLE AEVComputer implementation."""
 
@@ -28,9 +9,88 @@ __email__ = "kzinovjev@gmail.com"
 import numpy as _np
 import torch as _torch
 import torchani as _torchani
+from torchani.aev import ANIRadial as _ANIRadial, ANIAngular as _ANIAngular
 
 from torch import Tensor
 from typing import Tuple
+
+
+# Whether cuAEV works, for each CUDA device capability that has been checked.
+_cuaev_works = {}
+
+
+def _cuaev_available(aev_computer):
+    """
+    Whether TorchANI's fused cuAEV implementation can be used by the AEV
+    computer. Models that can use it select it in forward for CUDA inputs,
+    and the pure PyTorch implementation otherwise, since cuAEV doesn't
+    support CPU tensors. TorchANI's builds don't include kernels for every
+    GPU architecture, so cuAEV is only used if it works on the current
+    CUDA device.
+
+    Parameters
+    ----------
+
+    aev_computer: torchani.AEVComputer
+        The AEV computer.
+
+    Returns
+    -------
+
+    available: bool
+        Whether cuAEV can be used.
+    """
+    if not (
+        isinstance(aev_computer, _torchani.AEVComputer)
+        and aev_computer._cuaev_is_avail
+        and _torch.cuda.is_available()
+    ):
+        return False
+
+    capability = _torch.cuda.get_device_capability()
+    if capability not in _cuaev_works:
+        _cuaev_works[capability] = _check_cuaev(aev_computer)
+    return _cuaev_works[capability]
+
+
+def _check_cuaev(aev_computer):
+    """
+    Check that cuAEV gives the same AEVs as the pure PyTorch implementation
+    for a small molecule on the current CUDA device.
+
+    Parameters
+    ----------
+
+    aev_computer: torchani.AEVComputer
+        The AEV computer whose terms are used for the check.
+
+    Returns
+    -------
+
+    works: bool
+        Whether cuAEV works.
+    """
+    import copy as _copy
+
+    try:
+        computer = _torchani.AEVComputer(
+            _copy.deepcopy(aev_computer.radial),
+            _copy.deepcopy(aev_computer.angular),
+            num_species=aev_computer.num_species,
+        ).to(device="cuda", dtype=_torch.float32)
+        species = _torch.tensor([[0, 1, 2, 3]], device="cuda")
+        xyz = _torch.tensor(
+            [[[0.0, 0.0, 0.0], [1.1, 0.0, 0.0], [0.0, 1.2, 0.0], [0.3, 0.4, 1.1]]],
+            device="cuda",
+        )
+        expected = computer(species, xyz)
+        computer.set_strategy("cuaev")
+        aev = computer(species, xyz)
+        _torch.cuda.synchronize()
+        return bool(_torch.allclose(aev, expected, rtol=1e-4, atol=1e-6))
+    except Exception:
+        return False
+
 
 # Default hyperparameters for AEVComputer. Taken from ANI2x.
 _DEFAULT_HYPERS_DICT = {
@@ -94,6 +154,10 @@ class EMLEAEVComputer(_torch.nn.Module):
     (not a subclass to make sure it works with TorchScript)
     """
 
+    # TorchScript constants, so that the dense, fused and cuAEV branches of
+    # forward are only compiled when used.
+    __constants__ = ["_dense", "_fused", "_cuaev"]
+
     def __init__(
         self,
         num_species=7,
@@ -103,6 +167,8 @@ class EMLEAEVComputer(_torch.nn.Module):
         zid_map=None,
         device=None,
         dtype=None,
+        dense=False,
+        fused=False,
     ):
         """
         Constructor.
@@ -130,6 +196,21 @@ class EMLEAEVComputer(_torch.nn.Module):
 
         dtype: torch.dtype
             The data type to use for the models floating point tensors.
+
+        dense: bool
+            Whether to compute the AEVs with a dense implementation that
+            evaluates all atom pairs and triples, rather than with TorchANI.
+            It gives the same AEVs, involves no data-dependent shapes or
+            host synchronisation (so a model using it can be captured in a
+            CUDA graph), but its cost and memory grow with the cube of the
+            number of atoms, so it is only suitable for small QM regions
+            (up to ~60 atoms).
+
+        fused: bool
+            Whether to compute the AEVs on CUDA devices with the fused
+            torch.ops.emle.aev operator (see emle._ops), which gives the same
+            AEVs, is faster than TorchANI's implementations and can be
+            captured in a CUDA graph. On other devices TorchANI is used.
         """
         super().__init__()
 
@@ -156,10 +237,26 @@ class EMLEAEVComputer(_torch.nn.Module):
             if not mask.dtype == _torch.bool:
                 raise ValueError("'mask' must have dtype 'torch.bool'")
         self._mask = mask
+        self._set_mask_index()
 
         if not isinstance(is_external, bool):
             raise TypeError("'is_external' must be of type 'bool'")
         self._is_external = is_external
+        self._cuaev = False
+
+        if not isinstance(dense, bool):
+            raise TypeError("'dense' must be of type 'bool'")
+        self._dense = dense
+
+        if not isinstance(fused, bool):
+            raise TypeError("'fused' must be of type 'bool'")
+        if fused and is_external:
+            raise ValueError("'fused' AEVs cannot be used with external AEVs")
+        self._fused = fused
+        if fused:
+            from .._ops import load_ops
+
+            load_ops()
 
         # Initalise an empty AEV tensor to use to store the AEVs in parent models.
         # If AEVs are computed externally, then this tensor will be set by the
@@ -178,17 +275,52 @@ class EMLEAEVComputer(_torch.nn.Module):
         # Create the AEV computer.
         if not self._is_external:
             hypers = hypers or get_default_hypers(device, dtype)
+
+            def _to_float(x):
+                return float(x[0]) if hasattr(x, "__len__") else float(x)
+
+            def _to_list(x):
+                return x.tolist() if hasattr(x, "tolist") else list(x)
+
+            radial = _ANIRadial(
+                _to_float(hypers["EtaR"]),
+                _to_list(hypers["ShfR"]),
+                float(hypers["Rcr"]),
+            )
+            angular = _ANIAngular(
+                _to_float(hypers["EtaA"]),
+                _to_float(hypers["Zeta"]),
+                _to_list(hypers["ShfA"]),
+                _to_list(hypers["ShfZ"]),
+                float(hypers["Rca"]),
+            )
             self._aev_computer = _torchani.AEVComputer(
-                hypers["Rcr"],
-                hypers["Rca"],
-                hypers["EtaR"],
-                hypers["ShfR"],
-                hypers["EtaA"],
-                hypers["Zeta"],
-                hypers["ShfA"],
-                hypers["ShfZ"],
+                radial,
+                angular,
                 num_species=num_species,
             ).to(device=device, dtype=dtype)
+            # Whether TorchANI's cuAEV can be used for CUDA inputs (see forward).
+            self._cuaev = _cuaev_available(self._aev_computer)
+
+            # Parameters for the fused AEV operator, taken from TorchANI's
+            # terms so that the AEVs are identical. The operator is compiled
+            # for the ANI-2x AEV layout (7 species, 16 radial shifts, 8
+            # angular shifts and 4 angle sections).
+            if fused:
+                if num_species != 7:
+                    raise ValueError("'fused' AEVs are only supported for 7 species")
+                radial = self._aev_computer.radial
+                angular = self._aev_computer.angular
+                self._fused_params = (
+                    _to_list(radial.shifts.flatten()),
+                    _to_list(angular.shifts.flatten()),
+                    _to_list(angular.sections.flatten()),
+                    float(radial.eta),
+                    float(radial.cutoff),
+                    float(angular.eta),
+                    float(angular.zeta),
+                    float(angular.cutoff),
+                )
         # Create a dummy function to use in forward.
         else:
             self._aev_computer = self._dummy_aev_computer
@@ -229,28 +361,162 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if not self._is_external:
             zid_aev = self._zid_map[zid]
-            aev = self._aev_computer((zid_aev, xyz))[1]
+            if self._cuaev:
+                self._aev_computer._strategy = "cuaev" if xyz.is_cuda else "pyaev"
+            if self._fused:
+                if xyz.is_cuda:
+                    p = self._fused_params
+                    aev = _torch.ops.emle.aev(
+                        zid_aev, xyz, p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]
+                    )
+                else:
+                    aev = self._aev_computer(zid_aev, xyz)
+            elif self._dense:
+                radial = self._aev_computer.radial
+                angular = self._aev_computer.angular
+                aev = self._dense_aev(
+                    zid_aev,
+                    xyz,
+                    self._aev_computer.num_species,
+                    radial.eta,
+                    radial.shifts,
+                    radial.cutoff,
+                    angular.eta,
+                    angular.zeta,
+                    angular.shifts,
+                    angular.sections,
+                    angular.cutoff,
+                )
+            else:
+                aev = self._aev_computer(zid_aev, xyz)
         else:
             aev = self._aev
 
         norm = _torch.linalg.norm(aev, dim=2, keepdim=True)
 
-        aev = self._apply_mask(_torch.where(zid[:, :, None] > -1, aev / norm, 0.0))
+        aev = self._apply_mask(_torch.where(zid.unsqueeze(2) > -1, aev / norm, 0.0))
 
         return aev
 
     @staticmethod
-    def _dummy_aev_computer(input: Tuple[Tensor, Tensor]) -> Tensor:
+    def _dense_aev(
+        species: Tensor,
+        xyz: Tensor,
+        num_species: int,
+        radial_eta: Tensor,
+        radial_shifts: Tensor,
+        radial_cutoff: float,
+        angular_eta: Tensor,
+        angular_zeta: Tensor,
+        angular_shifts: Tensor,
+        angular_sections: Tensor,
+        angular_cutoff: float,
+    ) -> Tensor:
+        """
+        Compute ANI-style AEVs over all atom pairs and triples, with the same
+        terms and feature layout as TorchANI's AEVComputer (cosine cutoff).
+
+        Parameters
+        ----------
+
+        species: torch.Tensor (N_BATCH, MAX_N_ATOMS)
+            The AEV species indices (-1 for padding).
+
+        xyz: torch.Tensor (N_BATCH, MAX_N_ATOMS, 3)
+            The atomic coordinates.
+
+        num_species, radial_*, angular_*:
+            The AEV parameters (taken from TorchANI's radial and angular
+            terms).
+
+        Returns
+        -------
+
+        aevs: torch.Tensor (N_BATCH, MAX_N_ATOMS, N_AEV_COMPONENTS)
+            The atomic environment vectors.
+        """
+        n_batch, n_atoms = species.shape
+        pi: float = 3.141592653589793
+
+        # One-hot species, and the mask of valid (distinct, real) pairs.
+        real = species >= 0
+        onehot = (
+            species.unsqueeze(-1) == _torch.arange(num_species, device=xyz.device)
+        ).to(xyz.dtype)
+        not_eye = ~_torch.eye(n_atoms, dtype=_torch.bool, device=xyz.device)
+        pair = real.unsqueeze(2) & real.unsqueeze(1) & not_eye
+
+        # Displacements x_j - x_i and distances, made safe for invalid pairs.
+        v = (xyz.unsqueeze(1) - xyz.unsqueeze(2)) * pair.unsqueeze(-1)
+        d2 = (v * v).sum(-1)
+        r = _torch.where(pair, d2, _torch.ones_like(d2)).sqrt()
+
+        # Radial terms, summed over the neighbours of each species.
+        fc = _torch.where(
+            pair & (r <= radial_cutoff),
+            0.5 * _torch.cos(pi * r / radial_cutoff) + 0.5,
+            _torch.zeros_like(r),
+        )
+        terms = (
+            0.25
+            * _torch.exp(-radial_eta * (r.unsqueeze(-1) - radial_shifts) ** 2)
+            * fc.unsqueeze(-1)
+        )
+        radial_aev = _torch.einsum("bijf,bjs->bisf", terms, onehot)
+
+        # Angular terms for all (ordered) pairs of distinct neighbours j, k.
+        fc = _torch.where(
+            pair & (r <= angular_cutoff),
+            0.5 * _torch.cos(pi * r / angular_cutoff) + 0.5,
+            _torch.zeros_like(r),
+        )
+        fc = fc.unsqueeze(3) * fc.unsqueeze(2) * not_eye
+        cos = (v.unsqueeze(3) * v.unsqueeze(2)).sum(-1) / _torch.clamp(
+            r.unsqueeze(3) * r.unsqueeze(2), min=1e-10
+        )
+        angles = _torch.acos(0.95 * cos).unsqueeze(-1)
+        angular = 2 * ((1 + _torch.cos(angles - angular_sections)) / 2) ** angular_zeta
+        mean = 0.5 * (r.unsqueeze(3) + r.unsqueeze(2)).unsqueeze(-1)
+        radial = _torch.exp(-angular_eta * (mean - angular_shifts) ** 2)
+        terms = (radial.unsqueeze(-1) * angular.unsqueeze(-2)).flatten(-2)
+        terms = terms * fc.unsqueeze(-1)
+
+        # Sum over the species of j and k, then over unordered species pairs
+        # (each unordered pair of neighbours appears twice in the sum above).
+        per_pair = _torch.einsum(
+            "bijcf,bja->biacf",
+            _torch.einsum("bijkf,bkc->bijcf", terms, onehot),
+            onehot,
+        )
+        triu = _torch.triu_indices(num_species, num_species, device=xyz.device)
+        a = triu[0]
+        c = triu[1]
+        angular_aev = _torch.where(
+            (a == c).view(1, 1, -1, 1),
+            0.5 * per_pair[:, :, a, c],
+            0.5 * (per_pair[:, :, a, c] + per_pair[:, :, c, a]),
+        )
+
+        return _torch.cat(
+            (
+                radial_aev.reshape(n_batch, n_atoms, -1),
+                angular_aev.reshape(n_batch, n_atoms, -1),
+            ),
+            dim=-1,
+        )
+
+    @staticmethod
+    def _dummy_aev_computer(elem_idxs: Tensor, coords: Tensor) -> Tensor:
         """
         Dummy function to use in forward if AEVs are computed externally.
 
         Parameters
         ----------
 
-        zid: torch.Tensor (N_BATCH, MAX_N_ATOMS)
+        elem_idxs: torch.Tensor (N_BATCH, MAX_N_ATOMS)
             The species indices.
 
-        xyz: torch.Tensor (N_BATCH, MAX_N_ATOMS, 3)
+        coords: torch.Tensor (N_BATCH, MAX_N_ATOMS, 3)
             The atomic coordinates.
 
         Returns
@@ -277,7 +543,18 @@ class EMLEAEVComputer(_torch.nn.Module):
         aev: torch.Tensor
             The masked AEVs.
         """
-        return aev[:, :, self._mask] if self._mask is not None else aev
+        # Precomputed indices avoid a nonzero, and a device synchronisation, on
+        # every call.
+        return aev.index_select(2, self._mask_index) if self._mask is not None else aev
+
+    def _set_mask_index(self):
+        """
+        Store the indices of the features selected by the mask.
+        """
+        if self._mask is not None:
+            self._mask_index = _torch.nonzero(self._mask).squeeze(-1)
+        else:
+            self._mask_index = _torch.empty(0, dtype=_torch.int64)
 
     def to(self, *args, **kwargs):
         """
@@ -287,6 +564,7 @@ class EMLEAEVComputer(_torch.nn.Module):
             self._aev_computer = self._aev_computer.to(*args, **kwargs)
         if self._mask is not None:
             self._mask = self._mask.to(*args, **kwargs)
+        self._set_mask_index()
         self._zid_map = self._zid_map.to(*args, **kwargs)
 
         # Check for a device type in args and update the device attribute.
@@ -305,6 +583,7 @@ class EMLEAEVComputer(_torch.nn.Module):
             self._aev_computer = self._aev_computer.cuda(**kwargs)
         if self._mask is not None:
             self._mask = self._mask.cuda(**kwargs)
+        self._set_mask_index()
         self._zid_map = self._zid_map.cuda(**kwargs)
         return self
 
@@ -316,6 +595,7 @@ class EMLEAEVComputer(_torch.nn.Module):
             self._aev_computer = self._aev_computer.cpu(**kwargs)
         if self._mask is not None:
             self._mask = self._mask.cpu(**kwargs)
+        self._set_mask_index()
         self._zid_map = self._zid_map.cpu(**kwargs)
         return self
 

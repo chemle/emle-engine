@@ -1,28 +1,11 @@
-#######################################################################
-# EMLE-Engine: https://github.com/chemle/emle-engine
-#
-# Copyright: 2023-2025
-#
-# Authors: Lester Hedges   <lester.hedges@gmail.com>
-#          Kirill Zinovjev <kzinovjev@gmail.com>
-#
-# EMLE-Engine is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 2 of the License, or
-# (at your option) any later version.
-#
-# EMLE-Engine is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
-#####################################################################
+# SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers
+# SPDX-License-Identifier: MIT
 
 """Module for loss functions."""
 
 import torch as _torch
+
+from ..models._utils import _sanitize_alpha_mode
 
 
 class _BaseLoss(_torch.nn.Module):
@@ -165,8 +148,8 @@ class TholeLoss(_BaseLoss):
     emle_base: EMLEBase
         EMLEBase object.
 
-    mode: str, optional, default='species'
-        Alpha mode. Either 'species' or 'reference'.
+    mode: str, optional, default='fixed'
+        Alpha mode. Either 'fixed' or 'flexible'.
 
     loss: torch.nn.Module, optional, default=torch.nn.MSELoss()
         Loss function.
@@ -181,7 +164,7 @@ class TholeLoss(_BaseLoss):
         Loss function.
     """
 
-    def __init__(self, emle_base, mode="species", loss=_torch.nn.MSELoss()):
+    def __init__(self, emle_base, mode="fixed", loss=_torch.nn.MSELoss()):
         super().__init__()
 
         from ..models._emle_base import EMLEBase
@@ -274,12 +257,9 @@ class TholeLoss(_BaseLoss):
         Parameters
         ----------
         mode: str
-            Alpha mode. Either 'species' or 'reference'.
+            Alpha mode. Either 'fixed' or 'flexible'.
         """
-        mode = mode.lower().replace(" ", "")
-        if mode not in ("species", "reference"):
-            raise ValueError("TholeLoss: mode must be either 'species' or 'reference'")
-        self._emle_base.alpha_mode = mode
+        self._emle_base.alpha_mode = _sanitize_alpha_mode(mode)
 
     def forward(
         self,

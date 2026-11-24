@@ -1,24 +1,5 @@
-#######################################################################
-# EMLE-Engine: https://github.com/chemle/emle-engine
-#
-# Copyright: 2023-2025
-#
-# Authors: Lester Hedges   <lester.hedges@gmail.com>
-#          Kirill Zinovjev <kzinovjev@gmail.com>
-#
-# EMLE-Engine is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 2 of the License, or
-# (at your option) any later version.
-#
-# EMLE-Engine is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
-#####################################################################
+# SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers
+# SPDX-License-Identifier: MIT
 
 """SQM in-vacuo backend implementation."""
 
@@ -40,7 +21,7 @@ class SQM(_Backend):
     SQM in-vacuo backend implementation.
     """
 
-    def __init__(self, parm7, theory="DFTB3", qm_charge=0):
+    def __init__(self, parm7, theory="DFTB3"):
         """
         Constructor.
 
@@ -52,10 +33,10 @@ class SQM(_Backend):
 
         theory: str
             The SQM theory to use.
-
-        qm_charge: int
-            The charge on the QM region.
         """
+
+        # sqm only supports singlets.
+        super().__init__(charges=None)
 
         # Make sure a topology file has been set.
         if parm7 is None:
@@ -78,12 +59,7 @@ class SQM(_Backend):
         # Strip whitespace.
         self._theory = theory.replace(" ", "")
 
-        # Validate the QM charge.
-        if not isinstance(qm_charge, int):
-            raise TypeError("'qm_charge' must be of type 'int'.")
-        self._qm_charge = qm_charge
-
-    def calculate(self, atomic_numbers, xyz, forces=True, qm_charge=None):
+    def calculate(self, atomic_numbers, xyz, forces=True, qm_charge=0):
         """
         Compute the energy and forces.
 
@@ -99,8 +75,8 @@ class SQM(_Backend):
         forces: bool
             Whether to calculate and return forces.
 
-        qm_charge: int
-            The charge on the QM region.
+        qm_charge: int, numpy.ndarray (N_BATCH,)
+            The charge of the QM region.
 
         Returns
         -------
@@ -120,12 +96,6 @@ class SQM(_Backend):
         if not isinstance(atomic_numbers, _np.ndarray):
             raise TypeError("'atomic_numbers' must be of type 'numpy.ndarray'")
 
-        if qm_charge is None:
-            qm_charge = self._qm_charge
-        else:
-            if not isinstance(qm_charge, int):
-                raise TypeError("'qm_charge' must be of type 'int'.")
-
         if len(atomic_numbers) != len(xyz):
             raise ValueError(
                 f"Length of 'atomic_numbers' ({len(atomic_numbers)}) does not "
@@ -136,6 +106,8 @@ class SQM(_Backend):
         if len(atomic_numbers.shape) == 1:
             atomic_numbers = _np.expand_dims(atomic_numbers, axis=0)
             xyz = _np.expand_dims(xyz, axis=0)
+
+        qm_charge = _np.full(len(atomic_numbers), qm_charge)
 
         # Lists to store results.
         results_energy = []
@@ -164,7 +136,7 @@ class SQM(_Backend):
                     f.write("Run semi-empirical minimization\n")
                     f.write(" &qmmm\n")
                     f.write(f" qm_theory='{self._theory}',\n")
-                    f.write(f" qmcharge={qm_charge},\n")
+                    f.write(f" qmcharge={qm_charge[i]},\n")
                     f.write(" maxcyc=0,\n")
                     f.write(" verbosity=4,\n")
                     f.write(f" /\n")

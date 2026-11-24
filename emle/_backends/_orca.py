@@ -1,24 +1,5 @@
-#######################################################################
-# EMLE-Engine: https://github.com/chemle/emle-engine
-#
-# Copyright: 2023-2025
-#
-# Authors: Lester Hedges   <lester.hedges@gmail.com>
-#          Kirill Zinovjev <kzinovjev@gmail.com>
-#
-# EMLE-Engine is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 2 of the License, or
-# (at your option) any later version.
-#
-# EMLE-Engine is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
-#####################################################################
+# SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers
+# SPDX-License-Identifier: MIT
 
 """ORCA in-vacuo backend implementation."""
 
@@ -54,6 +35,8 @@ class ORCA(_Backend):
             The path to the ORCA template file.
         """
 
+        super().__init__(charges=None, mults=None)
+
         if not isinstance(exe, str):
             raise TypeError("'exe' must be of type 'str'")
 
@@ -68,7 +51,8 @@ class ORCA(_Backend):
                 raise IOError(f"Unable to locate ORCA template file: '{template}'")
 
             # Read the ORCA template file to check for the presence of the
-            # '*xyzfile' directive. Also store the charge and spin multiplicity.
+            # '*xyzfile' directive, which is replaced at runtime. Its charge
+            # and spin multiplicity are the only ones supported.
             lines = []
             with open(template, "r") as f:
                 for line in f:
@@ -91,13 +75,13 @@ class ORCA(_Backend):
                 )
 
             self._template_lines = lines
-            self._charge = int(charge)
-            self._mult = int(mult)
+            self.charges = (int(charge),)
+            self.mults = (int(mult),)
 
         self._exe = exe
         self._template = template
 
-    def calculate(self, atomic_numbers, xyz, forces=True):
+    def calculate(self, atomic_numbers, xyz, forces=True, qm_charge=0, mult=1):
         """
         Compute the energy and forces.
 
@@ -112,6 +96,12 @@ class ORCA(_Backend):
 
         forces: bool
             Whether to calculate and return forces.
+
+        qm_charge: int, numpy.ndarray (N_BATCH,)
+            The charge of the QM region.
+
+        mult: int, numpy.ndarray (N_BATCH,)
+            The spin multiplicity of the QM region.
 
         Returns
         -------
@@ -144,6 +134,9 @@ class ORCA(_Backend):
             atomic_numbers = _np.expand_dims(atomic_numbers, axis=0)
             xyz = _np.expand_dims(xyz, axis=0)
 
+        qm_charge = _np.full(len(atomic_numbers), qm_charge)
+        mult = _np.full(len(atomic_numbers), mult)
+
         # Lists to store results.
         results_energy = []
         results_forces = []
@@ -166,7 +159,7 @@ class ORCA(_Backend):
                 with open(inp_name, "w") as f:
                     for line in self._template_lines:
                         f.write(line)
-                    f.write(f"*xyzfile {self._charge} {self._mult} {xyz_name}\n")
+                    f.write(f"*xyzfile {qm_charge[i]} {mult[i]} {xyz_name}\n")
 
                 # Work out the elements.
                 elements = [_ase.Atom(id).symbol for id in atomic_numbers_i]

@@ -1,24 +1,5 @@
-######################################################################
-# EMLE-Engine: https://github.com/chemle/emle-engine
-#
-# Copyright: 2023-2025
-#
-# Authors: Lester Hedges   <lester.hedges@gmail.com>
-#          Kirill Zinovjev <kzinovjev@gmail.com>
-#
-# EMLE-Engine is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 2 of the License, or
-# (at your option) any later version.
-#
-# EMLE-Engine is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with EMLE-Engine If not, see <http://www.gnu.org/licenses/>.
-######################################################################
+# SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers
+# SPDX-License-Identifier: MIT
 
 """
 Parser for ORCA and HORTON outputs.
@@ -243,6 +224,8 @@ class ORCAParser:
         data = {key: h5f[key][:] for key in self._HORTON_KEYS}
         q = data["core_charges"] + data["valence_charges"]
         q_total = _np.sum(q)
+        if abs(_np.round(q_total) - q_total) >= 0.1:
+            raise ValueError(f"MBIS charges sum to non-integer {q_total}")
         q_shift = (_np.round(q_total) - q_total) / len(q)
         return {
             "s": data["valence_widths"],
@@ -273,7 +256,7 @@ class ORCAParser:
 
         E_tot: numpy.ndarray (N_CONFIGS,)
             Total gas-phase energy per configuration, in energy_unit (eV by
-            default).
+            default). NaN where the output has no final energy.
         """
         E_tot = [
             self._get_E_vac_from_out(self._get_file(name, "vac.orca"), energy_unit)
@@ -298,6 +281,8 @@ class ORCAParser:
         """
         E_prefix = b"FINAL SINGLE POINT ENERGY"
         E_line = [line for line in f if line.startswith(E_prefix)]
+        if not E_line:
+            return _np.nan
         return float(E_line[0].split()[-1]) * _ase.units.Hartree / energy_unit
 
     def get_forces(self):
@@ -308,9 +293,9 @@ class ORCAParser:
         Returns
         -------
 
-        forces: List[numpy.ndarray]
+        forces: List[numpy.ndarray or None]
             Per-configuration atomic forces in Hartree/Bohr, each of shape
-            (N_ATOMS, 3).
+            (N_ATOMS, 3). None where the output has no gradient.
         """
         forces = [
             self._get_forces_from_out(self._get_file(name, "vac.orca"))
@@ -324,8 +309,11 @@ class ORCAParser:
         ORCA reports the gradient in Hartree/Bohr; we negate (forces =
         -gradient) and return in the same units.
         """
-        while next(f) != b"CARTESIAN GRADIENT\n":
-            pass
+        for line in f:
+            if line == b"CARTESIAN GRADIENT\n":
+                break
+        else:
+            return None
         next(f)
         next(f)
         forces = []

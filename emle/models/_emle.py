@@ -1,24 +1,5 @@
-#######################################################################
-# EMLE-Engine: https://github.com/chemle/emle-engine
-#
-# Copyright: 2023-2025
-#
-# Authors: Lester Hedges   <lester.hedges@gmail.com>
-#          Kirill Zinovjev <kzinovjev@gmail.com>
-#
-# EMLE-Engine is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 2 of the License, or
-# (at your option) any later version.
-#
-# EMLE-Engine is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
-#####################################################################
+# SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers
+# SPDX-License-Identifier: MIT
 
 """EMLE model implementation."""
 
@@ -36,24 +17,12 @@ import torch as _torch
 import torchani as _torchani
 from torch import Tensor
 
-from . import EMLEBase as _EMLEBase
-from . import _patches
-from ._utils import _apply_switching_function, _preprocess_coordinates
-
-# Monkey-patch the TorchANI BuiltInModel and BuiltinEnsemble classes so that
-# they call self.aev_computer using args only to allow forward hooks to work
-# with TorchScript.
-_torchani.models.BuiltinModel = _patches.BuiltinModel
-_torchani.models.BuiltinEnsemble = _patches.BuiltinEnsemble
-
-try:
-    import NNPOps as _NNPOps
-
-    _NNPOps.OptimizedTorchANI = _patches.OptimizedTorchANI
-
-    _has_nnpops = True
-except:
-    _has_nnpops = False
+from ._emle_base import EMLEBase as _EMLEBase
+from ._utils import (
+    _apply_switching_function,
+    _preprocess_coordinates,
+    _sanitize_alpha_mode,
+)
 
 
 class EMLE(_torch.nn.Module):
@@ -68,23 +37,18 @@ class EMLE(_torch.nn.Module):
     # the required _is_emle attribute.
     _is_emle = True
 
-    # Store the expected path to the resources directory.
-    _resource_dir = _os.path.join(
-        _os.path.dirname(_os.path.abspath(__file__)), "..", "resources"
-    )
-
-    # Create the name of the default model file.
-    _default_model = _os.path.join(_resource_dir, "emle_qm7_aev.mat")
-
     # Store the list of supported species.
     _species = [1, 6, 7, 8, 16]
+
+    # TorchScript constant, so that the fused operator branch of forward is
+    # only compiled when the operators are used.
+    __constants__ = ["_use_fused_ops"]
 
     def __init__(
         self,
         model=None,
         method="electrostatic",
-        alpha_mode="species",
-        atomic_numbers=None,
+        alpha_mode="fixed",
         qm_charge=0,
         mm_charges=None,
         cutoff=None,
@@ -92,6 +56,8 @@ class EMLE(_torch.nn.Module):
         device=None,
         dtype=None,
         create_aev_calculator=True,
+        dense_aev=False,
+        use_fused_ops=False,
     ):
         """
         Constructor.
@@ -120,17 +86,11 @@ class EMLE(_torch.nn.Module):
 
         alpha_mode: str
             How atomic polarizabilities are calculated.
-                "species":
+                "fixed":
                     one volume scaling factor is used for each species
-                "reference":
+                "flexible":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
-
-        atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor
-            Atomic numbers for the QM region. This allows use of optimised AEV
-            symmetry functions from the NNPOps package. Only use this option
-            if you are using a fixed QM region, i.e. the same QM region for each
-            evalulation of the module.
 
         qm_charge: int
             The charge on the QM region. This can also be passed when calling
@@ -163,16 +123,33 @@ class EMLE(_torch.nn.Module):
             to False for derived classes that already have an AEV calculator,
             e.g. ANI2xEMLE. In that case, it's possible to hook the AEV
             calculator to avoid duplicating the computation.
+
+        dense_aev: bool
+            Whether to compute the AEVs with a dense implementation (all atom
+            pairs and triples) instead of TorchANI. This gives the same
+            results and allows the model to be captured in a CUDA graph (for
+            example with OpenMM-Torch's 'useCUDAGraphs' property), which
+            removes almost all of the per-call overhead on GPUs. Its cost and
+            memory grow with the cube of the number of QM atoms, so it is
+            intended for small QM regions (up to ~60 atoms). For batched
+            inputs, PyTorch may solve some batched linear systems with MAGMA,
+            which cannot be captured; calling
+            torch.backends.cuda.preferred_linalg_library("cusolver") before
+            capturing avoids this.
+
+        use_fused_ops: bool
+            Whether to use the fused C++/CUDA operators (see emle._ops) for the
+            QM/MM electrostatics and, on CUDA devices, the AEVs. They give the
+            same results (and finite gradients for zero-padded batches), are
+            several times faster, use much less memory and can be captured in
+            a CUDA graph. They are compiled on first use, which requires a C++
+            compiler and, for CUDA, a CUDA toolkit (CUDA_HOME). Only first
+            derivatives are supported. A scripted model that uses them can
+            only be loaded in a Python process that has loaded them.
         """
 
         # Call the base class constructor.
         super().__init__()
-
-        from .._resources import _fetch_resources
-
-        # Fetch or update the resources.
-        if model is None:
-            _fetch_resources()
 
         if method is None:
             method = "electrostatic"
@@ -185,31 +162,7 @@ class EMLE(_torch.nn.Module):
             )
         self._method = method
 
-        if alpha_mode is None:
-            alpha_mode = "species"
-        if not isinstance(alpha_mode, str):
-            raise TypeError("'alpha_mode' must be of type 'str'")
-        alpha_mode = alpha_mode.lower().replace(" ", "")
-        if alpha_mode not in ["species", "reference"]:
-            raise ValueError("'alpha_mode' must be 'species' or 'reference'")
-        self._alpha_mode = alpha_mode
-
-        if atomic_numbers is not None:
-            if isinstance(atomic_numbers, (_np.ndarray, _torch.Tensor)):
-                atomic_numbers = atomic_numbers.tolist()
-            if not isinstance(atomic_numbers, (tuple, list)):
-                raise TypeError(
-                    "'atomic_numbers' must be of type 'list', 'tuple', or 'numpy.ndarray'"
-                )
-            if not all(isinstance(a, int) for a in atomic_numbers):
-                raise TypeError(
-                    "All elements of 'atomic_numbers' must be of type 'int'"
-                )
-            if not all(a > 0 for a in atomic_numbers):
-                raise ValueError(
-                    "All elements of 'atomic_numbers' must be greater than zero"
-                )
-        self._atomic_numbers = atomic_numbers
+        self._alpha_mode = _sanitize_alpha_mode(alpha_mode)
 
         if not isinstance(qm_charge, int):
             raise TypeError("'qm_charge' must be of type 'int'")
@@ -257,17 +210,34 @@ class EMLE(_torch.nn.Module):
             # Set to None as this will be used in any calculator configuration.
             self._model = None
 
-            # Use the default model.
-            model = self._default_model
+            from .._resources import _fetch_default_model
 
-            # Use the default species.
-            species = self._species
+            try:
+                model = _fetch_default_model()
+            except Exception as e:
+                raise IOError(
+                    f"Unable to download the default EMLE embedding model: {e}"
+                ) from e
 
         if device is not None:
             if not isinstance(device, _torch.device):
                 raise TypeError("'device' must be of type 'torch.device'")
         else:
             device = _torch.get_default_device()
+
+        if not isinstance(use_fused_ops, bool):
+            raise TypeError("'use_fused_ops' must be of type 'bool'")
+        if use_fused_ops:
+            from .._ops import load_ops
+
+            with_cuda = load_ops()
+            if device.type == "cuda" and not with_cuda:
+                raise RuntimeError(
+                    "The fused EMLE operators were built without CUDA support. "
+                    "Set CUDA_HOME to a CUDA toolkit matching PyTorch's to use "
+                    "them on CUDA devices."
+                )
+        self._use_fused_ops = use_fused_ops
 
         if dtype is not None:
             if not isinstance(dtype, _torch.dtype):
@@ -279,12 +249,6 @@ class EMLE(_torch.nn.Module):
         try:
             params = _scipy_io.loadmat(model, squeeze_me=True)
         except:
-            if model is self._default_model and not _os.path.isfile(model):
-                raise IOError(
-                    f"Unable to locate default EMLE embedding model file: '{model}'. "
-                    "Please ensure that the resources are installed correctly. For "
-                    "details, see: https://github.com/chemle/emle-models"
-                )
             raise IOError(f"Unable to load model parameters from: '{model}'")
 
         q_core = _torch.tensor(params["q_core"], dtype=dtype, device=device)
@@ -326,38 +290,16 @@ class EMLE(_torch.nn.Module):
 
         if create_aev_calculator:
             num_species = params.get("computer_n_species", len(n_ref))
+            if not isinstance(dense_aev, bool):
+                raise TypeError("'dense_aev' must be of type 'bool'")
             emle_aev_computer = EMLEAEVComputer(
-                mask=aev_mask, num_species=num_species, device=device, dtype=dtype
+                mask=aev_mask,
+                num_species=num_species,
+                device=device,
+                dtype=dtype,
+                dense=dense_aev,
+                fused=use_fused_ops,
             )
-
-            # Optimise the AEV computer using NNPOps if available.
-            if _has_nnpops and atomic_numbers is not None:
-                try:
-                    import ase
-                    from torchani import SpeciesConverter
-
-                    # Work out the species.
-                    species = [ase.Atom(i).symbol for i in atomic_numbers]
-
-                    # Create a species converter.
-                    species_converter = SpeciesConverter(species).to(device)
-
-                    atomic_numbers = _torch.tensor(
-                        atomic_numbers, dtype=_torch.int64, device=device
-                    )
-
-                    atomic_numbers = atomic_numbers.reshape(1, *atomic_numbers.shape)
-                    emle_aev_computer._aev_computer = (
-                        _NNPOps.SymmetryFunctions.TorchANISymmetryFunctions(
-                            species_converter,
-                            emle_aev_computer._aev_computer,
-                            atomic_numbers,
-                        )
-                    )
-                except Exception as e:
-                    raise RuntimeError(
-                        "Unable to create optimised AEVComputer using NNPOps."
-                    ) from e
         else:
             emle_aev_computer = EMLEAEVComputer(
                 is_external=True,
@@ -505,8 +447,10 @@ class EMLE(_torch.nn.Module):
             to their minimum image position with respect to the QM region
             centre, and applies a hard distance cutoff, zeroing the charges
             of MM atoms further than 'cutoff' (set in the constructor) from
-            the nearest QM atom. Requires 'cell' to be specified and 'cutoff'
-            to have been set when the model was created.
+            the nearest QM atom. Requires 'cutoff' to have been set when the
+            model was created. If 'cell' is None the system is treated as
+            non-periodic: the QM region is assumed to already be whole, no
+            re-imaging is performed, and only the cutoff is applied.
 
         use_switching_function: bool
             Whether to scale the MM charges using a smooth switching
@@ -544,8 +488,6 @@ class EMLE(_torch.nn.Module):
 
         # Pre-process the coordinates.
         if preprocess:
-            if cell is None:
-                raise ValueError("'cell' must be specified when 'preprocess' is True")
             cutoff = self._cutoff
             if cutoff is None:
                 raise ValueError(
@@ -637,13 +579,39 @@ class EMLE(_torch.nn.Module):
             )
 
         mask = (self._atomic_numbers > 0).unsqueeze(-1)
-        mesh_data = self._emle_base._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s, mask)
 
         if self._method == "mechanical":
             q_core = q_core + q_val
             q_val = _torch.zeros_like(
                 q_core, dtype=self._charges_mm.dtype, device=self._device
             )
+
+        if self._use_fused_ops:
+            if mu is None:
+                # Static energy, induced fields and the field of the MM charges
+                # from one fused pass over the QM/MM pairs; the induced energy
+                # is -0.5 mu . F0, with mu = A_thole^-1 fields.
+                E_static, fields, F0 = _torch.ops.emle.electrostatics(
+                    xyz_qm_bohr,
+                    xyz_mm_bohr,
+                    self._charges_mm,
+                    s,
+                    q_core,
+                    q_val,
+                    self._atomic_numbers > 0,
+                )
+                if self._method == "electrostatic":
+                    mu_ind = self._emle_base._solve(
+                        A_thole, fields.reshape(batch_size, -1)
+                    )
+                    E_ind = -0.5 * _torch.sum(
+                        mu_ind * F0.reshape(batch_size, -1), dim=1
+                    )
+                else:
+                    E_ind = _torch.zeros_like(E_static)
+                return _torch.stack((E_static, E_ind), dim=0)
+
+        mesh_data = self._emle_base._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s, mask)
         E_static = self._emle_base.get_static_energy(
             q_core, q_val, self._charges_mm, mesh_data, mu
         )

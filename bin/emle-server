@@ -1,37 +1,25 @@
 #!/usr/bin/env python
 
-#######################################################################
-# EMLE-Engine: https://github.com/chemle/emle-engine
-#
-# Copyright: 2023-2025
-#
-# Authors: Lester Hedges   <lester.hedges@gmail.com>
-#          Kirill Zinovjev <kzinovjev@gmail.com>
-#
-# EMLE-Engine is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 2 of the License, or
-# (at your option) any later version.
-#
-# EMLE-Engine is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
-#####################################################################
+# SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers
+# SPDX-License-Identifier: MIT
 
 import argparse
 import numpy as np
 import os
 import sys
 import time
+import warnings
 
 from glob import glob
 
 from emle import _supported_backends
 from emle._socket import Socket
+
+# Deprecated options previously accepted by EMLECalculator / emle-server.
+DEPRECATED_OPTIONS = {
+    "rascal_model": "the Rascal backend has been removed",
+    "atomic_numbers": "it is no longer used",
+}
 
 
 # Copied from distutils.util.strtobool, which is deprecated.
@@ -65,7 +53,6 @@ try:
     use_dipoles = strtobool(os.getenv("EMLE_USE_DIPOLES"))
 except:
     use_dipoles = False
-atomic_numbers = os.getenv("EMLE_ATOMIC_NUMBERS")
 mm_charges = os.getenv("EMLE_MM_CHARGES")
 try:
     num_clients = int(os.getenv("EMLE_NUM_CLIENTS"))
@@ -107,7 +94,6 @@ try:
     ace_model = os.getenv("EMLE_ACE_MODEL")
 except:
     ace_model = None
-rascal_model = os.getenv("EMLE_RASCAL_MODEL")
 parm7 = os.getenv("EMLE_PARM7")
 try:
     lambda_interpolate = [
@@ -121,6 +107,24 @@ except:
     interpolate_steps = None
 qm_indices = os.getenv("EMLE_QM_INDICES")
 sqm_theory = os.getenv("EMLE_SQM_THEORY")
+aimnet2_model = os.getenv("EMLE_AIMNET2_MODEL")
+omnip2x_model = os.getenv("EMLE_OMNIP2X_MODEL")
+try:
+    electronic_state = int(os.getenv("EMLE_ELECTRONIC_STATE"))
+except:
+    electronic_state = None
+try:
+    model_charges = [int(x) for x in os.getenv("EMLE_MODEL_CHARGES").split(",")]
+except:
+    model_charges = None
+try:
+    model_mults = [int(x) for x in os.getenv("EMLE_MODEL_MULTS").split(",")]
+except:
+    model_mults = None
+try:
+    model_states = [int(x) for x in os.getenv("EMLE_MODEL_STATES").split(",")]
+except:
+    model_states = None
 orca_path = os.getenv("EMLE_ORCA_PATH")
 try:
     restart = strtobool(os.getenv("EMLE_RESTART"))
@@ -149,7 +153,6 @@ env = {
     "method": method,
     "alpha_mode": alpha_mode,
     "use_dipoles": use_dipoles,
-    "atomic_numbers": atomic_numbers,
     "mm_charges": mm_charges,
     "num_clients": num_clients,
     "backend": backend,
@@ -167,12 +170,17 @@ env = {
     "ani2x_model_index": ani2x_model_index,
     "mace_model": mace_model,
     "ace_model": ace_model,
-    "rascal_model": rascal_model,
     "lambda_interpolate": lambda_interpolate,
     "interpolate_steps": interpolate_steps,
     "parm7": parm7,
     "qm_indices": qm_indices,
     "sqm_theory": sqm_theory,
+    "aimnet2_model": aimnet2_model,
+    "omnip2x_model": omnip2x_model,
+    "electronic_state": electronic_state,
+    "model_charges": model_charges,
+    "model_mults": model_mults,
+    "model_states": model_states,
     "orca_path": orca_path,
     "restart": restart,
     "orca_template": orca_template,
@@ -218,15 +226,11 @@ parser.add_argument(
 parser.add_argument(
     "--alpha-mode",
     type=str,
-    help="the alpha mode to use for the embedding method",
-    choices=["species", "reference"],
-    required=False,
-)
-parser.add_argument(
-    "--atomic-numbers",
-    type=str,
-    nargs="*",
-    help="the atomic numbers of the atoms in the qm region",
+    help=(
+        "the alpha mode to use for the embedding method "
+        "('species'/'reference' are deprecated aliases for 'fixed'/'flexible')"
+    ),
+    choices=["fixed", "flexible", "species", "reference"],
     required=False,
 )
 parser.add_argument(
@@ -332,12 +336,6 @@ parser.add_argument(
     required=False,
 )
 parser.add_argument(
-    "--rascal-model",
-    type=str,
-    help="path to Rascal model file",
-    required=False,
-)
-parser.add_argument(
     "--lambda-interpolate",
     type=float,
     nargs="*",
@@ -373,6 +371,46 @@ parser.add_argument(
     "--sqm-theory",
     type=str,
     help="the semi-empirical theory to use for the QM region when using the SQM backend",
+    required=False,
+)
+parser.add_argument(
+    "--aimnet2-model",
+    type=str,
+    help="the AIMNet2 model name or file to use when using the AIMNet2 backend",
+    required=False,
+)
+parser.add_argument(
+    "--omnip2x-model",
+    type=str,
+    nargs="*",
+    help="path to OMNI-P2x model file(s) to use when using the OMNI-P2x backend",
+    required=False,
+)
+parser.add_argument(
+    "--electronic-state",
+    type=int,
+    help="the electronic state index (0 is the ground state)",
+    required=False,
+)
+parser.add_argument(
+    "--model-charges",
+    type=int,
+    nargs="+",
+    help="the QM charges that the in vacuo model supports",
+    required=False,
+)
+parser.add_argument(
+    "--model-mults",
+    type=int,
+    nargs="+",
+    help="the spin multiplicities that the in vacuo model supports",
+    required=False,
+)
+parser.add_argument(
+    "--model-states",
+    type=int,
+    nargs="+",
+    help="the electronic states that the in vacuo model supports",
     required=False,
 )
 parser.add_argument(
@@ -445,6 +483,17 @@ if config is not None:
 
     except Exception as e:
         raise ValueError(f"Could not load YAML config file: {e}")
+
+    # Remove deprecated options that are no longer accepted by EMLECalculator,
+    # warning the user that they are being ignored.
+    for option, reason in DEPRECATED_OPTIONS.items():
+        if option in config:
+            warnings.warn(
+                f"'{option}' is deprecated since {reason}. "
+                "This setting will be ignored.",
+                FutureWarning,
+            )
+            del config[option]
 
     # Reparse the command-line arguments using the existing config
     # as a Namespace. Any non-default arguments from the command line
@@ -531,38 +580,6 @@ if set_lambda_interpolate is not None:
 
 # Handle special case formatting for environment variables.
 
-# Validate the atomic numbers.
-if args["atomic_numbers"] is not None:
-    # Whether we are parsing a list of atomic numbers, rather than a file.
-    is_list = False
-
-    if isinstance(args["atomic_numbers"], str):
-        # If this isn't a path to a file, try splitting on commas.
-        if not os.path.isfile(args["atomic_numbers"]) or not os.path.isfile(
-            os.path.abspath(args["atomic_numbers"])
-        ):
-            try:
-                args["atomic_numbers"] = args["atomic_numbers"].split(",")
-                is_list = True
-            except:
-                raise ValueError(
-                    "Unable to parse EMLE_ATOMIC_NUMBERS environment variable as a comma-separated list of ints"
-                )
-
-    # A single entry list is assumed to be the path to a file.
-    elif isinstance(args["atomic_numbers"], list):
-        if len(args["atomic_numbers"]) == 1:
-            args["atomic_numbers"] = args["atomic_numbers"][0]
-        else:
-            is_list = True
-
-    # Try to parse lists of atomic numbers into a list of ints.
-    if is_list:
-        try:
-            args["atomic_numbers"] = [int(x) for x in args["atomic_numbers"]]
-        except:
-            raise TypeError("Unable to parse atomic numbers as a list of ints")
-
 # Validate the MM charges.
 if args["mm_charges"] is None:
     if method == "mm":
@@ -637,35 +654,37 @@ else:
         except:
             raise TypeError("Unable to parse QM indices as a list of indices")
 
-# Work out the DeePMD model. We allow the following formatting:
+# Work out the DeePMD and OMNI-P2x models. We allow the following formatting:
 #    1) A path to a single file.
 #    2) Multiple files specified using wildcards.
 #    3) A list of files, comma-separated.
 #
 # The first two can be found using glob, if empty then try splitting on ",".
-if args["deepmd_model"] is not None:
-    if isinstance(args["deepmd_model"], list) and len(args["deepmd_model"]) == 1:
-        args["deepmd_model"] = args["deepmd_model"][0]
-    if isinstance(args["deepmd_model"], str):
+for key, name in (("deepmd_model", "DeePMD"), ("omnip2x_model", "OMNI-P2x")):
+    if args[key] is None:
+        continue
+    if isinstance(args[key], list) and len(args[key]) == 1:
+        args[key] = args[key][0]
+    if isinstance(args[key], str):
         # Remove whitespace.
-        args["deepmd_model"] = args["deepmd_model"].replace(" ", "")
+        args[key] = args[key].replace(" ", "")
 
         # Try globbing.
-        models = glob(args["deepmd_model"])
+        models = glob(args[key])
 
         # No matches.
         if not models:
-            models = args["deepmd_model"].split(",")
+            models = args[key].split(",")
 
             # Invalid formatting.
             if len(models) == 1:
                 raise ValueError(
-                    f"DeePMD model not found, or invalid formatting: '{args['deepmd_model']}'"
+                    f"{name} model not found, or invalid formatting: '{args[key]}'"
                 )
             else:
-                args["deepmd_model"] = models
+                args[key] = models
         else:
-            args["deepmd_model"] = models
+            args[key] = models
 
 # Log errors by default.
 if args["log_file"] is None:

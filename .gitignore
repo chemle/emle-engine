@@ -27,7 +27,6 @@ doc/source/generated
 doc/source/api/generated
 
 # Resource files.
-emle/resources
 
 # Results.
 results/
@@ -35,6 +34,12 @@ results/
 # VSCode config
 .vscode/
 
+# Pixi local environments
+.pixi/
+
 # Local test input.
 tests/input/deepmd
-tests/input/rascal
+
+# Release build artifacts.
+emle-engine-source.tar.gz
+output/

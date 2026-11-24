@@ -1,39 +1,29 @@
-#######################################################################
-# EMLE-Engine: https://github.com/chemle/emle-engine
-#
-# Copyright: 2023-2025
-#
-# Authors: Lester Hedges   <lester.hedges@gmail.com>
-#          Kirill Zinovjev <kzinovjev@gmail.com>
-#
-# EMLE-Engine is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 2 of the License, or
-# (at your option) any later version.
-#
-# EMLE-Engine is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
-#####################################################################
+# SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers
+# SPDX-License-Identifier: MIT
 
 """Sander in-vacuo backend implementation."""
 
 __all__ = ["Sander"]
 
+try:
+    import sander as _sander
+except ImportError:
+    _sander = None
+
+import os as _os
+
 import ase as _ase
+import numpy as _np
 from ase.calculators.calculator import Calculator as _Calculator
 from ase.calculators.calculator import all_changes as _all_changes
-import os as _os
-import numpy as _np
-import sander as _sander
 
-from .._units import _KCAL_MOL_TO_HARTREE, _BOHR_TO_ANGSTROM
-
+from .._units import _BOHR_TO_ANGSTROM, _KCAL_MOL_TO_HARTREE
 from ._backend import Backend as _Backend
+
+# The (topology path, modification time, gas phase, number of atoms) that the
+# sander singleton is set up for. Setup parses the topology, so it is only
+# repeated when this changes.
+_setup_key = None
 
 
 class SanderCalculator(_Calculator):
@@ -71,6 +61,18 @@ class SanderCalculator(_Calculator):
 
         super().__init__()
 
+        global _setup_key
+        key = (
+            _os.path.abspath(parm7),
+            _os.path.getmtime(parm7),
+            is_gas,
+            len(atoms),
+        )
+        if _sander.is_setup() and key == _setup_key:
+            # Already set up for this system: positions (and the box) are
+            # updated in calculate.
+            return
+
         if _sander.is_setup():
             _sander.cleanup()
 
@@ -81,6 +83,7 @@ class SanderCalculator(_Calculator):
             _sander.setup(parm7, positions, box, _sander.gas_input())
         else:
             _sander.setup(parm7, positions, box, _sander.pme_input())
+        _setup_key = key
 
     def calculate(
         self, atoms, properties=["energy", "forces"], system_changes=_all_changes
@@ -124,6 +127,14 @@ class Sander(_Backend):
         """
         Constructor.
         """
+
+        super().__init__()
+
+        if _sander is None:
+            raise ImportError(
+                "sander (part of AmberTools) does not appear to be "
+                "installed, but is required to use the Sander backend."
+            )
 
         if not isinstance(parm7, str):
             raise TypeError("'parm7' must be of type 'str'")

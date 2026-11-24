@@ -46,7 +46,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "emle-engine"
-copyright = "2023-2024"
+copyright = "2023-2026, The EMLE-Engine developers"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

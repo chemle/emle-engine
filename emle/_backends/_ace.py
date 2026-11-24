@@ -1,33 +1,14 @@
-#######################################################################
-# EMLE-Engine: https://github.com/chemle/emle-engine
-#
-# Copyright: 2023-2025
-#
-# Authors: Lester Hedges   <lester.hedges@gmail.com>
-#          Kirill Zinovjev <kzinovjev@gmail.com>
-#
-# EMLE-Engine is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 2 of the License, or
-# (at your option) any later version.
-#
-# EMLE-Engine is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
-#####################################################################
+# SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers
+# SPDX-License-Identifier: MIT
 
 """ACE in-vacuo backend implementation."""
 
+__all__ = ["ACE"]
+
 try:
     import pyjulip as _pyjulip
-
-    __all__ = ["ACE"]
-except:
-    __all__ = []
+except ImportError:
+    _pyjulip = None
 
 import ase as _ase
 import os as _os
@@ -54,6 +35,14 @@ class ACE(_Backend):
         model: str
             The path to the ACE model.
         """
+
+        super().__init__()
+
+        if _pyjulip is None:
+            raise ImportError(
+                "pyjulip does not appear to be installed, but is required "
+                "to use the ACE backend."
+            )
 
         # Validate the model path.
         if not isinstance(model, str):

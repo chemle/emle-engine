@@ -1,24 +1,5 @@
-#######################################################################
-# EMLE-Engine: https://github.com/chemle/emle-engine
-#
-# Copyright: 2023-2025
-#
-# Authors: Lester Hedges   <lester.hedges@gmail.com>
-#          Kirill Zinovjev <kzinovjev@gmail.com>
-#
-# EMLE-Engine is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 2 of the License, or
-# (at your option) any later version.
-#
-# EMLE-Engine is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
-#####################################################################
+# SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers
+# SPDX-License-Identifier: MIT
 
 from loguru import logger as _logger
 import os as _os
@@ -28,6 +9,7 @@ import torch as _torch
 from ..models import EMLEAEVComputer as _EMLEAEVComputer
 from ..models import EMLEBase as _EMLEBase
 from ..models import EMLE
+from ..models._utils import _sanitize_alpha_mode
 from ._gpr import GPR as _GPR
 from ._ivm import IVM as _IVM
 from ._loss import QEqLoss as _QEqLoss
@@ -297,7 +279,7 @@ class EMLETrainer:
         alpha=None,
         train_mask=None,
         alpha_atomic=None,
-        alpha_mode="reference",
+        alpha_mode="flexible",
         sigma=1e-3,
         ivm_thr=0.05,
         epochs=100,
@@ -350,7 +332,7 @@ class EMLETrainer:
         train_mask: torch.Tensor(N_BATCH,)
             Mask for training samples.
 
-        alpha_mode: 'species' or 'reference'
+        alpha_mode: 'fixed' or 'flexible'
             Mode for polarizability model.
 
         sigma: float
@@ -373,7 +355,7 @@ class EMLETrainer:
 
         l2_reg_thole: float
             L2 regularization coefficient for Thole model training.
-            Only relevant if alpha_mode is 'reference'.
+            Only relevant if alpha_mode is 'flexible'.
 
         weight_alpha_mol: float
             Weight of molecular polarizabilities in the loss function.
@@ -435,11 +417,7 @@ class EMLETrainer:
             )
 
         # Checks for alpha_mode.
-        if not isinstance(alpha_mode, str):
-            raise TypeError("'alpha_mode' must be of type 'str'")
-        alpha_mode = alpha_mode.lower().replace(" ", "")
-        if alpha_mode not in ["species", "reference"]:
-            raise ValueError("'alpha_mode' must be 'species' or 'reference'")
+        alpha_mode = _sanitize_alpha_mode(alpha_mode, default="flexible")
 
         if train_mask is None:
             train_mask = _torch.ones(len(z), dtype=_torch.bool)
@@ -564,7 +542,7 @@ class EMLETrainer:
                         dtype=ref_values_s.dtype,
                         device=_torch.device(device),
                     )
-                    if alpha_mode == "reference"
+                    if alpha_mode == "flexible"
                     else None
                 ),
             }
@@ -631,7 +609,7 @@ class EMLETrainer:
             _logger.debug(f"Optimized a_Thole: {emle_base.a_Thole.data.item()}")
 
             # Fit sqrtk_ref ( alpha = sqrtk ** 2 * k_Z * v).
-            if alpha_mode == "reference":
+            if alpha_mode == "flexible":
                 _logger.info("Fitting ref_values_sqrtk values...")
                 self._train_model(
                     loss_class=self._thole_loss,
@@ -661,7 +639,7 @@ class EMLETrainer:
             "chi_ref": emle_base.ref_values_chi,
             "k_Z": emle_base.k_Z,
             "sqrtk_ref": (
-                emle_base.ref_values_sqrtk if alpha_mode == "reference" else None
+                emle_base.ref_values_sqrtk if alpha_mode == "flexible" else None
             ),
             "species": emle_base._species,
             "alpha_mode": emle_base._alpha_mode,
@@ -678,7 +656,7 @@ class EMLETrainer:
         if plot_data_filename is None:
             return emle_base
 
-        emle_base._alpha_mode = "species"
+        emle_base._alpha_mode = "fixed"
         s_pred, q_core_pred, q_val_pred, A_thole, *_ = emle_base(
             z.to(device=device, dtype=_torch.int64),
             xyz.to(device=device, dtype=dtype),
@@ -699,32 +677,30 @@ class EMLETrainer:
         if train_thole:
             plot_data.update(
                 {
-                    "alpha_species": self._thole_loss._get_alpha_mol(A_thole, z_mask)[
-                        0
-                    ],
+                    "alpha_fixed": self._thole_loss._get_alpha_mol(A_thole, z_mask)[0],
                     "alpha_qm": alpha,
                 }
             )
 
         if alpha_atomic is not None:
             plot_data["alpha_atomic_qm"] = alpha_atomic
-            plot_data["alpha_atomic_species_emle"] = self._thole_loss._get_alpha_atomic(
+            plot_data["alpha_atomic_fixed_emle"] = self._thole_loss._get_alpha_atomic(
                 A_thole, z_mask
             )
 
-        if alpha_mode == "reference":
-            emle_base._alpha_mode = "reference"
+        if alpha_mode == "flexible":
+            emle_base._alpha_mode = "flexible"
             *_, A_thole = emle_base(
                 z.to(device=device, dtype=_torch.int64),
                 xyz.to(device=device, dtype=dtype),
                 q_mol,
             )
-            plot_data["alpha_reference"] = self._thole_loss._get_alpha_mol(
+            plot_data["alpha_flexible"] = self._thole_loss._get_alpha_mol(
                 A_thole, z_mask
             )[0]
 
             if alpha_atomic is not None:
-                plot_data["alpha_atomic_reference_emle"] = (
+                plot_data["alpha_atomic_flexible_emle"] = (
                     self._thole_loss._get_alpha_atomic(A_thole, z_mask)
                 )
 

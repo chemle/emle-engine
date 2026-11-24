@@ -1,28 +1,14 @@
-#######################################################################
-# EMLE-Engine: https://github.com/chemle/emle-engine
-#
-# Copyright: 2023-2025
-#
-# Authors: Lester Hedges   <lester.hedges@gmail.com>
-#          Kirill Zinovjev <kzinovjev@gmail.com>
-#
-# EMLE-Engine is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 2 of the License, or
-# (at your option) any later version.
-#
-# EMLE-Engine is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
-#####################################################################
+# SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers
+# SPDX-License-Identifier: MIT
 
 """DeePMD in-vacuo backend implementation."""
 
 __all__ = ["DeePMD"]
+
+try:
+    from deepmd.infer import DeepPot as _DeepPot
+except ImportError:
+    _DeepPot = None
 
 import ase as _ase
 import numpy as _np
@@ -39,6 +25,14 @@ class DeePMD(_Backend):
     """
 
     def __init__(self, model, deviation=None, deviation_threshold=None):
+        super().__init__()
+
+        if _DeepPot is None:
+            raise ImportError(
+                "deepmd-kit does not appear to be installed, but is "
+                "required to use the DeePMD backend."
+            )
+
         # We support a str, or list/tuple of strings.
         if not isinstance(model, (str, list, tuple)):
             raise TypeError("'model' must be of type 'str', or a list of 'str' types")
@@ -86,8 +80,6 @@ class DeePMD(_Backend):
 
             # Initialise DeePMD backend attributes.
             try:
-                from deepmd.infer import DeepPot as _DeepPot
-
                 self._potential = [_DeepPot(m) for m in self._model]
                 self._z_map = []
                 for dp in self._potential:
@@ -97,8 +89,8 @@ class DeePMD(_Backend):
                             for index, element in enumerate(dp.get_type_map())
                         }
                     )
-            except:
-                raise RuntimeError("Unable to create the DeePMD potentials!")
+            except Exception as e:
+                raise RuntimeError(f"Unable to create the DeePMD potentials: {e}") from e
 
         self._max_f_std = None
 

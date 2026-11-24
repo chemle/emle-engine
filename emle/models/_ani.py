@@ -1,24 +1,5 @@
-#######################################################################
-# EMLE-Engine: https://github.com/chemle/emle-engine
-#
-# Copyright: 2023-2025
-#
-# Authors: Lester Hedges   <lester.hedges@gmail.com>
-#          Kirill Zinovjev <kzinovjev@gmail.com>
-#
-# EMLE-Engine is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 2 of the License, or
-# (at your option) any later version.
-#
-# EMLE-Engine is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
-#####################################################################
+# SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers
+# SPDX-License-Identifier: MIT
 
 """ANI2xEMLE model implementation."""
 
@@ -27,7 +8,6 @@ __email__ = "lester.hedges@gmail.com"
 
 __all__ = ["ANI2xEMLE"]
 
-import numpy as _np
 import torch as _torch
 import torchani as _torchani
 
@@ -35,14 +15,18 @@ from torch import Tensor
 from typing import Optional, Tuple
 
 from ._emle import EMLE as _EMLE
+from . import _patches
+from ._emle_aev_computer import _cuaev_available
 
-try:
-    import NNPOps as _NNPOps
 
-    _has_nnpops = True
-except:
-    _has_nnpops = False
-    pass
+# Module-level hook so TorchScript can access its source during compilation.
+# TorchANI >= 2.7.9: AEVComputer.forward(elem_idxs, coords, cell, pbc) -> Tensor.
+def _aev_hook(
+    module,
+    input: Tuple[Tensor, Optional[Tensor], Optional[Tensor], Optional[Tensor]],
+    output: Tensor,
+):
+    module._aev = output
 
 
 class ANI2xEMLE(_torch.nn.Module):
@@ -50,6 +34,10 @@ class ANI2xEMLE(_torch.nn.Module):
     Combined ANI2x and EMLE model. Predicts the in vacuo ANI2x energy along with
     static and induced EMLE energy components.
     """
+
+    # A TorchScript constant, so that the cuAEV strategy selection in forward
+    # is only compiled for ANI2x models that can use it.
+    __constants__ = ["_cuaev"]
 
     # Class attributes.
 
@@ -62,12 +50,11 @@ class ANI2xEMLE(_torch.nn.Module):
         self,
         emle_model=None,
         emle_method="electrostatic",
-        alpha_mode="species",
+        alpha_mode="fixed",
         mm_charges=None,
         qm_charge=0,
         model_index=None,
         ani2x_model=None,
-        atomic_numbers=None,
         device=None,
         dtype=None,
     ):
@@ -96,9 +83,9 @@ class ANI2xEMLE(_torch.nn.Module):
 
         alpha_mode: str
             How atomic polarizabilities are calculated.
-                "species":
+                "fixed":
                     one volume scaling factor is used for each species
-                "reference":
+                "flexible":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environment
 
@@ -114,17 +101,10 @@ class ANI2xEMLE(_torch.nn.Module):
             The index of the ANI2x model to use. If None, then the full 8 model
             ensemble will be used.
 
-        ani2x_model: torchani.models.ANI2x, NNPOPS.OptimizedTorchANI
+        ani2x_model: torchani.models.ANI2x
             An existing ANI2x model to use. If None, a new ANI2x model will be
-            created. If using an OptimizedTorchANI model, please ensure that
-            the ANI2x model from which it derived was created using
+            created. Please ensure that the model was created using
             periodic_table_index=True.
-
-        atomic_numbers: List[float], Tuple[float], numpy.ndarray, torch.Tensor (N_ATOMS,)
-            Atomic numbers for the QM region. This allows use of optimised AEV
-            symmetry functions from the NNPOps package. Only use this option
-            if you are using a fixed QM region, i.e. the same QM region for each
-            evalulation of the module.
 
         device: torch.device
             The device on which to run the model.
@@ -156,29 +136,11 @@ class ANI2xEMLE(_torch.nn.Module):
         else:
             dtype = _torch.get_default_dtype()
 
-        if atomic_numbers is not None:
-            if isinstance(atomic_numbers, _np.ndarray):
-                atomic_numbers = atomic_numbers.tolist()
-            if isinstance(atomic_numbers, (list, tuple)):
-                if not all(isinstance(i, int) for i in atomic_numbers):
-                    raise ValueError("'atomic_numbers' must be a list of integers")
-                else:
-                    atomic_numbers = _torch.tensor(atomic_numbers, dtype=_torch.int64)
-            if not isinstance(atomic_numbers, _torch.Tensor):
-                raise TypeError("'atomic_numbers' must be of type 'torch.Tensor'")
-            # Check that they are integers.
-            if atomic_numbers.dtype != _torch.int64:
-                raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
-            self._atomic_numbers = atomic_numbers.to(device)
-        else:
-            self._atomic_numbers = None
-
         # Create an instance of the EMLE model.
         self._emle = _EMLE(
             model=emle_model,
             method=emle_method,
             alpha_mode=alpha_mode,
-            atomic_numbers=(atomic_numbers if atomic_numbers is not None else None),
             mm_charges=mm_charges,
             qm_charge=qm_charge,
             device=device,
@@ -186,96 +148,43 @@ class ANI2xEMLE(_torch.nn.Module):
             create_aev_calculator=False,
         )
 
-        # Initialise the NNOps flag.
-        self._is_nnpops = False
-
         if ani2x_model is not None:
-            # Add the base ANI2x model and ensemble.
-            allowed_types = [
-                _torchani.models.BuiltinModel,
-                _torchani.models.BuiltinEnsemble,
-            ]
-
-            # Add the optimised model if NNPOps is available.
-            try:
-                allowed_types.append(_NNPOps.OptimizedTorchANI)
-            except:
-                pass
-
-            if not isinstance(ani2x_model, tuple(allowed_types)):
-                raise TypeError(f"'ani2x_model' must be of type {allowed_types}")
+            if not isinstance(ani2x_model, _torch.nn.Module):
+                raise TypeError("'ani2x_model' must be a torch.nn.Module")
 
             if (
-                isinstance(
-                    ani2x_model,
-                    (_torchani.models.BuiltinModel, _torchani.models.BuiltinEnsemble),
-                )
+                hasattr(ani2x_model, "periodic_table_index")
                 and not ani2x_model.periodic_table_index
             ):
                 raise ValueError(
                     "The ANI2x model must be created with 'periodic_table_index=True'"
                 )
 
-            self._ani2x = ani2x_model.to(device)
+            raw_ani2x = ani2x_model.to(device)
             if dtype == _torch.float64:
-                self._ani2x = self._ani2x.double()
+                raw_ani2x = raw_ani2x.double()
         else:
             # Create the ANI2x model.
-            self._ani2x = _torchani.models.ANI2x(
+            raw_ani2x = _torchani.models.ANI2x(
                 periodic_table_index=True, model_index=model_index
             ).to(device)
             if dtype == _torch.float64:
-                self._ani2x = self._ani2x.double()
+                raw_ani2x = raw_ani2x.double()
 
-            # Optimise the ANI2x model if atomic_numbers are specified.
-            if _has_nnpops and atomic_numbers is not None:
-                try:
-                    atomic_numbers = atomic_numbers.reshape(
-                        1, *atomic_numbers.shape
-                    ).to(self._device)
-                    self._ani2x = _NNPOps.OptimizedTorchANI(
-                        self._ani2x, atomic_numbers
-                    ).to(device)
+        # Wrap in PatchedANI2x so that aev_computer is a direct attribute
+        # (not a property) — this gives TorchScript a single unambiguous path
+        # and allows forward hooks to be shared correctly.
+        self._ani2x = _patches.PatchedANI2x(raw_ani2x)
 
-                    # Flag that the model has been optimised with NNPOps.
-                    self._is_nnpops = True
-                except Exception as e:
-                    raise RuntimeError(
-                        "Failed to optimise the ANI2x model with NNPOps."
-                    ) from e
+        # Whether to use cuAEV for CUDA inputs, only for ANI2x models created
+        # here.
+        self._cuaev = ani2x_model is None and _cuaev_available(
+            self._ani2x.aev_computer
+        )
 
-        # Add a hook to the ANI2x model to capture the AEV features.
-        self._add_hook()
-
-    def _add_hook(self):
-        """
-        Add a hook to the ANI2x model to capture the AEV features.
-        """
-        # Assign a tensor attribute that can be used for assigning the AEVs.
+        # Register a forward hook on aev_computer to capture AEVs.
         self._ani2x.aev_computer._aev = _torch.empty(0, device=self._device)
-
-        # Hook the forward pass of the ANI2x model to get the AEV features.
-        # Note that this currently requires a patched versions of TorchANI and NNPOps.
-        if _has_nnpops and isinstance(self._ani2x, _NNPOps.OptimizedTorchANI):
-
-            def hook(
-                module,
-                input: Tuple[Tuple[Tensor, Tensor], Optional[Tensor], Optional[Tensor]],
-                output: Tuple[Tensor, Tensor],
-            ):
-                module._aev = output[1]
-
-        else:
-
-            def hook(
-                module,
-                input: Tuple[Tuple[Tensor, Tensor], Optional[Tensor], Optional[Tensor]],
-                output: _torchani.aev.SpeciesAEV,
-            ):
-                module._aev = output[1]
-
-        # Register the hook.
-        self._aev_hook = self._ani2x.aev_computer.register_forward_hook(hook)
+        self._aev_hook = self._ani2x.aev_computer.register_forward_hook(_aev_hook)
 
     def to(self, *args, **kwargs):
         """
@@ -324,21 +233,15 @@ class ANI2xEMLE(_torch.nn.Module):
         """
         self._emle = self._emle.float()
         # Using .float() or .to(torch.float32) is broken for ANI2x models.
-        self._ani2x = _torchani.models.ANI2x(
-            periodic_table_index=True, model_index=self._model_index
+        raw_ani2x = _torchani.models.ANI2x(
+            periodic_table_index=True,
+            model_index=self._model_index,
         ).to(self._device)
-        # Optimise the ANI2x model if atomic_numbers were specified.
-        if self._atomic_numbers is not None:
-            try:
-                from NNPOps import OptimizedTorchANI as _OptimizedTorchANI
 
-                species = self._atomic_numbers.reshape(1, *self._atomic_numbers.shape)
-                self._ani2x = _OptimizedTorchANI(self._ani2x, species).to(self._device)
-            except:
-                pass
-
-        # Re-append the hook.
-        self._add_hook()
+        self._ani2x = _patches.PatchedANI2x(raw_ani2x)
+        self._cuaev = _cuaev_available(self._ani2x.aev_computer)
+        self._ani2x.aev_computer._aev = _torch.empty(0, device=self._device)
+        self._aev_hook = self._ani2x.aev_computer.register_forward_hook(_aev_hook)
 
         return self
 
@@ -387,12 +290,10 @@ class ANI2xEMLE(_torch.nn.Module):
             xyz_qm = xyz_qm.unsqueeze(0)
             xyz_mm = xyz_mm.unsqueeze(0)
             charges_mm = charges_mm.unsqueeze(0)
-        elif self._is_nnpops:
-            raise RuntimeError(
-                "Batched inputs are not supported when using NNPOps optimised models."
-            )
 
         # Get the in vacuo energy.
+        if self._cuaev:
+            self._ani2x.aev_computer._strategy = "cuaev" if xyz_qm.is_cuda else "pyaev"
         E_vac = self._ani2x((atomic_numbers, xyz_qm)).energies
 
         # If there are no point charges, return the in vacuo energy and zeros

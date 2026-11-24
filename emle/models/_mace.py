@@ -1,24 +1,5 @@
-#######################################################################
-# EMLE-Engine: https://github.com/chemle/emle-engine
-#
-# Copyright: 2023-2025
-#
-# Authors: Lester Hedges   <lester.hedges@gmail.com>
-#          Kirill Zinovjev <kzinovjev@gmail.com>
-#
-# EMLE-Engine is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 2 of the License, or
-# (at your option) any later version.
-#
-# EMLE-Engine is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with EMLE-Engine. If not, see <http://www.gnu.org/licenses/>.
-#####################################################################
+# SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers
+# SPDX-License-Identifier: MIT
 
 """MACEEMLE model implementation."""
 
@@ -30,7 +11,6 @@ __all__ = ["MACEEMLE", "MACEEMLEJoint"]
 import io as _io
 import os as _os
 import torch as _torch
-import numpy as _np
 
 from typing import List, Dict, Optional
 
@@ -123,11 +103,10 @@ class MACEEMLE(_torch.nn.Module):
         self,
         emle_model=None,
         emle_method="electrostatic",
-        alpha_mode="species",
+        alpha_mode="fixed",
         mm_charges=None,
         qm_charge=0,
         mace_model=None,
-        atomic_numbers=None,
         device=None,
         dtype=None,
     ):
@@ -156,9 +135,9 @@ class MACEEMLE(_torch.nn.Module):
 
         alpha_mode: str
             How atomic polarizabilities are calculated.
-                "species":
+                "fixed":
                     one volume scaling factor is used for each species
-                "reference":
+                "flexible":
                     scaling factors are obtained with GPR using the values learned
                     for each reference environmentw
 
@@ -177,9 +156,6 @@ class MACEEMLE(_torch.nn.Module):
             If None, the MACE-OFF23(S) model will be used by default.
             If more than one model is provided, only the energy from the first model will be returned
             in the forward pass, but the energy and forces from all models will be stored.
-
-        atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor (N_ATOMS,)
-            List of atomic numbers to use in the MACE model.
 
         device: torch.device
             The device on which to run the model.
@@ -210,36 +186,16 @@ class MACEEMLE(_torch.nn.Module):
         else:
             self._dtype = _torch.get_default_dtype()
 
-        if atomic_numbers is not None:
-            if isinstance(atomic_numbers, _np.ndarray):
-                atomic_numbers = atomic_numbers.tolist()
-            if isinstance(atomic_numbers, (list, tuple)):
-                if not all(isinstance(i, int) for i in atomic_numbers):
-                    raise ValueError("'atomic_numbers' must be a list of integers")
-                else:
-                    atomic_numbers = _torch.tensor(
-                        atomic_numbers, dtype=_torch.int64, device=device
-                    )
-            if not isinstance(atomic_numbers, _torch.Tensor):
-                raise TypeError("'atomic_numbers' must be of type 'torch.Tensor'")
-            # Check that they are integers.
-            if atomic_numbers.dtype != _torch.int64:
-                raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
-            self.register_buffer("_atomic_numbers", atomic_numbers.to(device))
-        else:
-            self.register_buffer(
-                "_atomic_numbers",
-                _torch.tensor(
-                    [], dtype=_torch.int64, device=device, requires_grad=False
-                ),
-            )
+        self.register_buffer(
+            "_atomic_numbers",
+            _torch.tensor([], dtype=_torch.int64, device=device, requires_grad=False),
+        )
 
         # Create an instance of the EMLE model.
         self._emle = _EMLE(
             model=emle_model,
             method=emle_method,
             alpha_mode=alpha_mode,
-            atomic_numbers=(atomic_numbers if atomic_numbers is not None else None),
             mm_charges=mm_charges,
             qm_charge=qm_charge,
             device=device,
@@ -318,31 +274,14 @@ class MACEEMLE(_torch.nn.Module):
         self._z_table = [int(z.item()) for z in self._mace.atomic_numbers]
         self._r_max = self._mace.r_max.item()
 
-        if len(self._atomic_numbers) > 0:
-            # Get the node attributes.
-            node_attrs = self._get_node_attrs(self._atomic_numbers)
-            self.register_buffer("_node_attrs", node_attrs.to(self._dtype))
-            self.register_buffer(
-                "_ptr",
-                _torch.tensor(
-                    [0, node_attrs.shape[0]], dtype=_torch.long, requires_grad=False
-                ),
-            )
-            self.register_buffer(
-                "_batch",
-                _torch.zeros(
-                    node_attrs.shape[0], dtype=_torch.long, requires_grad=False
-                ),
-            )
-        else:
-            # Initialise the node attributes.
-            self.register_buffer("_node_attrs", _torch.tensor([], dtype=self._dtype))
-            self.register_buffer(
-                "_ptr", _torch.tensor([], dtype=_torch.long, requires_grad=False)
-            )
-            self.register_buffer(
-                "_batch", _torch.tensor([], dtype=_torch.long, requires_grad=False)
-            )
+        # Initialise the node attributes.
+        self.register_buffer("_node_attrs", _torch.tensor([], dtype=self._dtype))
+        self.register_buffer(
+            "_ptr", _torch.tensor([], dtype=_torch.long, requires_grad=False)
+        )
+        self.register_buffer(
+            "_batch", _torch.tensor([], dtype=_torch.long, requires_grad=False)
+        )
 
         # No PBCs for now.
         self.register_buffer(
@@ -671,25 +610,46 @@ class MACEEMLE(_torch.nn.Module):
 
             results_E_vac[i] = E_vac[0] * EV_TO_HARTREE
 
+            # Hold a handle to the upstream-graph-bearing positions before
+            # the detach below, so slot 0 of the QbC loop can reuse the
+            # primary forward via autograd.grad against this tensor.
+            primary_positions = input_dict["positions"]
+
             # Decouple the positions from the computation graph for the next models.
             input_dict["positions"] = (
                 input_dict["positions"].clone().detach().requires_grad_(True)
             )
 
-            # Do inference for the other models.
+            # Do inference for the other models. Iterate over the full
+            # ModuleList (TorchScript can't slice it) and branch on j == 0
+            # to reuse the primary forward instead of recomputing it. The
+            # autograd.grad call is hoisted out of the if/else so the
+            # grads_qbc assignment site is unconditional within the loop
+            # body — TorchScript's loop-carried type analysis requires this
+            # to keep the variable typed as Optional[Tensor] across
+            # iterations (otherwise the post-assert narrowing to Tensor
+            # leaks into the next iteration's entry type).
             if len(self._mace_models) > 1:
                 for j, mace in enumerate(self._mace_models):
-                    E_vac_qbc = mace(input_dict, compute_force=False)[
-                        "interaction_energy"
-                    ]
-
-                    assert (
-                        E_vac_qbc is not None
-                    ), "The model did not return any energy. Please check the input."
-
-                    # Calculate the gradients
+                    if j == 0:
+                        # Reuse the primary call's E_vac. retain_graph=True
+                        # keeps the xyz_qm -> results_E_vac graph alive for
+                        # upstream backward.
+                        E_vac_qbc = E_vac
+                        target_positions = primary_positions
+                        retain = True
+                    else:
+                        E_vac_qbc_opt = mace(input_dict, compute_force=False)[
+                            "interaction_energy"
+                        ]
+                        assert (
+                            E_vac_qbc_opt is not None
+                        ), "The model did not return any energy. Please check the input."
+                        E_vac_qbc = E_vac_qbc_opt
+                        target_positions = input_dict["positions"]
+                        retain = False
                     grads_qbc = _torch.autograd.grad(
-                        [E_vac_qbc], [input_dict["positions"]]
+                        [E_vac_qbc], [target_positions], retain_graph=retain
                     )[0]
                     assert grads_qbc is not None, "Gradient computation failed"
 
@@ -744,7 +704,6 @@ class MACEEMLEJoint(_torch.nn.Module):
         mm_charges=None,
         qm_charge=0,
         mace_model=None,
-        atomic_numbers=None,
         use_dipoles=False,
         device=None,
         dtype=None,
@@ -788,9 +747,6 @@ class MACEEMLEJoint(_torch.nn.Module):
             If more than one model is provided, only the energy from the first model will be returned
             in the forward pass, but the energy and forces from all models will be stored.
 
-        atomic_numbers: List[int], Tuple[int], numpy.ndarray, torch.Tensor (N_ATOMS,)
-            List of atomic numbers to use in the MACE model.
-
         use_dipoles: bool
             Whether to include the MACE-predicted atomic dipoles 'mu' in the
             static electrostatic energy. When True, 'mu' is passed to EMLE as
@@ -826,39 +782,18 @@ class MACEEMLEJoint(_torch.nn.Module):
         else:
             self._dtype = _torch.get_default_dtype()
 
-        if atomic_numbers is not None:
-            if isinstance(atomic_numbers, _np.ndarray):
-                atomic_numbers = atomic_numbers.tolist()
-            if isinstance(atomic_numbers, (list, tuple)):
-                if not all(isinstance(i, int) for i in atomic_numbers):
-                    raise ValueError("'atomic_numbers' must be a list of integers")
-                else:
-                    atomic_numbers = _torch.tensor(
-                        atomic_numbers, dtype=_torch.int64, device=device
-                    )
-            if not isinstance(atomic_numbers, _torch.Tensor):
-                raise TypeError("'atomic_numbers' must be of type 'torch.Tensor'")
-            # Check that they are integers.
-            if atomic_numbers.dtype != _torch.int64:
-                raise ValueError("'atomic_numbers' must be of dtype 'torch.int64'")
-            self.register_buffer("_atomic_numbers", atomic_numbers.to(device))
-        else:
-            self.register_buffer(
-                "_atomic_numbers",
-                _torch.tensor(
-                    [], dtype=_torch.int64, device=device, requires_grad=False
-                ),
-            )
+        self.register_buffer(
+            "_atomic_numbers",
+            _torch.tensor([], dtype=_torch.int64, device=device, requires_grad=False),
+        )
 
         # Create an instance of the EMLE model.
-        # alpha_mode is fixed to "species" here: MACEEMLEJoint currently only
-        # supports the species mode. Re-expose as a parameter once reference
-        # mode is wired through MACE.
+        # alpha_mode is hard-coded to "fixed" here: MACEEMLEJoint currently only
+        # supports the fixed mode.
         self._emle = _EMLE(
             model=emle_model,
             method=emle_method,
-            alpha_mode="species",
-            atomic_numbers=(atomic_numbers if atomic_numbers is not None else None),
+            alpha_mode="fixed",
             mm_charges=mm_charges,
             qm_charge=qm_charge,
             device=device,
@@ -959,31 +894,14 @@ class MACEEMLEJoint(_torch.nn.Module):
         self._z_table = [int(z.item()) for z in self._mace.atomic_numbers]
         self._r_max = self._mace.r_max.item()
 
-        if len(self._atomic_numbers) > 0:
-            # Get the node attributes.
-            node_attrs = self._get_node_attrs(self._atomic_numbers)
-            self.register_buffer("_node_attrs", node_attrs.to(self._dtype))
-            self.register_buffer(
-                "_ptr",
-                _torch.tensor(
-                    [0, node_attrs.shape[0]], dtype=_torch.long, requires_grad=False
-                ),
-            )
-            self.register_buffer(
-                "_batch",
-                _torch.zeros(
-                    node_attrs.shape[0], dtype=_torch.long, requires_grad=False
-                ),
-            )
-        else:
-            # Initialise the node attributes.
-            self.register_buffer("_node_attrs", _torch.tensor([], dtype=self._dtype))
-            self.register_buffer(
-                "_ptr", _torch.tensor([], dtype=_torch.long, requires_grad=False)
-            )
-            self.register_buffer(
-                "_batch", _torch.tensor([], dtype=_torch.long, requires_grad=False)
-            )
+        # Initialise the node attributes.
+        self.register_buffer("_node_attrs", _torch.tensor([], dtype=self._dtype))
+        self.register_buffer(
+            "_ptr", _torch.tensor([], dtype=_torch.long, requires_grad=False)
+        )
+        self.register_buffer(
+            "_batch", _torch.tensor([], dtype=_torch.long, requires_grad=False)
+        )
 
         # No PBCs for now.
         self.register_buffer(
@@ -1351,25 +1269,46 @@ class MACEEMLEJoint(_torch.nn.Module):
 
             results_E_vac[i] = E_vac[0] * EV_TO_HARTREE
 
+            # Hold a handle to the upstream-graph-bearing positions before
+            # the detach below, so slot 0 of the QbC loop can reuse the
+            # primary forward via autograd.grad against this tensor.
+            primary_positions = input_dict["positions"]
+
             # Decouple the positions from the computation graph for the next models.
             input_dict["positions"] = (
                 input_dict["positions"].clone().detach().requires_grad_(True)
             )
 
-            # Do inference for the other models.
+            # Do inference for the other models. Iterate over the full
+            # ModuleList (TorchScript can't slice it) and branch on j == 0
+            # to reuse the primary forward instead of recomputing it. The
+            # autograd.grad call is hoisted out of the if/else so the
+            # grads_qbc assignment site is unconditional within the loop
+            # body — TorchScript's loop-carried type analysis requires this
+            # to keep the variable typed as Optional[Tensor] across
+            # iterations (otherwise the post-assert narrowing to Tensor
+            # leaks into the next iteration's entry type).
             if len(self._mace_models) > 1:
                 for j, mace in enumerate(self._mace_models):
-                    E_vac_qbc = mace(input_dict, compute_force=False)[
-                        "interaction_energy"
-                    ]
-
-                    assert (
-                        E_vac_qbc is not None
-                    ), "The model did not return any energy. Please check the input."
-
-                    # Calculate the gradients
+                    if j == 0:
+                        # Reuse the primary call's E_vac. retain_graph=True
+                        # keeps the xyz_qm -> results_E_vac graph alive for
+                        # upstream backward.
+                        E_vac_qbc = E_vac
+                        target_positions = primary_positions
+                        retain = True
+                    else:
+                        E_vac_qbc_opt = mace(input_dict, compute_force=False)[
+                            "interaction_energy"
+                        ]
+                        assert (
+                            E_vac_qbc_opt is not None
+                        ), "The model did not return any energy. Please check the input."
+                        E_vac_qbc = E_vac_qbc_opt
+                        target_positions = input_dict["positions"]
+                        retain = False
                     grads_qbc = _torch.autograd.grad(
-                        [E_vac_qbc], [input_dict["positions"]]
+                        [E_vac_qbc], [target_positions], retain_graph=retain
                     )[0]
                     assert grads_qbc is not None, "Gradient computation failed"
 
