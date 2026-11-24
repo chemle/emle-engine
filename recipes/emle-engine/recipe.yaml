@@ -20,12 +20,12 @@ build:
 requirements:
   host:
     - pip
-    - python >=3.10
+    - python >=3.11
     - setuptools >=77.0.0
     - setuptools-scm >=8.0
   run:
     - __unix
-    - python >=3.10
+    - python >=3.11
     - ase
     - h5py
     - loguru

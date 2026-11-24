@@ -25,14 +25,15 @@ classifiers = [
     "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Scientific/Engineering :: Chemistry",
     "Topic :: Scientific/Engineering :: Physics",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "ase",
     "h5py",
@@ -88,7 +89,7 @@ platforms = ["linux-64", "osx-64", "osx-arm64"]
 emle-engine = { path = ".", editable = true }
 
 [tool.pixi.dependencies]
-python = ">=3.10"
+python = ">=3.11"
 ase = "*"
 h5py = "*"
 loguru = "*"
@@ -106,12 +107,9 @@ platforms = ["linux-64", "osx-arm64"]
 [tool.pixi.feature.deepmd.dependencies]
 deepmd-kit = "*"
 
-# aimnet requires Python >=3.11; warp-lang has no osx-64 wheels.
+# warp-lang (needed by aimnet) has no osx-64 wheels.
 [tool.pixi.feature.aimnet2]
 platforms = ["linux-64", "osx-arm64"]
-
-[tool.pixi.feature.aimnet2.dependencies]
-python = ">=3.11"
 
 [tool.pixi.feature.aimnet2.pypi-dependencies]
 aimnet = "*"
