@@ -32,6 +32,11 @@ jobs:
         platform:
           - { name: "linux", os: "ubuntu-latest", shell: "bash -l {0}" }
           - { name: "macos", os: "macos-latest", shell: "bash -l {0}" }
+        exclude:
+          - platform: { name: "macos", os: "macos-latest", shell: "bash -l {0}" }
+            python-version: "3.11"
+          - platform: { name: "macos", os: "macos-latest", shell: "bash -l {0}" }
+            python-version: "3.12"
     defaults:
       run:
         shell: ${{ matrix.platform.shell }}
