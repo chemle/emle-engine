@@ -20,9 +20,7 @@ def _cuaev_available(aev_computer):
     Whether TorchANI's fused cuAEV implementation can be used by the AEV
     computer. Models that can use it select it in forward for CUDA inputs,
     and the pure PyTorch implementation otherwise, since cuAEV doesn't
-    support CPU tensors. (Choosing per call means it is also right for a
-    model moved between devices from C++, where the Python 'to' overrides
-    are not called.)
+    support CPU tensors.
 
     Parameters
     ----------
@@ -104,9 +102,8 @@ class EMLEAEVComputer(_torch.nn.Module):
     (not a subclass to make sure it works with TorchScript)
     """
 
-    # A TorchScript constant, so that the dense AEV branch of forward is only
-    # compiled when used (it needs a TorchANI AEV computer for its parameters,
-    # which external AEV computers don't have).
+    # TorchScript constants, so that the dense, fused and cuAEV branches of
+    # forward are only compiled when used.
     __constants__ = ["_dense", "_fused", "_cuaev"]
 
     def __init__(
@@ -250,9 +247,7 @@ class EMLEAEVComputer(_torch.nn.Module):
                 angular,
                 num_species=num_species,
             ).to(device=device, dtype=dtype)
-            # On CUDA, use TorchANI's fused cuAEV implementation when it is
-            # installed: it gives the same AEVs and gradients as the pure
-            # PyTorch one, with far fewer kernel launches.
+            # Whether TorchANI's cuAEV can be used for CUDA inputs (see forward).
             self._cuaev = _cuaev_available(self._aev_computer)
 
             # Parameters for the fused AEV operator, taken from TorchANI's
@@ -496,9 +491,8 @@ class EMLEAEVComputer(_torch.nn.Module):
         aev: torch.Tensor
             The masked AEVs.
         """
-        # Select with precomputed indices: indexing with the boolean mask
-        # itself requires a nonzero (and a device synchronisation) on every
-        # call, and has a much more expensive backward.
+        # Precomputed indices avoid a nonzero, and a device synchronisation, on
+        # every call.
         return aev.index_select(2, self._mask_index) if self._mask is not None else aev
 
     def _set_mask_index(self):

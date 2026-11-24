@@ -188,10 +188,8 @@ class EMLEBase(_torch.nn.Module):
             species_map[s] = i
         species_map = _torch.tensor(species_map, dtype=_torch.int64, device=device)
 
-        # Zero any reference feature values that would be subnormal in single
-        # precision. They make no numerical difference, but arithmetic on
-        # subnormal numbers is very slow on x86 CPUs (the default model has
-        # ~1600 of them, which halves the speed of the GPR kernel matmul).
+        # Zero values that would be subnormal in float32, since arithmetic on
+        # them is very slow on x86 CPUs.
         tiny = _torch.finfo(_torch.float32).tiny
         ref_features = ref_features.masked_fill(ref_features.abs() < tiny, 0.0)
 
@@ -512,8 +510,6 @@ class EMLEBase(_torch.nn.Module):
 
         # Contract with the coefficients of every property. The reference
         # mask is applied inline so the training code can update c freely.
-        # (A multiply and sum is faster than einsum here, which would copy K
-        # to a permuted layout.)
         # result_all: (n_props, n_batch * n_atoms, n_s)
         result_all = (K.unsqueeze(0) * (c * self._ref_mask).unsqueeze(1)).sum(-1)
         result_all = result_all + ref_mean.unsqueeze(1)
@@ -636,11 +632,9 @@ class EMLEBase(_torch.nn.Module):
         # Store the dimensions of A.
         n_batch, x, y = A.shape
 
-        # Create an identity matrix with one more row and column than A, with
-        # a zero final diagonal entry. (The zero is part of the diagonal, rather
-        # than assigned afterwards, since TorchScript implements assigning a
-        # scalar as a copy from a CPU tensor, which can't be captured in a
-        # CUDA graph.)
+        # An identity matrix with one more row and column than A and a zero
+        # final diagonal entry, built in one step so it can be captured in a
+        # CUDA graph.
         B_diag = _torch.nn.functional.pad(
             _torch.ones((n_batch, x), dtype=dtype, device=device), (0, 1)
         )
@@ -722,10 +716,9 @@ class EMLEBase(_torch.nn.Module):
 
         A = cls._get_minus_T2_thole(r_data[1], r_data[2], au3)
 
-        # Replace the diagonal with the inverse polarizabilities. This must be a
-        # replacement (rather than an addition) that also blocks the gradient
-        # of the T2 diagonal: cdist doesn't return exactly zero self-distances
-        # for larger systems, so the T2 diagonal can have spurious gradients.
+        # Replace the diagonal with the inverse polarizabilities, blocking the
+        # spurious gradient of the T2 diagonal (cdist doesn't give exactly zero
+        # self-distances for larger systems).
         n_batch, n_atoms = alpha.shape
         alpha3 = alpha.unsqueeze(-1).expand(n_batch, n_atoms, 3).reshape(n_batch, -1)
         new_diag = _torch.where(alpha3 > 0, 1.0 / (alpha3 + 1e-16), 1.0)
@@ -901,10 +894,8 @@ class EMLEBase(_torch.nn.Module):
 
         r = 1.0 / mesh_data[0]
         f1 = _torch.where(mask, EMLEBase._get_f1_slater(r, s.unsqueeze(2) * 2.0), 0.0)
-        # Combine the scalar weights before multiplying the (N_BATCH,
-        # N_QM_ATOMS, N_MM_ATOMS, 3) T1 tensor, so it is only touched once.
-        # (A plain multiply and sum is faster than einsum here, which would
-        # copy T1 to a permuted layout for a batched matrix-vector product.)
+        # Combine the scalar weights first, so the (N_BATCH, N_QM_ATOMS,
+        # N_MM_ATOMS, 3) T1 tensor is only multiplied once.
         w = f1 * q.unsqueeze(1)
         fields = _torch.sum(mesh_data[2] * w.unsqueeze(-1), dim=2).reshape(len(s), -1)
 
@@ -983,8 +974,6 @@ class EMLEBase(_torch.nn.Module):
         result: torch.Tensor (N_BATCH, MAX_MM_ATOMS)
             Electrostatic potential over MM atoms.
         """
-        # A plain multiply and sum is faster than einsum, which would copy T1
-        # to a permuted layout for a batched matrix-vector product.
         return -_torch.sum(T1 * mu.unsqueeze(2), dim=(1, 3))
 
     @staticmethod

@@ -176,8 +176,8 @@ class ANI2xEMLE(_torch.nn.Module):
         # and allows forward hooks to be shared correctly.
         self._ani2x = _patches.PatchedANI2x(raw_ani2x)
 
-        # Use the fused cuAEV implementation on CUDA when it is installed (for
-        # the ANI2x models created here; a user-supplied model is unchanged).
+        # Whether to use cuAEV for CUDA inputs, only for ANI2x models created
+        # here.
         self._cuaev = ani2x_model is None and _cuaev_available(
             self._ani2x.aev_computer
         )
