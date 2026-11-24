@@ -15,12 +15,18 @@ from torch import Tensor
 from typing import Tuple
 
 
+# Whether cuAEV works, for each CUDA device capability that has been checked.
+_cuaev_works = {}
+
+
 def _cuaev_available(aev_computer):
     """
     Whether TorchANI's fused cuAEV implementation can be used by the AEV
     computer. Models that can use it select it in forward for CUDA inputs,
     and the pure PyTorch implementation otherwise, since cuAEV doesn't
-    support CPU tensors.
+    support CPU tensors. TorchANI's builds don't include kernels for every
+    GPU architecture, so cuAEV is only used if it works on the current
+    CUDA device.
 
     Parameters
     ----------
@@ -34,10 +40,56 @@ def _cuaev_available(aev_computer):
     available: bool
         Whether cuAEV can be used.
     """
-    return (
+    if not (
         isinstance(aev_computer, _torchani.AEVComputer)
         and aev_computer._cuaev_is_avail
-    )
+        and _torch.cuda.is_available()
+    ):
+        return False
+
+    capability = _torch.cuda.get_device_capability()
+    if capability not in _cuaev_works:
+        _cuaev_works[capability] = _check_cuaev(aev_computer)
+    return _cuaev_works[capability]
+
+
+def _check_cuaev(aev_computer):
+    """
+    Check that cuAEV gives the same AEVs as the pure PyTorch implementation
+    for a small molecule on the current CUDA device.
+
+    Parameters
+    ----------
+
+    aev_computer: torchani.AEVComputer
+        The AEV computer whose terms are used for the check.
+
+    Returns
+    -------
+
+    works: bool
+        Whether cuAEV works.
+    """
+    import copy as _copy
+
+    try:
+        computer = _torchani.AEVComputer(
+            _copy.deepcopy(aev_computer.radial),
+            _copy.deepcopy(aev_computer.angular),
+            num_species=aev_computer.num_species,
+        ).to(device="cuda", dtype=_torch.float32)
+        species = _torch.tensor([[0, 1, 2, 3]], device="cuda")
+        xyz = _torch.tensor(
+            [[[0.0, 0.0, 0.0], [1.1, 0.0, 0.0], [0.0, 1.2, 0.0], [0.3, 0.4, 1.1]]],
+            device="cuda",
+        )
+        expected = computer(species, xyz)
+        computer.set_strategy("cuaev")
+        aev = computer(species, xyz)
+        _torch.cuda.synchronize()
+        return bool(_torch.allclose(aev, expected, rtol=1e-4, atol=1e-6))
+    except Exception:
+        return False
 
 
 # Default hyperparameters for AEVComputer. Taken from ANI2x.
