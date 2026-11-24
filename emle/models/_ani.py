@@ -16,6 +16,7 @@ from typing import Optional, Tuple
 
 from ._emle import EMLE as _EMLE
 from . import _patches
+from ._emle_aev_computer import _cuaev_available
 
 
 # Module-level hook so TorchScript can access its source during compilation.
@@ -33,6 +34,10 @@ class ANI2xEMLE(_torch.nn.Module):
     Combined ANI2x and EMLE model. Predicts the in vacuo ANI2x energy along with
     static and induced EMLE energy components.
     """
+
+    # A TorchScript constant, so that the cuAEV strategy selection in forward
+    # is only compiled for ANI2x models that can use it.
+    __constants__ = ["_cuaev"]
 
     # Class attributes.
 
@@ -171,6 +176,12 @@ class ANI2xEMLE(_torch.nn.Module):
         # and allows forward hooks to be shared correctly.
         self._ani2x = _patches.PatchedANI2x(raw_ani2x)
 
+        # Whether to use cuAEV for CUDA inputs, only for ANI2x models created
+        # here.
+        self._cuaev = ani2x_model is None and _cuaev_available(
+            self._ani2x.aev_computer
+        )
+
         # Register a forward hook on aev_computer to capture AEVs.
         self._ani2x.aev_computer._aev = _torch.empty(0, device=self._device)
         self._aev_hook = self._ani2x.aev_computer.register_forward_hook(_aev_hook)
@@ -223,10 +234,12 @@ class ANI2xEMLE(_torch.nn.Module):
         self._emle = self._emle.float()
         # Using .float() or .to(torch.float32) is broken for ANI2x models.
         raw_ani2x = _torchani.models.ANI2x(
-            periodic_table_index=True, model_index=self._model_index
+            periodic_table_index=True,
+            model_index=self._model_index,
         ).to(self._device)
 
         self._ani2x = _patches.PatchedANI2x(raw_ani2x)
+        self._cuaev = _cuaev_available(self._ani2x.aev_computer)
         self._ani2x.aev_computer._aev = _torch.empty(0, device=self._device)
         self._aev_hook = self._ani2x.aev_computer.register_forward_hook(_aev_hook)
 
@@ -279,6 +292,8 @@ class ANI2xEMLE(_torch.nn.Module):
             charges_mm = charges_mm.unsqueeze(0)
 
         # Get the in vacuo energy.
+        if self._cuaev:
+            self._ani2x.aev_computer._strategy = "cuaev" if xyz_qm.is_cuda else "pyaev"
         E_vac = self._ani2x((atomic_numbers, xyz_qm)).energies
 
         # If there are no point charges, return the in vacuo energy and zeros

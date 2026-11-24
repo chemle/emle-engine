@@ -57,6 +57,7 @@ environments for each of the optional in-vacuo backends:
     pixi install -e aimnet2 # adds the AIMNet2 backend
     pixi install -e sire    # adds the OpenMM/Sire integration
     pixi install -e full    # deepmd + xtb + ambertools + mace + sire combined
+    pixi install -e cuda    # adds the CUDA compiler for the fused operators (Linux)
 
 Then run commands inside an environment with ``pixi run -e <name> <command>``,
 or activate one with ``pixi shell -e <name>``. (Omit ``-e <name>`` to use the
@@ -82,3 +83,38 @@ If you are developing and want an editable install, use:
 .. code-block:: bash
 
     pip install -e .
+
+Fused operators
+---------------
+
+``EMLE(use_fused_ops=True)`` uses optional fused C++/CUDA operators for the
+QM/MM electrostatics and the AEVs. By default they are compiled the first
+time they are used, which requires a C++ compiler, ``ninja`` and, for GPUs,
+a CUDA compiler with the same CUDA version as PyTorch, which is printed by
+``python -c "import torch; print(torch.version.cuda)"``. With ``conda-forge``,
+e.g. for CUDA 12.9:
+
+.. code-block:: bash
+
+    conda install -c conda-forge cxx-compiler ninja cuda-nvcc cuda-cudart-dev "cuda-version=12.9"
+    export CUDA_HOME=$CONDA_PREFIX
+
+(The ``cuda`` pixi environment sets this up.) With a pip installed PyTorch,
+install ``ninja`` with pip, and use the system C++ compiler and a CUDA
+toolkit from NVIDIA with the same CUDA version as the PyTorch wheel, setting
+``CUDA_HOME`` to its location.
+
+To compile them when installing ``emle-engine`` instead, use:
+
+.. code-block:: bash
+
+    EMLE_BUILD_EXTENSIONS=1 pip install --no-build-isolation .
+
+(Set ``EMLE_WITH_CUDA=0`` to build only the CPU operators.)
+
+.. note::
+
+    A TorchScript model that uses the fused operators can only be loaded in
+    a Python process where ``emle-engine`` has loaded them, e.g. with
+    ``emle._ops.load_ops()``. It can't be used from C++ alone, e.g. with the
+    TorchANI-Amber interface in ``sander``.

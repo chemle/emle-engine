@@ -40,6 +40,10 @@ class EMLE(_torch.nn.Module):
     # Store the list of supported species.
     _species = [1, 6, 7, 8, 16]
 
+    # TorchScript constant, so that the fused operator branch of forward is
+    # only compiled when the operators are used.
+    __constants__ = ["_use_fused_ops"]
+
     def __init__(
         self,
         model=None,
@@ -52,6 +56,8 @@ class EMLE(_torch.nn.Module):
         device=None,
         dtype=None,
         create_aev_calculator=True,
+        dense_aev=False,
+        use_fused_ops=False,
     ):
         """
         Constructor.
@@ -117,6 +123,29 @@ class EMLE(_torch.nn.Module):
             to False for derived classes that already have an AEV calculator,
             e.g. ANI2xEMLE. In that case, it's possible to hook the AEV
             calculator to avoid duplicating the computation.
+
+        dense_aev: bool
+            Whether to compute the AEVs with a dense implementation (all atom
+            pairs and triples) instead of TorchANI. This gives the same
+            results and allows the model to be captured in a CUDA graph (for
+            example with OpenMM-Torch's 'useCUDAGraphs' property), which
+            removes almost all of the per-call overhead on GPUs. Its cost and
+            memory grow with the cube of the number of QM atoms, so it is
+            intended for small QM regions (up to ~60 atoms). For batched
+            inputs, PyTorch may solve some batched linear systems with MAGMA,
+            which cannot be captured; calling
+            torch.backends.cuda.preferred_linalg_library("cusolver") before
+            capturing avoids this.
+
+        use_fused_ops: bool
+            Whether to use the fused C++/CUDA operators (see emle._ops) for the
+            QM/MM electrostatics and, on CUDA devices, the AEVs. They give the
+            same results (and finite gradients for zero-padded batches), are
+            several times faster, use much less memory and can be captured in
+            a CUDA graph. They are compiled on first use, which requires a C++
+            compiler and, for CUDA, a CUDA toolkit (CUDA_HOME). Only first
+            derivatives are supported. A scripted model that uses them can
+            only be loaded in a Python process that has loaded them.
         """
 
         # Call the base class constructor.
@@ -196,6 +225,20 @@ class EMLE(_torch.nn.Module):
         else:
             device = _torch.get_default_device()
 
+        if not isinstance(use_fused_ops, bool):
+            raise TypeError("'use_fused_ops' must be of type 'bool'")
+        if use_fused_ops:
+            from .._ops import load_ops
+
+            with_cuda = load_ops()
+            if device.type == "cuda" and not with_cuda:
+                raise RuntimeError(
+                    "The fused EMLE operators were built without CUDA support. "
+                    "Set CUDA_HOME to a CUDA toolkit matching PyTorch's to use "
+                    "them on CUDA devices."
+                )
+        self._use_fused_ops = use_fused_ops
+
         if dtype is not None:
             if not isinstance(dtype, _torch.dtype):
                 raise TypeError("'dtype' must be of type 'torch.dtype'")
@@ -247,8 +290,15 @@ class EMLE(_torch.nn.Module):
 
         if create_aev_calculator:
             num_species = params.get("computer_n_species", len(n_ref))
+            if not isinstance(dense_aev, bool):
+                raise TypeError("'dense_aev' must be of type 'bool'")
             emle_aev_computer = EMLEAEVComputer(
-                mask=aev_mask, num_species=num_species, device=device, dtype=dtype
+                mask=aev_mask,
+                num_species=num_species,
+                device=device,
+                dtype=dtype,
+                dense=dense_aev,
+                fused=use_fused_ops,
             )
         else:
             emle_aev_computer = EMLEAEVComputer(
@@ -529,13 +579,39 @@ class EMLE(_torch.nn.Module):
             )
 
         mask = (self._atomic_numbers > 0).unsqueeze(-1)
-        mesh_data = self._emle_base._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s, mask)
 
         if self._method == "mechanical":
             q_core = q_core + q_val
             q_val = _torch.zeros_like(
                 q_core, dtype=self._charges_mm.dtype, device=self._device
             )
+
+        if self._use_fused_ops:
+            if mu is None:
+                # Static energy, induced fields and the field of the MM charges
+                # from one fused pass over the QM/MM pairs; the induced energy
+                # is -0.5 mu . F0, with mu = A_thole^-1 fields.
+                E_static, fields, F0 = _torch.ops.emle.electrostatics(
+                    xyz_qm_bohr,
+                    xyz_mm_bohr,
+                    self._charges_mm,
+                    s,
+                    q_core,
+                    q_val,
+                    self._atomic_numbers > 0,
+                )
+                if self._method == "electrostatic":
+                    mu_ind = self._emle_base._solve(
+                        A_thole, fields.reshape(batch_size, -1)
+                    )
+                    E_ind = -0.5 * _torch.sum(
+                        mu_ind * F0.reshape(batch_size, -1), dim=1
+                    )
+                else:
+                    E_ind = _torch.zeros_like(E_static)
+                return _torch.stack((E_static, E_ind), dim=0)
+
+        mesh_data = self._emle_base._get_mesh_data(xyz_qm_bohr, xyz_mm_bohr, s, mask)
         E_static = self._emle_base.get_static_energy(
             q_core, q_val, self._charges_mm, mesh_data, mu
         )

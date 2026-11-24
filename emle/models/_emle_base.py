@@ -188,6 +188,11 @@ class EMLEBase(_torch.nn.Module):
             species_map[s] = i
         species_map = _torch.tensor(species_map, dtype=_torch.int64, device=device)
 
+        # Zero values that would be subnormal in float32, since arithmetic on
+        # them is very slow on x86 CPUs.
+        tiny = _torch.finfo(_torch.float32).tiny
+        ref_features = ref_features.masked_fill(ref_features.abs() < tiny, 0.0)
+
         # Compute the inverse of the K matrix.
         Kinv = self._get_Kinv(ref_features, 1e-3)
 
@@ -377,11 +382,20 @@ class EMLEBase(_torch.nn.Module):
         # Compute the AEVs.
         aev = self._emle_aev_computer(species_id, xyz_qm)
 
-        # Compute the MBIS valence shell widths.
-        s = self._gpr(aev, self._ref_mean_s, self._c_s, species_id)
-
-        # Compute the electronegativities.
-        chi = self._gpr(aev, self._ref_mean_chi, self._c_chi, species_id)
+        # Predict the MBIS valence shell widths, the electronegativities and,
+        # for flexible alpha mode, the polarizability scaling factors with a
+        # single GPR kernel evaluation.
+        if self._alpha_mode == "flexible":
+            ref_mean = _torch.stack(
+                [self._ref_mean_s, self._ref_mean_chi, self._ref_mean_sqrtk]
+            )
+            c = _torch.stack([self._c_s, self._c_chi, self._c_sqrtk])
+        else:
+            ref_mean = _torch.stack([self._ref_mean_s, self._ref_mean_chi])
+            c = _torch.stack([self._c_s, self._c_chi])
+        gpr = self._gpr(aev, ref_mean, c, species_id)
+        s = gpr[0]
+        chi = gpr[1]
 
         # Convert coordinates to Bohr.
         ANGSTROM_TO_BOHR = 1.8897261258369282
@@ -396,9 +410,7 @@ class EMLEBase(_torch.nn.Module):
         k = self.k_Z[species_id]
 
         if self._alpha_mode == "flexible":
-            k_scale = (
-                self._gpr(aev, self._ref_mean_sqrtk, self._c_sqrtk, species_id) ** 2
-            )
+            k_scale = gpr[2] ** 2
             k = k_scale * k
 
         A_thole = self._get_A_thole(r_data, s, q_val, k, self.a_Thole)
@@ -458,13 +470,16 @@ class EMLEBase(_torch.nn.Module):
         mol_features: torch.Tensor (N_BATCH, N_ATOMS, N_FEAT)
             The feature vectors for each atom.
 
-        ref_mean: torch.Tensor (N_Z,)
+        ref_mean: torch.Tensor (N_Z,) or (N_PROPS, N_Z)
             The mean of the reference values for each species.
 
-        c: torch.Tensor (N_Z, MAX_N_REF)
+        c: torch.Tensor (N_Z, MAX_N_REF) or (N_PROPS, N_Z, MAX_N_REF)
             GPR coefficients. Entries beyond n_ref[i] are zeroed by
             _ref_mask at call time, so c can be updated freely by the
             training code without creating stale derived buffers.
+            Several properties can be predicted at once by stacking their
+            coefficients (and reference means), so that the GPR kernel is
+            only evaluated once.
 
         zid: torch.Tensor (N_BATCH, N_ATOMS,)
             The species identity value of each atom.
@@ -472,7 +487,7 @@ class EMLEBase(_torch.nn.Module):
         Returns
         -------
 
-        result: torch.Tensor (N_BATCH, N_ATOMS)
+        result: torch.Tensor (N_BATCH, N_ATOMS) or (N_PROPS, N_BATCH, N_ATOMS)
             The values of the predicted property for each atom.
         """
         n_s = self._ref_features.shape[0]
@@ -481,22 +496,31 @@ class EMLEBase(_torch.nn.Module):
         n_batch = mol_features.shape[0]
         n_atoms = mol_features.shape[1]
 
+        is_single = c.ndim == 2
+        if is_single:
+            c = c.unsqueeze(0)
+            ref_mean = ref_mean.unsqueeze(0)
+
         # Flatten atom and batch dims, compute the kernel against all species
-        # and references in a single batched matmul, then reshape.
-        # K: (n_batch * n_atoms, n_s * n_r) -> (n_batch, n_atoms, n_s, n_r)
+        # and references in a single matmul, then reshape.
+        # K: (n_batch * n_atoms, n_s * n_r) -> (n_batch * n_atoms, n_s, n_r)
         mol_flat = mol_features.reshape(n_batch * n_atoms, n_feat)
         ref_flat = self._ref_features.reshape(n_s * n_r, n_feat)
-        K = (mol_flat @ ref_flat.T).reshape(n_batch, n_atoms, n_s, n_r) ** 2
+        K = (mol_flat @ ref_flat.T).reshape(n_batch * n_atoms, n_s, n_r) ** 2
 
-        # Apply the reference mask inline so the training code can update c
-        # freely.  The multiply is cheap relative to the matmul above.
-        # result_all: (n_batch, n_atoms, n_s)
-        result_all = (K * (c * self._ref_mask)).sum(-1) + ref_mean
+        # Contract with the coefficients of every property. The reference
+        # mask is applied inline so the training code can update c freely.
+        # result_all: (n_props, n_batch * n_atoms, n_s)
+        result_all = (K.unsqueeze(0) * (c * self._ref_mask).unsqueeze(1)).sum(-1)
+        result_all = result_all + ref_mean.unsqueeze(1)
 
         # Gather each atom's own-species result; clamp handles padding (zid == -1).
-        zid_safe = zid.clamp(min=0)
-        result = result_all.gather(2, zid_safe.unsqueeze(-1)).squeeze(-1)
-        return result * (zid >= 0)
+        n_props = c.shape[0]
+        zid_safe = zid.clamp(min=0).reshape(1, n_batch * n_atoms, 1)
+        result = result_all.gather(2, zid_safe.expand(n_props, -1, -1))
+        result = result.reshape(n_props, n_batch, n_atoms) * (zid >= 0)
+
+        return result[0] if is_single else result
 
     @classmethod
     def _get_r_data(cls, xyz, mask):
@@ -516,38 +540,22 @@ class EMLEBase(_torch.nn.Module):
         -------
 
         result: r_data object
+            Tuple of the distance matrix (N_BATCH, N_ATOMS, N_ATOMS), its
+            (masked) inverse (N_BATCH, N_ATOMS, N_ATOMS) and the displacement
+            vectors r_i - r_j (N_BATCH, N_ATOMS, N_ATOMS, 3).
         """
-        n_batch, n_atoms_max = xyz.shape[:2]
-        mask_mat = mask[:, :, None] * mask[:, None, :]
+        mask_mat = mask.unsqueeze(2) * mask.unsqueeze(1)
 
-        rr_mat = xyz[:, :, None, :] - xyz[:, None, :, :]
+        rr_mat = xyz.unsqueeze(2) - xyz.unsqueeze(1)
         # cdist handles the zero-distance (self-interaction) gradient correctly.
         r_mat = _torch.where(mask_mat, _torch.cdist(xyz, xyz), 0.0)
         # Gradient-safe inverse: +1e-10 prevents 1/0 in the autograd graph while
         # the where ensures the actual output is zero for masked/diagonal entries.
         r_inv = _torch.where(r_mat > 0.0, 1.0 / (r_mat + 1e-10), 0.0)
 
-        r_inv2 = r_inv.repeat_interleave(3, dim=1).repeat_interleave(3, dim=2)
+        return r_mat, r_inv, rr_mat
 
-        # Get a stacked matrix of outer products over the rr_mat tensors.
-        outer = _torch.einsum("bnik,bnij->bnjik", rr_mat, rr_mat).reshape(
-            (n_batch, n_atoms_max * 3, n_atoms_max * 3)
-        )
-
-        id2 = _torch.tile(
-            _torch.eye(3, dtype=xyz.dtype, device=xyz.device).T,
-            (1, n_atoms_max, n_atoms_max),
-        )
-
-        t01 = r_inv
-        t21 = -id2 * r_inv2**3
-        t22 = 3 * outer * r_inv2**5
-
-        return r_mat, t01, t21, t22
-
-    def _get_q(
-        self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, chi, q_total, mask
-    ):
+    def _get_q(self, r_data: Tuple[Tensor, Tensor, Tensor], s, chi, q_total, mask):
         """
         Internal method that predicts MBIS charges
         (Eq. 16 in 10.1021/acs.jctc.2c00914)
@@ -576,10 +584,10 @@ class EMLEBase(_torch.nn.Module):
             Predicted MBIS charges.
         """
         A = self._get_A_QEq(r_data, s, mask)
-        b = _torch.hstack([-chi, q_total[:, None]])
-        return _torch.linalg.solve(A, b)[:, :-1]
+        b = _torch.hstack([-chi, q_total.unsqueeze(1)])
+        return EMLEBase._solve(A, b)[:, :-1]
 
-    def _get_A_QEq(self, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, mask):
+    def _get_A_QEq(self, r_data: Tuple[Tensor, Tensor, Tensor], s, mask):
         """
         Internal method, generates A matrix for charge prediction
         (Eq. 16 in 10.1021/acs.jctc.2c00914)
@@ -602,12 +610,14 @@ class EMLEBase(_torch.nn.Module):
         """
         s_gauss = s * self.a_QEq
         s2 = s_gauss**2
-        s2_mat = s2[:, :, None] + s2[:, None, :]
-        s_mat = _torch.where(s2_mat > 0, _torch.sqrt(s2_mat + 1e-16), 0)
+        s2_mat = s2.unsqueeze(2) + s2.unsqueeze(1)
+        s_mat = _torch.sqrt(s2_mat + 1e-16)
 
         device = r_data[0].device
         dtype = r_data[0].dtype
 
+        # Entries for pairs involving padded atoms (s = 0) are finite here,
+        # since r and r_inv are zero for them, and are removed below.
         A = self._get_T0_gaussian(r_data[1], r_data[0], s_mat)
 
         diag_ones = _torch.ones_like(
@@ -622,20 +632,21 @@ class EMLEBase(_torch.nn.Module):
         # Store the dimensions of A.
         n_batch, x, y = A.shape
 
-        # Create an tensor of ones with one more row and column than A.
-        B_diag = _torch.ones((n_batch, x + 1), dtype=dtype, device=device)
+        # An identity matrix with one more row and column than A and a zero
+        # final diagonal entry, built in one step so it can be captured in a
+        # CUDA graph.
+        B_diag = _torch.nn.functional.pad(
+            _torch.ones((n_batch, x), dtype=dtype, device=device), (0, 1)
+        )
         B = _torch.diag_embed(B_diag)
 
         # Copy A into B.
-        mask_mat = mask[:, :, None] * mask[:, None, :]
+        mask_mat = mask.unsqueeze(2) * mask.unsqueeze(1)
         B[:, :x, :y] = _torch.where(mask_mat, A, B[:, :x, :y])
 
         # Set last row and column to 1 (masked)
         B[:, -1, :-1] = mask.float()
         B[:, :-1, -1] = mask.float()
-
-        # Set the final entry on the diagonal to zero.
-        B[:, -1, -1] = 0.0
 
         return B
 
@@ -662,14 +673,10 @@ class EMLEBase(_torch.nn.Module):
         results: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS)
         """
         sqrt2: float = 1.4142135623730951
-        return t01 * _torch.where(
-            s_mat > 0, _torch.erf(r / ((s_mat + 1e-16) * sqrt2)), 0.0
-        )
+        return t01 * _torch.erf(r / ((s_mat + 1e-16) * sqrt2))
 
     @classmethod
-    def _get_A_thole(
-        cls, r_data: Tuple[Tensor, Tensor, Tensor, Tensor], s, q_val, k, a_Thole
-    ):
+    def _get_A_thole(cls, r_data: Tuple[Tensor, Tensor, Tensor], s, q_val, k, a_Thole):
         """
         Internal method, generates A matrix for induced dipoles prediction
         (Eq. 20 in 10.1021/acs.jctc.2c00914)
@@ -701,91 +708,67 @@ class EMLEBase(_torch.nn.Module):
         alpha = v * k
 
         alphap = alpha * a_Thole
-        alphap_mat = alphap[:, :, None] * alphap[:, None, :]
+        alphap_mat = alphap.unsqueeze(2) * alphap.unsqueeze(1)
 
         au3 = _torch.where(
             alphap_mat > 0, r_data[0] ** 3 / _torch.sqrt(alphap_mat + 1e-16), 0.0
         )
 
-        # Compute the damping factors on the compact (n, n) au3 tensor before
-        # expanding to (3n, 3n), so the expensive exp runs on 9x fewer elements.
-        A = -cls._get_T2_thole(r_data[2], r_data[3], au3)
+        A = cls._get_minus_T2_thole(r_data[1], r_data[2], au3)
 
-        alpha3 = alpha.repeat_interleave(3, dim=1)
+        # Replace the diagonal with the inverse polarizabilities, blocking the
+        # spurious gradient of the T2 diagonal (cdist doesn't give exactly zero
+        # self-distances for larger systems).
+        n_batch, n_atoms = alpha.shape
+        alpha3 = alpha.unsqueeze(-1).expand(n_batch, n_atoms, 3).reshape(n_batch, -1)
         new_diag = _torch.where(alpha3 > 0, 1.0 / (alpha3 + 1e-16), 1.0)
-        diag_ones = _torch.ones_like(new_diag, dtype=A.dtype, device=A.device)
-        mask = _torch.diag_embed(diag_ones)
-        A = mask * _torch.diag_embed(new_diag) + (1.0 - mask) * A
+        is_diag = _torch.eye(A.shape[-1], dtype=_torch.bool, device=A.device)
 
-        return A
+        return _torch.where(is_diag, _torch.diag_embed(new_diag), A)
 
-    @classmethod
-    def _get_T2_thole(cls, tr21: Tensor, tr22: Tensor, au3: Tensor) -> Tensor:
+    @staticmethod
+    def _get_minus_T2_thole(r_inv: Tensor, rr: Tensor, au3: Tensor) -> Tensor:
         """
-        Internal method, calculates T2 tensor with Thole damping.
+        Internal method, calculates minus the T2 tensor with Thole damping
+        (the off-diagonal part of the A matrix for induced dipoles).
 
         Parameters
         ----------
 
-        tr21: torch.Tensor (N_BATCH, N_ATOMS * 3, N_ATOMS * 3)
-            r_data[2]
+        r_inv: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS)
+            Inverse distance matrix (r_data[1]).
 
-        tr22: torch.Tensor (N_BATCH, N_ATOMS * 3, N_ATOMS * 3)
-            r_data[3]
+        rr: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS, 3)
+            Displacement vectors r_i - r_j (r_data[2]).
 
         au3: torch.Tensor (N_BATCH, N_ATOMS, N_ATOMS)
-            Compact scaled distance matrix (unexpanded). Each element will be
-            broadcast over the 3x3 Cartesian block for that atom pair.
+            Scaled distance matrix (see _get_A_thole).
 
         Returns
         -------
 
         result: torch.Tensor (N_BATCH, N_ATOMS * 3, N_ATOMS * 3)
         """
-        # Compute damping on the compact (n, n) tensor, then expand to (3n, 3n).
-        # This means the exp is evaluated on 9x fewer elements than if au3 were
-        # already expanded.
-        lam3 = cls._lambda3(au3).repeat_interleave(3, dim=1).repeat_interleave(3, dim=2)
-        lam5 = cls._lambda5(au3).repeat_interleave(3, dim=1).repeat_interleave(3, dim=2)
-        return lam3 * tr21 + lam5 * tr22
+        n_batch, n_atoms = r_inv.shape[:2]
 
-    @staticmethod
-    def _lambda3(au3):
-        """
-        Internal method, calculates r^3 component of T2 tensor with Thole
-        damping.
+        # Thole damping factors for the r^-3 and r^-5 components.
+        exp_au3 = _torch.exp(-au3)
+        lam3 = 1 - exp_au3
+        lam5 = 1 - (1 + au3) * exp_au3
 
-        Parameters
-        ----------
+        # The 3x3 block of T2 for atoms (i, j) is
+        #     -lam3 / r^3 * I + 3 * lam5 / r^5 * outer(r_ij, r_ij).
+        # Build minus T2 as a (N_BATCH, N_ATOMS, 3, N_ATOMS, 3) tensor from
+        # the compact (N_BATCH, N_ATOMS, N_ATOMS) coefficients.
+        r_inv3 = r_inv**3
+        c3 = lam3 * r_inv3
+        c5 = 3 * lam5 * r_inv3 * r_inv**2
+        eye = _torch.eye(3, dtype=r_inv.dtype, device=r_inv.device)
+        minus_T2 = c3.unsqueeze(2).unsqueeze(4) * eye.unsqueeze(1) - (
+            c5.unsqueeze(-1) * rr
+        ).transpose(2, 3).unsqueeze(-1) * rr.unsqueeze(2)
 
-        au3: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
-            Scaled distance matrix (see _get_A_thole).
-
-        Returns
-        -------
-
-        result: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
-        """
-        return 1 - _torch.exp(-au3)
-
-    @staticmethod
-    def _lambda5(au3):
-        """
-        Internal method, calculates r^5 component of T2 tensor with Thole
-        damping.
-
-        Parameters
-        ----------
-
-        au3: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
-            Scaled distance matrix (see _get_A_thole).
-
-        Returns
-        -------
-
-        result: torch.Tensor (N_ATOMS * 3, N_ATOMS * 3)
-        """
-        return 1 - (1 + au3) * _torch.exp(-au3)
+        return minus_T2.reshape(n_batch, n_atoms * 3, n_atoms * 3)
 
     @staticmethod
     def get_static_energy(
@@ -910,13 +893,43 @@ class EMLEBase(_torch.nn.Module):
         """
 
         r = 1.0 / mesh_data[0]
-        f1 = _torch.where(mask, EMLEBase._get_f1_slater(r, s[:, :, None] * 2.0), 0.0)
-        fields = _torch.sum(
-            mesh_data[2] * f1[..., None] * q[:, None, :, None], dim=2
-        ).reshape(len(s), -1)
+        f1 = _torch.where(mask, EMLEBase._get_f1_slater(r, s.unsqueeze(2) * 2.0), 0.0)
+        # Combine the scalar weights first, so the (N_BATCH, N_QM_ATOMS,
+        # N_MM_ATOMS, 3) T1 tensor is only multiplied once.
+        w = f1 * q.unsqueeze(1)
+        fields = _torch.sum(mesh_data[2] * w.unsqueeze(-1), dim=2).reshape(len(s), -1)
 
-        mu_ind = _torch.linalg.solve(A, fields)
+        mu_ind = EMLEBase._solve(A, fields)
         return mu_ind.reshape((mu_ind.shape[0], -1, 3))
+
+    @staticmethod
+    def _solve(A: Tensor, b: Tensor) -> Tensor:
+        """
+        Internal method to solve the linear systems A x = b.
+
+        On CUDA, the check for singular matrices is skipped: it copies an error
+        flag to the host on every call, which synchronises the device and
+        prevents capturing the model in a CUDA graph. A singular matrix then
+        gives non-finite results rather than an exception.
+
+        Parameters
+        ----------
+
+        A: torch.Tensor (N_BATCH, N, N)
+            The matrices.
+
+        b: torch.Tensor (N_BATCH, N)
+            The right-hand sides.
+
+        Returns
+        -------
+
+        result: torch.Tensor (N_BATCH, N)
+            The solutions.
+        """
+        if A.is_cuda:
+            return _torch.linalg.solve_ex(A, b)[0]
+        return _torch.linalg.solve(A, b)
 
     @staticmethod
     def _get_vpot_q(q, T0):
@@ -938,7 +951,7 @@ class EMLEBase(_torch.nn.Module):
         result: torch.Tensor (N_BATCH, MAX_MM_ATOMS)
             Electrostatic potential over MM atoms.
         """
-        return _torch.sum(T0 * q[:, :, None], dim=1)
+        return _torch.sum(T0 * q.unsqueeze(2), dim=1)
 
     @staticmethod
     def _get_vpot_mu(mu: Tensor, T1: Tensor) -> Tensor:
@@ -961,7 +974,7 @@ class EMLEBase(_torch.nn.Module):
         result: torch.Tensor (N_BATCH, MAX_MM_ATOMS)
             Electrostatic potential over MM atoms.
         """
-        return -_torch.einsum("ijkl,ijl->ik", T1, mu)
+        return -_torch.sum(T1 * mu.unsqueeze(2), dim=(1, 3))
 
     @staticmethod
     def _get_mesh_data(
@@ -991,18 +1004,18 @@ class EMLEBase(_torch.nn.Module):
         result: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
             Tuple of mesh data objects.
         """
-        rr = xyz_mesh[:, None, :, :] - xyz[:, :, None, :]
+        rr = xyz_mesh.unsqueeze(1) - xyz.unsqueeze(2)
         r = (rr * rr).sum(-1).sqrt()
 
         # Mask for padded coordinates; +1e-10 keeps the autograd graph free of
         # inf/nan even where mask is False.
         r_inv = _torch.where(mask, 1.0 / (r + 1e-10), 0.0)
-        T0_slater = _torch.where(mask, EMLEBase._get_T0_slater(r, s[:, :, None]), 0.0)
+        T0_slater = _torch.where(mask, EMLEBase._get_T0_slater(r, s.unsqueeze(2)), 0.0)
 
         return (
             r_inv,
             T0_slater,
-            -rr * r_inv[..., None] ** 3,
+            rr * (-(r_inv**3)).unsqueeze(-1),
         )
 
     @staticmethod
@@ -1024,10 +1037,9 @@ class EMLEBase(_torch.nn.Module):
 
         result: torch.Tensor (N_BATCH, MAX_QM_ATOMS, MAX_MM_ATOMS)
         """
-        return (
-            EMLEBase._get_T0_slater(r, s) * r
-            - _torch.exp(-r / s) / s * (0.5 + r / (s * 2)) * r
-        )
+        # Closed form of T0_slater(r, s) * r - exp(-r / s) / s * (0.5 + r / (2 * s)) * r
+        x = r / s
+        return 1 - (1 + x * (1 + 0.5 * x)) * _torch.exp(-x)
 
     @staticmethod
     def _get_T0_slater(r: Tensor, s: Tensor) -> Tensor:

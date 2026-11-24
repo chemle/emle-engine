@@ -255,6 +255,79 @@ def test_emle(alpha_mode, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     )
 
 
+@pytest.mark.parametrize("alpha_mode", ["fixed", "flexible"])
+def test_emle_gradients_finite_difference(alpha_mode):
+    """
+    Check the EMLE energy gradients against central finite differences for a
+    QM region with more than 25 atoms, where torch.cdist switches to its
+    matrix-multiplication algorithm and no longer returns exactly zero
+    self-distances.
+    """
+    z = numpy.load("tests/input/atomic_numbers.npy")
+    xyz = numpy.load("tests/input/xyz_qm.npy")
+
+    # Two copies of the molecule, 6 Angstrom apart.
+    atomic_numbers = torch.tensor(numpy.concatenate([z, z]), dtype=torch.int64)
+    xyz_qm = torch.tensor(
+        numpy.concatenate([xyz, xyz + [6.0, 0.0, 0.0]]), dtype=torch.float64
+    )
+    xyz_mm = torch.tensor(numpy.load("tests/input/xyz_mm.npy"), dtype=torch.float64)
+    charges_mm = torch.tensor(
+        numpy.load("tests/input/charges_mm.npy"), dtype=torch.float64
+    )
+
+    model = EMLE(alpha_mode=alpha_mode, device=torch.device("cpu"), dtype=torch.float64)
+
+    def energy(xyz_qm, xyz_mm):
+        return model(atomic_numbers, charges_mm, xyz_qm, xyz_mm).sum()
+
+    xyz_qm.requires_grad_(True)
+    xyz_mm.requires_grad_(True)
+    grad_qm, grad_mm = torch.autograd.grad(energy(xyz_qm, xyz_mm), (xyz_qm, xyz_mm))
+    xyz_qm = xyz_qm.detach()
+    xyz_mm = xyz_mm.detach()
+
+    h = 1e-5
+    # Check every QM atom: only a few atoms get non-zero cdist self-distances.
+    for i in range(len(atomic_numbers)):
+        for k in range(3):
+            d = torch.zeros_like(xyz_qm)
+            d[i, k] = h
+            fd = (energy(xyz_qm + d, xyz_mm) - energy(xyz_qm - d, xyz_mm)) / (2 * h)
+            assert torch.isclose(grad_qm[i, k], fd, rtol=1e-5, atol=1e-8)
+    for i in (0, 100, 418):
+        for k in range(3):
+            d = torch.zeros_like(xyz_mm)
+            d[i, k] = h
+            fd = (energy(xyz_qm, xyz_mm + d) - energy(xyz_qm, xyz_mm - d)) / (2 * h)
+            assert torch.isclose(grad_mm[i, k], fd, rtol=1e-5, atol=1e-8)
+
+    # Also check the gradients of the valence charges and the Thole matrix
+    # (contracted with fixed random weights), which are more sensitive to
+    # spurious gradients on the matrix diagonals than the energy.
+    q_total = torch.zeros(1, dtype=torch.int64)
+    n = len(atomic_numbers)
+    gen = torch.Generator().manual_seed(42)
+    w_q = torch.randn(1, n, dtype=torch.float64, generator=gen)
+    w_A = torch.randn(1, 3 * n, 3 * n, dtype=torch.float64, generator=gen)
+
+    def base(xyz_qm):
+        _, _, q_val, A_thole = model._emle_base(
+            atomic_numbers[None], xyz_qm[None], q_total
+        )
+        return (q_val * w_q).sum() + (A_thole * w_A).sum()
+
+    xyz_qm.requires_grad_(True)
+    (grad,) = torch.autograd.grad(base(xyz_qm), xyz_qm)
+    xyz_qm = xyz_qm.detach()
+    for i in range(n):
+        for k in range(3):
+            d = torch.zeros_like(xyz_qm)
+            d[i, k] = h
+            fd = (base(xyz_qm + d) - base(xyz_qm - d)) / (2 * h)
+            assert torch.isclose(grad[i, k], fd, rtol=1e-5, atol=1e-6)
+
+
 def test_emle_pickle(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     """
     Check that an EMLE model can be pickled and still gives the same energy.
@@ -734,3 +807,235 @@ def test_preprocess_vs_sire(tmp_path, monkeypatch, use_switching_function):
     forces_test = -torch.cat([grad_qm, grad_mm])
 
     assert torch.allclose(forces_ref, forces_test, atol=1e-6)
+
+
+def test_emle_dense_aev():
+    """
+    Check that the dense AEV implementation (used for CUDA graph capture)
+    reproduces TorchANI's AEVs and their gradients, including for a
+    zero-padded batch.
+    """
+    z = numpy.load("tests/input/atomic_numbers.npy")
+    xyz = numpy.load("tests/input/xyz_qm.npy")
+
+    model = EMLE(device=torch.device("cpu"), dtype=torch.float64)
+    computer = model._emle_base._emle_aev_computer
+    torchani_computer = computer._aev_computer
+
+    # A batch of the molecule and a padded copy of a fragment of it.
+    atomic_numbers = torch.tensor(numpy.stack([z, z]), dtype=torch.int64)
+    atomic_numbers[1, 15:] = 0
+    positions = torch.tensor(numpy.stack([xyz, xyz]), dtype=torch.float64)
+    positions[1, 15:] = 0.0
+    species = computer._zid_map[model._emle_base._species_map[atomic_numbers]]
+
+    x1 = positions.clone().requires_grad_(True)
+    x2 = positions.clone().requires_grad_(True)
+    aev_ref = torchani_computer(species, x1)
+    radial = torchani_computer.radial
+    angular = torchani_computer.angular
+    aev = computer._dense_aev(
+        species,
+        x2,
+        torchani_computer.num_species,
+        radial.eta,
+        radial.shifts,
+        radial.cutoff,
+        angular.eta,
+        angular.zeta,
+        angular.shifts,
+        angular.sections,
+        angular.cutoff,
+    )
+    assert torch.allclose(aev, aev_ref, rtol=1e-12, atol=1e-14)
+
+    gen = torch.Generator().manual_seed(0)
+    w = torch.randn(aev.shape, dtype=torch.float64, generator=gen)
+    (g_ref,) = torch.autograd.grad((aev_ref * w).sum(), x1)
+    (g,) = torch.autograd.grad((aev * w).sum(), x2)
+    assert torch.allclose(g, g_ref, rtol=1e-10, atol=1e-12)
+
+
+def _require_fused_ops(device):
+    """
+    Build the fused operators, failing if they can't be built, and skip if
+    the CUDA kernels are needed but there is no CUDA toolkit.
+    """
+    from emle._ops import load_ops
+
+    if not load_ops() and device == "cuda":
+        pytest.skip("fused CUDA operators need a CUDA toolkit")
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@pytest.mark.parametrize("use_fused_ops", [False, True])
+def test_emle_cuda_graph(use_fused_ops, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    """
+    Check that a TorchScript EMLE model with dense AEVs, or with the fused
+    operators, can be captured in a CUDA graph, and that replaying the graph
+    for new coordinates gives the same energy and forces as the standard model.
+    """
+    if use_fused_ops:
+        _require_fused_ops("cuda")
+    device = torch.device("cuda")
+    z = atomic_numbers.to(device)
+    q = charges_mm.to(device)
+    reference = EMLE(device=device)
+    model = torch.jit.script(
+        EMLE(
+            device=device,
+            dense_aev=not use_fused_ops,
+            use_fused_ops=use_fused_ops,
+        )
+    )
+
+    x = xyz_qm.detach().clone().to(device).requires_grad_(True)
+    y = xyz_mm.detach().clone().to(device).requires_grad_(True)
+
+    def step():
+        energy = model(z, q, x, y).sum()
+        return (energy,) + torch.autograd.grad(energy, (x, y))
+
+    # Warm up on a side stream, as required before capture.
+    stream = torch.cuda.Stream()
+    stream.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(stream):
+        for _ in range(3):
+            step()
+    torch.cuda.current_stream().wait_stream(stream)
+
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
+        outputs = step()
+
+    # Replay with displaced coordinates.
+    with torch.no_grad():
+        x.add_(0.01)
+        y.sub_(0.01)
+    graph.replay()
+
+    x_ref = x.detach().clone().requires_grad_(True)
+    y_ref = y.detach().clone().requires_grad_(True)
+    energy = reference(z, q, x_ref, y_ref).sum()
+    expected = (energy,) + torch.autograd.grad(energy, (x_ref, y_ref))
+    for a, b in zip(outputs, expected):
+        assert torch.allclose(a, b, rtol=1e-3, atol=1e-5)
+
+
+@pytest.mark.parametrize("method", ["electrostatic", "mechanical", "nonpol"])
+@pytest.mark.parametrize("alpha_mode", ["fixed", "flexible"])
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA not available"
+            ),
+        ),
+    ],
+)
+def test_emle_fused_ops(device, alpha_mode, method):
+    """
+    Check that a TorchScript EMLE model using the fused operators gives the
+    same energies and gradients as the standard model (float64), and finite
+    gradients for a zero-padded batch.
+    """
+    _require_fused_ops(device)
+    device = torch.device(device)
+    z = numpy.load("tests/input/atomic_numbers.npy")
+    xyz = numpy.load("tests/input/xyz_qm.npy")
+    xyz_mm = numpy.load("tests/input/xyz_mm.npy")
+    q_mm = numpy.load("tests/input/charges_mm.npy")
+
+    # A batch of the molecule and a zero-padded fragment of it.
+    atomic_numbers = torch.tensor(numpy.stack([z, z]), dtype=torch.int64)
+    atomic_numbers[1, 15:] = 0
+    xyz_qm = torch.tensor(numpy.stack([xyz, xyz]), dtype=torch.float64)
+    xyz_qm[1, 15:] = 0.0
+    xyz_mm = torch.tensor(numpy.stack([xyz_mm, xyz_mm]), dtype=torch.float64)
+    charges_mm = torch.tensor(numpy.stack([q_mm, q_mm]), dtype=torch.float64)
+    atomic_numbers, xyz_qm, xyz_mm, charges_mm = (
+        t.to(device) for t in (atomic_numbers, xyz_qm, xyz_mm, charges_mm)
+    )
+
+    kwargs = dict(
+        alpha_mode=alpha_mode,
+        method=method,
+        device=device,
+        dtype=torch.float64,
+    )
+    reference = EMLE(**kwargs)
+    model = torch.jit.script(EMLE(use_fused_ops=True, **kwargs))
+
+    def run(m):
+        x = xyz_qm.clone().requires_grad_(True)
+        y = xyz_mm.clone().requires_grad_(True)
+        q = charges_mm.clone().requires_grad_(True)
+        energy = m(atomic_numbers, q, x, y)
+        weights = torch.tensor([[1.3], [0.7]], dtype=torch.float64, device=device)
+        grads = torch.autograd.grad((energy * weights).sum(), (x, y, q))
+        return (energy,) + grads
+
+    expected = run(reference)
+    result = run(model)
+    for a, b in zip(result, expected):
+        # The standard model gives NaN gradients for the padded configuration.
+        finite = torch.isfinite(b)
+        assert torch.allclose(a[finite], b[finite], rtol=1e-10, atol=1e-12)
+        assert torch.isfinite(a).all()
+
+    # Padding the MM region with zero charges at the origin, as Sire does,
+    # changes nothing.
+    n_mm = xyz_mm.shape[1]
+    pad = torch.zeros(2, 10, 3, dtype=torch.float64, device=device)
+    xyz_mm = torch.cat((xyz_mm, pad), dim=1)
+    charges_mm = torch.cat((charges_mm, pad[..., 0]), dim=1)
+    padded = run(model)
+    assert torch.allclose(padded[0], result[0], rtol=1e-10, atol=1e-12)
+    assert torch.allclose(padded[1], result[1], rtol=1e-10, atol=1e-12)
+    for a, b in zip(padded[2:], result[2:]):
+        assert torch.allclose(a[:, :n_mm], b, rtol=1e-10, atol=1e-12)
+        assert torch.isfinite(a).all()
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@pytest.mark.parametrize("method", ["electrostatic", "mechanical", "nonpol"])
+@pytest.mark.parametrize("alpha_mode", ["fixed", "flexible"])
+def test_emle_fused_ops_float32(alpha_mode, method):
+    """
+    Check that a TorchScript EMLE model using the fused CUDA operators in
+    single precision gives the same energies and gradients as the standard
+    model.
+    """
+    _require_fused_ops("cuda")
+    device = torch.device("cuda")
+    atomic_numbers, xyz_qm, xyz_mm, charges_mm = (
+        torch.tensor(numpy.load(f"tests/input/{name}.npy"), device=device)
+        for name in ("atomic_numbers", "xyz_qm", "xyz_mm", "charges_mm")
+    )
+    atomic_numbers = atomic_numbers.to(torch.int64)
+    xyz_qm, xyz_mm, charges_mm = (
+        t.to(torch.float32) for t in (xyz_qm, xyz_mm, charges_mm)
+    )
+
+    kwargs = dict(
+        alpha_mode=alpha_mode,
+        method=method,
+        device=device,
+        dtype=torch.float32,
+    )
+    reference = EMLE(**kwargs)
+    model = torch.jit.script(EMLE(use_fused_ops=True, **kwargs))
+
+    def run(m):
+        x = xyz_qm.clone().requires_grad_(True)
+        y = xyz_mm.clone().requires_grad_(True)
+        q = charges_mm.clone().requires_grad_(True)
+        energy = m(atomic_numbers, q, x, y)
+        grads = torch.autograd.grad(energy.sum(), (x, y, q))
+        return (energy,) + grads
+
+    for a, b in zip(run(model), run(reference)):
+        assert torch.allclose(a, b, rtol=1e-3, atol=1e-5)

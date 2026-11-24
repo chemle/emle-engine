@@ -28,9 +28,10 @@ jobs:
       max-parallel: 9
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
         platform:
           - { name: "linux", os: "ubuntu-latest", shell: "bash -l {0}" }
+          - { name: "macos", os: "macos-latest", shell: "bash -l {0}" }
     defaults:
       run:
         shell: ${{ matrix.platform.shell }}
@@ -61,7 +62,7 @@ jobs:
           key: mace-models-v1
 #
       - name: Install additional test dependencies
-        run: conda install pytest
+        run: conda install cxx-compiler ninja pytest
 #
       - name: Install the package
         run: pip install .
