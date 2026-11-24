@@ -985,3 +985,16 @@ def test_emle_fused_ops(device, alpha_mode, method):
         finite = torch.isfinite(b)
         assert torch.allclose(a[finite], b[finite], rtol=1e-10, atol=1e-12)
         assert torch.isfinite(a).all()
+
+    # Padding the MM region with zero charges at the origin, as Sire does,
+    # changes nothing.
+    n_mm = xyz_mm.shape[1]
+    pad = torch.zeros(2, 10, 3, dtype=torch.float64, device=device)
+    xyz_mm = torch.cat((xyz_mm, pad), dim=1)
+    charges_mm = torch.cat((charges_mm, pad[..., 0]), dim=1)
+    padded = run(model)
+    assert torch.allclose(padded[0], result[0], rtol=1e-10, atol=1e-12)
+    assert torch.allclose(padded[1], result[1], rtol=1e-10, atol=1e-12)
+    for a, b in zip(padded[2:], result[2:]):
+        assert torch.allclose(a[:, :n_mm], b, rtol=1e-10, atol=1e-12)
+        assert torch.isfinite(a).all()
