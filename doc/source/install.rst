@@ -57,6 +57,7 @@ environments for each of the optional in-vacuo backends:
     pixi install -e aimnet2 # adds the AIMNet2 backend
     pixi install -e sire    # adds the OpenMM/Sire integration
     pixi install -e full    # deepmd + xtb + ambertools + mace + sire combined
+    pixi install -e cuda    # adds the CUDA compiler for the fused operators (Linux)
 
 Then run commands inside an environment with ``pixi run -e <name> <command>``,
 or activate one with ``pixi shell -e <name>``. (Omit ``-e <name>`` to use the
