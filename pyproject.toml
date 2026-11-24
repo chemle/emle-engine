@@ -141,6 +141,8 @@ openmm = ">=8.1"
 ambertools = "*"
 
 [tool.pixi.feature.dev.dependencies]
+cxx-compiler = "*"
+ninja = "*"
 pytest = "*"
 ruff = "*"
 
