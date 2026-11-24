@@ -41,12 +41,12 @@ if os.environ.get("EMLE_BUILD_EXTENSIONS", "0") == "1":
     else:
         cflags, ldflags = ["-O3"], []
 
-    sources = [os.path.join("emle", "csrc", "ops.cpp")]
+    sources = [os.path.join("emle", "_csrc", "ops.cpp")]
     with_cuda = os.environ.get("EMLE_WITH_CUDA", "1" if CUDA_HOME else "0") == "1"
     if with_cuda:
         ext = CUDAExtension(
             "emle._C",
-            sources + [os.path.join("emle", "csrc", "ops_cuda.cu")],
+            sources + [os.path.join("emle", "_csrc", "ops_cuda.cu")],
             define_macros=[("EMLE_WITH_CUDA", None)],
             extra_compile_args={"cxx": cflags, "nvcc": ["-O3"]},
             extra_link_args=ldflags,

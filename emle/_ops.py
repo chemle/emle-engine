@@ -7,7 +7,7 @@ Optional fused C++/CUDA operators.
 The operators (torch.ops.emle.electrostatics and torch.ops.emle.aev) are
 loaded from the emle._C extension when emle-engine was installed with them
 (EMLE_BUILD_EXTENSIONS=1 pip install --no-build-isolation ., see setup.py).
-Otherwise they are compiled from emle/csrc the first time they are requested
+Otherwise they are compiled from emle/_csrc the first time they are requested
 and cached by PyTorch (in ~/.cache/torch_extensions, or TORCH_EXTENSIONS_DIR),
 which needs a C++ compiler and, for the CUDA kernels, a CUDA toolkit matching
 PyTorch's CUDA version (CUDA_HOME). Set EMLE_JIT_EXTENSIONS=0 to disable
@@ -116,7 +116,7 @@ def load_ops(verbose=False):
 
     from torch.utils import cpp_extension as _cpp_extension
 
-    here = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "csrc")
+    here = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "_csrc")
     sources = [_os.path.join(here, "ops.cpp")]
     cuda_home = _cpp_extension.CUDA_HOME
     with_cuda = (

@@ -66,7 +66,7 @@ script-files = [
 ]
 
 [tool.setuptools.package-data]
-emle = ["csrc/*.cpp", "csrc/*.cu"]
+emle = ["_csrc/*.cpp", "_csrc/*.cu"]
 
 [tool.setuptools.packages.find]
 include = ["emle", "emle.*"]
