@@ -4,6 +4,11 @@
 Changelog
 =========
 
+`v2.0.1 <https://github.com/chemle/emle-engine/compare/v2.0.0...v2.0.1>`__ - Nov 2026
+-------------------------------------------------------------------------------------
+
+* Update the package metadata `#108 <https://github.com/chemle/emle-engine/pull/108>`__.
+
 `v2.0.0 <https://github.com/chemle/emle-engine/compare/v1.0.0...v2.0.0>`__ - Nov 2026
 -------------------------------------------------------------------------------------
 
