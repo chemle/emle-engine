@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers
+# SPDX-License-Identifier: MIT
+
 """
 Optional build of the fused C++/CUDA operators (emle._C).
 
