@@ -856,34 +856,27 @@ def test_emle_dense_aev():
     assert torch.allclose(g, g_ref, rtol=1e-10, atol=1e-12)
 
 
-try:
-    from emle._ops import load_ops as _load_ops
+def _require_fused_ops(device):
+    """
+    Build the fused operators, failing if they can't be built, and skip if
+    the CUDA kernels are needed but there is no CUDA toolkit.
+    """
+    from emle._ops import load_ops
 
-    has_fused_cuda_ops = _load_ops() and torch.cuda.is_available()
-    has_fused_ops = True
-except Exception:
-    has_fused_ops = has_fused_cuda_ops = False
+    if not load_ops() and device == "cuda":
+        pytest.skip("fused CUDA operators need a CUDA toolkit")
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-@pytest.mark.parametrize(
-    "use_fused_ops",
-    [
-        False,
-        pytest.param(
-            True,
-            marks=pytest.mark.skipif(
-                not has_fused_cuda_ops, reason="fused CUDA operators not available"
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("use_fused_ops", [False, True])
 def test_emle_cuda_graph(use_fused_ops, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     """
     Check that a TorchScript EMLE model with dense AEVs, or with the fused
     operators, can be captured in a CUDA graph, and that replaying the graph
     for new coordinates gives the same energy and forces as the standard model.
     """
+    if use_fused_ops:
+        _require_fused_ops("cuda")
     device = torch.device("cuda")
     z = atomic_numbers.to(device)
     q = charges_mm.to(device)
@@ -929,7 +922,6 @@ def test_emle_cuda_graph(use_fused_ops, atomic_numbers, charges_mm, xyz_qm, xyz_
         assert torch.allclose(a, b, rtol=1e-3, atol=1e-5)
 
 
-@pytest.mark.skipif(not has_fused_ops, reason="fused EMLE operators could not be built")
 @pytest.mark.parametrize("method", ["electrostatic", "mechanical", "nonpol"])
 @pytest.mark.parametrize("alpha_mode", ["fixed", "flexible"])
 @pytest.mark.parametrize(
@@ -939,7 +931,7 @@ def test_emle_cuda_graph(use_fused_ops, atomic_numbers, charges_mm, xyz_qm, xyz_
         pytest.param(
             "cuda",
             marks=pytest.mark.skipif(
-                not has_fused_cuda_ops, reason="fused CUDA operators not available"
+                not torch.cuda.is_available(), reason="CUDA not available"
             ),
         ),
     ],
@@ -950,6 +942,7 @@ def test_emle_fused_ops(device, alpha_mode, method):
     same energies and gradients as the standard model (float64), and finite
     gradients for a zero-padded batch.
     """
+    _require_fused_ops(device)
     device = torch.device(device)
     z = numpy.load("tests/input/atomic_numbers.npy")
     xyz = numpy.load("tests/input/xyz_qm.npy")
