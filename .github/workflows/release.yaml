@@ -77,6 +77,15 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
 
+  publish-docs:
+    name: Publish the documentation
+    needs: publish-pypi
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/docs.yaml
+
   build-conda:
     name: Build conda package (noarch)
     needs: build-pypi
