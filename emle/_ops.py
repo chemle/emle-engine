@@ -69,11 +69,12 @@ def _check_cuda_toolkit(cuda_home):
     toolkit = ".".join(version)
     if version[0] != _torch.version.cuda.split(".")[0]:
         _error = RuntimeError(
-            f"The CUDA toolkit in '{cuda_home}' is version {toolkit}, but "
-            f"PyTorch uses CUDA {_torch.version.cuda}. Set CUDA_HOME to a CUDA "
+            f"Unable to build the fused EMLE operators: The CUDA toolkit in "
+            f"'{cuda_home}' is version {toolkit}, but PyTorch uses CUDA "
+            f"{_torch.version.cuda}. Set CUDA_HOME to a CUDA "
             f"{_torch.version.cuda} toolkit."
         )
-        raise RuntimeError(f"Unable to build the fused EMLE operators: {_error}")
+        raise _error
 
 
 def load_ops(verbose=False):
@@ -91,6 +92,10 @@ def load_ops(verbose=False):
     if _loaded is not None:
         return _loaded
 
+    # Raise the error from an earlier failed attempt, rather than retrying.
+    if _error is not None:
+        raise RuntimeError(str(_error))
+
     import torch as _torch
 
     # Prefer an ahead-of-time build.
@@ -103,8 +108,11 @@ def load_ops(verbose=False):
         pass
 
     if _os.environ.get("EMLE_JIT_EXTENSIONS", "1") == "0":
-        _error = ImportError("emle._C is not installed and EMLE_JIT_EXTENSIONS=0")
-        raise RuntimeError(f"Unable to load the fused EMLE operators: {_error}")
+        _error = RuntimeError(
+            "Unable to load the fused EMLE operators: emle._C is not installed "
+            "and EMLE_JIT_EXTENSIONS=0"
+        )
+        raise _error
 
     from torch.utils import cpp_extension as _cpp_extension
 
@@ -158,8 +166,8 @@ def load_ops(verbose=False):
             verbose=verbose,
         )
     except Exception as e:
-        _error = e
-        raise RuntimeError(f"Unable to build the fused EMLE operators: {e}") from e
+        _error = RuntimeError(f"Unable to build the fused EMLE operators: {e}")
+        raise _error from e
 
     _loaded = with_cuda
     return _loaded
