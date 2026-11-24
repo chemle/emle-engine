@@ -4,7 +4,7 @@
 // Fused operators for EMLE: CUDA kernels (see ops.cpp for the definitions).
 #include <torch/extension.h>
 #include <torch/library.h>
-#include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAStream.h>
 #include <c10/cuda/CUDAException.h>
 #include <c10/cuda/CUDAGuard.h>
 #include <tuple>
@@ -173,13 +173,13 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> electrostatics_fwd_cuda(
   torch::Tensor qc = qc_in;
   torch::Tensor qv = qv_in;
   torch::Tensor mask = mask_in;
-  const at::cuda::CUDAGuard guard(xq.device());
+  const c10::cuda::CUDAGuard guard(xq.device());
   xq = xq.contiguous(); xm = xm.contiguous(); q = q.contiguous(); s = s.contiguous();
   qc = qc.contiguous(); qv = qv.contiguous(); mask = mask.contiguous();
   const int B = xq.size(0), N = xq.size(1), M = xm.size(1);
   auto e_rows = torch::empty({B, N}, xq.options());
   auto fields = torch::empty_like(xq), F0 = torch::empty_like(xq);
-  auto stream = at::cuda::getCurrentCUDAStream();
+  auto stream = c10::cuda::getCurrentCUDAStream();
   AT_DISPATCH_FLOATING_TYPES(xq.scalar_type(), "fused_forward_cuda", [&] {
     fwd_kernel<scalar_t><<<B * N, THREADS, THREADS * 7 * sizeof(scalar_t), stream>>>(
         xq.data_ptr<scalar_t>(), xm.data_ptr<scalar_t>(), q.data_ptr<scalar_t>(), s.data_ptr<scalar_t>(),
@@ -203,14 +203,14 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
   torch::Tensor gE = gE_in;
   torch::Tensor gF = gF_in;
   torch::Tensor gF0 = gF0_in;
-  const at::cuda::CUDAGuard guard(xq.device());
+  const c10::cuda::CUDAGuard guard(xq.device());
   xq = xq.contiguous(); xm = xm.contiguous(); q = q.contiguous(); s = s.contiguous();
   qc = qc.contiguous(); qv = qv.contiguous(); mask = mask.contiguous();
   gE = gE.contiguous(); gF = gF.contiguous(); gF0 = gF0.contiguous();
   const int B = xq.size(0), N = xq.size(1), M = xm.size(1);
   auto g_xq = torch::empty_like(xq), g_xm = torch::empty_like(xm), g_q = torch::empty_like(q);
   auto g_s = torch::empty_like(s), g_qc = torch::empty_like(qc), g_qv = torch::empty_like(qv);
-  auto stream = at::cuda::getCurrentCUDAStream();
+  auto stream = c10::cuda::getCurrentCUDAStream();
   AT_DISPATCH_FLOATING_TYPES(xq.scalar_type(), "fused_backward_cuda", [&] {
     bwd_qm_kernel<scalar_t><<<B * N, THREADS, THREADS * 6 * sizeof(scalar_t), stream>>>(
         xq.data_ptr<scalar_t>(), xm.data_ptr<scalar_t>(), q.data_ptr<scalar_t>(), s.data_ptr<scalar_t>(),
@@ -411,13 +411,13 @@ torch::Tensor aev_fwd_cuda(const torch::Tensor& species_in, const torch::Tensor&
                           c10::ArrayRef<double> shf_z, double eta_r, double rc_r, double eta_a, double zeta, double rc_a) {
   torch::Tensor species = species_in;
   torch::Tensor xyz = xyz_in;
-  const at::cuda::CUDAGuard guard(xyz.device());
+  const c10::cuda::CUDAGuard guard(xyz.device());
   species = species.to(torch::kInt).contiguous(); xyz = xyz.contiguous();
   const int B = xyz.size(0), N = xyz.size(1);
   auto out = torch::empty({B, N, AEV_LEN}, xyz.options());
   Params p = make_params(shf_r, shf_a, shf_z, eta_r, rc_r, eta_a, zeta, rc_a);
   AT_DISPATCH_FLOATING_TYPES(xyz.scalar_type(), "aev_forward", [&] {
-    aev_fwd<scalar_t><<<B * N, 128, AEV_LEN * sizeof(scalar_t), at::cuda::getCurrentCUDAStream()>>>(
+    aev_fwd<scalar_t><<<B * N, 128, AEV_LEN * sizeof(scalar_t), c10::cuda::getCurrentCUDAStream()>>>(
         species.data_ptr<int>(), xyz.data_ptr<scalar_t>(), N, p, out.data_ptr<scalar_t>());
     C10_CUDA_KERNEL_LAUNCH_CHECK();
   });
@@ -430,13 +430,13 @@ torch::Tensor aev_bwd_cuda(const torch::Tensor& species_in, const torch::Tensor&
   torch::Tensor species = species_in;
   torch::Tensor xyz = xyz_in;
   torch::Tensor grad = grad_in;
-  const at::cuda::CUDAGuard guard(xyz.device());
+  const c10::cuda::CUDAGuard guard(xyz.device());
   species = species.to(torch::kInt).contiguous(); xyz = xyz.contiguous(); grad = grad.contiguous();
   const int B = xyz.size(0), N = xyz.size(1);
   auto gx = torch::zeros_like(xyz);
   Params p = make_params(shf_r, shf_a, shf_z, eta_r, rc_r, eta_a, zeta, rc_a);
   AT_DISPATCH_FLOATING_TYPES(xyz.scalar_type(), "aev_backward", [&] {
-    aev_bwd<scalar_t><<<B * N, 128, AEV_LEN * sizeof(scalar_t), at::cuda::getCurrentCUDAStream()>>>(
+    aev_bwd<scalar_t><<<B * N, 128, AEV_LEN * sizeof(scalar_t), c10::cuda::getCurrentCUDAStream()>>>(
         species.data_ptr<int>(), xyz.data_ptr<scalar_t>(), grad.data_ptr<scalar_t>(), N, p, gx.data_ptr<scalar_t>());
     C10_CUDA_KERNEL_LAUNCH_CHECK();
   });
