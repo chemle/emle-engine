@@ -120,3 +120,24 @@ jobs:
           shopt -s globstar
           anaconda --token "$ANACONDA_API_TOKEN" upload --user chemle \
             --label "$LABEL" --skip-existing conda-dist/**/*.conda
+      - name: Remove all but the newest three dev builds
+        if: needs.build-pypi.outputs.label == 'dev'
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
+        run: |
+          curl -fsS -H "Authorization: token $ANACONDA_API_TOKEN" \
+            https://api.anaconda.org/package/chemle/emle-engine/files > files.json
+          python - <<'EOF' > stale.txt
+          import json
+          files = [f for f in json.load(open("files.json")) if f["labels"] == ["dev"]]
+          newest = {}
+          for f in files:
+              newest[f["version"]] = max(newest.get(f["version"], ""), f["upload_time"])
+          keep = sorted(newest, key=newest.get, reverse=True)[:3]
+          for f in files:
+              if f["version"] not in keep:
+                  print(f"chemle/emle-engine/{f['version']}/{f['basename']}")
+          EOF
+          while read -r spec; do
+            anaconda --token "$ANACONDA_API_TOKEN" remove --force "$spec"
+          done < stale.txt
