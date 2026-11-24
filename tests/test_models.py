@@ -998,3 +998,44 @@ def test_emle_fused_ops(device, alpha_mode, method):
     for a, b in zip(padded[2:], result[2:]):
         assert torch.allclose(a[:, :n_mm], b, rtol=1e-10, atol=1e-12)
         assert torch.isfinite(a).all()
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@pytest.mark.parametrize("method", ["electrostatic", "mechanical", "nonpol"])
+@pytest.mark.parametrize("alpha_mode", ["fixed", "flexible"])
+def test_emle_fused_ops_float32(alpha_mode, method):
+    """
+    Check that a TorchScript EMLE model using the fused CUDA operators in
+    single precision gives the same energies and gradients as the standard
+    model.
+    """
+    _require_fused_ops("cuda")
+    device = torch.device("cuda")
+    atomic_numbers, xyz_qm, xyz_mm, charges_mm = (
+        torch.tensor(numpy.load(f"tests/input/{name}.npy"), device=device)
+        for name in ("atomic_numbers", "xyz_qm", "xyz_mm", "charges_mm")
+    )
+    atomic_numbers = atomic_numbers.to(torch.int64)
+    xyz_qm, xyz_mm, charges_mm = (
+        t.to(torch.float32) for t in (xyz_qm, xyz_mm, charges_mm)
+    )
+
+    kwargs = dict(
+        alpha_mode=alpha_mode,
+        method=method,
+        device=device,
+        dtype=torch.float32,
+    )
+    reference = EMLE(**kwargs)
+    model = torch.jit.script(EMLE(use_fused_ops=True, **kwargs))
+
+    def run(m):
+        x = xyz_qm.clone().requires_grad_(True)
+        y = xyz_mm.clone().requires_grad_(True)
+        q = charges_mm.clone().requires_grad_(True)
+        energy = m(atomic_numbers, q, x, y)
+        grads = torch.autograd.grad(energy.sum(), (x, y, q))
+        return (energy,) + grads
+
+    for a, b in zip(run(model), run(reference)):
+        assert torch.allclose(a, b, rtol=1e-3, atol=1e-5)
