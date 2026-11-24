@@ -41,6 +41,41 @@ def compiler_flags():
     return ["-O3"], []
 
 
+def _check_cuda_toolkit(cuda_home):
+    """
+    Raise an error if the major version of the CUDA toolkit differs from that
+    of PyTorch's CUDA, since PyTorch can't load kernels built with it.
+
+    Parameters
+    ----------
+
+    cuda_home: str
+        The location of the CUDA toolkit.
+    """
+    import re as _re
+    import subprocess as _subprocess
+
+    import torch as _torch
+
+    global _error
+
+    nvcc = _os.path.join(cuda_home, "bin", "nvcc")
+    try:
+        output = _subprocess.check_output([nvcc, "--version"], text=True)
+        version = _re.search(r"release (\d+)\.(\d+)", output).group(1, 2)
+    except Exception:
+        return
+
+    toolkit = ".".join(version)
+    if version[0] != _torch.version.cuda.split(".")[0]:
+        _error = RuntimeError(
+            f"The CUDA toolkit in '{cuda_home}' is version {toolkit}, but "
+            f"PyTorch uses CUDA {_torch.version.cuda}. Set CUDA_HOME to a CUDA "
+            f"{_torch.version.cuda} toolkit."
+        )
+        raise RuntimeError(f"Unable to build the fused EMLE operators: {_error}")
+
+
 def load_ops(verbose=False):
     """
     Compile (if needed) and load the fused EMLE operators.
@@ -87,6 +122,7 @@ def load_ops(verbose=False):
         )
     )
     if with_cuda:
+        _check_cuda_toolkit(cuda_home)
         sources.append(_os.path.join(here, "ops_cuda.cu"))
 
     # PyTorch does not rebuild a cached extension when the GPU architecture
