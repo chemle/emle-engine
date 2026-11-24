@@ -15,24 +15,31 @@ from torch import Tensor
 from typing import Tuple
 
 
-def _set_aev_strategy(aev_computer):
+def _cuaev_available(aev_computer):
     """
-    Use TorchANI's fused cuAEV implementation for CUDA tensors when it is
-    installed, and the pure PyTorch implementation otherwise. (Depending on
-    the TorchANI version, cuAEV either rejects CPU tensors or is not faster
-    on them.) Call this again after moving the AEV computer to a device.
+    Whether TorchANI's fused cuAEV implementation can be used by the AEV
+    computer. Models that can use it select it in forward for CUDA inputs,
+    and the pure PyTorch implementation otherwise, since cuAEV doesn't
+    support CPU tensors. (Choosing per call means it is also right for a
+    model moved between devices from C++, where the Python 'to' overrides
+    are not called.)
 
     Parameters
     ----------
 
     aev_computer: torchani.AEVComputer
-        The AEV computer to configure.
+        The AEV computer.
+
+    Returns
+    -------
+
+    available: bool
+        Whether cuAEV can be used.
     """
-    if not isinstance(aev_computer, _torchani.AEVComputer):
-        return
-    device = next(aev_computer.buffers()).device
-    use_cuaev = device.type == "cuda" and aev_computer._cuaev_is_avail
-    aev_computer.set_strategy("cuaev" if use_cuaev else "pyaev")
+    return (
+        isinstance(aev_computer, _torchani.AEVComputer)
+        and aev_computer._cuaev_is_avail
+    )
 
 
 # Default hyperparameters for AEVComputer. Taken from ANI2x.
@@ -100,7 +107,7 @@ class EMLEAEVComputer(_torch.nn.Module):
     # A TorchScript constant, so that the dense AEV branch of forward is only
     # compiled when used (it needs a TorchANI AEV computer for its parameters,
     # which external AEV computers don't have).
-    __constants__ = ["_dense", "_fused"]
+    __constants__ = ["_dense", "_fused", "_cuaev"]
 
     def __init__(
         self,
@@ -186,6 +193,7 @@ class EMLEAEVComputer(_torch.nn.Module):
         if not isinstance(is_external, bool):
             raise TypeError("'is_external' must be of type 'bool'")
         self._is_external = is_external
+        self._cuaev = False
 
         if not isinstance(dense, bool):
             raise TypeError("'dense' must be of type 'bool'")
@@ -245,7 +253,7 @@ class EMLEAEVComputer(_torch.nn.Module):
             # On CUDA, use TorchANI's fused cuAEV implementation when it is
             # installed: it gives the same AEVs and gradients as the pure
             # PyTorch one, with far fewer kernel launches.
-            _set_aev_strategy(self._aev_computer)
+            self._cuaev = _cuaev_available(self._aev_computer)
 
             # Parameters for the fused AEV operator, taken from TorchANI's
             # terms so that the AEVs are identical. The operator is compiled
@@ -306,6 +314,8 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if not self._is_external:
             zid_aev = self._zid_map[zid]
+            if self._cuaev:
+                self._aev_computer._strategy = "cuaev" if xyz.is_cuda else "pyaev"
             if self._fused:
                 if xyz.is_cuda:
                     p = self._fused_params
@@ -506,7 +516,6 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if not self._is_external:
             self._aev_computer = self._aev_computer.to(*args, **kwargs)
-            _set_aev_strategy(self._aev_computer)
         if self._mask is not None:
             self._mask = self._mask.to(*args, **kwargs)
         self._set_mask_index()
@@ -526,7 +535,6 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if not self._is_external:
             self._aev_computer = self._aev_computer.cuda(**kwargs)
-            _set_aev_strategy(self._aev_computer)
         if self._mask is not None:
             self._mask = self._mask.cuda(**kwargs)
         self._set_mask_index()
@@ -539,7 +547,6 @@ class EMLEAEVComputer(_torch.nn.Module):
         """
         if not self._is_external:
             self._aev_computer = self._aev_computer.cpu(**kwargs)
-            _set_aev_strategy(self._aev_computer)
         if self._mask is not None:
             self._mask = self._mask.cpu(**kwargs)
         self._set_mask_index()
