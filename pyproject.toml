@@ -7,7 +7,7 @@ name = "emle-engine"
 description = "An engine for electrostatic machine learned embedding potentials"
 readme = "README.md"
 authors = [
-    { name = "Lester Hedges", email = "lester.hedges@gmail.com" },
+    { name = "The EMLE-Engine developers" },
 ]
 license = "MIT"
 license-files = ["LICENSE"]
