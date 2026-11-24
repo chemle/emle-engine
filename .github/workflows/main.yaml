@@ -61,7 +61,7 @@ jobs:
           key: mace-models-v1
 #
       - name: Install additional test dependencies
-        run: conda install pytest
+        run: conda install cxx-compiler ninja pytest
 #
       - name: Install the package
         run: pip install .
