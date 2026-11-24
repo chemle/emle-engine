@@ -51,6 +51,7 @@ Changelog
 * Add conda and PyPI packages [#102](https://github.com/chemle/emle-engine/pull/102).
 * Use the versioned `emle-1.0` default model, downloaded on first use and cached in the torch hub directory, rather than cloning the `emle-models` repository with `pygit2` [#103](https://github.com/chemle/emle-engine/pull/103).
 * Relicense under MIT, with SPDX headers in the source files [#104](https://github.com/chemle/emle-engine/pull/104).
+* Speed up the EMLE models on CPU and GPU, using TorchANI's cuAEV implementation on GPUs that support it. Add optional dense AEVs (`dense_aev`), so that models can be captured in a CUDA graph, and optional fused C++/CUDA operators (`use_fused_ops`), which are compiled on first use. On CUDA, a singular matrix in the linear solves now gives non-finite results rather than an error [#106](https://github.com/chemle/emle-engine/pull/106).
 
 [1.0.0](https://github.com/chemle/emle-engine/releases/tag/v1.0.0) - Oct 2024
 -----------------------------------------------------------------------------
