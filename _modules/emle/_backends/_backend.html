@@ -1,14 +1,15 @@
 <!doctype html>
 <html class="no-js" lang="en" data-content_root="../../../">
-  <head><meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" />
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
+        <link rel="prefetch" href="../../../_static/logo.jpg" as="image">
 
-    <link rel="shortcut icon" href="../../../_static/favicon.png"/><!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
+    <link rel="shortcut icon" href="../../../_static/favicon.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>emle._backends._backend - emle-engine</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d8a2add5" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=302659d7" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css?v=3ab3c30c" />
     
     
@@ -144,14 +145,10 @@
   </symbol>
 </svg>
 
-<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
-<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
-<label class="overlay sidebar-overlay" for="__navigation">
-  <div class="visually-hidden">Hide navigation sidebar</div>
-</label>
-<label class="overlay toc-overlay" for="__toc">
-  <div class="visually-hidden">Hide table of contents sidebar</div>
-</label>
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
 
 <a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
 
@@ -161,8 +158,7 @@
   <header class="mobile-header">
     <div class="header-left">
       <label class="nav-overlay-icon" for="__navigation">
-        <div class="visually-hidden">Toggle site navigation sidebar</div>
-        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
       </label>
     </div>
     <div class="header-center">
@@ -170,8 +166,7 @@
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
-        <button class="theme-toggle">
-          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
           <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
           <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
           <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
@@ -179,8 +174,7 @@
         </button>
       </div>
       <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
-        <div class="visually-hidden">Toggle table of contents sidebar</div>
-        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
       </label>
     </div>
   </header>
@@ -188,7 +182,6 @@
     <div class="sidebar-container">
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
-  
   <div class="sidebar-logo-container">
     <img class="sidebar-logo" src="../../../_static/logo.jpg" alt="Logo"/>
   </div>
@@ -213,7 +206,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../training.html">Training</a></li>
 </ul>
 <ul>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../../api/index.html">API Documentation</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of API Documentation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../api/index.html">API Documentation</a><input aria-label="Toggle navigation of API Documentation" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../../api/index_models.html">emle.models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../api/index_calculator.html">emle.calculator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../api/index_train.html">emle.train</a></li>
@@ -251,8 +244,7 @@
         </a>
         <div class="content-icon-container">
           <div class="theme-toggle-container theme-toggle-content">
-            <button class="theme-toggle">
-              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
               <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
               <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
               <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
@@ -260,62 +252,93 @@
             </button>
           </div>
           <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
-            <div class="visually-hidden">Toggle table of contents sidebar</div>
-            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
           </label>
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for emle._backends._backend</h1><div class="highlight"><pre>
-<span></span><span class="c1">#######################################################################</span>
-<span class="c1"># EMLE-Engine: https://github.com/chemle/emle-engine</span>
-<span class="c1">#</span>
-<span class="c1"># Copyright: 2023-2025</span>
-<span class="c1">#</span>
-<span class="c1"># Authors: Lester Hedges   &lt;lester.hedges@gmail.com&gt;</span>
-<span class="c1">#          Kirill Zinovjev &lt;kzinovjev@gmail.com&gt;</span>
-<span class="c1">#</span>
-<span class="c1"># EMLE-Engine is free software: you can redistribute it and/or modify</span>
-<span class="c1"># it under the terms of the GNU General Public License as published by</span>
-<span class="c1"># the Free Software Foundation, either version 2 of the License, or</span>
-<span class="c1"># (at your option) any later version.</span>
-<span class="c1">#</span>
-<span class="c1"># EMLE-Engine is distributed in the hope that it will be useful,</span>
-<span class="c1"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
-<span class="c1"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the</span>
-<span class="c1"># GNU General Public License for more details.</span>
-<span class="c1">#</span>
-<span class="c1"># You should have received a copy of the GNU General Public License</span>
-<span class="c1"># along with EMLE-Engine. If not, see &lt;http://www.gnu.org/licenses/&gt;.</span>
-<span class="c1">#####################################################################</span>
+<span></span><span class="c1"># SPDX-FileCopyrightText: 2023-2026 The EMLE-Engine developers</span>
+<span class="c1"># SPDX-License-Identifier: MIT</span>
 
-<span class="sd">&quot;&quot;&quot;In-vacuo backend base class.&quot;&quot;&quot;</span>
+<span class="sd">"""In-vacuo backend base class."""</span>
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Backend&quot;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"Backend"</span><span class="p">]</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">inspect</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_inspect</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_np</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_supported</span><span class="p">(</span><span class="n">backend</span><span class="p">,</span> <span class="n">qm_charge</span><span class="p">,</span> <span class="n">mult</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Raise a ValueError if the QM charge, spin multiplicity or electronic</span>
+<span class="sd">    state, which can be per frame, is not supported by the backend: any</span>
+<span class="sd">    object with the 'charges', 'mults' and 'states' attributes described in</span>
+<span class="sd">    Backend.</span>
+<span class="sd">    """</span>
+    <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">option</span><span class="p">,</span> <span class="n">supported</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="p">(</span>
+        <span class="p">(</span><span class="s2">"charge"</span><span class="p">,</span> <span class="s2">"model_charges"</span><span class="p">,</span> <span class="n">backend</span><span class="o">.</span><span class="n">charges</span><span class="p">,</span> <span class="n">qm_charge</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">"spin multiplicity"</span><span class="p">,</span> <span class="s2">"model_mults"</span><span class="p">,</span> <span class="n">backend</span><span class="o">.</span><span class="n">mults</span><span class="p">,</span> <span class="n">mult</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">"electronic state"</span><span class="p">,</span> <span class="s2">"model_states"</span><span class="p">,</span> <span class="n">backend</span><span class="o">.</span><span class="n">states</span><span class="p">,</span> <span class="n">state</span><span class="p">),</span>
+    <span class="p">):</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">_np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
+        <span class="k">if</span> <span class="n">supported</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">values</span> <span class="o">&lt;=</span> <span class="nb">set</span><span class="p">(</span><span class="n">supported</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"unsupported QM </span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">, supported: </span><span class="si">{</span><span class="n">supported</span><span class="si">}</span><span class="s2">. "</span>
+                <span class="sa">f</span><span class="s2">"If the model supports it, declare it with '</span><span class="si">{</span><span class="n">option</span><span class="si">}</span><span class="s2">' "</span>
+                <span class="sa">f</span><span class="s2">"('--</span><span class="si">{</span><span class="n">option</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">'_'</span><span class="p">,</span><span class="w"> </span><span class="s1">'-'</span><span class="p">)</span><span class="si">}</span><span class="s2">' or 'EMLE_</span><span class="si">{</span><span class="n">option</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2">' "</span>
+                <span class="s2">"for emle-server)"</span>
+            <span class="p">)</span>
 
 
 <div class="viewcode-block" id="Backend">
 <a class="viewcode-back" href="../../../api/index_backends.html#emle._backends._backend.Backend">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Backend</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Base class for in-vacuo backends.</span>
 
 <span class="sd">    This class should not be instantiated directly, but should be subclassed</span>
 <span class="sd">    by specific backends.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    The 'charges', 'mults' and 'states' attributes hold the QM charges, spin</span>
+<span class="sd">    multiplicities and electronic states (0 is the ground state) that the</span>
+<span class="sd">    model supports, as a tuple, or None for any value. The default is a</span>
+<span class="sd">    neutral singlet in the ground state. Of the 'qm_charge', 'mult' and</span>
+<span class="sd">    'state' arguments, those that 'calculate' takes are passed to it, or all</span>
+<span class="sd">    of them if it takes '**kwargs'.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">charges</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,),</span> <span class="n">mults</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,),</span> <span class="n">states</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,)):</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Constructor.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
 
-        <span class="c1"># Don&#39;t allow user to create an instance of the base class.</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        charges: tuple of int</span>
+<span class="sd">            The supported QM charges, or None for any value.</span>
+
+<span class="sd">        mults: tuple of int</span>
+<span class="sd">            The supported spin multiplicities, or None for any value.</span>
+
+<span class="sd">        states: tuple of int</span>
+<span class="sd">            The supported electronic states, or None for any value.</span>
+<span class="sd">        """</span>
+
+        <span class="c1"># Don't allow user to create an instance of the base class.</span>
         <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="ow">is</span> <span class="n">Backend</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
-                <span class="s2">&quot;&#39;Backend&#39; is an abstract class and should not be instantiated directly&quot;</span>
+                <span class="s2">"'Backend' is an abstract class and should not be instantiated directly"</span>
             <span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">atomic_numbers</span><span class="p">,</span> <span class="n">xyz</span><span class="p">,</span> <span class="n">forces</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">charges</span> <span class="o">=</span> <span class="n">charges</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mults</span> <span class="o">=</span> <span class="n">mults</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">states</span> <span class="o">=</span> <span class="n">states</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">atomic_numbers</span><span class="p">,</span> <span class="n">xyz</span><span class="p">,</span> <span class="n">forces</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">qm_charge</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">mult</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Compute the energy and forces.</span>
 
 <span class="sd">        Parameters</span>
@@ -330,6 +353,18 @@
 <span class="sd">        forces: bool</span>
 <span class="sd">            Whether to calculate and return forces.</span>
 
+<span class="sd">        qm_charge: int, numpy.ndarray (N_BATCH,)</span>
+<span class="sd">            The charge of the QM region.</span>
+
+<span class="sd">        mult: int, numpy.ndarray (N_BATCH,)</span>
+<span class="sd">            The spin multiplicity of the QM region.</span>
+
+<span class="sd">        state: int, numpy.ndarray (N_BATCH,)</span>
+<span class="sd">            The electronic state index (0 is the ground state).</span>
+
+<span class="sd">        kwargs: dict</span>
+<span class="sd">            Other keyword arguments, passed to 'calculate'.</span>
+
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 
@@ -338,13 +373,18 @@
 
 <span class="sd">        forces: numpy.ndarray</span>
 <span class="sd">            The in-vacuo forces in Eh/Bohr.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span><span class="n">atomic_numbers</span><span class="p">,</span> <span class="n">xyz</span><span class="p">,</span> <span class="n">forces</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<span class="sd">        """</span>
+        <span class="n">_check_supported</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">qm_charge</span><span class="p">,</span> <span class="n">mult</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+        <span class="n">inputs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"qm_charge"</span><span class="p">:</span> <span class="n">qm_charge</span><span class="p">,</span> <span class="s2">"mult"</span><span class="p">:</span> <span class="n">mult</span><span class="p">,</span> <span class="s2">"state"</span><span class="p">:</span> <span class="n">state</span><span class="p">}</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="n">_inspect</span><span class="o">.</span><span class="n">signature</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">calculate</span><span class="p">)</span><span class="o">.</span><span class="n">parameters</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">kind</span> <span class="ow">is</span> <span class="n">p</span><span class="o">.</span><span class="n">VAR_KEYWORD</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">params</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+            <span class="n">inputs</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">inputs</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">params</span><span class="p">}</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">calculate</span><span class="p">(</span><span class="n">atomic_numbers</span><span class="p">,</span> <span class="n">xyz</span><span class="p">,</span> <span class="n">forces</span><span class="p">,</span> <span class="o">**</span><span class="n">inputs</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
 <div class="viewcode-block" id="Backend.calculate">
 <a class="viewcode-back" href="../../../api/index_backends.html#emle._backends._backend.Backend.calculate">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">calculate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">atomic_numbers</span><span class="p">,</span> <span class="n">xyz</span><span class="p">,</span> <span class="n">forces</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Compute the energy and forces.</span>
 
 <span class="sd">        Parameters</span>
@@ -367,7 +407,7 @@
 
 <span class="sd">        forces: numpy.ndarray</span>
 <span class="sd">            The in-vacuo forces in Eh/Bohr.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
 </div>
 
@@ -385,7 +425,7 @@
             Made with 
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 23, 2025</div>
+              Last updated on Nov 24, 2026</div>
           </div>
           <div class="right-details">
             
@@ -401,8 +441,8 @@
     </aside>
   </div>
 </div><script src="../../../_static/documentation_options.js?v=5929fcd5"></script>
-    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
-    <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
     </body>
 </html>

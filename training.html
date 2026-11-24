@@ -1,15 +1,16 @@
 <!doctype html>
 <html class="no-js" lang="en" data-content_root="./">
-  <head><meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="genindex.html" /><link rel="search" title="Search" href="search.html" /><link rel="next" title="API Documentation" href="api/index.html" /><link rel="prev" title="Error Analysis" href="analysis.html" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="API Documentation" href="api/index.html"><link rel="prev" title="Error Analysis" href="analysis.html">
+        <link rel="prefetch" href="_static/logo.jpg" as="image">
 
-    <link rel="shortcut icon" href="_static/favicon.png"/><!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
+    <link rel="shortcut icon" href="_static/favicon.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>Training - emle-engine</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d8a2add5" />
-    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=354aac6f" />
-    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=302659d7" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
     <link rel="stylesheet" type="text/css" href="_static/css/custom.css?v=3ab3c30c" />
     
     
@@ -145,14 +146,10 @@
   </symbol>
 </svg>
 
-<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
-<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
-<label class="overlay sidebar-overlay" for="__navigation">
-  <div class="visually-hidden">Hide navigation sidebar</div>
-</label>
-<label class="overlay toc-overlay" for="__toc">
-  <div class="visually-hidden">Hide table of contents sidebar</div>
-</label>
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
 
 <a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
 
@@ -162,8 +159,7 @@
   <header class="mobile-header">
     <div class="header-left">
       <label class="nav-overlay-icon" for="__navigation">
-        <div class="visually-hidden">Toggle site navigation sidebar</div>
-        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
       </label>
     </div>
     <div class="header-center">
@@ -171,17 +167,15 @@
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
-        <button class="theme-toggle">
-          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
           <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
           <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
           <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
-        <div class="visually-hidden">Toggle table of contents sidebar</div>
-        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
       </label>
     </div>
   </header>
@@ -189,7 +183,6 @@
     <div class="sidebar-container">
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
-  
   <div class="sidebar-logo-container">
     <img class="sidebar-logo" src="_static/logo.jpg" alt="Logo"/>
   </div>
@@ -214,7 +207,7 @@
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Training</a></li>
 </ul>
 <ul>
-<li class="toctree-l1 has-children"><a class="reference internal" href="api/index.html">API Documentation</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of API Documentation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="api/index.html">API Documentation</a><input aria-label="Toggle navigation of API Documentation" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="api/index_models.html">emle.models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/index_calculator.html">emle.calculator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/index_train.html">emle.train</a></li>
@@ -254,40 +247,95 @@
           
 
 <div class="theme-toggle-container theme-toggle-content">
-            <button class="theme-toggle">
-              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
               <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
               <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
               <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
-            <div class="visually-hidden">Toggle table of contents sidebar</div>
-            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
           </label>
         </div>
         <article role="main" id="furo-main-content">
           <section id="training">
 <span id="ref-training"></span><h1>Training<a class="headerlink" href="#training" title="Link to this heading">¶</a></h1>
 <p>Training of custom <code class="docutils literal notranslate"><span class="pre">EMLE</span></code> models can be performed with the <code class="docutils literal notranslate"><span class="pre">emle-train</span></code>
-executable. It requires a tarball with the reference QM calculations with the
+executable. It requires either an extXYZ file with the reference data (see
+below) or a tarball with the reference QM calculations with the
 same naming convention as used one for <a class="reference internal" href="analysis.html#ref-analysis"><span class="std std-ref">error analysis</span></a>,
 with the difference that only gas phase calculations are required and dipolar
 polarizabilies must be present.</p>
 <p>Simple usage:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>emle-train<span class="w"> </span>--extxyz<span class="w"> </span>data.xyz<span class="w"> </span>model.mat
+</pre></div>
+</div>
+<p>or</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>emle-train<span class="w"> </span>--orca-tarball<span class="w"> </span>orca.tar<span class="w"> </span>model.mat
 </pre></div>
 </div>
+<section id="extxyz-input">
+<h2>extXYZ input<a class="headerlink" href="#extxyz-input" title="Link to this heading">¶</a></h2>
+<p>The extXYZ file can contain molecules of different composition and charge.
+The following properties are required for each frame:</p>
+<div class="table-wrapper docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">s</span></code></p></td>
+<td><p>per-atom</p></td>
+<td><p>MBIS valence widths (Bohr)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">q_core</span></code></p></td>
+<td><p>per-atom</p></td>
+<td><p>MBIS core charges (e)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">q_val</span></code></p></td>
+<td><p>per-atom</p></td>
+<td><p>MBIS valence charges (e)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">alpha</span></code></p></td>
+<td><p>per-frame</p></td>
+<td><p>Molecular dipolar polarizability, 3x3 (Bohr<sup>3</sup>)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Positions are in Angstrom. Optionally, <code class="docutils literal notranslate"><span class="pre">total_charge</span></code> can be given for each
+frame, otherwise it is the sum of <code class="docutils literal notranslate"><span class="pre">q_core</span></code> and <code class="docutils literal notranslate"><span class="pre">q_val</span></code> rounded to the nearest
+integer. The valence charges are shifted evenly to sum up to the total charge,
+an error is raised if the difference is 0.1 e or more. Any other properties
+(e.g. energies and forces) are ignored, so the same file can be used to train
+other models. Example frame:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>3
+Properties=species:S:1:pos:R:3:q_core:R:1:q_val:R:1:s:R:1 alpha="_JSON [[8.1, 0.0, 0.0], [0.0, 9.6, 0.0], [0.0, 0.0, 8.8]]" total_charge=0 pbc="F F F"
+O        0.00000000       0.00000000       0.11730000       6.00000000      -6.78100000       0.42200000
+H        0.00000000       0.75720000      -0.46920000       1.00000000      -0.60950000       0.31200000
+H        0.00000000      -0.75720000      -0.46920000       1.00000000      -0.60950000       0.31200000
+</pre></div>
+</div>
+<p>An existing tarball can be converted to extXYZ with <code class="docutils literal notranslate"><span class="pre">tarball-to-extxyz</span></code>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>tarball-to-extxyz<span class="w"> </span>orca.tar<span class="w"> </span>-o<span class="w"> </span>data.xyz
+</pre></div>
+</div>
+<p>When <code class="docutils literal notranslate"><span class="pre">--orca-tarball</span></code> is passed to <code class="docutils literal notranslate"><span class="pre">emle-train</span></code>, the same conversion is done
+internally.</p>
 <p>The resulting <code class="docutils literal notranslate"><span class="pre">model.mat</span></code> file can then be used with <code class="docutils literal notranslate"><span class="pre">emle-engine</span></code>, either
 specifying the model via <code class="docutils literal notranslate"><span class="pre">--emle-model</span></code> when launcing a server, using the
 <code class="docutils literal notranslate"><span class="pre">EMLE_MODEL</span></code> environment variable, or as a direct argument to the <code class="docutils literal notranslate"><span class="pre">EMLECalculator</span></code>
 or Torch module constructors.</p>
 <p>A full list of argument and their default values can be
 printed with <code class="docutils literal notranslate"><span class="pre">emle-train</span> <span class="pre">-h</span></code>:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>usage: emle-train [-h] --orca-tarball name.tar [--train-mask] [--sigma] [--ivm-thr] [--epochs]
-                  [--lr-qeq] [--lr-thole] [--lr-sqrtk] [--print-every] [--computer-n-species]
-                  [--computer-zid-map] [--plot-data name.mat]
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>usage: emle-train [-h] (--orca-tarball name.tar | --extxyz name.xyz) [--train-mask] [--sigma]
+                  [--ivm-thr] [--epochs] [--lr-qeq] [--lr-thole] [--lr-sqrtk] [--print-every]
+                  [--computer-n-species] [--computer-zid-map] [--plot-data name.mat]
+                  [--device {cpu,cuda}]
                   output
 
 EMLE training script
@@ -299,6 +347,7 @@ options:
 -h, --help            show this help message and exit
 --orca-tarball name.tar
                       ORCA tarball (default: None)
+--extxyz name.xyz     extXYZ file with training data (default: None)
 --train-mask          Mask for training set (default: None)
 --sigma               Sigma value for GPR (default: 0.001)
 --ivm-thr             IVM threshold (default: 0.05)
@@ -310,15 +359,18 @@ options:
 --computer-n-species  Number of species supported by AEV computer (default: None)
 --computer-zid-map    Map between EMLE and AEV computer zid values (default: None)
 --plot-data name.mat  Data for plotting (default: None)
+--device {cpu,cuda}   PyTorch device. If not set, cuda if available, otherwise cpu (default:
+                      None)
 </pre></div>
 </div>
 <p>Here <code class="docutils literal notranslate"><span class="pre">train-mask</span></code> is a boolean file containing zeros and ones that defines the
-subset of the full training set (provided as <code class="docutils literal notranslate"><span class="pre">--orca-tarball</span></code>) that is used for
-training.  Note that the values written to <code class="docutils literal notranslate"><span class="pre">--plot-data</span></code> are for the full training
+subset of the full training set (provided as <code class="docutils literal notranslate"><span class="pre">--extxyz</span></code> or <code class="docutils literal notranslate"><span class="pre">--orca-tarball</span></code>,
+one value per frame/structure) that is used for training.  Note that the values written to <code class="docutils literal notranslate"><span class="pre">--plot-data</span></code> are for the full training
 set, which allows generation of prediction plots for the train/test sets.</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">--computer-n-species</span></code> and <code class="docutils literal notranslate"><span class="pre">--computer-zid-map</span></code> arguments are only
 needed when using a common AEV computer for both gas phase backend and EMLE
 model.</p>
+</section>
 </section>
 
         </article>
@@ -352,7 +404,7 @@ model.</p>
             Made with 
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 23, 2025</div>
+              Last updated on Nov 24, 2026</div>
           </div>
           <div class="right-details">
             
@@ -361,15 +413,34 @@ model.</p>
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Training</a><ul>
+<li><a class="reference internal" href="#extxyz-input">extXYZ input</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>
   </div>
 </div><script src="_static/documentation_options.js?v=5929fcd5"></script>
-    <script src="_static/doctools.js?v=9bcbadda"></script>
-    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
-    <script src="_static/scripts/furo.js?v=5fa4622c"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
     </body>
 </html>

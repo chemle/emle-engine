@@ -10,13 +10,16 @@ and :ref:`ref-analyzer` modules.
 .. autoclass:: emle._backends._backend.Backend
    :no-show-inheritance:
 
+.. autoclass:: emle._backends.AIMNet2
+   :no-show-inheritance:
+
 .. autoclass:: emle._backends.DeePMD
    :no-show-inheritance:
 
-.. autoclass:: emle._backends.ORCA
+.. autoclass:: emle._backends.OMNIP2x
    :no-show-inheritance:
 
-.. autoclass:: emle._backends.Rascal
+.. autoclass:: emle._backends.ORCA
    :no-show-inheritance:
 
 .. autoclass:: emle._backends.Sander

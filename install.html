@@ -1,15 +1,16 @@
 <!doctype html>
 <html class="no-js" lang="en" data-content_root="./">
-  <head><meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="genindex.html" /><link rel="search" title="Search" href="search.html" /><link rel="next" title="Dynamics" href="dynamics.html" /><link rel="prev" title="EMLE-Engine" href="index.html" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Dynamics" href="dynamics.html"><link rel="prev" title="EMLE-Engine" href="index.html">
+        <link rel="prefetch" href="_static/logo.jpg" as="image">
 
-    <link rel="shortcut icon" href="_static/favicon.png"/><!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
+    <link rel="shortcut icon" href="_static/favicon.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>Installation - emle-engine</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d8a2add5" />
-    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=354aac6f" />
-    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=302659d7" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
     <link rel="stylesheet" type="text/css" href="_static/css/custom.css?v=3ab3c30c" />
     
     
@@ -145,14 +146,10 @@
   </symbol>
 </svg>
 
-<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
-<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
-<label class="overlay sidebar-overlay" for="__navigation">
-  <div class="visually-hidden">Hide navigation sidebar</div>
-</label>
-<label class="overlay toc-overlay" for="__toc">
-  <div class="visually-hidden">Hide table of contents sidebar</div>
-</label>
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
 
 <a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
 
@@ -162,8 +159,7 @@
   <header class="mobile-header">
     <div class="header-left">
       <label class="nav-overlay-icon" for="__navigation">
-        <div class="visually-hidden">Toggle site navigation sidebar</div>
-        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
       </label>
     </div>
     <div class="header-center">
@@ -171,17 +167,15 @@
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
-        <button class="theme-toggle">
-          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
           <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
           <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
           <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
-        <div class="visually-hidden">Toggle table of contents sidebar</div>
-        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
       </label>
     </div>
   </header>
@@ -189,7 +183,6 @@
     <div class="sidebar-container">
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
-  
   <div class="sidebar-logo-container">
     <img class="sidebar-logo" src="_static/logo.jpg" alt="Logo"/>
   </div>
@@ -214,7 +207,7 @@
 <li class="toctree-l1"><a class="reference internal" href="training.html">Training</a></li>
 </ul>
 <ul>
-<li class="toctree-l1 has-children"><a class="reference internal" href="api/index.html">API Documentation</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of API Documentation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="api/index.html">API Documentation</a><input aria-label="Toggle navigation of API Documentation" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="api/index_models.html">emle.models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/index_calculator.html">emle.calculator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/index_train.html">emle.train</a></li>
@@ -254,48 +247,114 @@
           
 
 <div class="theme-toggle-container theme-toggle-content">
-            <button class="theme-toggle">
-              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
               <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
               <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
               <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
-            <div class="visually-hidden">Toggle table of contents sidebar</div>
-            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
           </label>
         </div>
         <article role="main" id="furo-main-content">
           <section id="installation">
 <span id="ref-install"></span><h1>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h1>
-<p>First create a conda environment with all of the required dependencies:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>env<span class="w"> </span>create<span class="w"> </span>-f<span class="w"> </span>environment.yaml
-conda<span class="w"> </span>activate<span class="w"> </span>emle
+<section id="application-users">
+<h2>Application users<a class="headerlink" href="#application-users" title="Link to this heading">¶</a></h2>
+<p>If you just want to use <code class="docutils literal notranslate"><span class="pre">emle-engine</span></code>, e.g. as a dependency of another
+package, the recommended installation route is via a pre-built package from
+the <a class="reference external" href="https://anaconda.org/chemle">chemle</a> conda channel or from
+<a class="reference external" href="https://pypi.org/project/emle-engine">PyPI</a>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>chemle<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>emle-engine
+
+<span class="c1"># or</span>
+
+pip<span class="w"> </span>install<span class="w"> </span>emle-engine
 </pre></div>
 </div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>If you wish to use <a class="reference external" href="https://github.com/lab-cosmo/librascal">librascal</a> for
-delta-learning you will need to use the <code class="docutils literal notranslate"><span class="pre">environment_rascal.yaml</span></code> file instead.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">conda-forge</span></code> channel is needed alongside <code class="docutils literal notranslate"><span class="pre">chemle</span></code>, since that is
+where the dependencies of <code class="docutils literal notranslate"><span class="pre">emle-engine</span></code> (e.g. PyTorch and TorchANI) are
+published.</p>
+<p>These packages contain the minimal set of dependencies required to run
+<code class="docutils literal notranslate"><span class="pre">emle-engine</span></code> with the TorchANI/ANI2x and EMLE models. The optional
+in-vacuo backends are not installed automatically, and can be added to the
+same environment from <code class="docutils literal notranslate"><span class="pre">conda-forge</span></code> as required, e.g.:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>xtb-python<span class="w">   </span><span class="c1"># xtb backend</span>
+conda<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>ambertools<span class="w">   </span><span class="c1"># sander and sqm backends</span>
+conda<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>deepmd-kit<span class="w">   </span><span class="c1"># DeePMD-kit backend</span>
+</pre></div>
 </div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>If you wisth to use <code class="docutils literal notranslate"><span class="pre">emle-engine</span></code> with <code class="docutils literal notranslate"><span class="pre">OpenMM</span></code>, please use the
-<code class="docutils literal notranslate"><span class="pre">environment_sire.yaml</span></code> file instead. (This is required as <code class="docutils literal notranslate"><span class="pre">sire</span></code>
-provides the interface between <code class="docutils literal notranslate"><span class="pre">emle-engine</span></code> and <code class="docutils literal notranslate"><span class="pre">OpenMM</span></code>.)</p>
+</section>
+<section id="developers">
+<h2>Developers<a class="headerlink" href="#developers" title="Link to this heading">¶</a></h2>
+<p>Developers, or users who want greater control over their production
+environment, e.g. to select which optional in-vacuo backends are installed,
+should install <code class="docutils literal notranslate"><span class="pre">emle-engine</span></code> from source using <a class="reference external" href="https://pixi.sh">pixi</a>.
+This is now the preferred and best-supported way to set up a development
+environment. Pixi provides a <code class="docutils literal notranslate"><span class="pre">default</span></code> environment with the minimal set of
+dependencies required to run <code class="docutils literal notranslate"><span class="pre">emle-engine</span></code>, along with additional
+environments for each of the optional in-vacuo backends:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pixi<span class="w"> </span>install<span class="w">            </span><span class="c1"># default: torchani/ANI2x and EMLE models only</span>
+pixi<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>deepmd<span class="w">  </span><span class="c1"># adds the DeePMD-kit backend</span>
+pixi<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>xtb<span class="w">     </span><span class="c1"># adds the xtb-python backend</span>
+pixi<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>ambertools<span class="w">  </span><span class="c1"># adds the sander and sqm backends</span>
+pixi<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>mace<span class="w">    </span><span class="c1"># adds the MACE/emle-mace backends</span>
+pixi<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>aimnet2<span class="w"> </span><span class="c1"># adds the AIMNet2 backend</span>
+pixi<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>sire<span class="w">    </span><span class="c1"># adds the OpenMM/Sire integration</span>
+pixi<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>full<span class="w">    </span><span class="c1"># deepmd + xtb + ambertools + mace + sire combined</span>
+pixi<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>cuda<span class="w">    </span><span class="c1"># adds the CUDA compiler for the fused operators (Linux)</span>
+</pre></div>
+</div>
+<p>Then run commands inside an environment with <code class="docutils literal notranslate"><span class="pre">pixi</span> <span class="pre">run</span> <span class="pre">-e</span> <span class="pre">&lt;name&gt;</span> <span class="pre">&lt;command&gt;</span></code>,
+or activate one with <code class="docutils literal notranslate"><span class="pre">pixi</span> <span class="pre">shell</span> <span class="pre">-e</span> <span class="pre">&lt;name&gt;</span></code>. (Omit <code class="docutils literal notranslate"><span class="pre">-e</span> <span class="pre">&lt;name&gt;</span></code> to use the
+<code class="docutils literal notranslate"><span class="pre">default</span></code> environment.)</p>
+<p>AIMNet2 is not included in <code class="docutils literal notranslate"><span class="pre">full</span></code>. It can be added to an existing environment
+with pip, e.g. <code class="docutils literal notranslate"><span class="pre">pixi</span> <span class="pre">run</span> <span class="pre">-e</span> <span class="pre">full</span> <span class="pre">python</span> <span class="pre">-m</span> <span class="pre">pip</span> <span class="pre">install</span> <span class="pre">aimnet</span></code>.</p>
+<p>Alternatively, you can create a plain conda environment with the minimal
+<code class="docutils literal notranslate"><span class="pre">default</span></code> dependencies from <code class="docutils literal notranslate"><span class="pre">environment.yaml</span></code>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>env<span class="w"> </span>create<span class="w"> </span>-f<span class="w"> </span>environment.yaml
+conda<span class="w"> </span>activate<span class="w"> </span>emle
+pip<span class="w"> </span>install<span class="w"> </span>.
+</pre></div>
 </div>
 <p>For GPU functionality, you will need to install appropriate CUDA drivers on
 your host system. (This doesn’t come with <code class="docutils literal notranslate"><span class="pre">cudatoolkit</span></code> from <code class="docutils literal notranslate"><span class="pre">conda-forge</span></code>.)</p>
-<p>Finally, install <code class="docutils literal notranslate"><span class="pre">emle-engine</span></code> into the active environment:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>.
-</pre></div>
-</div>
 <p>If you are developing and want an editable install, use:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
 </pre></div>
 </div>
+</section>
+<section id="fused-operators">
+<h2>Fused operators<a class="headerlink" href="#fused-operators" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">EMLE(use_fused_ops=True)</span></code> uses optional fused C++/CUDA operators for the
+QM/MM electrostatics and the AEVs. By default they are compiled the first
+time they are used, which requires a C++ compiler, <code class="docutils literal notranslate"><span class="pre">ninja</span></code> and, for GPUs,
+a CUDA compiler with the same CUDA version as PyTorch, which is printed by
+<code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-c</span> <span class="pre">&quot;import</span> <span class="pre">torch;</span> <span class="pre">print(torch.version.cuda)&quot;</span></code>. With <code class="docutils literal notranslate"><span class="pre">conda-forge</span></code>,
+e.g. for CUDA 12.9:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>cxx-compiler<span class="w"> </span>ninja<span class="w"> </span>cuda-nvcc<span class="w"> </span>cuda-cudart-dev<span class="w"> </span><span class="s2">"cuda-version=12.9"</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">CUDA_HOME</span><span class="o">=</span><span class="nv">$CONDA_PREFIX</span>
+</pre></div>
+</div>
+<p>(The <code class="docutils literal notranslate"><span class="pre">cuda</span></code> pixi environment sets this up.) With a pip installed PyTorch,
+install <code class="docutils literal notranslate"><span class="pre">ninja</span></code> with pip, and use the system C++ compiler and a CUDA
+toolkit from NVIDIA with the same CUDA version as the PyTorch wheel, setting
+<code class="docutils literal notranslate"><span class="pre">CUDA_HOME</span></code> to its location.</p>
+<p>To compile them when installing <code class="docutils literal notranslate"><span class="pre">emle-engine</span></code> instead, use:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">EMLE_BUILD_EXTENSIONS</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--no-build-isolation<span class="w"> </span>.
+</pre></div>
+</div>
+<p>(Set <code class="docutils literal notranslate"><span class="pre">EMLE_WITH_CUDA=0</span></code> to build only the CPU operators.)</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>A TorchScript model that uses the fused operators can only be loaded in
+a Python process where <code class="docutils literal notranslate"><span class="pre">emle-engine</span></code> has loaded them, e.g. with
+<code class="docutils literal notranslate"><span class="pre">emle._ops.load_ops()</span></code>. It can’t be used from C++ alone, e.g. with the
+TorchANI-Amber interface in <code class="docutils literal notranslate"><span class="pre">sander</span></code>.</p>
+</div>
+</section>
 </section>
 
         </article>
@@ -329,7 +388,7 @@ your host system. (This doesn’t come with <code class="docutils literal notran
             Made with 
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 23, 2025</div>
+              Last updated on Nov 24, 2026</div>
           </div>
           <div class="right-details">
             
@@ -338,15 +397,36 @@ your host system. (This doesn’t come with <code class="docutils literal notran
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Installation</a><ul>
+<li><a class="reference internal" href="#application-users">Application users</a></li>
+<li><a class="reference internal" href="#developers">Developers</a></li>
+<li><a class="reference internal" href="#fused-operators">Fused operators</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>
   </div>
 </div><script src="_static/documentation_options.js?v=5929fcd5"></script>
-    <script src="_static/doctools.js?v=9bcbadda"></script>
-    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
-    <script src="_static/scripts/furo.js?v=5fa4622c"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
     </body>
 </html>
