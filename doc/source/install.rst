@@ -89,13 +89,20 @@ Fused operators
 
 ``EMLE(use_fused_ops=True)`` uses optional fused C++/CUDA operators for the
 QM/MM electrostatics and the AEVs. By default they are compiled the first
-time they are used, which requires a C++ compiler and, for GPUs, a CUDA
-toolkit matching the CUDA version of PyTorch (set ``CUDA_HOME`` to its
-location), e.g. from ``conda-forge``:
+time they are used, which requires a C++ compiler, ``ninja`` and, for GPUs,
+a CUDA compiler with the same CUDA version as PyTorch, which is printed by
+``python -c "import torch; print(torch.version.cuda)"``. With ``conda-forge``,
+e.g. for CUDA 12.9:
 
 .. code-block:: bash
 
-    conda install -c conda-forge cxx-compiler ninja cuda-toolkit
+    conda install -c conda-forge cxx-compiler ninja cuda-nvcc cuda-cudart-dev "cuda-version=12.9"
+    export CUDA_HOME=$CONDA_PREFIX
+
+(The ``cuda`` pixi environment sets this up.) With a pip installed PyTorch,
+install ``ninja`` with pip, and use the system C++ compiler and a CUDA
+toolkit from NVIDIA with the same CUDA version as the PyTorch wheel, setting
+``CUDA_HOME`` to its location.
 
 To compile them when installing ``emle-engine`` instead, use:
 
