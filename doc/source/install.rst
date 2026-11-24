@@ -103,3 +103,10 @@ To compile them when installing ``emle-engine`` instead, use:
     EMLE_BUILD_EXTENSIONS=1 pip install --no-build-isolation .
 
 (Set ``EMLE_WITH_CUDA=0`` to build only the CPU operators.)
+
+.. note::
+
+    A TorchScript model that uses the fused operators can only be loaded in
+    a Python process where ``emle-engine`` has loaded them, e.g. with
+    ``emle._ops.load_ops()``. It can't be used from C++ alone, e.g. with the
+    TorchANI-Amber interface in ``sander``.

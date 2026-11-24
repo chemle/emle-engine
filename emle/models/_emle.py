@@ -144,7 +144,8 @@ class EMLE(_torch.nn.Module):
             several times faster, use much less memory and can be captured in
             a CUDA graph. They are compiled on first use, which requires a C++
             compiler and, for CUDA, a CUDA toolkit (CUDA_HOME). Only first
-            derivatives are supported.
+            derivatives are supported. A scripted model that uses them can
+            only be loaded in a Python process that has loaded them.
         """
 
         # Call the base class constructor.
