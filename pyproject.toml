@@ -73,7 +73,7 @@ emle = ["_csrc/*.cpp", "_csrc/*.cu"]
 include = ["emle", "emle.*"]
 
 [tool.setuptools_scm]
-version_scheme = "guess-next-dev"
+version_scheme = "release-branch-semver"
 
 # ------------------------------------------------------------------------ #
 #                            Pixi Workspace                                #
