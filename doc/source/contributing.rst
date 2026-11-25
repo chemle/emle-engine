@@ -7,7 +7,25 @@ Contributing
 We welcome bug-fixes and ehanchements to the codebase via pull requests to
 our `GitHub repository <https://github.com/chemle/emle-engine>`_. When
 submitting a PR, please make sure that you rebase your branch on the latest
-``main`` branch and that all tests pass.
+``devel`` branch and that all tests pass. Please also add an item to the
+``CHANGELOG.md`` for any new features or bug fixes.
+
+Branches and versions
+---------------------
+
+New features and bug fixes are merged into the ``devel`` branch, and each
+push to ``devel`` publishes a development build to the ``dev`` label of the
+`chemle <https://anaconda.org/chemle>`__ conda channel. The ``main`` branch
+only receives urgent bug fixes between releases, which are released as
+patch versions, e.g. 2.0.1.
+
+Releases from ``devel`` are minor versions, e.g. 2.1.0, so development
+builds are versioned as the next minor release, e.g. ``2.1.0.dev5`` for the
+fifth commit after the last release. Versions are set automatically from
+the git tags by `setuptools-scm <https://setuptools-scm.readthedocs.io>`__.
+When the next release from ``devel`` will be a major version, push a
+development tag to ``devel``, e.g. ``v3.0.0.dev0``, so that later development
+builds are versioned as ``3.0.0.devN``.
 
 If you are adding a new :ref:`model <ref-models>`, please make sure that
 it is `TorchScript <https://pytorch.org/docs/stable/jit.html>`_
