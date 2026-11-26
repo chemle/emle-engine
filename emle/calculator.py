@@ -1430,7 +1430,7 @@ class EMLECalculator:
                     dE_dxyz_mm_bohr = (
                         dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
                         if dE_dxyz_mm is not None
-                        else _np.zeros_like(xyz_mm.cpu().numpy())
+                        else _np.zeros_like(xyz_mm.detach().cpu().numpy())
                     )
 
                     # Compute the total energy and gradients.
@@ -1467,7 +1467,7 @@ class EMLECalculator:
                 grad_mm = (
                     dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
                     if dE_dxyz_mm is not None
-                    else _np.zeros_like(xyz_mm.cpu().numpy())
+                    else _np.zeros_like(xyz_mm.detach().cpu().numpy())
                 )
                 E_vac, E_static, E_induced = E.sum(axis=1).detach().cpu().numpy()
                 E_tot = E_vac + E_static + E_induced
@@ -1515,7 +1515,7 @@ class EMLECalculator:
             dE_dxyz_mm_bohr = (
                 dE_dxyz_mm.cpu().numpy() * _BOHR_TO_ANGSTROM
                 if dE_dxyz_mm is not None
-                else _np.zeros_like(xyz_mm.cpu().numpy())
+                else _np.zeros_like(xyz_mm.detach().cpu().numpy())
             )
 
             # Store the the MM and EMLE energies. The MM energy is an approximation.
@@ -1797,8 +1797,12 @@ class EMLECalculator:
             E_tot.item() * _HARTREE_TO_KJ_MOL,
             (-grad_qm * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_BOHR).tolist(),
             (
-                -grad_mm[:num_mm_atoms] * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_BOHR
-            ).tolist(),
+                (
+                    -grad_mm[:num_mm_atoms] * _HARTREE_TO_KJ_MOL * _NANOMETER_TO_BOHR
+                ).tolist()
+                if grad_mm is not None
+                else []
+            ),
         )
         if dE_dcharges_mm is not None:
             # dE_dcharges_mm is in Hartree/e; convert to kJ/mol/e to match the
