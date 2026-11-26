@@ -4,6 +4,11 @@
 Changelog
 =========
 
+`v2.0.2 <https://github.com/chemle/emle-engine/compare/v2.0.1...v2.0.2>`__ - Nov 2026
+-------------------------------------------------------------------------------------
+
+* Fix the Sire callback when there are no MM atoms `#109 <https://github.com/chemle/emle-engine/pull/109>`__.
+
 `v2.0.1 <https://github.com/chemle/emle-engine/compare/v2.0.0...v2.0.1>`__ - Nov 2026
 -------------------------------------------------------------------------------------
 
