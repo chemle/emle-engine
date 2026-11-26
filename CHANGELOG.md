@@ -1,10 +1,15 @@
 Changelog
 =========
 
-[2.1.0](https://github.com/chemle/emle-engine/compare/v2.0.1...v2.1.0) - XXXX
+[2.1.0](https://github.com/chemle/emle-engine/compare/v2.0.2...v2.1.0) - XXXX
 -----------------------------------------------------------------------------
 
 * Please add an item to this CHANGELOG for any new features or bug fixes when creating a PR.
+
+[2.0.2](https://github.com/chemle/emle-engine/compare/v2.0.1...v2.0.2) - Nov 2026
+-----------------------------------------------------------------------------
+
+* Fix the Sire callback when there are no MM atoms [#109](https://github.com/chemle/emle-engine/pull/109).
 
 [2.0.1](https://github.com/chemle/emle-engine/compare/v2.0.0...v2.0.1) - Nov 2026
 -----------------------------------------------------------------------------
