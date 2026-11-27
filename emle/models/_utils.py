@@ -277,3 +277,87 @@ def _apply_switching_function(
     min_dist = dist.min(dim=2).values
 
     return charges_mm * _switching_function(min_dist, cutoff, switch_width)
+
+
+def _apply_cutoff(
+    atomic_numbers: _torch.Tensor,
+    charges_mm: _torch.Tensor,
+    xyz_qm: _torch.Tensor,
+    xyz_mm: _torch.Tensor,
+    cell: Optional[_torch.Tensor],
+    cutoff: Optional[float],
+    switch_width: float,
+    preprocess: bool,
+    use_switching_function: bool,
+) -> Tuple[_torch.Tensor, _torch.Tensor, _torch.Tensor]:
+    """
+    Optionally pre-process the coordinates and apply the switching function.
+
+    Parameters
+    ----------
+
+    atomic_numbers: torch.Tensor (BATCH, N_QM_ATOMS)
+        Atomic numbers of the QM atoms. Padding atoms are indicated using
+        a value of zero or less.
+
+    charges_mm: torch.Tensor (BATCH, N_MM_ATOMS)
+        MM point charges in atomic units.
+
+    xyz_qm: torch.Tensor (BATCH, N_QM_ATOMS, 3)
+        Positions of the QM atoms in Angstrom.
+
+    xyz_mm: torch.Tensor (BATCH, N_MM_ATOMS, 3)
+        Positions of the MM atoms in Angstrom.
+
+    cell: Optional[torch.Tensor] (3, 3) or (BATCH, 3, 3)
+        The simulation cell vectors in Angstrom.
+
+    cutoff: Optional[float]
+        The QM/MM cutoff distance in Angstrom. Required if either
+        'preprocess' or 'use_switching_function' is True.
+
+    switch_width: float
+        The fraction of the cutoff over which the switching function is
+        applied.
+
+    preprocess: bool
+        Whether to pre-process the coordinates. See _preprocess_coordinates.
+
+    use_switching_function: bool
+        Whether to scale the MM charges using a smooth switching function.
+
+    Returns
+    -------
+
+    xyz_qm: torch.Tensor (BATCH, N_QM_ATOMS, 3)
+        The positions of the QM atoms.
+
+    xyz_mm: torch.Tensor (BATCH, N_MM_ATOMS, 3)
+        The positions of the MM atoms.
+
+    charges_mm: torch.Tensor (BATCH, N_MM_ATOMS)
+        The MM charges.
+    """
+    if preprocess:
+        if cutoff is None:
+            raise ValueError(
+                "'cutoff' must be specified when creating the model "
+                "in order to use 'preprocess'"
+            )
+        if cell is not None and cell.ndim == 2:
+            cell = cell.unsqueeze(0).expand(xyz_qm.shape[0], 3, 3)
+        xyz_qm, xyz_mm, charges_mm = _preprocess_coordinates(
+            atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell, cutoff
+        )
+
+    if use_switching_function:
+        if cutoff is None:
+            raise ValueError(
+                "'cutoff' must be specified when creating the model "
+                "in order to use 'use_switching_function'"
+            )
+        charges_mm = _apply_switching_function(
+            atomic_numbers, charges_mm, xyz_qm, xyz_mm, cutoff, switch_width
+        )
+
+    return xyz_qm, xyz_mm, charges_mm
