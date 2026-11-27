@@ -1,10 +1,14 @@
 Changelog
 =========
 
-[2.1.0](https://github.com/chemle/emle-engine/compare/v2.0.2...v2.1.0) - XXXX
+[2.1.0](https://github.com/chemle/emle-engine/compare/v2.0.3...v2.1.0) - XXXX
 -----------------------------------------------------------------------------
 
 * Please add an item to this CHANGELOG for any new features or bug fixes when creating a PR.
+
+[2.0.3](https://github.com/chemle/emle-engine/compare/v2.0.2...v2.0.3) - Nov 2026
+-----------------------------------------------------------------------------
+
 * Expose the cutoff and switching function options on the composite models, applying the pre-processing to both the in vacuo and EMLE components [#113](https://github.com/chemle/emle-engine/pull/113).
 * Fixed `MACEEMLE` and `MACEEMLEJoint` passing the wrong cell to the per-configuration models for batched inputs [#113](https://github.com/chemle/emle-engine/pull/113).
 
