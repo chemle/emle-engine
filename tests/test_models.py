@@ -669,6 +669,137 @@ def test_emle_mace(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
     )
 
 
+def _check_cutoff_options(model, emle, atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    """
+    Check that a composite model applies the pre-processing and switching
+    function to both its in vacuo and EMLE components.
+    """
+    box_length = 30.0
+    cell = box_length * torch.eye(3, dtype=xyz_qm.dtype, device=xyz_qm.device)
+
+    xyz_qm = xyz_qm.detach()
+    xyz_mm = xyz_mm.detach()
+
+    # Split the QM region across the periodic boundary.
+    xyz_qm_split = xyz_qm.clone()
+    xyz_qm_split[-1, 0] += box_length
+
+    energy_plain = model(atomic_numbers, charges_mm, xyz_qm, xyz_mm, cell, 0)
+
+    for use_switching_function in (False, True):
+        energy_ref = model(
+            atomic_numbers,
+            charges_mm,
+            xyz_qm,
+            xyz_mm,
+            cell,
+            0,
+            True,
+            use_switching_function,
+        )
+        energy = model(
+            atomic_numbers,
+            charges_mm,
+            xyz_qm_split,
+            xyz_mm,
+            cell,
+            0,
+            True,
+            use_switching_function,
+        )
+        assert torch.allclose(energy, energy_ref, atol=1e-4)
+        assert not torch.allclose(energy[1:], energy_plain[1:], atol=1e-4)
+
+        if emle is not None:
+            energy_emle = emle(
+                atomic_numbers,
+                charges_mm,
+                xyz_qm,
+                xyz_mm,
+                cell,
+                0,
+                None,
+                True,
+                use_switching_function,
+            )
+            assert torch.allclose(energy[1:], energy_emle, atol=1e-4)
+
+
+def test_ani2x_cutoff(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    """
+    Check the cutoff and switching function options of ANI2xEMLE.
+    """
+    model = torch.jit.script(ANI2xEMLE(cutoff=6.0, switch_width=0.2))
+    emle = torch.jit.script(EMLE(cutoff=6.0, switch_width=0.2))
+    _check_cutoff_options(model, emle, atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+
+
+@pytest.mark.skipif(not has_mace, reason="mace-torch not installed")
+@pytest.mark.skipif(not has_e3nn, reason="e3nn not installed")
+def test_mace_cutoff(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    """
+    Check the cutoff and switching function options of MACEEMLE.
+    """
+    try:
+        model = MACEEMLE(cutoff=6.0, switch_width=0.2)
+    except RuntimeError as e:
+        pytest.skip(f"MACE model unavailable: {e}")
+    model = torch.jit.script(model)
+    emle = torch.jit.script(EMLE(cutoff=6.0, switch_width=0.2))
+    _check_cutoff_options(model, emle, atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+
+
+@pytest.mark.skipif(not has_mace, reason="mace-torch not installed")
+@pytest.mark.skipif(not has_e3nn, reason="e3nn not installed")
+@pytest.mark.skipif(not has_emle_mace, reason="emle-mace not installed")
+@pytest.mark.skipif(not has_emle_mace_model, reason="Test emle-mace model not found")
+def test_emle_mace_cutoff(atomic_numbers, charges_mm, xyz_qm, xyz_mm):
+    """
+    Check the cutoff and switching function options of MACEEMLEJoint.
+    """
+    try:
+        model = MACEEMLEJoint(mace_model=MACE_EMLE_MODEL, cutoff=6.0, switch_width=0.2)
+    except RuntimeError as e:
+        pytest.skip(f"MACEEMLEJoint model unavailable: {e}")
+    model = torch.jit.script(model)
+    _check_cutoff_options(model, None, atomic_numbers, charges_mm, xyz_qm, xyz_mm)
+
+
+@pytest.mark.skipif(not has_deepmd, reason="deepmd-kit not installed")
+def test_deepmd_cutoff(
+    deepmd_model_path,
+    deepmd_atomic_numbers,
+    deepmd_charges_mm,
+    deepmd_xyz_qm,
+    deepmd_xyz_mm,
+):
+    """
+    Check the cutoff and switching function options of DeePMDEMLE.
+    """
+    model = DeePMDEMLE(
+        deepmd_model=deepmd_model_path,
+        cutoff=6.0,
+        switch_width=0.2,
+        dtype=torch.float64,
+    )
+    model = torch.jit.script(model)
+    emle = EMLE(
+        cutoff=6.0,
+        switch_width=0.2,
+        dtype=torch.float64,
+        device=torch.device("cpu"),
+    )
+    emle = torch.jit.script(emle)
+    _check_cutoff_options(
+        model,
+        emle,
+        deepmd_atomic_numbers,
+        deepmd_charges_mm,
+        deepmd_xyz_qm,
+        deepmd_xyz_mm,
+    )
+
+
 @pytest.mark.skipif(not has_sire, reason="sire is not installed")
 @pytest.mark.parametrize("use_switching_function", [False, True])
 def test_preprocess_vs_sire(tmp_path, monkeypatch, use_switching_function):
