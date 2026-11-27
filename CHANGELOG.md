@@ -5,6 +5,7 @@ Changelog
 -----------------------------------------------------------------------------
 
 * Please add an item to this CHANGELOG for any new features or bug fixes when creating a PR.
+* Expose the cutoff and switching function options on the composite models, applying the pre-processing to both the in vacuo and EMLE components [#112](https://github.com/chemle/emle-engine/pull/112).
 
 [2.0.2](https://github.com/chemle/emle-engine/compare/v2.0.1...v2.0.2) - Nov 2026
 -----------------------------------------------------------------------------

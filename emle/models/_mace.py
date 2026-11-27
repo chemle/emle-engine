@@ -15,7 +15,7 @@ import torch as _torch
 from typing import List, Dict, Optional
 
 from ._emle import EMLE as _EMLE
-from ._utils import _get_neighbor_pairs
+from ._utils import _apply_cutoff, _get_neighbor_pairs
 
 from torch import Tensor
 
@@ -107,6 +107,8 @@ class MACEEMLE(_torch.nn.Module):
         mm_charges=None,
         qm_charge=0,
         mace_model=None,
+        cutoff=None,
+        switch_width=0.2,
         device=None,
         dtype=None,
     ):
@@ -157,6 +159,18 @@ class MACEEMLE(_torch.nn.Module):
             If more than one model is provided, only the energy from the first model will be returned
             in the forward pass, but the energy and forces from all models will be stored.
 
+        cutoff: float
+            The QM/MM cutoff distance in Angstrom. This is only used when
+            'preprocess' or 'use_switching_function' is requested when
+            calling the forward method, in which case it is required. MM
+            atoms further than this distance from the nearest QM atom will
+            not contribute to the embedding.
+
+        switch_width: float
+            The fraction of 'cutoff' over which the switching function (if
+            requested) scales the MM charges smoothly to zero, i.e. the
+            switching region is [(1 - switch_width) * cutoff, cutoff].
+
         device: torch.device
             The device on which to run the model.
 
@@ -198,10 +212,14 @@ class MACEEMLE(_torch.nn.Module):
             alpha_mode=alpha_mode,
             mm_charges=mm_charges,
             qm_charge=qm_charge,
+            cutoff=cutoff,
+            switch_width=switch_width,
             device=device,
             dtype=dtype,
             create_aev_calculator=True,
         )
+        self._cutoff = self._emle._cutoff
+        self._switch_width = self._emle._switch_width
 
         if not isinstance(mace_model, (list, tuple)):
             mace_model = (
@@ -488,6 +506,8 @@ class MACEEMLE(_torch.nn.Module):
         xyz_mm: Tensor,
         cell: Optional[Tensor] = None,
         qm_charge: int = 0,
+        preprocess: bool = False,
+        use_switching_function: bool = False,
     ) -> Tensor:
         """
         Compute the the MACE and static and induced EMLE energy components.
@@ -513,6 +533,21 @@ class MACEEMLE(_torch.nn.Module):
         qm_charge: int
             The charge on the QM region.
 
+        preprocess: bool
+            Whether to pre-process the input coordinates. This makes whole
+            the QM region, re-images the MM atoms to their minimum image
+            position with respect to the QM region centre, and applies a hard
+            distance cutoff, zeroing the charges of MM atoms further than
+            'cutoff' (set in the constructor) from the nearest QM atom. The
+            processed coordinates are used by both the in vacuo and EMLE
+            models. Requires 'cutoff' to have been set when the model was
+            created.
+
+        use_switching_function: bool
+            Whether to scale the MM charges using a smooth switching
+            function. Requires 'cutoff' to have been set when the model was
+            created.
+
         Returns
         -------
 
@@ -533,6 +568,19 @@ class MACEEMLE(_torch.nn.Module):
             charges_mm = charges_mm.unsqueeze(0)
             if cell is not None and cell.ndim == 2:
                 cell = cell.unsqueeze(0)
+
+        # Pre-process the coordinates and apply the switching function.
+        xyz_qm, xyz_mm, charges_mm = _apply_cutoff(
+            atomic_numbers,
+            charges_mm,
+            xyz_qm,
+            xyz_mm,
+            cell,
+            self._cutoff,
+            self._switch_width,
+            preprocess,
+            use_switching_function,
+        )
 
         # Store the number of batches.
         num_batches = atomic_numbers.shape[0]
@@ -705,6 +753,8 @@ class MACEEMLEJoint(_torch.nn.Module):
         qm_charge=0,
         mace_model=None,
         use_dipoles=False,
+        cutoff=None,
+        switch_width=0.2,
         device=None,
         dtype=None,
     ):
@@ -753,6 +803,18 @@ class MACEEMLEJoint(_torch.nn.Module):
             part of the external parameters. The calculator only permits this
             flag with the 'emle-mace' backend.
 
+        cutoff: float
+            The QM/MM cutoff distance in Angstrom. This is only used when
+            'preprocess' or 'use_switching_function' is requested when
+            calling the forward method, in which case it is required. MM
+            atoms further than this distance from the nearest QM atom will
+            not contribute to the embedding.
+
+        switch_width: float
+            The fraction of 'cutoff' over which the switching function (if
+            requested) scales the MM charges smoothly to zero, i.e. the
+            switching region is [(1 - switch_width) * cutoff, cutoff].
+
         device: torch.device
             The device on which to run the model.
 
@@ -796,10 +858,14 @@ class MACEEMLEJoint(_torch.nn.Module):
             alpha_mode="fixed",
             mm_charges=mm_charges,
             qm_charge=qm_charge,
+            cutoff=cutoff,
+            switch_width=switch_width,
             device=device,
             dtype=dtype,
             create_aev_calculator=True,
         )
+        self._cutoff = self._emle._cutoff
+        self._switch_width = self._emle._switch_width
 
         if not isinstance(mace_model, (list, tuple)):
             mace_model = (
@@ -1110,6 +1176,8 @@ class MACEEMLEJoint(_torch.nn.Module):
         xyz_mm: Tensor,
         cell: Optional[Tensor] = None,
         qm_charge: int = 0,
+        preprocess: bool = False,
+        use_switching_function: bool = False,
     ) -> Tensor:
         """
         Compute the MACE and static and induced EMLE energy components.
@@ -1135,6 +1203,21 @@ class MACEEMLEJoint(_torch.nn.Module):
         qm_charge: int
             The charge on the QM region.
 
+        preprocess: bool
+            Whether to pre-process the input coordinates. This makes whole
+            the QM region, re-images the MM atoms to their minimum image
+            position with respect to the QM region centre, and applies a hard
+            distance cutoff, zeroing the charges of MM atoms further than
+            'cutoff' (set in the constructor) from the nearest QM atom. The
+            processed coordinates are used by both the in vacuo and EMLE
+            models. Requires 'cutoff' to have been set when the model was
+            created.
+
+        use_switching_function: bool
+            Whether to scale the MM charges using a smooth switching
+            function. Requires 'cutoff' to have been set when the model was
+            created.
+
         Returns
         -------
 
@@ -1157,6 +1240,19 @@ class MACEEMLEJoint(_torch.nn.Module):
             charges_mm = charges_mm.unsqueeze(0)
             if cell is not None and cell.ndim == 2:
                 cell = cell.unsqueeze(0)
+
+        # Pre-process the coordinates and apply the switching function.
+        xyz_qm, xyz_mm, charges_mm = _apply_cutoff(
+            atomic_numbers,
+            charges_mm,
+            xyz_qm,
+            xyz_mm,
+            cell,
+            self._cutoff,
+            self._switch_width,
+            preprocess,
+            use_switching_function,
+        )
 
         # Store the number of batches.
         num_batches = atomic_numbers.shape[0]

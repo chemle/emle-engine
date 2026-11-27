@@ -18,11 +18,7 @@ import torchani as _torchani
 from torch import Tensor
 
 from ._emle_base import EMLEBase as _EMLEBase
-from ._utils import (
-    _apply_switching_function,
-    _preprocess_coordinates,
-    _sanitize_alpha_mode,
-)
+from ._utils import _apply_cutoff, _sanitize_alpha_mode
 
 
 class EMLE(_torch.nn.Module):
@@ -486,39 +482,18 @@ class EMLE(_torch.nn.Module):
             else:
                 raise TypeError("'cell' must be of type 'torch.Tensor'")
 
-        # Pre-process the coordinates.
-        if preprocess:
-            cutoff = self._cutoff
-            if cutoff is None:
-                raise ValueError(
-                    "'cutoff' must be specified when creating the EMLE model "
-                    "in order to use 'preprocess'"
-                )
-            self._xyz_qm, self._xyz_mm, self._charges_mm = _preprocess_coordinates(
-                self._atomic_numbers,
-                self._charges_mm,
-                self._xyz_qm,
-                self._xyz_mm,
-                cell,
-                cutoff,
-            )
-
-        # Apply the switching function to the MM charges.
-        if use_switching_function:
-            cutoff = self._cutoff
-            if cutoff is None:
-                raise ValueError(
-                    "'cutoff' must be specified when creating the EMLE model "
-                    "in order to use 'use_switching_function'"
-                )
-            self._charges_mm = _apply_switching_function(
-                self._atomic_numbers,
-                self._charges_mm,
-                self._xyz_qm,
-                self._xyz_mm,
-                cutoff,
-                self._switch_width,
-            )
+        # Pre-process the coordinates and apply the switching function.
+        self._xyz_qm, self._xyz_mm, self._charges_mm = _apply_cutoff(
+            self._atomic_numbers,
+            self._charges_mm,
+            self._xyz_qm,
+            self._xyz_mm,
+            cell,
+            self._cutoff,
+            self._switch_width,
+            preprocess,
+            use_switching_function,
+        )
 
         # Ensure qm_charge is a tensor and repeat for batch size if necessary
         if isinstance(qm_charge, int):
