@@ -618,8 +618,10 @@ class MACEEMLE(_torch.nn.Module):
             )
 
             # Get the cell for this configuration.
+            cell_i: Optional[Tensor] = None
             if cell is not None:
-                cell = cell[i].to(self._dtype).to(device)
+                cell_i = cell if cell.ndim == 2 else cell[i]
+                cell_i = cell_i.to(self._dtype).to(device)
 
             if not _torch.equal(atomic_numbers[i], self._atomic_numbers):
                 # Update the node attributes if the atomic numbers have changed.
@@ -647,7 +649,7 @@ class MACEEMLE(_torch.nn.Module):
                 "positions": positions,
                 "edge_index": edge_index,
                 "shifts": shifts,
-                "cell": self._cell if cell is None else cell,
+                "cell": self._cell if cell_i is None else cell_i,
             }
 
             E_vac = self._mace(input_dict, compute_force=False)["interaction_energy"]
@@ -720,7 +722,7 @@ class MACEEMLE(_torch.nn.Module):
                     charges_mm[i : i + 1],
                     xyz_qm[i : i + 1],
                     xyz_mm[i : i + 1],
-                    cell,
+                    cell_i,
                     qm_charge,
                 )
                 results_E_emle_static[i] = E_emle[0][0]
@@ -1294,8 +1296,10 @@ class MACEEMLEJoint(_torch.nn.Module):
             )
 
             # Get the cell for this configuration.
+            cell_i: Optional[Tensor] = None
             if cell is not None:
-                cell = cell[i].to(self._dtype).to(device)
+                cell_i = cell if cell.ndim == 2 else cell[i]
+                cell_i = cell_i.to(self._dtype).to(device)
 
             if not _torch.equal(atomic_numbers[i], self._atomic_numbers):
                 # Update the node attributes if the atomic numbers have changed.
@@ -1324,7 +1328,7 @@ class MACEEMLEJoint(_torch.nn.Module):
                 "positions": positions,
                 "edge_index": edge_index,
                 "shifts": shifts,
-                "cell": self._cell if cell is None else cell,
+                "cell": self._cell if cell_i is None else cell_i,
                 "total_charge": _torch.tensor(qm_charge, dtype=self._dtype).to(device),
             }
 
@@ -1436,7 +1440,7 @@ class MACEEMLEJoint(_torch.nn.Module):
                     charges_mm[i : i + 1],
                     xyz_qm[i : i + 1],
                     xyz_mm[i : i + 1],
-                    cell,
+                    cell_i,
                     qm_charge,
                     external_params,
                 )
